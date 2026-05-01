@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Trading Platform - Complete Build</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #3B82F6;
+            --primary-foreground: #FFFFFF;
+            --secondary: #8B5CF6;
+            --accent: #EC4899;
+            --background: #0F172A;
+            --foreground: #F1F5F9;
+            --card: #1E293B;
+            --border: #334155;
+            --muted-foreground: #94A3B8;
+            --success: #22C55E;
+            --destructive: #EF4444;
+            --warning: #F59E0B;
+        }
+        
+        body {
+            background-color: var(--background);
+            color: var(--foreground);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        .bg-background { background-color: var(--background); }
+        .bg-card { background-color: var(--card); }
+        .text-foreground { color: var(--foreground); }
+        .text-muted-foreground { color: var(--muted-foreground); }
+        .border-border { border-color: var(--border); }
+        .text-primary { color: var(--primary); }
+        .text-success { color: var(--success); }
+        .text-warning { color: var(--warning); }
+        .text-destructive { color: var(--destructive); }
+        .bg-primary { background-color: var(--primary); }
+        .bg-success { background-color: var(--success); }
+        
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="bg-background text-foreground">
+    <div id="app"></div>
+
+    <script>
+        // Auth Data Store
+        const DEMO_ACCOUNT = {
+            email: "dean@gmail.com",
+            username: "dean",
+            password: "123456",
+            fullName: "Dean",
+            phone: "+256700000000",
+            level: 5,
+            isDemo: true,
+        };
+
+        let users = [DEMO_ACCOUNT];
+        let currentSession = null;
+
+        // Trading Data
+        const coinsData = [
+            { symbol: "BTC", name: "Bitcoin", price: 67500, change: 2.5, color: "#F7931A" },
+            { symbol: "ETH", name: "Ethereum", price: 3450, change: 1.8, color: "#627EEA" },
+            { symbol: "SOL", name: "Solana", price: 142, change: 3.2, color: "#00D4AA" },
+            { symbol: "BNB", name: "Binance", price: 580, change: 0.9, color: "#F3BA2F" },
+            { symbol: "AVAX", name: "Avalanche", price: 35, change: 2.1, color: "#E84142" },
+        ];
+
+        const traders = [
+            { id: "1", name: "Marcus Chen", winRate: 87, monthlyReturn: 12, followers: 2840, strategies: 3, avatar: "M" },
+            { id: "2", name: "Sarah Williams", winRate: 92, monthlyReturn: 15, followers: 3120, strategies: 4, avatar: "S" },
+            { id: "3", name: "James Rodriguez", winRate: 84, monthlyReturn: 11, followers: 2100, strategies: 3, avatar: "J" },
+            { id: "4", name: "Elena Volkov", winRate: 89, monthlyReturn: 14, followers: 2950, strategies: 4, avatar: "E" },
+            { id: "5", name: "David Kim", winRate: 86, monthlyReturn: 13, followers: 2650, strategies: 3, avatar: "D" },
+        ];
+
+        // Main App Component
+        function App() {
+            const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+            const [isMounted, setIsMounted] = React.useState(false);
+            const [activeTab, setActiveTab] = React.useState("trade");
+            const [showBalance, setShowBalance] = React.useState(true);
+            const [mainBalance] = React.useState(24831.42);
+
+            React.useEffect(() => {
+                setIsMounted(true);
+                const session = localStorage.getItem("nexus_session");
+                if (session) {
+                    currentSession = JSON.parse(session);
+                    setIsAuthenticated(true);
+                }
+            }, []);
+
+            if (!isMounted) return null;
+
+            if (!isAuthenticated) {
+                return React.createElement(AuthScreen, {
+                    onAuthenticated: (user) => {
+                        currentSession = user;
+                        localStorage.setItem("nexus_session", JSON.stringify({ loggedIn: true, user }));
+                        setIsAuthenticated(true);
+                    }
+                });
+            }
+
+            return React.createElement(
+                'div',
+                { className: 'min-h-screen bg-background text-foreground' },
+                React.createElement(Header, { activeTab, setActiveTab }),
+                React.createElement(
+                    'div',
+                    { className: 'mx-auto max-w-[1600px] px-4 py-4' },
+                    React.createElement(
+                        'div',
+                        { className: 'mb-4 flex items-center justify-between rounded-xl border border-border bg-card p-4' },
+                        React.createElement(
+                            'div',
+                            { className: 'flex items-center gap-4' },
+                            React.createElement('div', { className: 'flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary' }, '$'),
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('p', { className: 'text-sm text-muted-foreground' }, 'Main Account Balance'),
+                                React.createElement(
+                                    'p',
+                                    { className: 'font-mono text-2xl font-bold' },
+                                    showBalance ? `$${mainBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : '******'
+                                )
+                            )
+                        ),
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: () => setShowBalance(!showBalance),
+                                className: 'rounded-lg bg-muted px-3 py-2 text-sm font-medium hover:bg-muted/80'
+                            },
+                            showBalance ? 'Hide Balance' : 'Show Balance'
+                        )
+                    ),
+                    activeTab === 'trade' && React.createElement(TradeView),
+                    activeTab === 'wallstreet' && React.createElement(WallstreetView),
+                    activeTab === 'wallet' && React.createElement(WalletView),
+                    activeTab === 'settings' && React.createElement(SettingsView, { user: currentSession }),
+                    activeTab === 'markets' && React.createElement(MarketsView)
+                ),
+                React.createElement(BottomNav, { activeTab, setActiveTab })
+            );
+        }
+
+        // Auth Screen Component
+        function AuthScreen({ onAuthenticated }) {
+            const [step, setStep] = React.useState("signin");
+            const [signinIdentifier, setSigninIdentifier] = React.useState("");
+            const [signinPassword, setSigninPassword] = React.useState("");
+            const [signupName, setSignupName] = React.useState("");
+            const [signupUsername, setSignupUsername] = React.useState("");
+            const [signupEmail, setSignupEmail] = React.useState("");
+            const [signupPassword, setSignupPassword] = React.useState("");
+            const [error, setError] = React.useState("");
+            const [isLoading, setIsLoading] = React.useState(false);
+
+            const handleSignIn = (e) => {
+                e.preventDefault();
+                setError("");
+                setIsLoading(true);
+
+                setTimeout(() => {
+                    const user = users.find(u => 
+                        (u.email.toLowerCase() === signinIdentifier.toLowerCase() || 
+                         u.username.toLowerCase() === signinIdentifier.toLowerCase()) && 
+                        u.password === signinPassword
+                    );
+
+                    if (!user) {
+                        setError("Invalid credentials");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    setIsLoading(false);
+                    onAuthenticated({
+                        email: user.email,
+                        username: user.username,
+                        fullName: user.fullName,
+                        level: user.level
+                    });
+                }, 500);
+            };
+
+            const handleSignUp = (e) => {
+                e.preventDefault();
+                setError("");
+                setIsLoading(true);
+
+                setTimeout(() => {
+                    if (!signupName || !signupUsername || !signupEmail || !signupPassword) {
+                        setError("Please fill all fields");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    if (users.some(u => u.email.toLowerCase() === signupEmail.toLowerCase())) {
+                        setError("Email already registered");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    users.push({
+                        email: signupEmail,
+                        username: signupUsername.toLowerCase(),
+                        password: signupPassword,
+                        fullName: signupName,
+                        phone: "",
+                        level: 1
+                    });
+
+                    setIsLoading(false);
+                    setSigninIdentifier(signupUsername);
+                    setStep("signin");
+                }, 500);
+            };
+
+            return React.createElement(
+                'div',
+                { className: 'min-h-screen bg-gradient-to-br from-primary/20 via-background to-accent/20 flex items-center justify-center p-4' },
+                React.createElement(
+                    'div',
+                    { className: 'w-full max-w-md' },
+                    React.createElement(
+                        'div',
+                        { className: 'text-center mb-8' },
+                        React.createElement('h1', { className: 'text-4xl font-bold mb-2' }, 'Nexus Trading'),
+                        React.createElement('p', { className: 'text-muted-foreground' }, 'Advanced AI Trading Platform')
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'rounded-xl border border-border bg-card p-8' },
+                        step === "signin" && React.createElement(
+                            'form',
+                            { onSubmit: handleSignIn, className: 'space-y-4' },
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('label', { className: 'text-sm text-muted-foreground mb-2 block' }, 'Email or Username'),
+                                React.createElement('input', {
+                                    type: 'text',
+                                    value: signinIdentifier,
+                                    onChange: (e) => setSigninIdentifier(e.target.value),
+                                    placeholder: 'dean@gmail.com or dean',
+                                    className: 'w-full rounded-lg border border-border bg-background py-2 px-3 text-foreground outline-none focus:border-primary'
+                                })
+                            ),
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('label', { className: 'text-sm text-muted-foreground mb-2 block' }, 'Password'),
+                                React.createElement('input', {
+                                    type: 'password',
+                                    value: signinPassword,
+                                    onChange: (e) => setSigninPassword(e.target.value),
+                                    placeholder: '••••••',
+                                    className: 'w-full rounded-lg border border-border bg-background py-2 px-3 text-foreground outline-none focus:border-primary'
+                                })
+                            ),
+                            error && React.createElement('p', { className: 'text-destructive text-sm' }, error),
+                            React.createElement('button', {
+                                type: 'submit',
+                                disabled: isLoading,
+                                className: 'w-full bg-primary text-primary-foreground py-2 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50'
+                            }, isLoading ? 'Signing In...' : 'Sign In'),
+                            React.createElement(
+                                'button',
+                                {
+                                    type: 'button',
+                                    onClick: () => setStep("signup"),
+                                    className: 'w-full text-primary text-sm hover:underline mt-2'
+                                },
+                                'Create Account'
+                            )
+                        ),
+                        step === "signup" && React.createElement(
+                            'form',
+                            { onSubmit: handleSignUp, className: 'space-y-3' },
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('label', { className: 'text-sm text-muted-foreground mb-2 block' }, 'Full Name'),
+                                React.createElement('input', {
+                                    type: 'text',
+                                    value: signupName,
+                                    onChange: (e) => setSignupName(e.target.value),
+                                    className: 'w-full rounded-lg border border-border bg-background py-2 px-3 outline-none focus:border-primary'
+                                })
+                            ),
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('label', { className: 'text-sm text-muted-foreground mb-2 block' }, 'Username'),
+                                React.createElement('input', {
+                                    type: 'text',
+                                    value: signupUsername,
+                                    onChange: (e) => setSignupUsername(e.target.value.toLowerCase()),
+                                    className: 'w-full rounded-lg border border-border bg-background py-2 px-3 outline-none focus:border-primary'
+                                })
+                            ),
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('label', { className: 'text-sm text-muted-foreground mb-2 block' }, 'Email'),
+                                React.createElement('input', {
+                                    type: 'email',
+                                    value: signupEmail,
+                                    onChange: (e) => setSignupEmail(e.target.value),
+                                    className: 'w-full rounded-lg border border-border bg-background py-2 px-3 outline-none focus:border-primary'
+                                })
+                            ),
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement('label', { className: 'text-sm text-muted-foreground mb-2 block' }, 'Password'),
+                                React.createElement('input', {
+                                    type: 'password',
+                                    value: signupPassword,
+                                    onChange: (e) => setSignupPassword(e.target.value),
+                                    className: 'w-full rounded-lg border border-border bg-background py-2 px-3 outline-none focus:border-primary'
+                                })
+                            ),
+                            error && React.createElement('p', { className: 'text-destructive text-sm' }, error),
+                            React.createElement('button', {
+                                type: 'submit',
+                                disabled: isLoading,
+                                className: 'w-full bg-primary text-primary-foreground py-2 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50'
+                            }, isLoading ? 'Creating...' : 'Sign Up'),
+                            React.createElement(
+                                'button',
+                                {
+                                    type: 'button',
+                                    onClick: () => setStep("signin"),
+                                    className: 'w-full text-primary text-sm hover:underline mt-2'
+                                },
+                                'Back to Sign In'
+                            )
+                        )
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'mt-6 rounded-lg border border-border bg-card/50 p-4 text-sm' },
+                        React.createElement('p', { className: 'font-medium mb-2' }, 'Demo Account:'),
+                        React.createElement('p', { className: 'text-muted-foreground' }, 'Email: dean@gmail.com'),
+                        React.createElement('p', { className: 'text-muted-foreground' }, 'Password: 123456')
+                    )
+                )
+            );
+        }
+
+        // Header Component
+        function Header({ activeTab, setActiveTab }) {
+            const tabs = ["trade", "markets", "wallstreet", "wallet", "settings"];
+            const tabLabels = { trade: "Trade", markets: "Markets", wallstreet: "Wallstreet", wallet: "Wallet", settings: "Settings" };
+
+            return React.createElement(
+                'header',
+                { className: 'border-b border-border bg-card/50 backdrop-blur sticky top-0 z-50' },
+                React.createElement(
+                    'div',
+                    { className: 'mx-auto max-w-[1600px] px-4 py-4 flex items-center justify-between' },
+                    React.createElement('h1', { className: 'text-2xl font-bold' }, 'Nexus'),
+                    React.createElement(
+                        'div',
+                        { className: 'flex gap-2' },
+                        tabs.map(tab => React.createElement(
+                            'button',
+                            {
+                                key: tab,
+                                onClick: () => setActiveTab(tab),
+                                className: `px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                    activeTab === tab 
+                                        ? 'bg-primary text-primary-foreground' 
+                                        : 'text-muted-foreground hover:bg-card'
+                                }`
+                            },
+                            tabLabels[tab]
+                        ))
+                    ),
+                    React.createElement(
+                        'button',
+                        { onClick: () => { localStorage.clear(); window.location.reload(); }, className: 'text-sm text-muted-foreground hover:text-foreground' },
+                        'Logout'
+                    )
+                )
+            );
+        }
+
+        // Trade View Component
+        function TradeView() {
+            const [selectedCoin] = React.useState(coinsData[0]);
+
+            return React.createElement(
+                'div',
+                { className: 'space-y-4' },
+                React.createElement(
+                    'div',
+                    { className: 'grid grid-cols-1 lg:grid-cols-3 gap-4' },
+                    React.createElement(
+                        'div',
+                        { className: 'lg:col-span-2 rounded-xl border border-border bg-card p-6' },
+                        React.createElement('h2', { className: 'text-lg font-semibold mb-4' }, `${selectedCoin.symbol} Trading Chart`),
+                        React.createElement(
+                            'div',
+                            { className: 'h-64 bg-background rounded-lg flex items-center justify-center' },
+                            React.createElement('p', { className: 'text-muted-foreground' }, 'Live Chart Area - Price: $' + selectedCoin.price.toLocaleString())
+                        )
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'rounded-xl border border-border bg-card p-6' },
+                        React.createElement('h3', { className: 'font-semibold mb-4' }, 'Order Panel'),
+                        React.createElement(
+                            'div',
+                            { className: 'space-y-2' },
+                            React.createElement('input', { type: 'number', placeholder: 'Amount', className: 'w-full rounded-lg border border-border bg-background py-2 px-3 text-foreground outline-none' }),
+                            React.createElement('button', { className: 'w-full bg-success text-white py-2 rounded-lg font-medium hover:bg-success/90' }, 'Buy'),
+                            React.createElement('button', { className: 'w-full bg-destructive text-white py-2 rounded-lg font-medium hover:bg-destructive/90' }, 'Sell')
+                        )
+                    )
+                )
+            );
+        }
+
+        // Wallstreet View Component
+        function WallstreetView() {
+            const [activeMode, setActiveMode] = React.useState("strategy");
+
+            return React.createElement(
+                'div',
+                { className: 'space-y-4' },
+                React.createElement(
+                    'div',
+                    { className: 'flex gap-2' },
+                    ["strategy", "container"].map(mode => React.createElement(
+                        'button',
+                        {
+                            key: mode,
+                            onClick: () => setActiveMode(mode),
+                            className: `px-4 py-2 rounded-lg font-medium transition-colors ${
+                                activeMode === mode 
+                                    ? 'bg-primary text-primary-foreground' 
+                                    : 'bg-muted text-muted-foreground'
+                            }`
+                        },
+                        mode === "strategy" ? "Strategy Analysis" : "Container Mode"
+                    ))
+                ),
+                activeMode === "strategy" && React.createElement(
+                    'div',
+                    { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' },
+                    traders.map(trader => React.createElement(
+                        'div',
+                        { key: trader.id, className: 'rounded-lg border border-border bg-card p-4' },
+                        React.createElement('h3', { className: 'font-semibold' }, trader.name),
+                        React.createElement('p', { className: 'text-sm text-muted-foreground' }, `Win Rate: ${trader.winRate}%`),
+                        React.createElement('p', { className: 'text-sm text-muted-foreground' }, `Monthly: +${trader.monthlyReturn}%`),
+                        React.createElement('button', { className: 'mt-2 w-full bg-primary text-white py-2 rounded-lg text-sm hover:bg-primary/90' }, 'Analyze')
+                    ))
+                ),
+                activeMode === "container" && React.createElement(
+                    'div',
+                    { className: 'rounded-lg border border-border bg-card p-6' },
+                    React.createElement('h2', { className: 'text-lg font-semibold mb-4' }, 'Container Mode - Copy & Fix Trading'),
+                    React.createElement('p', { className: 'text-muted-foreground' }, 'Select a trader to start copy trading or fixed period trading.')
+                )
+            );
+        }
+
+        // Wallet View Component
+        function WalletView() {
+            const [activeTab, setActiveTab] = React.useState("deposit");
+
+            return React.createElement(
+                'div',
+                { className: 'space-y-4' },
+                React.createElement(
+                    'div',
+                    { className: 'flex gap-2 flex-wrap' },
+                    ["deposit", "withdraw", "history"].map(tab => React.createElement(
+                        'button',
+                        {
+                            key: tab,
+                            onClick: () => setActiveTab(tab),
+                            className: `px-4 py-2 rounded-lg font-medium transition-colors ${
+                                activeTab === tab 
+                                    ? 'bg-primary text-primary-foreground' 
+                                    : 'bg-muted text-muted-foreground'
+                            }`
+                        },
+                        tab.charAt(0).toUpperCase() + tab.slice(1)
+                    ))
+                ),
+                activeTab === "deposit" && React.createElement(
+                    'div',
+                    { className: 'rounded-lg border border-border bg-card p-6' },
+                    React.createElement('h2', { className: 'text-lg font-semibold mb-4' }, 'Deposit Funds'),
+                    React.createElement(
+                        'div',
+                        { className: 'grid grid-cols-2 gap-3' },
+                        React.createElement(
+                            'button',
+                            { className: 'p-4 rounded-lg border border-border bg-background hover:border-primary transition-colors' },
+                            'MTN Mobile Money'
+                        ),
+                        React.createElement(
+                            'button',
+                            { className: 'p-4 rounded-lg border border-border bg-background hover:border-primary transition-colors' },
+                            'Airtel Money'
+                        ),
+                        React.createElement(
+                            'button',
+                            { className: 'p-4 rounded-lg border border-border bg-background hover:border-primary transition-colors' },
+                            'Bank Transfer'
+                        ),
+                        React.createElement(
+                            'button',
+                            { className: 'p-4 rounded-lg border border-border bg-background hover:border-primary transition-colors' },
+                            'Crypto Wallet'
+                        )
+                    )
+                )
+            );
+        }
+
+        // Markets View Component
+        function MarketsView() {
+            return React.createElement(
+                'div',
+                { className: 'rounded-lg border border-border bg-card p-6' },
+                React.createElement('h2', { className: 'text-lg font-semibold mb-4' }, 'Market Overview'),
+                React.createElement(
+                    'div',
+                    { className: 'space-y-2' },
+                    coinsData.map(coin => React.createElement(
+                        'div',
+                        { key: coin.symbol, className: 'flex justify-between items-center p-3 rounded-lg border border-border/50' },
+                        React.createElement('span', { className: 'font-medium' }, coin.symbol),
+                        React.createElement('span', { className: 'text-muted-foreground' }, '$' + coin.price.toLocaleString()),
+                        React.createElement('span', { className: coin.change > 0 ? 'text-success' : 'text-destructive' }, (coin.change > 0 ? '+' : '') + coin.change + '%')
+                    ))
+                )
+            );
+        }
+
+        // Settings View Component
+        function SettingsView({ user }) {
+            return React.createElement(
+                'div',
+                { className: 'max-w-2xl' },
+                React.createElement(
+                    'div',
+                    { className: 'rounded-lg border border-border bg-card p-6' },
+                    React.createElement('h2', { className: 'text-lg font-semibold mb-6' }, 'Profile Settings'),
+                    React.createElement(
+                        'div',
+                        { className: 'space-y-4' },
+                        React.createElement(
+                            'div',
+                            null,
+                            React.createElement('label', { className: 'text-sm text-muted-foreground' }, 'Name'),
+                            React.createElement('p', { className: 'font-medium' }, user?.fullName)
+                        ),
+                        React.createElement(
+                            'div',
+                            null,
+                            React.createElement('label', { className: 'text-sm text-muted-foreground' }, 'Email'),
+                            React.createElement('p', { className: 'font-medium' }, user?.email)
+                        ),
+                        React.createElement(
+                            'div',
+                            null,
+                            React.createElement('label', { className: 'text-sm text-muted-foreground' }, 'Username'),
+                            React.createElement('p', { className: 'font-medium' }, user?.username)
+                        ),
+                        React.createElement(
+                            'div',
+                            null,
+                            React.createElement('label', { className: 'text-sm text-muted-foreground' }, 'User Level'),
+                            React.createElement('p', { className: 'font-medium text-primary' }, 'Level ' + user?.level)
+                        )
+                    )
+                )
+            );
+        }
+
+        // Bottom Nav Component
+        function BottomNav({ activeTab, setActiveTab }) {
+            const tabs = [
+                { id: "trade", label: "Trade" },
+                { id: "markets", label: "Markets" },
+                { id: "wallstreet", label: "Wallstreet" },
+                { id: "wallet", label: "Wallet" },
+                { id: "settings", label: "Settings" },
+            ];
+
+            return React.createElement(
+                'nav',
+                { className: 'fixed bottom-0 left-0 right-0 border-t border-border bg-card/95 backdrop-blur md:hidden' },
+                React.createElement(
+                    'div',
+                    { className: 'flex justify-around' },
+                    tabs.map(tab => React.createElement(
+                        'button',
+                        {
+                            key: tab.id,
+                            onClick: () => setActiveTab(tab.id),
+                            className: `flex-1 py-3 text-xs font-medium transition-colors ${
+                                activeTab === tab.id 
+                                    ? 'text-primary border-t-2 border-primary' 
+                                    : 'text-muted-foreground'
+                            }`
+                        },
+                        tab.label
+                    ))
+                )
+            );
+        }
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(React.createElement(App));
+    </script>
+
+    <!-- React Library -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</body>
+</html>

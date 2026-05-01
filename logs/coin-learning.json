@@ -1,0 +1,2303 @@
+{
+  "BTCUSDT": {
+    "symbol": "BTCUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -175.92,
+    "avgLatencyMs": 87,
+    "directionMatchRate": 0,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 17,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on BULLISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.049Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 75,
+        "confidenceScore": 38,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 50,
+        "confidenceScore": 20,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.060Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.305Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.440Z",
+        "winRate": 80,
+        "confidenceScore": 60,
+        "totalTrades": 5,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.336Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "ETHUSDT": {
+    "symbol": "ETHUSDT",
+    "totalTrades": 3,
+    "wins": 2,
+    "losses": 1,
+    "winRate": 66.7,
+    "avgPnl": 1.82,
+    "avgLatencyMs": 25,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 41,
+    "recommendation": "NEUTRAL",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BULLISH",
+        "winRate": 66.7,
+        "totalTrades": 3,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 75,
+        "confidenceScore": 29,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.060Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.305Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.440Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      }
+    ]
+  },
+  "SOLUSDT": {
+    "symbol": "SOLUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.34,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.060Z",
+        "winRate": 100,
+        "confidenceScore": 21,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 80,
+        "confidenceScore": 55,
+        "totalTrades": 5,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.440Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "BNBUSDT": {
+    "symbol": "BNBUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -1.15,
+    "avgLatencyMs": 38,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on BEARISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 66.7,
+        "confidenceScore": 21,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.060Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.440Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "ADAUSDT": {
+    "symbol": "ADAUSDT",
+    "totalTrades": 15,
+    "wins": 9,
+    "losses": 6,
+    "winRate": 60,
+    "avgPnl": 0,
+    "avgLatencyMs": 70,
+    "directionMatchRate": 100,
+    "patternsIdentified": 2,
+    "patternsBlocked": 1,
+    "confidenceScore": 64,
+    "recommendation": "BUY",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 40,
+        "totalTrades": 5,
+        "blocked": true
+      },
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 70,
+        "totalTrades": 10,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 28.6,
+        "confidenceScore": 56,
+        "totalTrades": 7,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 40,
+        "confidenceScore": 51,
+        "totalTrades": 5,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 20,
+        "confidenceScore": 48,
+        "totalTrades": 5,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 37.5,
+        "confidenceScore": 48,
+        "totalTrades": 8,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.060Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 56.3,
+        "confidenceScore": 48,
+        "totalTrades": 16,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 46.2,
+        "confidenceScore": 54,
+        "totalTrades": 13,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 61.5,
+        "confidenceScore": 62,
+        "totalTrades": 13,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.440Z",
+        "winRate": 66.7,
+        "confidenceScore": 62,
+        "totalTrades": 15,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 71.4,
+        "confidenceScore": 69,
+        "totalTrades": 7,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 60,
+        "confidenceScore": 64,
+        "totalTrades": 15,
+        "recommendation": "BUY"
+      }
+    ]
+  },
+  "DOGEUSDT": {
+    "symbol": "DOGEUSDT",
+    "totalTrades": 12,
+    "wins": 8,
+    "losses": 4,
+    "winRate": 66.7,
+    "avgPnl": 0,
+    "avgLatencyMs": 132,
+    "directionMatchRate": 25,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 44,
+    "recommendation": "NEUTRAL",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BEARISH",
+        "winRate": 66.7,
+        "totalTrades": 9,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on BEARISH",
+        "winRate": 66.7,
+        "totalTrades": 3,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 87.5,
+        "confidenceScore": 70,
+        "totalTrades": 8,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 71.4,
+        "confidenceScore": 52,
+        "totalTrades": 7,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 50,
+        "confidenceScore": 60,
+        "totalTrades": 6,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 61.5,
+        "confidenceScore": 48,
+        "totalTrades": 13,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.060Z",
+        "winRate": 0,
+        "confidenceScore": 24,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 64.3,
+        "confidenceScore": 66,
+        "totalTrades": 14,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 26.7,
+        "confidenceScore": 56,
+        "totalTrades": 15,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 80,
+        "confidenceScore": 58,
+        "totalTrades": 15,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.440Z",
+        "winRate": 52.9,
+        "confidenceScore": 47,
+        "totalTrades": 17,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 28.6,
+        "confidenceScore": 45,
+        "totalTrades": 7,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 44,
+        "totalTrades": 12,
+        "recommendation": "NEUTRAL"
+      }
+    ]
+  },
+  "XRPUSDT": {
+    "symbol": "XRPUSDT",
+    "totalTrades": 13,
+    "wins": 8,
+    "losses": 5,
+    "winRate": 61.5,
+    "avgPnl": 0,
+    "avgLatencyMs": 166,
+    "directionMatchRate": 46.2,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 46,
+    "recommendation": "NEUTRAL",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BEARISH",
+        "winRate": 71.4,
+        "totalTrades": 7,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on BEARISH",
+        "winRate": 50,
+        "totalTrades": 6,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 100,
+        "confidenceScore": 72,
+        "totalTrades": 7,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 33.3,
+        "confidenceScore": 47,
+        "totalTrades": 6,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 42.9,
+        "confidenceScore": 46,
+        "totalTrades": 7,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 50,
+        "confidenceScore": 55,
+        "totalTrades": 12,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 75,
+        "confidenceScore": 38,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 64.7,
+        "confidenceScore": 54,
+        "totalTrades": 17,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 69.2,
+        "confidenceScore": 63,
+        "totalTrades": 13,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 25,
+        "confidenceScore": 55,
+        "totalTrades": 12,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 53.8,
+        "confidenceScore": 48,
+        "totalTrades": 13,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 28.6,
+        "confidenceScore": 37,
+        "totalTrades": 7,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 61.5,
+        "confidenceScore": 46,
+        "totalTrades": 13,
+        "recommendation": "NEUTRAL"
+      }
+    ]
+  },
+  "AVAXUSDT": {
+    "symbol": "AVAXUSDT",
+    "totalTrades": 6,
+    "wins": 5,
+    "losses": 1,
+    "winRate": 83.3,
+    "avgPnl": 0.06,
+    "avgLatencyMs": 40,
+    "directionMatchRate": 100,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 68,
+    "recommendation": "BUY",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 100,
+        "totalTrades": 3,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 66.7,
+        "totalTrades": 3,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 100,
+        "confidenceScore": 69,
+        "totalTrades": 7,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 83.3,
+        "confidenceScore": 58,
+        "totalTrades": 6,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 83.3,
+        "confidenceScore": 68,
+        "totalTrades": 6,
+        "recommendation": "BUY"
+      }
+    ]
+  },
+  "DOTUSDT": {
+    "symbol": "DOTUSDT",
+    "totalTrades": 2,
+    "wins": 1,
+    "losses": 1,
+    "winRate": 50,
+    "avgPnl": 0,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 0,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 19,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on BULLISH",
+        "winRate": 50,
+        "totalTrades": 2,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 50,
+        "confidenceScore": 19,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "LINKUSDT": {
+    "symbol": "LINKUSDT",
+    "totalTrades": 2,
+    "wins": 1,
+    "losses": 1,
+    "winRate": 50,
+    "avgPnl": 0.02,
+    "avgLatencyMs": 1,
+    "directionMatchRate": 0,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 19,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BEARISH",
+        "winRate": 50,
+        "totalTrades": 2,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T12:42:32.593Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:43:39.050Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T12:58:01.202Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 80,
+        "confidenceScore": 67,
+        "totalTrades": 5,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 75,
+        "confidenceScore": 28,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 50,
+        "confidenceScore": 19,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "PEPEUSDT": {
+    "symbol": "PEPEUSDT",
+    "totalTrades": 3,
+    "wins": 2,
+    "losses": 1,
+    "winRate": 66.7,
+    "avgPnl": 0.07,
+    "avgLatencyMs": 50,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 41,
+    "recommendation": "NEUTRAL",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 66.7,
+        "totalTrades": 3,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 75,
+        "confidenceScore": 23,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 75,
+        "confidenceScore": 38,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      }
+    ]
+  },
+  "WIFUSDT": {
+    "symbol": "WIFUSDT",
+    "totalTrades": 3,
+    "wins": 2,
+    "losses": 1,
+    "winRate": 66.7,
+    "avgPnl": 0.04,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 33.3,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 28,
+    "recommendation": "AVOID",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on BULLISH",
+        "winRate": 50,
+        "totalTrades": 2,
+        "blocked": false
+      },
+      {
+        "pattern": "BUY on BULLISH",
+        "winRate": 100,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 75,
+        "confidenceScore": 33,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 75,
+        "confidenceScore": 28,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      }
+    ]
+  },
+  "BONKUSDT": {
+    "symbol": "BONKUSDT",
+    "totalTrades": 3,
+    "wins": 2,
+    "losses": 1,
+    "winRate": 66.7,
+    "avgPnl": 0.05,
+    "avgLatencyMs": 78,
+    "directionMatchRate": 100,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 41,
+    "recommendation": "NEUTRAL",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 100,
+        "totalTrades": 2,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 75,
+        "confidenceScore": 43,
+        "totalTrades": 4,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 15,
+        "totalTrades": 0,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      }
+    ]
+  },
+  "FLOKIUSDT": {
+    "symbol": "FLOKIUSDT",
+    "totalTrades": 2,
+    "wins": 1,
+    "losses": 1,
+    "winRate": 50,
+    "avgPnl": -0.03,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 50,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 29,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BULLISH",
+        "winRate": 100,
+        "totalTrades": 1,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on BULLISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 34,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "SHIBUSDT": {
+    "symbol": "SHIBUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.19,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 75,
+        "confidenceScore": 43,
+        "totalTrades": 4,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 75,
+        "confidenceScore": 28,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "MEMEUSDT": {
+    "symbol": "MEMEUSDT",
+    "totalTrades": 3,
+    "wins": 2,
+    "losses": 1,
+    "winRate": 66.7,
+    "avgPnl": 0.08,
+    "avgLatencyMs": 26,
+    "directionMatchRate": 33.3,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 28,
+    "recommendation": "AVOID",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BEARISH",
+        "winRate": 100,
+        "totalTrades": 2,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on BEARISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      }
+    ]
+  },
+  "MYROUSDT": {
+    "symbol": "MYROUSDT",
+    "totalTrades": 3,
+    "wins": 2,
+    "losses": 1,
+    "winRate": 66.7,
+    "avgPnl": 0.08,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 41,
+    "recommendation": "NEUTRAL",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 100,
+        "totalTrades": 1,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 50,
+        "totalTrades": 2,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 88.9,
+        "confidenceScore": 55,
+        "totalTrades": 9,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 75,
+        "confidenceScore": 43,
+        "totalTrades": 4,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 83.3,
+        "confidenceScore": 65,
+        "totalTrades": 6,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 14,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      }
+    ]
+  },
+  "BOMEUSDT": {
+    "symbol": "BOMEUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.24,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 75,
+        "confidenceScore": 43,
+        "totalTrades": 4,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 75,
+        "confidenceScore": 43,
+        "totalTrades": 4,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "MEWUSDT": {
+    "symbol": "MEWUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.28,
+    "avgLatencyMs": 38,
+    "directionMatchRate": 0,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 17,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on BULLISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "POPCATUSDT": {
+    "symbol": "POPCATUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.25,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BULLISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 75,
+        "confidenceScore": 38,
+        "totalTrades": 4,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "MOGUSDT": {
+    "symbol": "MOGUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.29,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "TURBOUSDT": {
+    "symbol": "TURBOUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.24,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on BULLISH",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 66.7,
+        "confidenceScore": 34,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "COQUSDT": {
+    "symbol": "COQUSDT",
+    "totalTrades": 5,
+    "wins": 4,
+    "losses": 1,
+    "winRate": 80,
+    "avgPnl": 0.13,
+    "avgLatencyMs": 41,
+    "directionMatchRate": 100,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 67,
+    "recommendation": "BUY",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 75,
+        "totalTrades": 4,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 100,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 80,
+        "confidenceScore": 63,
+        "totalTrades": 5,
+        "recommendation": "BUY"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 80,
+        "confidenceScore": 67,
+        "totalTrades": 5,
+        "recommendation": "BUY"
+      }
+    ]
+  },
+  "SAMOUSDT": {
+    "symbol": "SAMOUSDT",
+    "totalTrades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "avgPnl": -0.24,
+    "avgLatencyMs": 0,
+    "directionMatchRate": 100,
+    "patternsIdentified": 1,
+    "patternsBlocked": 0,
+    "confidenceScore": 37,
+    "recommendation": "INSUFFICIENT_DATA",
+    "learnedPatterns": [
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 0,
+        "totalTrades": 1,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 0,
+        "confidenceScore": 17,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 50,
+        "confidenceScore": 29,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 41,
+        "totalTrades": 3,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 75,
+        "confidenceScore": 40,
+        "totalTrades": 4,
+        "recommendation": "NEUTRAL"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      }
+    ]
+  },
+  "KISHUUSDT": {
+    "symbol": "KISHUUSDT",
+    "totalTrades": 6,
+    "wins": 5,
+    "losses": 1,
+    "winRate": 83.3,
+    "avgPnl": 0.14,
+    "avgLatencyMs": 56,
+    "directionMatchRate": 100,
+    "patternsIdentified": 2,
+    "patternsBlocked": 0,
+    "confidenceScore": 68,
+    "recommendation": "BUY",
+    "learnedPatterns": [
+      {
+        "pattern": "BUY on NEUTRAL",
+        "winRate": 50,
+        "totalTrades": 2,
+        "blocked": false
+      },
+      {
+        "pattern": "SELL on NEUTRAL",
+        "winRate": 100,
+        "totalTrades": 4,
+        "blocked": false
+      }
+    ],
+    "lastUpdated": "2026-04-30T22:06:38.717Z",
+    "history": [
+      {
+        "timestamp": "2026-04-30T13:25:30.560Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T13:26:25.061Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:27:51.306Z",
+        "winRate": 50,
+        "confidenceScore": 39,
+        "totalTrades": 2,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:53:22.711Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:55:58.507Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T13:57:34.441Z",
+        "winRate": 66.7,
+        "confidenceScore": 28,
+        "totalTrades": 3,
+        "recommendation": "AVOID"
+      },
+      {
+        "timestamp": "2026-04-30T14:08:01.337Z",
+        "winRate": 0,
+        "confidenceScore": 37,
+        "totalTrades": 1,
+        "recommendation": "INSUFFICIENT_DATA"
+      },
+      {
+        "timestamp": "2026-04-30T22:06:38.717Z",
+        "winRate": 83.3,
+        "confidenceScore": 68,
+        "totalTrades": 6,
+        "recommendation": "BUY"
+      }
+    ]
+  }
+}

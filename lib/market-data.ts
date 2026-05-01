@@ -1,0 +1,431 @@
+"use client"
+
+/**
+ * Market Data Service
+ * Fetches real-time crypto prices from public APIs (CoinGecko free tier)
+ * Provides historical data and price simulation for paper trading
+ */
+
+import { coinsData, type Coin } from "./coins-data"
+
+// ============================================================
+// Types
+// ============================================================
+
+export interface OHLCV {
+  timestamp: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface MarketSnapshot {
+  symbol: string
+  price: number
+  change24h: number
+  high24h: number
+  low24h: number
+  volume24h: number
+  marketCap: number
+  timestamp: number
+}
+
+export interface OrderBookLevel {
+  price: number
+  size: number
+  total: number
+}
+
+export interface OrderBookData {
+  bids: OrderBookLevel[]
+  asks: OrderBookLevel[]
+  spread: number
+  spreadPercentage: number
+}
+
+// ============================================================
+// CoinGecko API (Free, no key required)
+// ============================================================
+
+const COINGECKO_BASE = "https://api.coingecko.com/api/v3"
+
+// Map our coin symbols to CoinGecko IDs
+const COINGECKO_IDS: Record<string, string> = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  SOL: "solana",
+  XRP: "ripple",
+  ADA: "cardano",
+  AVAX: "avalanche-2",
+  DOT: "polkadot",
+  LINK: "chainlink",
+  MATIC: "matic-network",
+  DOGE: "dogecoin",
+  SHIB: "shiba-inu",
+  UNI: "uniswap",
+  ATOM: "cosmos",
+  LTC: "litecoin",
+  BCH: "bitcoin-cash",
+  TRX: "tron",
+  NEAR: "near",
+  APE: "apecoin",
+  FTM: "fantom",
+  ALGO: "algorand",
+  VET: "vechain",
+  SAND: "the-sandbox",
+  MANA: "decentraland",
+  AXS: "axie-infinity",
+  GALA: "gala",
+  ENJ: "enjincoin",
+  CHZ: "chiliz",
+  FLOW: "flow",
+  HBAR: "hedera-hashgraph",
+  XTZ: "tezos",
+  THETA: "theta-token",
+  EOS: "eos",
+  AAVE: "aave",
+  MKR: "maker",
+  COMP: "compound-governance-token",
+  SNX: "havven",
+  CRV: "curve-dao-token",
+  "1INCH": "1inch",
+  YFI: "yearn-finance",
+  SUSHI: "sushi",
+  LUNC: "terra-luna",
+  KCS: "kucoin-shares",
+  ORCA: "orca",
+  CFX: "conflux-token",
+}
+
+// ============================================================
+// Rate Limiting & Caching
+// ============================================================
+
+interface CacheEntry<T> {
+  data: T
+  timestamp: number
+  ttl: number
+}
+
+const cache = new Map<string, CacheEntry<any>>()
+
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.timestamp > entry.ttl) {
+    cache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+function setCache<T>(key: string, data: T, ttl: number): void {
+  cache.set(key, { data, timestamp: Date.now(), ttl })
+}
+
+// Rate limiter: CoinGecko free tier allows 10-30 calls/min
+let lastCallTime = 0
+const MIN_CALL_INTERVAL = 2500 // 2.5 seconds between calls
+
+async function rateLimitedFetch(url: string): Promise<any> {
+  const now = Date.now()
+  const timeSinceLastCall = now - lastCallTime
+  if (timeSinceLastCall < MIN_CALL_INTERVAL) {
+    await new Promise((resolve) => setTimeout(resolve, MIN_CALL_INTERVAL - timeSinceLastCall))
+  }
+  lastCallTime = Date.now()
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) {
+      if (response.status === 429) {
+        // Rate limited - wait and retry once
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+        const retryResponse = await fetch(url, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (!retryResponse.ok) throw new Error(`HTTP ${retryResponse.status}`)
+        return retryResponse.json()
+      }
+      throw new Error(`HTTP ${response.status}`)
+    }
+    return response.json()
+  } catch (error) {
+    throw error
+  }
+}
+
+// ============================================================
+// Public API Functions
+// ============================================================
+
+/**
+ * Fetch current price for a single coin from CoinGecko
+ */
+export async function fetchCoinPrice(symbol: string): Promise<number | null> {
+  const coinId = COINGECKO_IDS[symbol.toUpperCase()]
+  if (!coinId) return null
+
+  const cacheKey = `price_${symbol}`
+  const cached = getCached<number>(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const data = await rateLimitedFetch(
+      `${COINGECKO_BASE}/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true`
+    )
+    const price = data[coinId]?.usd ?? null
+    if (price !== null) {
+      setCache(cacheKey, price, 30_000) // Cache for 30 seconds
+    }
+    return price
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Fetch current prices for multiple coins
+ */
+export async function fetchMultiplePrices(symbols: string[]): Promise<Record<string, number>> {
+  const result: Record<string, number> = {}
+  const uncached: string[] = []
+
+  for (const symbol of symbols) {
+    const cached = getCached<number>(`price_${symbol}`)
+    if (cached !== null) {
+      result[symbol] = cached
+    } else {
+      uncached.push(symbol)
+    }
+  }
+
+  if (uncached.length === 0) return result
+
+  const ids = uncached
+    .map((s) => COINGECKO_IDS[s.toUpperCase()])
+    .filter(Boolean)
+    .join(",")
+
+  if (!ids) return result
+
+  try {
+    const data = await rateLimitedFetch(
+      `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd`
+    )
+
+    for (const symbol of uncached) {
+      const id = COINGECKO_IDS[symbol.toUpperCase()]
+      if (id && data[id]?.usd) {
+        result[symbol] = data[id].usd
+        setCache(`price_${symbol}`, data[id].usd, 30_000)
+      }
+    }
+  } catch {
+    // Return whatever we have
+  }
+
+  return result
+}
+
+/**
+ * Fetch historical OHLCV data for a coin
+ */
+export async function fetchHistoricalData(
+  symbol: string,
+  days: number = 7
+): Promise<OHLCV[]> {
+  const coinId = COINGECKO_IDS[symbol.toUpperCase()]
+  if (!coinId) return generateSimulatedOHLCV(symbol, days)
+
+  const cacheKey = `history_${symbol}_${days}`
+  const cached = getCached<OHLCV[]>(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const data = await rateLimitedFetch(
+      `${COINGECKO_BASE}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`
+    )
+
+    if (Array.isArray(data) && data.length > 0) {
+      const ohlcv: OHLCV[] = data.map((item: number[]) => ({
+        timestamp: item[0],
+        open: item[1],
+        high: item[2],
+        low: item[3],
+        close: item[4],
+        volume: 0, // CoinGecko OHLC doesn't include volume
+      }))
+      setCache(cacheKey, ohlcv, 60_000) // Cache for 1 minute
+      return ohlcv
+    }
+  } catch {
+    // Fall back to simulated data
+  }
+
+  return generateSimulatedOHLCV(symbol, days)
+}
+
+/**
+ * Fetch market snapshot for all tracked coins
+ */
+export async function fetchMarketSnapshots(): Promise<MarketSnapshot[]> {
+  const cacheKey = "market_snapshots"
+  const cached = getCached<MarketSnapshot[]>(cacheKey)
+  if (cached !== null) return cached
+
+  const ids = Object.values(COINGECKO_IDS).join(",")
+
+  try {
+    const data = await rateLimitedFetch(
+      `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=50&page=1&sparkline=false`
+    )
+
+    if (Array.isArray(data)) {
+      const snapshots: MarketSnapshot[] = data.map((coin: any) => ({
+        symbol:
+          Object.entries(COINGECKO_IDS).find(([, v]) => v === coin.id)?.[0] ??
+          coin.symbol.toUpperCase(),
+        price: coin.current_price,
+        change24h: coin.price_change_percentage_24h ?? 0,
+        high24h: coin.high_24h ?? coin.current_price,
+        low24h: coin.low_24h ?? coin.current_price,
+        volume24h: coin.total_volume ?? 0,
+        marketCap: coin.market_cap ?? 0,
+        timestamp: Date.now(),
+      }))
+      setCache(cacheKey, snapshots, 60_000) // Cache for 1 minute
+      return snapshots
+    }
+  } catch {
+    // Fall back to static data
+  }
+
+  // Fallback: return from static coinsData
+  return coinsData.map((coin) => ({
+    symbol: coin.symbol,
+    price: coin.price,
+    change24h: coin.change24h,
+    high24h: coin.price * 1.02,
+    low24h: coin.price * 0.98,
+    volume24h: coin.volume,
+    marketCap: coin.marketCap,
+    timestamp: Date.now(),
+  }))
+}
+
+/**
+ * Generate a simulated order book for a coin
+ */
+export function generateOrderBook(
+  currentPrice: number,
+  levels: number = 15
+): OrderBookData {
+  const bids: OrderBookLevel[] = []
+  const asks: OrderBookLevel[] = []
+
+  let bidTotal = 0
+  let askTotal = 0
+
+  for (let i = 1; i <= levels; i++) {
+    const bidPrice = currentPrice * (1 - (i * 0.001))
+    const bidSize = Math.random() * 5 + 0.1
+    bidTotal += bidSize
+    bids.push({
+      price: Number(bidPrice.toFixed(2)),
+      size: Number(bidSize.toFixed(4)),
+      total: Number(bidTotal.toFixed(4)),
+    })
+
+    const askPrice = currentPrice * (1 + (i * 0.001))
+    const askSize = Math.random() * 5 + 0.1
+    askTotal += askSize
+    asks.push({
+      price: Number(askPrice.toFixed(2)),
+      size: Number(askSize.toFixed(4)),
+      total: Number(askTotal.toFixed(4)),
+    })
+  }
+
+  const spread = asks[0].price - bids[0].price
+  const spreadPercentage = (spread / currentPrice) * 100
+
+  return { bids, asks, spread, spreadPercentage }
+}
+
+// ============================================================
+// Simulated Data Generation (Fallback)
+// ============================================================
+
+/**
+ * Generate simulated OHLCV data when API is unavailable
+ */
+function generateSimulatedOHLCV(symbol: string, days: number): OHLCV[] {
+  const coin = coinsData.find((c) => c.symbol === symbol)
+  const basePrice = coin?.price ?? 100
+  const volatility = basePrice * 0.02 // 2% daily volatility
+  const dataPoints = days * 24 // Hourly data points
+  const data: OHLCV[] = []
+
+  let currentPrice = basePrice * (1 - days * 0.001) // Slight mean reversion
+
+  for (let i = 0; i < dataPoints; i++) {
+    const timestamp = Date.now() - (dataPoints - i) * 3600_000
+    const change = (Math.random() - 0.48) * volatility
+    const open = currentPrice
+    const close = currentPrice + change
+    const high = Math.max(open, close) + Math.random() * volatility * 0.5
+    const low = Math.min(open, close) - Math.random() * volatility * 0.5
+    const volume = basePrice * (Math.random() * 10000 + 1000)
+
+    data.push({
+      timestamp,
+      open: Number(open.toFixed(2)),
+      high: Number(high.toFixed(2)),
+      low: Number(low.toFixed(2)),
+      close: Number(close.toFixed(2)),
+      volume: Number(volume.toFixed(2)),
+    })
+
+    currentPrice = close
+  }
+
+  return data
+}
+
+/**
+ * Simulate a real-time price tick (for use in useEffect intervals)
+ */
+export function simulatePriceTick(
+  currentPrice: number,
+  volatility: number = 0.002
+): number {
+  const change = currentPrice * volatility * (Math.random() - 0.5) * 2
+  return Number((currentPrice + change).toFixed(2))
+}
+
+/**
+ * Update coinsData with real-time prices from the market service
+ */
+export function updateCoinsWithMarketData(
+  coins: Coin[],
+  priceUpdates: Record<string, number>
+): Coin[] {
+  return coins.map((coin) => {
+    const newPrice = priceUpdates[coin.symbol]
+    if (!newPrice) return coin
+    const change24h = ((newPrice - coin.price) / coin.price) * 100
+    return {
+      ...coin,
+      price: newPrice,
+      change24h: Number(change24h.toFixed(2)),
+      volume: coin.volume * (1 + (Math.random() - 0.5) * 0.1),
+    }
+  })
+}

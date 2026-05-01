@@ -1,0 +1,333 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   NEXUS PRO — Design System CSS Variables
+   Based on the NEXUS PRO Master Context Brief
+   ============================================================ */
+
+:root {
+  --background: oklch(0.07 0.01 250);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.10 0.015 250);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.10 0.015 250);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.65 0.20 195);
+  --primary-foreground: oklch(0.10 0.02 250);
+  --secondary: oklch(0.15 0.02 250);
+  --secondary-foreground: oklch(0.90 0.01 250);
+  --muted: oklch(0.20 0.02 250);
+  --muted-foreground: oklch(0.60 0.03 250);
+  --accent: oklch(0.65 0.20 195);
+  --accent-foreground: oklch(0.10 0.02 250);
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.70 0.18 150);
+  --success-foreground: oklch(0.10 0.02 150);
+  --warning: oklch(0.75 0.18 85);
+  --warning-foreground: oklch(0.15 0.03 85);
+  --border: oklch(0.20 0.02 250);
+  --input: oklch(0.15 0.02 250);
+  --ring: oklch(0.65 0.20 195);
+  --chart-1: oklch(0.65 0.20 195);
+  --chart-2: oklch(0.70 0.18 150);
+  --chart-3: oklch(0.60 0.22 25);
+  --chart-4: oklch(0.75 0.18 85);
+  --chart-5: oklch(0.60 0.18 280);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.10 0.015 250);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-primary: oklch(0.65 0.20 195);
+  --sidebar-primary-foreground: oklch(0.10 0.02 250);
+  --sidebar-accent: oklch(0.15 0.02 250);
+  --sidebar-accent-foreground: oklch(0.90 0.01 250);
+  --sidebar-border: oklch(0.20 0.02 250);
+  --sidebar-ring: oklch(0.65 0.20 195);
+}
+
+.dark {
+  --background: oklch(0.07 0.01 250);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.10 0.015 250);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.10 0.015 250);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.65 0.20 195);
+  --primary-foreground: oklch(0.10 0.02 250);
+  --secondary: oklch(0.15 0.02 250);
+  --secondary-foreground: oklch(0.90 0.01 250);
+  --muted: oklch(0.20 0.02 250);
+  --muted-foreground: oklch(0.60 0.03 250);
+  --accent: oklch(0.65 0.20 195);
+  --accent-foreground: oklch(0.10 0.02 250);
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.70 0.18 150);
+  --success-foreground: oklch(0.10 0.02 150);
+  --warning: oklch(0.75 0.18 85);
+  --warning-foreground: oklch(0.15 0.03 85);
+  --border: oklch(0.20 0.02 250);
+  --input: oklch(0.15 0.02 250);
+  --ring: oklch(0.65 0.20 195);
+  --chart-1: oklch(0.65 0.20 195);
+  --chart-2: oklch(0.70 0.18 150);
+  --chart-3: oklch(0.60 0.22 25);
+  --chart-4: oklch(0.75 0.18 85);
+  --chart-5: oklch(0.60 0.18 280);
+  --sidebar: oklch(0.10 0.015 250);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-primary: oklch(0.65 0.20 195);
+  --sidebar-primary-foreground: oklch(0.10 0.02 250);
+  --sidebar-accent: oklch(0.15 0.02 250);
+  --sidebar-accent-foreground: oklch(0.90 0.01 250);
+  --sidebar-border: oklch(0.20 0.02 250);
+  --sidebar-ring: oklch(0.65 0.20 195);
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Inter Fallback', system-ui, sans-serif;
+  --font-mono: 'Space Mono', 'Space Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.30 0.02 250);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.40 0.02 250);
+}
+
+/* Smooth touch scrolling */
+html, body {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ticker animation */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker 30s linear infinite;
+}
+
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px currentColor; }
+  50% { opacity: 0.5; box-shadow: 0 0 4px currentColor; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Number counter animation */
+@keyframes count-up {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-count {
+  animation: count-up 0.4s ease forwards;
+}
+
+/* Safe area padding for mobile bottom nav */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent text size adjustment on mobile orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Better touch targets on mobile */
+@media (max-width: 768px) {
+  button, a, input, select, textarea {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+}
+
+/* ============================================================
+   NEXUS SCROLL ISOLATION SYSTEM
+   ============================================================ */
+
+/* Base scroll isolation class */
+.nexus-scroll-isolated {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.30 0.02 250) transparent;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+/* Hover/focus glow indicator for scrollable areas */
+.nexus-scroll-active {
+  border-color: oklch(0.65 0.20 195 / 0.5) !important;
+  box-shadow: inset 0 0 0 1px oklch(0.65 0.20 195 / 0.3);
+}
+
+/* Dead-end rubber-band bounce animation */
+@keyframes nexus-scroll-bounce {
+  0% { transform: translateY(0); }
+  25% { transform: translateY(-4px); }
+  50% { transform: translateY(2px); }
+  75% { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes nexus-scroll-glow {
+  0% { box-shadow: inset 0 0 0 0px oklch(0.65 0.20 195 / 0); }
+  50% { box-shadow: inset 0 0 12px 2px oklch(0.65 0.20 195 / 0.2); }
+  100% { box-shadow: inset 0 0 0 0px oklch(0.65 0.20 195 / 0); }
+}
+
+.nexus-scroll-deadend {
+  animation: nexus-scroll-bounce 0.4s ease, nexus-scroll-glow 0.6s ease;
+}
+
+/* Horizontal scroll isolation */
+.nexus-scroll-isolated-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Prevent scroll chaining on nested scrollable areas */
+.nexus-scroll-isolated *,
+.nexus-scroll-isolated-x * {
+  overscroll-behavior: contain;
+}
+
+/* Toast notification container - bottom-left */
+.nexus-toast-container {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.nexus-toast-container > * {
+  pointer-events: auto;
+}
+
+/* Toast entry/exit animations */
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+.nexus-toast-enter {
+  animation: toast-slide-in 0.3s ease forwards;
+}
+
+.nexus-toast-exit {
+  animation: toast-slide-out 0.3s ease forwards;
+}
+
+/* Study mode indicator */
+.nexus-study-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: oklch(0.75 0.18 85 / 0.15);
+  color: oklch(0.75 0.18 85);
+  border: 1px solid oklch(0.75 0.18 85 / 0.3);
+}
