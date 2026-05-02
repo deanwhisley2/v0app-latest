@@ -56,14 +56,11 @@ export async function POST(request: Request) {
     })
     if (!sendRes.ok) {
       const payload = (await sendRes.json().catch(() => ({}))) as { error?: string }
-      return NextResponse.json(
-        {
-          error:
-            payload.error ||
-            "Account created but verification email failed. Check RESEND_API_KEY / EMAIL_FROM on the server.",
-        },
-        { status: 502 }
-      )
+      const msg =
+        payload.error ||
+        "Account created but verification email failed. Check RESEND_API_KEY / EMAIL_FROM on the server."
+      const status = sendRes.status === 429 ? 429 : 502
+      return NextResponse.json({ error: msg }, { status })
     }
   } catch {
     return NextResponse.json(
