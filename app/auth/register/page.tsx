@@ -3,7 +3,6 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -26,59 +25,37 @@ export default function RegisterPage() {
       const trimmedName = fullName.trim()
       const trimmedPhone = phone.trim()
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: trimmedEmail,
-        password,
-        options: {
-          data: {
-            full_name: trimmedName,
-            phone: trimmedPhone,
-          },
-        },
-      })
-
-      if (signUpError) {
-        setError(signUpError.message)
-        return
-      }
-
-      const userId = data.user?.id
-      if (!userId) {
-        setError("Could not create user. Try again or disable Supabase “Confirm email” if sessions are blocked.")
-        return
-      }
-
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: userId,
-        email: trimmedEmail,
-        full_name: trimmedName,
-        phone: trimmedPhone,
-        is_verified: false,
-      })
-      if (profileError) {
-        setError(
-          `Account created, but profile save failed: ${profileError.message}. Add column is_verified to profiles or fix RLS.`
-        )
-        return
-      }
-
-      const sendRes = await fetch("/api/auth/send-verification", {
+      // Server-only signup: no profiles.insert — DB trigger creates profile after auth.users insert.
+      const res = await fetch("/api/auth/register", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmedEmail }),
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password,
+          full_name: trimmedName,
+          phone: trimmedPhone,
+        }),
+        redirect: "manual",
       })
-      const sendJson = (await sendRes.json().catch(() => ({}))) as { error?: string }
-      if (!sendRes.ok) {
-        setError(sendJson.error || "Account created but verification email failed. Use Resend API key on the server.")
-        return
+
+      if (res.status === 302 || res.status === 303) {
+        const location = res.headers.get("Location")
+        if (location) {
+          try {
+            sessionStorage.setItem("nexus_pending_verify_email", trimmedEmail)
+          } catch {
+            /* ignore */
+          }
+          window.location.assign(location)
+          return
+        }
       }
 
-      await supabase.auth.signOut()
-
-      try {
-        sessionStorage.setItem("nexus_pending_verify_email", trimmedEmail)
-      } catch {
-        /* ignore */
+      const json = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        setError(json.error || "Registration failed")
+        return
       }
 
       router.replace(`/auth/verify?email=${encodeURIComponent(trimmedEmail)}`)
