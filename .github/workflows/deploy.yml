@@ -1,4 +1,4 @@
-name: Deploy Nexus Pro
+name: Deploy v0app-latest
 
 on:
   push:
