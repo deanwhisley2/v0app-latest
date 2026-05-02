@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
-// Supabase sends the verification email when signup confirmation is enabled.
-// This endpoint triggers a resend for users who did not receive it.
+// Supabase Auth sends the OTP when email confirmations use the OTP template.
+// No server-side code generation — Auth owns the code.
 
 export async function POST(req: Request) {
   let email: string | undefined

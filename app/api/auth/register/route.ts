@@ -47,27 +47,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: signUpError.message }, { status: 400 })
   }
 
-  const origin = new URL(request.url).origin
-  try {
-    const sendRes = await fetch(`${origin}/api/auth/send-verification`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    })
-    if (!sendRes.ok) {
-      const payload = (await sendRes.json().catch(() => ({}))) as { error?: string }
-      const msg =
-        payload.error ||
-        "Account created but confirmation email failed. Check Supabase Auth email settings."
-      const status = sendRes.status === 429 ? 429 : 502
-      return NextResponse.json({ error: msg }, { status })
-    }
-  } catch {
-    return NextResponse.json(
-      { error: "Could not reach send-verification endpoint." },
-      { status: 502 }
-    )
-  }
+  // OTP email is sent once by Supabase on signUp when confirmations are enabled.
+  // Users can request another code from /auth/verify via send-verification.
 
   await supabase.auth.signOut()
 
