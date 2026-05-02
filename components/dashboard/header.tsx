@@ -30,7 +30,7 @@ interface HeaderProps {
   onTabChange: (tab: string) => void
   coins?: Array<{ symbol: string; name: string; price: number; change24h: number }>
   currentUser?: { email: string; username: string; fullName: string; level: number }
-  onLogout?: () => void
+  onLogout?: () => void | Promise<void>
 }
 
 export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogout }: HeaderProps) {
@@ -278,7 +278,16 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
                             <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                           </button>
                           <button 
-                            onClick={() => { onLogout?.(); setShowProfileMenu(false) }}
+                            type="button"
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  await onLogout?.()
+                                } finally {
+                                  setShowProfileMenu(false)
+                                }
+                              })()
+                            }}
                             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-destructive transition-colors hover:bg-destructive/10"
                           >
                             <LogOut className="h-4 w-4" />

@@ -40,7 +40,7 @@ interface SettingItem {
 }
 
 interface SettingsScreenProps {
-  onLogout?: () => void
+  onLogout?: () => void | Promise<void>
 }
 
 export function SettingsScreen({ onLogout }: SettingsScreenProps) {
@@ -135,7 +135,8 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
         {onLogout && (
           <Card className="border-destructive/30 bg-card p-4">
             <button
-              onClick={onLogout}
+              type="button"
+              onClick={() => void Promise.resolve(onLogout())}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 font-medium text-destructive transition-colors hover:bg-destructive/20"
             >
               <LogOut className="h-5 w-5" />
