@@ -1,112 +1,151 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
+
+const EMAIL_OTP_TYPES = [
+  'signup',
+  'invite',
+  'magiclink',
+  'recovery',
+  'email_change',
+  'email',
+] as const
+
+type EmailOtpType = (typeof EMAIL_OTP_TYPES)[number]
+
+function parseEmailOtpType(raw: string | null): EmailOtpType {
+  const t = raw?.toLowerCase()
+  if (t && (EMAIL_OTP_TYPES as readonly string[]).includes(t)) {
+    return t as EmailOtpType
+  }
+  return 'signup'
+}
 
 function VerifyContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const email = searchParams.get('email') || ''
-  const [code, setCode] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const email = searchParams.get('email') ?? ''
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  const token =
+    searchParams.get('token_hash') ?? searchParams.get('token')
+
+  const [status, setStatus] = useState<
+    'verifying' | 'success' | 'error' | 'pending'
+  >(() => {
+    if (token) return 'verifying'
+    if (email) return 'pending'
+    return 'error'
+  })
+  const [error, setError] = useState(() =>
+    !token && !email ? 'No verification token found' : ''
+  )
+  const [resendBusy, setResendBusy] = useState(false)
+  const [resendMsg, setResendMsg] = useState('')
+
+  const runIdRef = useRef(0)
+
+  useEffect(() => {
+    const nextToken =
+      searchParams.get('token_hash') ?? searchParams.get('token')
+    if (!nextToken) return
+
+    const myId = ++runIdRef.current
+    setStatus('verifying')
     setError('')
 
-    const res = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code })
-    })
+    const type = parseEmailOtpType(searchParams.get('type'))
 
-    if (res.ok) {
-      setSuccess(true)
-      setTimeout(() => {
-        router.push('/auth/login?verified=true')
-      }, 2000)
-    } else {
-      const data = await res.json()
-      setError(data.error || 'Invalid or expired code')
-      setLoading(false)
-    }
-  }
+    void (async () => {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: nextToken,
+        type,
+      })
 
-  // NO ERROR ON LOAD - just show the form
+      if (myId !== runIdRef.current) return
+
+      if (verifyError) {
+        setStatus('error')
+        setError(verifyError.message)
+      } else {
+        setStatus('success')
+        setTimeout(() => {
+          router.push('/auth/login?verified=true')
+        }, 2000)
+      }
+    })()
+  }, [searchParams, router])
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Verify Your Email</h1>
-        
-        {!success ? (
-          <>
-            <p className="text-center text-gray-600">
-              Enter the 6-digit code sent to <strong className="text-blue-600">{email}</strong>
-            </p>
-            
-            {error && (
-              <div className="p-3 text-red-700 bg-red-100 rounded-md">
-                {error}
-              </div>
-            )}
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
+        <h1 className="mb-4 text-center text-2xl font-bold text-gray-900">
+          Verify your email
+        </h1>
 
-            <form onSubmit={handleVerify} className="space-y-4">
-              <input
-                type="text"
-                maxLength={6}
-                placeholder="000000"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full p-3 text-2xl text-center tracking-widest border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-                required
-              />
-              
-              <button
-                type="submit"
-                disabled={loading || code.length !== 6}
-                className="w-full py-3 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-              >
-                {loading ? 'Verifying...' : 'Verify & Continue'}
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="text-center">
-            <div className="p-3 text-green-700 bg-green-100 rounded-md mb-4">
-              ✓ Email verified successfully!
+        {status === 'verifying' && (
+          <p className="text-center text-gray-600">Verifying your email…</p>
+        )}
+
+        {status === 'success' && (
+          <div className="space-y-3 text-center">
+            <div className="rounded-md bg-green-100 p-3 text-green-700">
+              ✓ Email verified! Redirecting to login…
             </div>
-            <p className="text-gray-600">Redirecting to login...</p>
           </div>
         )}
 
-        <p className="text-xs text-center text-gray-500 mt-4">
-          Didn't receive code?{' '}
-          <button 
-            onClick={async () => {
-              setError('')
-              setLoading(true)
-              try {
-                const res = await fetch('/api/auth/send-verification', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email })
-                })
-                if (res.ok) setError('New code sent! Check your email.')
-                else setError('Failed to resend code. Please try again.')
-              } catch (err) {
-                setError('Network error. Please try again.')
-              }
-              setLoading(false)
-            }}
-            className="text-blue-600 hover:underline"
-          >
-            Click here to resend
-          </button>
-        </p>
+        {status === 'error' && (
+          <div className="rounded-md bg-red-100 p-3 text-center text-red-700">
+            {error || 'Verification failed'}
+          </div>
+        )}
+
+        {status === 'pending' && (
+          <div className="space-y-4">
+            <p className="text-center text-gray-600">
+              We sent a verification link to{' '}
+              <strong className="text-blue-600">{email}</strong>. Open the link
+              in this browser to confirm your account.
+            </p>
+            {resendMsg && (
+              <div className="rounded-md bg-blue-50 p-3 text-center text-sm text-blue-800">
+                {resendMsg}
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={resendBusy || !email}
+              onClick={async () => {
+                setResendMsg('')
+                setResendBusy(true)
+                try {
+                  const res = await fetch('/api/auth/send-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                  })
+                  const data = (await res.json().catch(() => ({}))) as {
+                    error?: string
+                    message?: string
+                  }
+                  if (res.ok) {
+                    setResendMsg(data.message ?? 'Check your inbox for a new link.')
+                  } else {
+                    setResendMsg(data.error ?? 'Could not resend. Try again.')
+                  }
+                } catch {
+                  setResendMsg('Network error. Please try again.')
+                }
+                setResendBusy(false)
+              }}
+              className="w-full rounded-md bg-blue-600 py-3 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            >
+              {resendBusy ? 'Sending…' : 'Resend verification email'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -114,7 +153,13 @@ function VerifyContent() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+          Loading…
+        </div>
+      }
+    >
       <VerifyContent />
     </Suspense>
   )

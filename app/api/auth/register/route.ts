@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       const payload = (await sendRes.json().catch(() => ({}))) as { error?: string }
       const msg =
         payload.error ||
-        "Account created but verification email failed. Check RESEND_API_KEY / EMAIL_FROM on the server."
+        "Account created but confirmation email failed. Check Supabase Auth email settings."
       const status = sendRes.status === 429 ? 429 : 502
       return NextResponse.json({ error: msg }, { status })
     }
