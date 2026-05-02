@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
-// Supabase Auth sends the OTP when email confirmations use the OTP template.
-// No server-side code generation — Auth owns the code.
+/** Triggers Supabase Auth to resend signup confirmation (OTP or link — per your templates). No Resend. */
 
 export async function POST(req: Request) {
   let email: string | undefined
@@ -17,10 +16,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "email is required" }, { status: 400 })
   }
 
+  const origin = new URL(req.url).origin
+  const emailRedirectTo = `${origin}/auth/verify`
+
   const supabase = await createRouteHandlerSupabaseClient()
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
+    options: { emailRedirectTo },
   })
 
   if (error) {

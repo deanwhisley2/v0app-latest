@@ -2,7 +2,6 @@
 
 import { useState, Suspense, type FormEvent } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import {
   InputOTP,
   InputOTPGroup,
@@ -30,43 +29,32 @@ function VerifyContent() {
     setError('')
     setInfoMsg('')
 
-    const { data, error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: digits,
-      type: 'signup',
-    })
+    try {
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: digits }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+      }
 
-    if (verifyError) {
-      setError(verifyError.message || 'Invalid or expired code')
-      setLoading(false)
-      return
-    }
-
-    const userId = data.session?.user?.id ?? data.user?.id
-    if (userId) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ is_verified: true })
-        .eq('id', userId)
-
-      if (profileError) {
-        console.error('profiles update:', profileError)
-        setError(
-          profileError.message ||
-            'Email verified but profile could not be updated. Try signing in.',
-        )
+      if (!res.ok) {
+        setError(data.error ?? 'Invalid or expired code')
         setLoading(false)
         return
       }
+
+      setSuccess(true)
+      setLoading(false)
+      setTimeout(() => {
+        router.push('/auth/login?verified=true')
+      }, 2000)
+    } catch {
+      setError('Network error. Please try again.')
+      setLoading(false)
     }
-
-    await supabase.auth.signOut()
-
-    setSuccess(true)
-    setLoading(false)
-    setTimeout(() => {
-      router.push('/auth/login?verified=true')
-    }, 2000)
   }
 
   const handleResend = async () => {
@@ -131,6 +119,11 @@ function VerifyContent() {
             <p className="text-center text-gray-600">
               Enter the 6-digit code sent to{' '}
               <strong className="text-blue-600">{email}</strong>
+            </p>
+            <p className="text-center text-xs text-gray-500">
+              Email is sent by Supabase Auth (configure SMTP or templates in the Supabase
+              dashboard). Redirect URLs must include{' '}
+              <span className="font-mono">/auth/verify</span>.
             </p>
 
             {error && (

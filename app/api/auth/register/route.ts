@@ -9,8 +9,8 @@ type RegisterBody = {
 }
 
 /**
- * Registration only runs Supabase Auth signUp — no manual profiles insert.
- * Profile rows are expected from DB trigger on auth.users (handle_new_user).
+ * Registration: Supabase Auth signUp only. Confirmation email is sent by Supabase Auth
+ * when email confirmations are enabled (Dashboard SMTP or hosted mail — not Resend).
  */
 export async function POST(request: Request) {
   let body: RegisterBody
@@ -31,11 +31,14 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createRouteHandlerSupabaseClient()
+  const origin = new URL(request.url).origin
+  const emailRedirectTo = `${origin}/auth/verify`
 
   const { error: signUpError } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo,
       data: {
         full_name,
         phone,
@@ -46,9 +49,6 @@ export async function POST(request: Request) {
   if (signUpError) {
     return NextResponse.json({ error: signUpError.message }, { status: 400 })
   }
-
-  // OTP email is sent once by Supabase on signUp when confirmations are enabled.
-  // Users can request another code from /auth/verify via send-verification.
 
   await supabase.auth.signOut()
 
