@@ -26,6 +26,8 @@ export default function RegisterPage() {
       const trimmedPhone = phone.trim()
 
       // Server-only signup: no profiles.insert — DB trigger creates profile after auth.users insert.
+      // Use redirect: 'follow' so the browser completes the 303 to /auth/verify; 'manual' often yields
+      // unreadable/opaque responses and we wrongly fall through to "Registration failed".
       const res = await fetch("/api/auth/register", {
         method: "POST",
         credentials: "same-origin",
@@ -36,25 +38,37 @@ export default function RegisterPage() {
           full_name: trimmedName,
           phone: trimmedPhone,
         }),
-        redirect: "manual",
+        redirect: "follow",
       })
 
-      if (res.status === 302 || res.status === 303) {
-        const location = res.headers.get("Location")
-        if (location) {
+      try {
+        const next = new URL(res.url)
+        if (
+          next.pathname === "/auth/verify" ||
+          next.pathname.startsWith("/auth/verify/")
+        ) {
+          setError(null)
           try {
             sessionStorage.setItem("nexus_pending_verify_email", trimmedEmail)
           } catch {
             /* ignore */
           }
-          window.location.assign(location)
+          window.location.assign(res.url)
           return
         }
+      } catch {
+        /* ignore URL parse */
       }
 
-      const json = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) {
-        setError(json.error || "Registration failed")
+      const ct = res.headers.get("content-type") ?? ""
+      if (ct.includes("application/json")) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) {
+          setError(json.error || "Registration failed")
+          return
+        }
+      } else if (!res.ok) {
+        setError("Registration failed")
         return
       }
 
