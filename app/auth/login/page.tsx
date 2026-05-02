@@ -28,10 +28,27 @@ export default function LoginPage() {
         setError(signInError.message)
         return
       }
-      if (!data.session) {
+      if (!data.session || !data.user) {
         setError("No session returned. Check your email or confirm your account.")
         return
       }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("is_verified")
+        .eq("id", data.user.id)
+        .maybeSingle()
+
+      if (profileErr) {
+        console.warn("profiles check:", profileErr.message)
+      } else if (profile && profile.is_verified === false) {
+        await supabase.auth.signOut()
+        setError("Verify your email before signing in.")
+        router.replace(`/auth/verify?email=${encodeURIComponent(email.trim())}`)
+        router.refresh()
+        return
+      }
+
       router.replace("/dashboard")
       router.refresh()
     } catch (err) {

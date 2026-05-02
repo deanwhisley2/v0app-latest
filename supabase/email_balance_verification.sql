@@ -1,0 +1,1 @@
+-- Consolidated schema lives in trading_platform_schema.sql (includes balances + verification + bot_trade_records).

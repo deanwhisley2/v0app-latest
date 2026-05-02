@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
 const inter = Inter({
@@ -74,6 +75,7 @@ export default function RootLayout({
           }}
         />
         <AuthProvider>{children}</AuthProvider>
+        <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

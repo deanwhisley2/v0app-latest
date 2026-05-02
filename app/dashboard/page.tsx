@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
@@ -34,7 +35,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("trade")
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
-  const [mainBalance, setMainBalance] = useState(24831.42)
+  const [mainBalance, setMainBalance] = useState(0)
+  const [totalEarnings, setTotalEarnings] = useState(0)
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
   const [fundAmount, setFundAmount] = useState("")
   const [fundMethod, setFundMethod] = useState<"mtn" | "airtel" | "bank" | "wallet">("mtn")
@@ -103,6 +105,44 @@ export default function DashboardPage() {
       router.replace("/auth/login")
     }
   }, [authLoading, user, router])
+
+  useEffect(() => {
+    if (authLoading || !user) return
+    ;(async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("is_verified")
+        .eq("id", user.id)
+        .maybeSingle()
+      if (data?.is_verified === false) {
+        router.replace(`/auth/verify?email=${encodeURIComponent(user.email ?? "")}`)
+        await signOut()
+      }
+    })()
+  }, [authLoading, user, router, signOut])
+
+  useEffect(() => {
+    if (authLoading || !user) return
+    ;(async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+
+      const res = await fetch("/api/user/balance", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+
+      const json = (await res.json()) as {
+        available_balance?: number
+        total_earnings?: number
+      }
+      setMainBalance(Number(json.available_balance ?? 0))
+      setTotalEarnings(Number(json.total_earnings ?? 0))
+    })()
+  }, [authLoading, user])
 
   const handleLogout = useCallback(async () => {
     const { error } = await signOut()
@@ -222,8 +262,12 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-muted-foreground">Main Account Balance</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-muted-foreground">Available balance</p>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Bot earnings (total):{" "}
+                    {showBalance ? `$${totalEarnings.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••"}
+                  </span>
                   <button
                     onClick={() => setShowBalance(!showBalance)}
                     className="text-muted-foreground transition-colors hover:text-foreground"
@@ -400,7 +444,7 @@ export default function DashboardPage() {
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
               <Sidebar
                 coins={coinsData}
-                portfolioTotal={24831.42}
+                portfolioTotal={mainBalance}
                 portfolioChange={12.4}
               />
             </div>
@@ -467,7 +511,7 @@ export default function DashboardPage() {
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
               <Sidebar
                 coins={coinsData}
-                portfolioTotal={24831.42}
+                portfolioTotal={mainBalance}
                 portfolioChange={12.4}
               />
             </div>
@@ -486,7 +530,7 @@ export default function DashboardPage() {
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
               <Sidebar
                 coins={coinsData}
-                portfolioTotal={24831.42}
+                portfolioTotal={mainBalance}
                 portfolioChange={12.4}
               />
             </div>
@@ -506,7 +550,7 @@ export default function DashboardPage() {
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
               <Sidebar
                 coins={coinsData}
-                portfolioTotal={24831.42}
+                portfolioTotal={mainBalance}
                 portfolioChange={12.4}
               />
             </div>
@@ -521,7 +565,7 @@ export default function DashboardPage() {
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
               <Sidebar
                 coins={coinsData}
-                portfolioTotal={24831.42}
+                portfolioTotal={mainBalance}
                 portfolioChange={12.4}
               />
             </div>

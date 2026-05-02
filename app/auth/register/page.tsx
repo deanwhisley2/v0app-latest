@@ -43,22 +43,45 @@ export default function RegisterPage() {
       }
 
       const userId = data.user?.id
-      if (userId) {
-        const { error: profileError } = await supabase.from("profiles").insert({
-          id: userId,
-          email: trimmedEmail,
-          full_name: trimmedName,
-          phone: trimmedPhone,
-        })
-        if (profileError) {
-          setError(
-            `Account created, but profile save failed: ${profileError.message}. Fix RLS/columns in Supabase or try again after signing in.`
-          )
-          return
-        }
+      if (!userId) {
+        setError("Could not create user. Try again or disable Supabase “Confirm email” if sessions are blocked.")
+        return
       }
 
-      router.replace("/auth/login")
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: userId,
+        email: trimmedEmail,
+        full_name: trimmedName,
+        phone: trimmedPhone,
+        is_verified: false,
+      })
+      if (profileError) {
+        setError(
+          `Account created, but profile save failed: ${profileError.message}. Add column is_verified to profiles or fix RLS.`
+        )
+        return
+      }
+
+      const sendRes = await fetch("/api/auth/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmedEmail }),
+      })
+      const sendJson = (await sendRes.json().catch(() => ({}))) as { error?: string }
+      if (!sendRes.ok) {
+        setError(sendJson.error || "Account created but verification email failed. Use Resend API key on the server.")
+        return
+      }
+
+      await supabase.auth.signOut()
+
+      try {
+        sessionStorage.setItem("nexus_pending_verify_email", trimmedEmail)
+      } catch {
+        /* ignore */
+      }
+
+      router.replace(`/auth/verify?email=${encodeURIComponent(trimmedEmail)}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
