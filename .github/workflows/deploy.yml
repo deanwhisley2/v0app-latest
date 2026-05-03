@@ -19,7 +19,7 @@ jobs:
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
             export APP_DIR="${{ secrets.APP_DIR }}"
-            export APP_NAME="nexus-pro"
+            export APP_NAME="${{ secrets.APP_NAME }}"
             cd "$APP_DIR"
             chmod +x scripts/deploy.sh
             ./scripts/deploy.sh

@@ -1,0 +1,11 @@
+After pushing code, on the server:
+
+cd /var/www/nexus
+echo "BREVO_API_KEY=PASTE_YOUR_BREVO_API_KEY_HERE" >> .env.local
+echo "BREVO_SENDER_EMAIL=noreply@nexuspro.it.com" >> .env.local
+echo "BREVO_SENDER_NAME=Nexus Pro" >> .env.local
+
+Replace PASTE_YOUR_BREVO_API_KEY_HERE with the API key from Brevo (SMTP & API → API keys).
+
+Then:
+pm2 restart nexus
