@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server"
-import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { findAuthUserIdByEmail } from "@/lib/auth-users"
 
-/**
- * Confirms signup OTP via Supabase Auth, syncs profiles.is_verified, optional legacy cleanup.
- * Codes are issued by Auth emails — not stored in public.email_verifications by this app.
- */
+/** Validates code from public.email_verifications (issued via Brevo). */
+
 export async function POST(request: Request) {
   try {
     let email: string | undefined
@@ -22,36 +20,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "email and code are required" }, { status: 400 })
     }
 
+    const emailNormalized = email.toLowerCase()
     const code = codeRaw.replace(/\D/g, "").slice(0, 6)
     if (code.length !== 6) {
       return NextResponse.json({ error: "Enter the 6-digit code" }, { status: 400 })
     }
 
-    const supabase = await createRouteHandlerSupabaseClient()
-
-    const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "signup",
-    })
-
-    if (otpError) {
-      return NextResponse.json(
-        { error: otpError.message || "Invalid or expired code" },
-        { status: 400 }
-      )
-    }
-
-    const userId = otpData.session?.user?.id ?? otpData.user?.id
+    const admin = createAdminClient()
+    const userId = await findAuthUserIdByEmail(admin, email)
     if (!userId) {
-      return NextResponse.json(
-        { error: "Verification incomplete. Try again." },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Invalid code or email" }, { status: 400 })
     }
 
     const nowIso = new Date().toISOString()
-    const admin = createAdminClient()
+
+    const { data: rows, error: selErr } = await admin
+      .from("email_verifications")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("email", emailNormalized)
+      .eq("code", code)
+      .gt("expires_at", nowIso)
+      .limit(1)
+
+    if (selErr) {
+      console.error("verify-code select:", selErr)
+      return NextResponse.json({ error: "Verification lookup failed" }, { status: 500 })
+    }
+
+    if (!rows?.length) {
+      return NextResponse.json({ error: "Invalid or expired code" }, { status: 400 })
+    }
 
     const { error: profileErr } = await admin
       .from("profiles")
@@ -91,8 +90,6 @@ export async function POST(request: Request) {
     }
 
     await admin.from("email_verifications").delete().eq("user_id", userId)
-
-    await supabase.auth.signOut()
 
     return NextResponse.json({ ok: true, message: "Email verified. You can sign in." })
   } catch (e) {

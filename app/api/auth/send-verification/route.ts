@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
+import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 
-/** Triggers Supabase Auth to resend signup confirmation (OTP or link — per your templates). No Resend. */
+/** Brevo sends the message; codes live in public.email_verifications (service role). */
 
 export async function POST(req: Request) {
   let email: string | undefined
@@ -16,18 +16,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "email is required" }, { status: 400 })
   }
 
-  const origin = new URL(req.url).origin
-  const emailRedirectTo = `${origin}/auth/verify`
+  const result = await issueEmailVerificationCode(email)
 
-  const supabase = await createRouteHandlerSupabaseClient()
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email,
-    options: { emailRedirectTo },
-  })
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: result.status ?? 400 }
+    )
+  }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+  if (result.ambiguous) {
+    return NextResponse.json({
+      ok: true,
+      message: "If an account exists for this email, a code was sent.",
+    })
   }
 
   return NextResponse.json({ message: "Verification code sent" })

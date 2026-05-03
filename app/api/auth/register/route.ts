@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
+import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 
 type RegisterBody = {
   email?: string
@@ -9,8 +10,8 @@ type RegisterBody = {
 }
 
 /**
- * Registration: Supabase Auth signUp only. Confirmation email is sent by Supabase Auth
- * when email confirmations are enabled (Dashboard SMTP or hosted mail — not Resend).
+ * Supabase Auth signUp + Brevo verification email (see public.email_verifications).
+ * Disable “Confirm email” in Supabase Auth to avoid duplicate mails from Auth SMTP.
  */
 export async function POST(request: Request) {
   let body: RegisterBody
@@ -48,6 +49,14 @@ export async function POST(request: Request) {
 
   if (signUpError) {
     return NextResponse.json({ error: signUpError.message }, { status: 400 })
+  }
+
+  const issued = await issueEmailVerificationCode(email)
+  if (!issued.ok) {
+    return NextResponse.json(
+      { error: issued.error },
+      { status: issued.status ?? 400 }
+    )
   }
 
   await supabase.auth.signOut()

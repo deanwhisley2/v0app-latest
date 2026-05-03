@@ -121,9 +121,10 @@ function VerifyContent() {
               <strong className="text-blue-600">{email}</strong>
             </p>
             <p className="text-center text-xs text-gray-500">
-              Email is sent by Supabase Auth (configure SMTP or templates in the Supabase
-              dashboard). Redirect URLs must include{' '}
-              <span className="font-mono">/auth/verify</span>.
+              Codes are emailed via Brevo. Set{' '}
+              <span className="font-mono">BREVO_API_KEY</span> on the server; optional{' '}
+              <span className="font-mono">BREVO_SENDER_EMAIL</span>,{' '}
+              <span className="font-mono">BREVO_SENDER_NAME</span>.
             </p>
 
             {error && (
