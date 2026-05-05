@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const goGuestDashboard = useCallback(() => {
@@ -33,6 +34,7 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setInfo(null)
     if (isDevLocalOnly()) {
       goGuestDashboard()
       return
@@ -100,6 +102,37 @@ export default function LoginPage() {
     }
   }
 
+  async function handleForgotPassword() {
+    setError(null)
+    setInfo(null)
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      setError("Enter your email first, then click Forgot password.")
+      return
+    }
+    const configIssue = getSupabaseBrowserConfigIssue()
+    if (configIssue) {
+      setError(configIssue)
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: `${window.location.origin}/auth/login`,
+      })
+      if (resetError) {
+        setError(resetError.message)
+        return
+      }
+      setInfo("Password reset email sent. Check inbox and spam.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send reset email")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl">
@@ -151,7 +184,23 @@ export default function LoginPage() {
               disabled={isSubmitting}
               aria-invalid={!!error}
             />
+            <div className="text-right">
+              <button
+                type="button"
+                className="text-xs text-primary underline-offset-4 hover:underline disabled:opacity-50"
+                disabled={isSubmitting}
+                onClick={handleForgotPassword}
+              >
+                Forgot password?
+              </button>
+            </div>
           </div>
+
+          {info ? (
+            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
+              {info}
+            </p>
+          ) : null}
 
           {error ? (
             <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">

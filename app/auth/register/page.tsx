@@ -25,6 +25,7 @@ export default function RegisterPage() {
   const { language: ctxLang, currency: ctxCur, setPreferences } = useUserPreferences()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
@@ -45,6 +46,10 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.")
+      return
+    }
     setIsSubmitting(true)
     setPreferences({ language, currency })
     try {
@@ -250,6 +255,19 @@ export default function RegisterPage() {
               disabled={isSubmitting}
             />
             <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="register-confirm-password">Confirm password</Label>
+            <Input
+              id="register-confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+              disabled={isSubmitting}
+            />
           </div>
 
           {error ? (

@@ -99,8 +99,7 @@ function VerifyContent() {
             Missing email address
           </h1>
           <p className="mt-3 text-gray-600">
-            Go back and complete registration, or open the link that includes{' '}
-            <span className="font-mono text-sm">?email=</span> your address.
+            Go back and complete registration to continue verification.
           </p>
         </div>
       </div>
@@ -119,12 +118,6 @@ function VerifyContent() {
             <p className="text-center text-gray-600">
               Enter the 6-digit code sent to{' '}
               <strong className="text-blue-600">{email}</strong>
-            </p>
-            <p className="text-center text-xs text-gray-500">
-              Codes are emailed via Brevo. Set{' '}
-              <span className="font-mono">BREVO_API_KEY</span> on the server; optional{' '}
-              <span className="font-mono">BREVO_SENDER_EMAIL</span>,{' '}
-              <span className="font-mono">BREVO_SENDER_NAME</span>.
             </p>
 
             {error && (
