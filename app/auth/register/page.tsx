@@ -102,8 +102,6 @@ export default function RegisterPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
         <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl text-center">
-          <p className="font-mono text-2xl font-black tracking-tight text-primary">NEXUS</p>
-          <p className="text-xs font-bold tracking-[0.3em] text-cyan-400">PRO</p>
           <h1 className="mt-2 text-xl font-semibold text-foreground">Local dev mode</h1>
           <p className="text-sm text-muted-foreground">
             <code className="rounded bg-muted px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY=1</code> is on. Sign-up and
@@ -140,9 +138,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="text-center">
-          <p className="font-mono text-2xl font-black tracking-tight text-primary">NEXUS</p>
-          <p className="text-xs font-bold tracking-[0.3em] text-cyan-400">PRO</p>
-          <h1 className="mt-4 text-2xl font-semibold text-foreground">{reg.title}</h1>
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">{reg.title}</h1>
           <p className="mt-2 text-sm text-muted-foreground">{reg.subtitle}</p>
         </div>
 

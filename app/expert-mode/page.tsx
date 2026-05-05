@@ -46,7 +46,7 @@ function ExpertModeContent() {
   const params = useSearchParams()
   const initialSymbol = params.get("symbol")?.toUpperCase() ?? "BTCUSDT"
   const [symbol, setSymbol] = useState(initialSymbol)
-  const [timeWindowSeconds, setTimeWindowSeconds] = useState(300)
+  const [timeWindowMinutes, setTimeWindowMinutes] = useState(5)
   const [useNex, setUseNex] = useState(true)
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [analysisLoading, setAnalysisLoading] = useState(false)
@@ -82,6 +82,7 @@ function ExpertModeContent() {
   async function startAnalysis() {
     setAnalysisLoading(true)
     setSessionStatus(null)
+    const timeWindowSeconds = Math.max(60, Math.min(600, Math.floor(timeWindowMinutes * 60)))
     const res = await fetch("/api/expert/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -192,13 +193,13 @@ function ExpertModeContent() {
             <Input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTCUSDT" />
           </div>
           <div>
-            <Label>Time Window (seconds)</Label>
+            <Label>Time Window (minutes)</Label>
             <Input
               type="number"
-              min={60}
-              max={600}
-              value={timeWindowSeconds}
-              onChange={(e) => setTimeWindowSeconds(Number(e.target.value))}
+              min={1}
+              max={10}
+              value={timeWindowMinutes}
+              onChange={(e) => setTimeWindowMinutes(Number(e.target.value))}
             />
           </div>
           <div className="flex items-end gap-2">

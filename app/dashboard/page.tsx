@@ -181,22 +181,31 @@ export default function DashboardPage() {
   const [connectedExchanges, setConnectedExchanges] = useState<Array<{ id: string; name: string; balance: number; isDefault?: boolean }>>([])
   const [selectedExchangeId, setSelectedExchangeId] = useState<string | undefined>()
   
-  // Load connected exchanges from localStorage
+  // Load connected exchanges from localStorage + account metadata for cross-device continuity.
   useEffect(() => {
     if (typeof window === "undefined") return
-    const stored = localStorage.getItem("nexus_exchanges")
-    if (stored) {
-      const exchanges = JSON.parse(stored).filter((e: { connected: boolean }) => e.connected)
-      setConnectedExchanges(exchanges.map((e: { id: string; name: string; balance: number; isDefault?: boolean }) => ({
-        id: e.id,
-        name: e.name,
-        balance: e.balance || 0,
-        isDefault: e.isDefault,
-      })))
-      const defaultExchange = exchanges.find((e: { isDefault: boolean }) => e.isDefault)
+    const fromRows = (rows: Array<{ id: string; name: string; balance?: number; isDefault?: boolean }>) => {
+      setConnectedExchanges(
+        rows.map((e) => ({
+          id: e.id,
+          name: e.name,
+          balance: e.balance || 0,
+          isDefault: e.isDefault,
+        }))
+      )
+      const defaultExchange = rows.find((e) => e.isDefault)
       if (defaultExchange) setSelectedExchangeId(defaultExchange.id)
     }
-  }, [])
+    const stored = localStorage.getItem("nexus_exchanges")
+    if (stored) {
+      const exchanges = JSON.parse(stored)
+      fromRows(exchanges)
+    }
+    const metadataExchanges = (user?.user_metadata as Record<string, unknown> | undefined)?.nexus_exchanges
+    if (Array.isArray(metadataExchanges) && metadataExchanges.length > 0) {
+      fromRows(metadataExchanges as Array<{ id: string; name: string; balance?: number; isDefault?: boolean }>)
+    }
+  }, [user])
   
   // Live Analysis State
   const [liveAnalysis, setLiveAnalysis] = useState<{
@@ -600,6 +609,18 @@ export default function DashboardPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => router.push("/joelin")}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+              >
+                Joelin
+              </button>
+              <button
+                onClick={() => router.push(`/expert-mode?symbol=${encodeURIComponent(selectedCoinSymbol)}`)}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+              >
+                Expert Mode
+              </button>
               <button
                 onClick={() => { setShowFundModal("add"); setFundAmount(""); setFundPhone(""); }}
                 className="flex items-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90"

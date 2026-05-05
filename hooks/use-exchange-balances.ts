@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { fetchAllExchangeBalances, type ExchangeBalance } from "@/lib/exchange-balance-api"
+import { supabase } from "@/lib/supabaseClient"
+import { useAuth } from "@/contexts/AuthContext"
 
 export interface ConnectedExchange {
   id: string
@@ -26,6 +28,7 @@ export interface ExchangeBalanceState {
 const POLL_INTERVAL_MS = 1000 // 1 second polling for real-time accuracy
 
 export function useExchangeBalances() {
+  const { user } = useAuth()
   const [exchanges, setExchanges] = useState<ConnectedExchange[]>([])
   const [balanceState, setBalanceState] = useState<ExchangeBalanceState>({
     balances: {},
@@ -42,37 +45,41 @@ export function useExchangeBalances() {
     exchangesRef.current = exchanges
   }, [exchanges])
 
-  // Load exchanges from localStorage
+  // Load exchanges from localStorage first, then account metadata for cross-device continuity.
   useEffect(() => {
     if (typeof window === "undefined") return
-    
+    const mapRows = (rows: any[]): ConnectedExchange[] =>
+      rows.map((ex: any) => ({
+        id: ex.id,
+        name: ex.name,
+        apiKey: ex._apiKey || ex.apiKey || "",
+        apiSecret: ex._apiSecret || "",
+        apiPassphrase: ex._apiPassphrase || "",
+        frozen: ex.frozen || false,
+        isDefault: ex.isDefault || false,
+        balance: ex.balance || 0,
+        lastSync: ex.lastSync ? new Date(ex.lastSync) : undefined,
+      }))
+
     const stored = localStorage.getItem("nexus_exchanges")
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
-        const mapped: ConnectedExchange[] = parsed.map((ex: any) => ({
-          id: ex.id,
-          name: ex.name,
-          apiKey: ex._apiKey || ex.apiKey || "",
-          apiSecret: ex._apiSecret || "",
-          apiPassphrase: ex._apiPassphrase || "",
-          frozen: ex.frozen || false,
-          isDefault: ex.isDefault || false,
-          balance: ex.balance || 0,
-          lastSync: ex.lastSync ? new Date(ex.lastSync) : undefined,
-        }))
-        setExchanges(mapped)
+        setExchanges(mapRows(parsed))
       } catch (e) {
         console.error("Failed to parse exchanges:", e)
       }
     }
-  }, [])
 
-  // Save exchanges to localStorage (preserving secrets)
-  const saveExchanges = useCallback((updated: ConnectedExchange[]) => {
-    setExchanges(updated)
+    const profileRows = (user?.user_metadata as any)?.nexus_exchanges
+    if (Array.isArray(profileRows) && profileRows.length > 0) {
+      setExchanges(mapRows(profileRows))
+    }
+  }, [user])
+
+  // Save exchanges locally and to account metadata (cross-device).
+  const saveExchanges = useCallback(async (updated: ConnectedExchange[]) => {
     if (typeof window !== "undefined") {
-      // Store secrets separately so they persist
       const toStore = updated.map((ex) => ({
         id: ex.id,
         name: ex.name,
@@ -86,8 +93,17 @@ export function useExchangeBalances() {
         lastSync: ex.lastSync,
       }))
       localStorage.setItem("nexus_exchanges", JSON.stringify(toStore))
+      if (user) {
+        const currentMeta = (user.user_metadata as Record<string, unknown>) ?? {}
+        await supabase.auth.updateUser({
+          data: {
+            ...currentMeta,
+            nexus_exchanges: toStore,
+          },
+        })
+      }
     }
-  }, [])
+  }, [user])
 
   // Toggle freeze/unfreeze for an exchange
   const toggleFreeze = useCallback((exchangeId: string) => {
@@ -95,7 +111,7 @@ export function useExchangeBalances() {
       const updated = prev.map((ex) =>
         ex.id === exchangeId ? { ...ex, frozen: !ex.frozen } : ex
       )
-      saveExchanges(updated)
+      void saveExchanges(updated)
       return updated
     })
   }, [saveExchanges])
@@ -136,7 +152,7 @@ export function useExchangeBalances() {
         ]
       }
       
-      saveExchanges(updated)
+      void saveExchanges(updated)
       return updated
     })
   }, [saveExchanges])
@@ -145,7 +161,7 @@ export function useExchangeBalances() {
   const disconnectExchange = useCallback((exchangeId: string) => {
     setExchanges((prev) => {
       const updated = prev.filter((ex) => ex.id !== exchangeId)
-      saveExchanges(updated)
+      void saveExchanges(updated)
       return updated
     })
   }, [saveExchanges])
@@ -157,7 +173,7 @@ export function useExchangeBalances() {
         ...ex,
         isDefault: ex.id === exchangeId,
       }))
-      saveExchanges(updated)
+      void saveExchanges(updated)
       return updated
     })
   }, [saveExchanges])

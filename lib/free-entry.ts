@@ -3,13 +3,13 @@ import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 
 /**
- * No-credentials / guest access: **on by default** (no env required).
- * Set `NEXT_PUBLIC_DISABLE_GUEST=1` to require real Supabase login everywhere.
- * `NEXT_PUBLIC_DEV_LOCAL_ONLY=1` always allows guest (overrides DISABLE_GUEST).
+ * No-credentials / guest access: off by default for production realism.
+ * Set `NEXT_PUBLIC_ENABLE_GUEST=1` to allow guest mode.
+ * `NEXT_PUBLIC_DEV_LOCAL_ONLY=1` still allows guest for local development.
  */
 export function isGuestLoginEnabled(): boolean {
   if (isDevLocalOnly()) return true
-  return process.env.NEXT_PUBLIC_DISABLE_GUEST !== "1"
+  return process.env.NEXT_PUBLIC_ENABLE_GUEST === "1"
 }
 
 /** @alias — same as {@link isGuestLoginEnabled} */

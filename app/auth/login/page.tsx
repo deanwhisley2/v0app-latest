@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Bot, MessageCircle, X } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
@@ -10,7 +11,7 @@ import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { NexusProLogo } from "@/components/brand/nexus-pro-logo"
+import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,6 +21,15 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showJoelin, setShowJoelin] = useState(false)
+  const [joelinInput, setJoelinInput] = useState("")
+  const [joelinBusy, setJoelinBusy] = useState(false)
+  const [joelinMessages, setJoelinMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
+    {
+      role: "assistant",
+      text: "I am Joelin. I can explain how Nexus works, container mode benefits, and guide you to human support (admin desk coming soon).",
+    },
+  ])
 
   const goGuestDashboard = useCallback(() => {
     try {
@@ -133,26 +143,36 @@ export default function LoginPage() {
     }
   }
 
+  async function askJoelin(seed?: string) {
+    const prompt = (seed ?? joelinInput).trim()
+    if (!prompt || joelinBusy) return
+    setJoelinMessages((prev) => [...prev, { role: "user", text: prompt }])
+    setJoelinInput("")
+    setJoelinBusy(true)
+    try {
+      const reply = await requestNexusAssistantReply({
+        userMessage: prompt,
+        surface: "auth_screen",
+        isGuest: false,
+        tradingUserLevel: 1,
+      })
+      setJoelinMessages((prev) => [...prev, { role: "assistant", text: reply }])
+    } finally {
+      setJoelinBusy(false)
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="text-center">
-          <div className="flex justify-center">
-            <NexusProLogo variant="light" className="h-10 w-auto sm:h-11" aria-label="NEXUS PRO" />
-          </div>
-          <h1 className="mt-4 text-2xl font-semibold text-foreground">Sign in</h1>
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">Sign in</h1>
           <p className="mt-2 text-sm text-muted-foreground">Use your email and password.</p>
           {isDevLocalOnly() ? (
             <p className="mt-3 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200">
               <strong>Local dev mode:</strong> Supabase is off. <strong>Sign in</strong> skips password and opens
               the guest dashboard. Remove <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY</code>{" "}
               when you are ready for real auth.
-            </p>
-          ) : getSupabaseBrowserConfigIssue() && isGuestLoginEnabled() ? (
-            <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              <strong>No Supabase keys in .env.local.</strong> <strong>Sign in</strong> will open a{" "}
-              <strong>guest</strong> dashboard until you add <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-              <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>.
             </p>
           ) : null}
         </div>
@@ -245,6 +265,65 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
+      <button
+        type="button"
+        onClick={() => setShowJoelin(true)}
+        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
+        aria-label="Open Joelin assistant"
+      >
+        <Bot className="h-6 w-6" />
+      </button>
+
+      {showJoelin && (
+        <div className="fixed bottom-6 right-6 z-50 w-[360px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              <p className="font-semibold">Joelin Assistant</p>
+            </div>
+            <button type="button" onClick={() => setShowJoelin(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="max-h-72 space-y-2 overflow-y-auto p-3 text-sm">
+            {joelinMessages.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
+                <div className={`inline-block max-w-[90%] rounded-xl px-3 py-2 ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border p-3">
+            <div className="mb-2 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void askJoelin("Explain container mode benefits")} className="rounded-md border border-border px-2 py-1 text-xs">
+                Container mode
+              </button>
+              <button type="button" onClick={() => void askJoelin("Why should I trust Nexus Pro?")} className="rounded-md border border-border px-2 py-1 text-xs">
+                Why trust us?
+              </button>
+              <button type="button" onClick={() => void askJoelin("How do I contact a human assistant?")} className="rounded-md border border-border px-2 py-1 text-xs">
+                Human assistant
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                value={joelinInput}
+                onChange={(e) => setJoelinInput(e.target.value)}
+                placeholder="Ask Joelin..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void askJoelin()
+                }}
+                disabled={joelinBusy}
+              />
+              <Button type="button" size="icon" onClick={() => void askJoelin()} disabled={joelinBusy || !joelinInput.trim()}>
+                <MessageCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">Human assistant (admin login) is planned next release.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

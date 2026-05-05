@@ -66,19 +66,6 @@ export default function HomePage() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 flex justify-center pt-6 md:pt-10"
-        aria-hidden
-      >
-        <img
-          src="/brand/nexus-pro-hero-watermark.svg"
-          alt=""
-          width={900}
-          height={280}
-          className="w-[min(118vw,920px)] max-w-none opacity-[0.24] contrast-110 saturate-110 [mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
-        />
-      </div>
-
       <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/" className="flex items-center outline-offset-4 hover:opacity-95">

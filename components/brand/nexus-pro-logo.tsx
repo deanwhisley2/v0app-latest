@@ -113,10 +113,8 @@ export function NexusProLogo({
         )}
       </defs>
 
-      <g transform="translate(0,2)">{mark}</g>
-
       <text
-        x="62"
+        x="4"
         y="38"
         fill={`url(#${gradId})`}
         style={{
@@ -129,7 +127,7 @@ export function NexusProLogo({
         NEXUS
       </text>
       <text
-        x="62"
+        x="4"
         y="52"
         fill={proFill}
         style={{
