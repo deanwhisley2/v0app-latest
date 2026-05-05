@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense, type FormEvent } from 'react'
+import { useEffect, useState, Suspense, type FormEvent } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
   InputOTP,
@@ -11,7 +11,7 @@ import {
 function VerifyContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const email = searchParams.get('email')?.trim() ?? ''
+  const [email, setEmail] = useState('')
 
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
@@ -19,6 +19,28 @@ function VerifyContent() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
+
+  useEffect(() => {
+    const fromQuery = searchParams.get('email')?.trim() ?? ''
+    let fromSession = ''
+    try {
+      fromSession = sessionStorage.getItem('nexus_pending_verify_email')?.trim() ?? ''
+    } catch {
+      /* ignore */
+    }
+    const resolved = fromQuery || fromSession
+    if (!resolved) return
+    setEmail(resolved)
+    try {
+      sessionStorage.setItem('nexus_pending_verify_email', resolved)
+    } catch {
+      /* ignore */
+    }
+    if (fromQuery && typeof window !== 'undefined') {
+      const cleanPath = `${window.location.origin}/auth/verify`
+      window.history.replaceState({}, '', cleanPath)
+    }
+  }, [searchParams])
 
   const handleVerify = async (e: FormEvent) => {
     e.preventDefault()

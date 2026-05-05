@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createRouteHandlerSupabaseClient()
-  const origin = new URL(request.url).origin
+  const origin = process.env.NEXT_PUBLIC_SITE_URL?.trim() || new URL(request.url).origin
   const emailRedirectTo = `${origin}/auth/verify`
 
   const { error: signUpError } = await supabase.auth.signUp({
@@ -72,7 +72,5 @@ export async function POST(request: Request) {
 
   await supabase.auth.signOut()
 
-  const verify = new URL("/auth/verify", request.url)
-  verify.searchParams.set("email", email)
-  return NextResponse.redirect(verify, 303)
+  return NextResponse.json({ ok: true })
 }
