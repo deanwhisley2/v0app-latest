@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { NexusNotificationsProvider } from '@/contexts/NexusNotificationsContext'
 import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
@@ -77,7 +78,9 @@ export default function RootLayout({
           }}
         />
         <AuthProvider>
-          <UserPreferencesProvider>{children}</UserPreferencesProvider>
+          <NexusNotificationsProvider>
+            <UserPreferencesProvider>{children}</UserPreferencesProvider>
+          </NexusNotificationsProvider>
         </AuthProvider>
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
         {process.env.NODE_ENV === 'production' && <Analytics />}
