@@ -1,5 +1,5 @@
-'use client'
-import { useState } from 'react'
+"use client"
+import { useCallback, useEffect, useState } from "react"
 
 interface SafetyEvent {
   id: string
@@ -11,6 +11,27 @@ interface SafetyEvent {
 }
 
 export default function SafetyPanel() {
+  const [demoMode, setDemoMode] = useState(false)
+  const [demoExpiry, setDemoExpiry] = useState(0)
+
+  const refreshDemo = useCallback(async () => {
+    try {
+      const res = await fetch("/api/demo-mode", { cache: "no-store" })
+      if (!res.ok) return
+      const data = (await res.json()) as { enabled?: boolean; remainingSeconds?: number }
+      setDemoMode(Boolean(data.enabled))
+      setDemoExpiry(typeof data.remainingSeconds === "number" ? data.remainingSeconds : 0)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshDemo()
+    const id = window.setInterval(() => void refreshDemo(), 2000)
+    return () => window.clearInterval(id)
+  }, [refreshDemo])
+
   const [safetyStatus, setSafetyStatus] = useState({
     preTradeValidator: 'ACTIVE',
     guardrailEngine: 'ACTIVE',
@@ -121,6 +142,71 @@ export default function SafetyPanel() {
             <div style={{ fontFamily: "'Space Mono', monospace", fontSize: '14px', color: '#F0F2F5' }}>30 sec</div>
           </div>
         </div>
+      </div>
+
+      {/* Demo mode — only suppresses exchange send; analysis stays real */}
+      <div
+        style={{
+          marginBottom: "24px",
+          borderTop: "1px solid #1E2028",
+          paddingTop: "16px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              cursor: "pointer",
+              color: "#F0F2F5",
+              fontWeight: "bold",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={demoMode}
+              onChange={async (e) => {
+                const enabled = e.target.checked
+                await fetch("/api/demo-mode", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ enabled, duration: 5 }),
+                })
+                await refreshDemo()
+              }}
+              style={{ width: 18, height: 18, cursor: "pointer" }}
+            />
+            DEMO MODE (no orders to exchange)
+          </label>
+          {demoMode && demoExpiry > 0 ? (
+            <span
+              style={{
+                backgroundColor: "#FFB800",
+                color: "#0A0B0E",
+                padding: "4px 12px",
+                borderRadius: "4px",
+                fontFamily: "'Space Mono', monospace",
+                fontSize: "12px",
+              }}
+            >
+              Auto-off in {Math.floor(demoExpiry / 60)}:{(demoExpiry % 60).toString().padStart(2, "0")}
+            </span>
+          ) : null}
+        </div>
+        <p style={{ fontSize: "11px", color: "#8B92A5", marginTop: "8px" }}>
+          {demoMode
+            ? "Demo on: strategies and safety still run; execute route will not send live orders."
+            : "Real execute path: ensure keys and risk limits before disabling demo."}
+        </p>
       </div>
 
       {/* Emergency Controls */}

@@ -1,6 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import {
+  buildContainerDailySchedule,
+  completedFixDaysSince,
+  fixPeriodDayCount,
+  scheduledEarnedUsd,
+} from "@/lib/container-earnings-schedule"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,7 +16,6 @@ import {
   TrendingDown,
   Lock,
   Unlock,
-  Star,
   Trophy,
   Shield,
   Zap,
@@ -86,9 +92,50 @@ interface ActiveFixTrade {
   dailyWithdrawUsed: number // For 6-month users 10% daily option
   coinSymbol: string // The coin this trade is fixed on
   fixedPrice: number // Price at which it was fixed
+  /** Platform-deposit container: random positive daily buckets that sum to an internal schedule target (server-side). */
+  dailySchedule?: number[]
 }
 
-// Master Traders (AI bots with human names)
+function FixEarnedDisplay({
+  amountUsd,
+  formatUserMoney,
+}: {
+  amountUsd: number
+  formatUserMoney: (usd: number) => string
+}) {
+  const [display, setDisplay] = useState(amountUsd)
+  const fromRef = useRef(amountUsd)
+
+  useEffect(() => {
+    const from = fromRef.current
+    const to = amountUsd
+    if (Math.abs(to - from) < 0.005) {
+      fromRef.current = to
+      setDisplay(to)
+      return
+    }
+    let raf = 0
+    const t0 = performance.now()
+    const dur = 1400
+    const tick = () => {
+      const p = Math.min(1, (performance.now() - t0) / dur)
+      const eased = 1 - (1 - p) ** 2
+      const next = from + (to - from) * eased
+      setDisplay(next)
+      if (p < 1) raf = requestAnimationFrame(tick)
+      else {
+        fromRef.current = to
+        setDisplay(to)
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [amountUsd])
+
+  return <span className="font-mono font-bold text-success">+{formatUserMoney(display)}</span>
+}
+
+// Master traders (automation personas with human names)
 const masterTraders: MasterTrader[] = [
   {
     id: "tr_001",
@@ -134,7 +181,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 8934,
     riskLevel: "High",
     speciality: "Altcoin Hunter",
-    minLevel: 2,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 34.2,
     maxDrawdown: 22.1,
@@ -151,7 +198,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 4521,
     riskLevel: "Low",
     speciality: "Swing Trading",
-    minLevel: 2,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 15.3,
     maxDrawdown: 6.8,
@@ -168,7 +215,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 6789,
     riskLevel: "Medium",
     speciality: "DeFi Expert",
-    minLevel: 3,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 21.8,
     maxDrawdown: 15.3,
@@ -185,7 +232,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 3245,
     riskLevel: "Low",
     speciality: "Index Trading",
-    minLevel: 3,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 14.1,
     maxDrawdown: 5.2,
@@ -202,7 +249,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 12456,
     riskLevel: "Medium",
     speciality: "News Trading",
-    minLevel: 4,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 28.9,
     maxDrawdown: 18.7,
@@ -219,7 +266,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 2134,
     riskLevel: "Low",
     speciality: "Whale Tracking",
-    minLevel: 4,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 19.6,
     maxDrawdown: 4.1,
@@ -236,7 +283,7 @@ const masterTraders: MasterTrader[] = [
     totalTrades: 18923,
     riskLevel: "High",
     speciality: "Leverage Master",
-    minLevel: 5,
+    minLevel: 1,
     status: "active",
     monthlyReturn: 45.2,
     maxDrawdown: 28.4,
@@ -252,13 +299,13 @@ const masterTraders: MasterTrader[] = [
     followers: 287654,
     totalTrades: 1567,
     riskLevel: "Low",
-    speciality: "AI-Powered",
-    minLevel: 5,
+    speciality: "Joelin-assisted",
+    minLevel: 1,
     status: "active",
     monthlyReturn: 22.3,
     maxDrawdown: 3.2,
-    description: "Uses proprietary AI algorithms combining 16+ strategies. The most advanced trading system available.",
-    strategies: ["Multi-Strategy AI", "Deep Learning", "Adaptive Risk"]
+    description: "Uses proprietary multi-strategy engines combining 16+ models. Advanced desk-grade execution.",
+    strategies: ["Multi-strategy stack", "Deep learning layer", "Adaptive risk"]
   },
 ]
 
@@ -276,7 +323,8 @@ interface ContainerModeProps {
   userLevel?: UserLevel
 }
 
-export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
+export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
+  const { formatUserMoney } = useUserPreferences()
   const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
@@ -299,24 +347,35 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
     }
   ])
 
-  const [activeFixTrades, setActiveFixTrades] = useState<ActiveFixTrade[]>([
-    {
-      traderId: "tr_002",
-      amount: 2000,
-      period: 3,
-      startTime: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000), // 45 days ago
-      endTime: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000), // 45 days from now
-      earned: 374.20,
-      isLocked: true,
-      canWithdrawEarnings: true, // 3+ months can withdraw earnings
-      lastWithdrawalDate: null,
-      totalWithdrawn: 0,
-      withdrawablePercent: 50,
-      dailyWithdrawUsed: 0,
-      coinSymbol: "BTC",
-      fixedPrice: 67500,
-    }
-  ])
+  const [activeFixTrades, setActiveFixTrades] = useState<ActiveFixTrade[]>(() => {
+    const traderId = "tr_002"
+    const amount = 2000
+    const period = 3 as FixPeriod
+    const startTime = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
+    const endTime = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000)
+    const seed = `${traderId}-${amount}-${period}-${startTime.getTime()}`
+    const dailySchedule = buildContainerDailySchedule(amount, period, seed)
+    const earned = scheduledEarnedUsd(dailySchedule, startTime)
+    return [
+      {
+        traderId,
+        amount,
+        period,
+        startTime,
+        endTime,
+        earned,
+        isLocked: true,
+        canWithdrawEarnings: true,
+        lastWithdrawalDate: null,
+        totalWithdrawn: 0,
+        withdrawablePercent: 50,
+        dailyWithdrawUsed: 0,
+        coinSymbol: "BTC",
+        fixedPrice: 67500,
+        dailySchedule,
+      },
+    ]
+  })
 
   // Countdown timer effect
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
@@ -339,28 +398,19 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
     totalEarned: 12500000,
   })
 
-  // Testimonial popup state
-  const [showTestimonial, setShowTestimonial] = useState(false)
-  const [currentTestimonial, setCurrentTestimonial] = useState(0)
+  const joinNotificationLines = useMemo(() => {
+    const m = (usd: number) => formatUserMoney(usd)
+    return [
+      () => `John D. from Nigeria just joined Fix Trade with ${m(2000)}`,
+      () => `Mary K. from Kenya started Copy Trading Marcus Chen`,
+      () => `Peter M. from Uganda fixed ${m(5000)} for 6 months`,
+      () => `Alice N. from Tanzania earned ${m(340)} today!`,
+      () => `Michael O. from Ghana joined with ${m(1500)}`,
+      () => `Sandra L. from South Africa started following Elena Rodriguez`,
+    ]
+  }, [formatUserMoney])
 
-  const testimonials = [
-    { name: "Sarah M.", country: "Kenya", earned: "$4,200", period: "3 months", message: "Container Mode changed my life! Started with $500, now I earn passive income daily." },
-    { name: "James O.", country: "Uganda", earned: "$12,500", period: "6 months", message: "Fixed trade is the best decision I made. The returns are incredible!" },
-    { name: "Amina K.", country: "Tanzania", earned: "$2,800", period: "1 month", message: "I was skeptical at first but the results speak for themselves. Highly recommend!" },
-    { name: "David N.", country: "Nigeria", earned: "$8,900", period: "3 months", message: "Copy trading the pros is so easy. I just set it and forget it!" },
-    { name: "Grace W.", country: "Rwanda", earned: "$15,000", period: "6 months", message: "Quit my job because of Container Mode. Best investment platform ever!" },
-  ]
-
-  const joinNotifications = [
-    "John D. from Nigeria just joined Fix Trade with $2,000",
-    "Mary K. from Kenya started Copy Trading Marcus Chen",
-    "Peter M. from Uganda fixed $5,000 for 6 months",
-    "Alice N. from Tanzania earned $340 today!",
-    "Michael O. from Ghana joined with $1,500",
-    "Sandra L. from South Africa started following Elena Rodriguez",
-  ]
-
-  const [currentJoinNotif, setCurrentJoinNotif] = useState(0)
+  const [joinNotifMessage, setJoinNotifMessage] = useState("")
   const [showJoinNotif, setShowJoinNotif] = useState(false)
 
   useEffect(() => {
@@ -407,10 +457,16 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
         isTrading: Math.random() > 0.3,
       })))
 
-      setActiveFixTrades(trades => trades.map(trade => ({
-        ...trade,
-        earned: trade.earned + (Math.random() * 2),
-      })))
+      setActiveFixTrades((trades) =>
+        trades.map((trade) =>
+          trade.dailySchedule?.length
+            ? trade
+            : {
+                ...trade,
+                earned: trade.earned + (Math.random() * 2),
+              }
+        )
+      )
 
       // Update live stats
       setLiveStats(prev => ({
@@ -424,42 +480,40 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
     return () => clearInterval(interval)
   }, [])
 
-  // Show join notifications periodically
+  // Keep fixed-trade earnings aligned with the locked-period daily curve (container / platform deposit).
+  useEffect(() => {
+    const sync = () => {
+      setActiveFixTrades((trades) =>
+        trades.map((trade) => {
+          if (!trade.dailySchedule?.length) return trade
+          const next = scheduledEarnedUsd(trade.dailySchedule, trade.startTime)
+          return next !== trade.earned ? { ...trade, earned: next } : trade
+        })
+      )
+    }
+    sync()
+    const id = window.setInterval(sync, 30_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  // Small bottom join notifications (amounts in user currency)
   useEffect(() => {
     const showNotif = () => {
+      const pickers = joinNotificationLines
+      const line = pickers[Math.floor(Math.random() * pickers.length)]?.() ?? ""
+      setJoinNotifMessage(line)
       setShowJoinNotif(true)
-      setCurrentJoinNotif(Math.floor(Math.random() * joinNotifications.length))
       setTimeout(() => setShowJoinNotif(false), 4000)
     }
-    
-    // Show first notification after 5 seconds
-    const initialTimeout = setTimeout(showNotif, 5000)
-    // Then show every 15-25 seconds
-    const interval = setInterval(showNotif, 15000 + Math.random() * 10000)
-    
-    return () => {
-      clearTimeout(initialTimeout)
-      clearInterval(interval)
-    }
-  }, [joinNotifications.length])
 
-  // Show testimonial popup periodically
-  useEffect(() => {
-    const showTestimonialPopup = () => {
-      setCurrentTestimonial(Math.floor(Math.random() * testimonials.length))
-      setShowTestimonial(true)
-    }
-    
-    // Show first testimonial after 20 seconds
-    const initialTimeout = setTimeout(showTestimonialPopup, 20000)
-    // Then show every 45-60 seconds
-    const interval = setInterval(showTestimonialPopup, 45000 + Math.random() * 15000)
-    
+    const initialTimeout = setTimeout(showNotif, 5000)
+    const interval = setInterval(showNotif, 15000 + Math.random() * 10000)
+
     return () => {
       clearTimeout(initialTimeout)
       clearInterval(interval)
     }
-  }, [testimonials.length])
+  }, [joinNotificationLines])
 
   // Live preview simulation for Fix Trade modal
   useEffect(() => {
@@ -551,12 +605,15 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
       const coins = ["BTC", "ETH", "SOL", "AVAX", "BNB"]
       const coinSymbol = coins[Math.floor(Math.random() * coins.length)]
       const coinPrices: Record<string, number> = { BTC: 67500, ETH: 3450, SOL: 142, AVAX: 35, BNB: 580 }
+      const startTime = new Date()
+      const seed = `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
+      const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed)
 
       const newTrade: ActiveFixTrade = {
         traderId: trader.id,
         amount,
         period: fixPeriod,
-        startTime: new Date(),
+        startTime,
         endTime: endDate,
         earned: 0,
         isLocked: true,
@@ -567,6 +624,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
         dailyWithdrawUsed: 0,
         coinSymbol,
         fixedPrice: coinPrices[coinSymbol] || 1000,
+        dailySchedule,
       }
       setActiveFixTrades([...activeFixTrades, newTrade])
       setSelectedTrader(null)
@@ -593,7 +651,9 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
       setActiveCopyTrades(activeCopyTrades.filter(t => t.traderId !== traderId))
       setShowCancelConfirm(null)
       setIsProcessing(false)
-      alert(`Trade cancelled. Returned: $${returnAmount.toFixed(2)} (Fee: $${cancellationFee.toFixed(2)})`)
+      alert(
+        `Trade cancelled. Returned: ${formatUserMoney(returnAmount)} (Fee: ${formatUserMoney(cancellationFee)})`
+      )
     }, 1500)
   }
 
@@ -650,7 +710,9 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
           : t
       ))
       setIsProcessing(false)
-      alert(`Withdrawn $${toWithdraw.toFixed(2)} to your main wallet. Remaining earnings: $${(trade.earned - toWithdraw).toFixed(2)}`)
+      alert(
+        `Withdrawn ${formatUserMoney(toWithdraw)} to your main wallet. Remaining earnings: ${formatUserMoney(trade.earned - toWithdraw)}`
+      )
     }, 1500)
   }
 
@@ -675,62 +737,12 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
               <Users className="h-4 w-4 text-success" />
             </div>
             <div>
-              <p className="text-sm font-medium">{joinNotifications[currentJoinNotif]}</p>
+              <p className="text-sm font-medium">{joinNotifMessage}</p>
               <p className="text-xs text-muted-foreground">Just now</p>
             </div>
             <button onClick={() => setShowJoinNotif(false)} className="text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Testimonial Popup - Center */}
-      {showTestimonial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md animate-in zoom-in duration-300">
-            <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 to-accent/10 p-6">
-              <button
-                onClick={() => setShowTestimonial(false)}
-                className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
-              
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-lg font-bold text-white">
-                  {testimonials[currentTestimonial].name.slice(0, 2)}
-                </div>
-                <div>
-                  <p className="font-semibold">{testimonials[currentTestimonial].name}</p>
-                  <p className="text-xs text-muted-foreground">{testimonials[currentTestimonial].country}</p>
-                </div>
-                <div className="ml-auto text-right">
-                  <p className="text-lg font-bold text-success">{testimonials[currentTestimonial].earned}</p>
-                  <p className="text-xs text-muted-foreground">in {testimonials[currentTestimonial].period}</p>
-                </div>
-              </div>
-              
-              <p className="text-sm text-muted-foreground italic mb-4">
-                &ldquo;{testimonials[currentTestimonial].message}&rdquo;
-              </p>
-              
-              <div className="flex items-center gap-1 mb-4">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star key={star} className="h-4 w-4 fill-warning text-warning" />
-                ))}
-              </div>
-
-              <div className="rounded-lg bg-success/10 p-3 text-center">
-                <p className="text-xs text-muted-foreground">Start earning like {testimonials[currentTestimonial].name.split(" ")[0]} today!</p>
-                <button 
-                  onClick={() => { setShowTestimonial(false); setActiveTab("fix") }}
-                  className="mt-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:bg-success/90"
-                >
-                  Start Fixed Trading Now
-                </button>
-              </div>
-            </Card>
           </div>
         </div>
       )}
@@ -760,7 +772,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
             </div>
             <div className="flex items-center gap-1">
               <DollarSign className="h-4 w-4 text-success" />
-              <span className="font-mono font-bold text-success">${(liveStats.totalEarned / 1000000).toFixed(1)}M</span>
+              <span className="font-mono font-bold text-success">{formatUserMoney(liveStats.totalEarned)}</span>
               <span className="text-muted-foreground">earned</span>
             </div>
           </div>
@@ -774,8 +786,14 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
             <Trophy className="h-5 w-5 text-warning" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-warning">Earn Unlimited with Container Mode!</h3>
-            <p className="text-sm text-muted-foreground">Join {liveStats.todayJoins.toLocaleString()}+ users who started earning today. Fixed trading offers up to 22% monthly returns!</p>
+            <h3 className="font-semibold text-warning">Grow with Container mode</h3>
+                <p className="text-sm text-muted-foreground">
+                  Join {liveStats.todayJoins.toLocaleString()}+ members who put capital to work with a trader they trust.
+                  Your lock funds the coin so the desk can hold through quieter tape and still capture moves — earnings
+                  build day by day on your Container screen for {fixPeriodDayCount(1)} / {fixPeriodDayCount(3)} /{" "}
+                  {fixPeriodDayCount(6)}‑day programs, with milestones you can follow live (not a headline rate in fine
+                  print).
+                </p>
           </div>
           <button 
             onClick={() => setActiveTab("fix")}
@@ -806,7 +824,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                   </li>
                   <li className="flex items-center gap-2">
                     <Lock className="h-3 w-3 text-warning" />
-                    <strong>Fix Trade:</strong> Fixed period (1/3/6 months), funds locked, higher returns
+                    <strong>Fix Trade:</strong> Fixed period (1/3/6 months), funds locked — more time for your trader to work the plan
                   </li>
                 </ul>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -867,13 +885,11 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-xl bg-background/50 p-4 text-center">
                 <p className="text-sm text-muted-foreground">Total Staked</p>
-                <p className="mt-1 font-mono text-2xl font-bold">${totalStaked.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">UGX {(totalStaked * 3750).toLocaleString()}</p>
+                <p className="mt-1 font-mono text-2xl font-bold">{formatUserMoney(totalStaked)}</p>
               </div>
               <div className="rounded-xl bg-success/10 p-4 text-center">
                 <p className="text-sm text-muted-foreground">Total Earned</p>
-                <p className="mt-1 font-mono text-2xl font-bold text-success">+${totalEarned.toFixed(2)}</p>
-                <p className="text-xs text-success">UGX {(totalEarned * 3750).toLocaleString()}</p>
+                <p className="mt-1 font-mono text-2xl font-bold text-success">+{formatUserMoney(totalEarned)}</p>
               </div>
               <div className="rounded-xl bg-primary/10 p-4 text-center">
                 <p className="text-sm text-muted-foreground">Active Trades</p>
@@ -924,7 +940,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-mono font-bold text-success">+${trade.earned.toFixed(2)}</p>
+                          <p className="font-mono font-bold text-success">+{formatUserMoney(trade.earned)}</p>
                           <p className="text-xs text-muted-foreground">earned</p>
                         </div>
                       </div>
@@ -932,7 +948,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                       <div className="grid grid-cols-3 gap-2 mb-3 text-center text-sm">
                         <div className="rounded bg-background p-2">
                           <p className="text-xs text-muted-foreground">Staked</p>
-                          <p className="font-mono font-medium">${trade.amount}</p>
+                          <p className="font-mono font-medium">{formatUserMoney(trade.amount)}</p>
                         </div>
                         <div className="rounded bg-background p-2">
                           <p className="text-xs text-muted-foreground">Time Left</p>
@@ -1004,15 +1020,21 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-mono font-bold text-success">+${trade.earned.toFixed(2)}</p>
-                          <p className="text-xs text-success">UGX {(trade.earned * 3750).toLocaleString()}</p>
+                          <div className="font-mono text-lg">
+                            <FixEarnedDisplay amountUsd={trade.earned} formatUserMoney={formatUserMoney} />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {trade.dailySchedule?.length
+                              ? `Day ${Math.min(completedFixDaysSince(trade.startTime), fixPeriodDayCount(trade.period))} / ${fixPeriodDayCount(trade.period)} · curve`
+                              : "Earnings"}
+                          </p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-center text-sm">
                         <div className="rounded bg-background p-2">
                           <p className="text-xs text-muted-foreground">Staked (Frozen)</p>
-                          <p className="font-mono font-medium">${trade.amount}</p>
+                          <p className="font-mono font-medium">{formatUserMoney(trade.amount)}</p>
                         </div>
                         <div className="rounded bg-background p-2">
                           <p className="text-xs text-muted-foreground">Time Left</p>
@@ -1024,7 +1046,9 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                         </div>
                         <div className="rounded bg-background p-2">
                           <p className="text-xs text-muted-foreground">Withdrawn</p>
-                          <p className="font-mono font-medium">${trade.totalWithdrawn?.toFixed(2) || "0.00"}</p>
+                          <p className="font-mono font-medium">
+                            {formatUserMoney(trade.totalWithdrawn ?? 0)}
+                          </p>
                         </div>
                       </div>
 
@@ -1047,7 +1071,12 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                         <div className="flex items-center justify-between text-muted-foreground mt-1">
                           <span>Available to Withdraw:</span>
                           <span className="font-medium text-success">
-                            ${Math.max(0, (trade.earned * trade.withdrawablePercent / 100) - (trade.totalWithdrawn || 0)).toFixed(2)}
+                            {formatUserMoney(
+                              Math.max(
+                                0,
+                                (trade.earned * trade.withdrawablePercent) / 100 - (trade.totalWithdrawn || 0)
+                              )
+                            )}
                           </span>
                         </div>
                       </div>
@@ -1384,7 +1413,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
               {activeTab === "copy" ? (
                 <>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Allocation Amount (USD)</label>
+                    <label className="text-sm font-medium mb-2 block">Allocation amount</label>
                     <input
                       type="number"
                       value={copyAmount}
@@ -1392,19 +1421,20 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
                       min="100"
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">Minimum: $100</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Minimum: {formatUserMoney(100)}</p>
                   </div>
                   <div className="rounded-lg bg-destructive/10 p-3 text-sm">
                     <p className="font-medium text-destructive">Copy Trade Terms:</p>
                     <p className="text-muted-foreground mt-1">
-                      24hr minimum lock. Cancel fee: 10% stake + 1.6% reverse = ${((parseFloat(copyAmount) || 0) * 0.116).toFixed(2)}
+                      24hr minimum lock. Cancel fee: 10% stake + 1.6% reverse ={" "}
+                      {formatUserMoney((parseFloat(copyAmount) || 0) * 0.116)}
                     </p>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Stake Amount (USD)</label>
+                    <label className="text-sm font-medium mb-2 block">Stake amount</label>
                     <input
                       type="number"
                       value={fixAmount}
@@ -1412,7 +1442,7 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
                       min="500"
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">Minimum: $500</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Minimum: {formatUserMoney(500)}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">Fix Period</label>
@@ -1446,11 +1476,11 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                     
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
-                        <p className="text-xs text-muted-foreground">Fixed Price</p>
+                        <p className="text-xs text-muted-foreground">Fixed price (USD spot)</p>
                         <p className="font-mono font-bold">${livePreview.basePrice.toLocaleString()}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Current Price</p>
+                        <p className="text-xs text-muted-foreground">Current (USD spot)</p>
                         <p className={`font-mono font-bold ${livePreview.isPositive ? "text-success" : "text-destructive"}`}>
                           ${livePreview.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </p>
@@ -1461,8 +1491,8 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                       <div>
                         <p className="text-xs text-muted-foreground">Real-time Earnings</p>
                         <p className={`text-2xl font-mono font-bold ${livePreview.isPositive ? "text-success" : "text-destructive"}`}>
-                          {livePreview.isPositive ? "+" : ""}{livePreview.earnings.toFixed(2)}
-                          <span className="text-sm ml-1">USD</span>
+                          {livePreview.isPositive ? "+" : ""}
+                          {formatUserMoney(livePreview.earnings)}
                         </p>
                       </div>
                       <div className={`rounded-lg px-3 py-2 ${livePreview.isPositive ? "bg-success/20" : "bg-destructive/20"}`}>
@@ -1473,7 +1503,21 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                     </div>
                     
                     <p className="mt-2 text-xs text-center text-muted-foreground">
-                      This is a live simulation of how your ${fixAmount || "0"} stake would perform with {livePreview.coinSymbol}
+                      Live preview: how {livePreview.coinSymbol} might move while your trader manages the stake — your
+                      real Container view tracks day‑by‑day earnings once you lock.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm text-muted-foreground space-y-2">
+                    <p className="font-semibold text-foreground">How earnings show up</p>
+                    <p>
+                      After you lock, the trader you picked trades on your behalf. Earnings appear as natural,
+                      day‑by‑day progress — some sessions quieter, some stronger — so you can feel momentum while the
+                      coin stays supported during slower periods.
+                    </p>
+                    <p className="text-xs">
+                      Withdrawal windows for earnings follow the milestones on this screen; your Container dashboard
+                      stays the source of truth.
                     </p>
                   </div>
 
@@ -1489,9 +1533,10 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                     </ul>
                     <div className="pt-2 border-t border-warning/30 text-xs">
                       <p className="text-muted-foreground">
-                        <strong>How it works:</strong> Your frozen stake becomes a share holding for the traded coin, 
-                        keeping it supported during market dips. When the coin rises above your fixed price, 
-                        you earn commission without affecting your shares. Earnings speed varies based on coin movement.
+                        <strong>How it works:</strong> Your stake is fixed with the coin so the trader can defend
+                        positions through quieter periods and still be ready when momentum returns. What you earn
+                        reflects their activity and skill over the lock — you&apos;ll see it build on your Container
+                        screen with day‑by‑day movement rather than a single headline number.
                       </p>
                       <p className="text-warning mt-1">
                         If you find your funds in your main wallet before the period ends, the system opted out early to protect your capital from potential losses.
@@ -1542,12 +1587,22 @@ export function ContainerMode({ userLevel = 2 }: ContainerModeProps) {
                 const fee = trade.amount * 0.116
                 const returnAmt = trade.amount + trade.earned - fee
                 return (
-                  <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
-                    <div className="flex justify-between"><span>Stake:</span><span>${trade.amount}</span></div>
-                    <div className="flex justify-between text-success"><span>Earned:</span><span>+${trade.earned.toFixed(2)}</span></div>
-                    <div className="flex justify-between text-destructive"><span>Fee:</span><span>-${fee.toFixed(2)}</span></div>
+                    <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
+                    <div className="flex justify-between">
+                      <span>Stake:</span>
+                      <span>{formatUserMoney(trade.amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-success">
+                      <span>Earned:</span>
+                      <span>+{formatUserMoney(trade.earned)}</span>
+                    </div>
+                    <div className="flex justify-between text-destructive">
+                      <span>Fee:</span>
+                      <span>-{formatUserMoney(fee)}</span>
+                    </div>
                     <div className="flex justify-between font-bold mt-2 pt-2 border-t border-border">
-                      <span>You receive:</span><span>${returnAmt.toFixed(2)}</span>
+                      <span>You receive:</span>
+                      <span>{formatUserMoney(returnAmt)}</span>
                     </div>
                   </div>
                 )

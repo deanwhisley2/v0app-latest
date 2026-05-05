@@ -82,14 +82,34 @@ export async function fetchExchangeBalance(
   }
 
   try {
+    const body: Record<string, string | undefined> = {
+      apiPassphrase,
+    }
+    if (exchangeId === "binance" && !apiKey && !apiSecret) {
+      // Server may fill from BINANCE_API_KEY / BINANCE_SECRET_KEY
+    } else if (
+      exchangeId === "bitget" &&
+      !apiKey &&
+      !apiSecret &&
+      !(apiPassphrase && apiPassphrase.trim())
+    ) {
+      // Server may fill from BITGET_API_KEY / BITGET_API_SECRET / BITGET_PASSPHRASE
+    } else if (
+      exchangeId === "kucoin" &&
+      !apiKey &&
+      !apiSecret &&
+      !(apiPassphrase && apiPassphrase.trim())
+    ) {
+      // Server may fill from KUCOIN_API_KEY / KUCOIN_API_SECRET / KUCOIN_API_PASSPHRASE
+    } else {
+      body.apiKey = apiKey
+      body.apiSecret = apiSecret
+    }
+
     const response = await fetch(route, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        apiKey,
-        apiSecret,
-        apiPassphrase,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(10000),
     })
 

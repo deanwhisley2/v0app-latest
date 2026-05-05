@@ -16,6 +16,9 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
+import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
+import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
 interface Message {
   role: "user" | "assistant"
@@ -27,6 +30,7 @@ interface AIAssistantPopupProps {
   isOpen: boolean
   onClose: () => void
   context?: "login" | "dashboard"
+  isGuestSession?: boolean
 }
 
 const QUICK_QUESTIONS = {
@@ -44,54 +48,17 @@ const QUICK_QUESTIONS = {
   ],
 }
 
-const AI_RESPONSES: Record<string, string> = {
-  // Login related
-  "login": "To log in to your Nexus Pro account:\n\n1. Enter your registered email or phone number\n2. Enter your password\n3. Click 'Continue to 2FA'\n4. Select your preferred verification method (email or SMS)\n5. Enter the 6-digit code sent to you\n\nIf you're a new user, click 'Sign Up' to create an account first.",
-  "password": "To reset your password:\n\n1. Click 'Forgot Password' on the login screen\n2. Enter your registered email address\n3. Check your email for the reset link\n4. Create a new password (minimum 10 characters)\n5. Log in with your new password\n\nNote: Password reset links expire after 24 hours.",
-  "2fa": "If you're not receiving your 2FA verification code:\n\n1. Check your spam/junk folder for email codes\n2. Ensure your phone has signal for SMS codes\n3. Try switching between email and phone verification\n4. Wait 60 seconds before requesting a new code\n5. If issues persist, contact our support team\n\nCodes expire after 10 minutes.",
-  "human": "I've notified our support team about your request. A human agent will contact you shortly.\n\n**Ticket Reference:** #NXP-" + Date.now().toString().slice(-6) + "\n\n**Expected Response Time:**\n- Business hours: 15-30 minutes\n- After hours: Within 4 hours\n\nYou'll receive an email notification when an agent responds.",
-  // Dashboard related
-  "trade": "To place a trade on Nexus Pro:\n\n1. Select a coin from the market list or chart\n2. Go to the Trading Panel on the right\n3. Choose BUY (green) or SELL (red)\n4. Select your order type (Market or Limit)\n5. Enter the amount you want to trade\n6. Adjust leverage if desired (1x-20x)\n7. Click the Buy/Sell button to execute\n\nYour order will be filled instantly at market price, or when limit price is reached.",
-  "deposit": "To deposit funds to your Nexus Pro account:\n\n1. Click on 'Portfolio' in the navigation\n2. Select 'Deposit' button\n3. Choose the cryptocurrency you want to deposit\n4. Copy your unique deposit address\n5. Send funds from your external wallet\n\n**Important:** Always double-check the deposit address and network. Deposits typically confirm within 10-30 minutes depending on network congestion.",
-  "security": "To enhance your account security:\n\n1. **Enable 2FA** - Already required for all logins\n2. **Whitelist Addresses** - Go to Settings > Security > Whitelist withdrawal addresses\n3. **Anti-Phishing Code** - Set a unique code that appears in all official emails\n4. **Session Management** - Review and terminate active sessions\n5. **API Restrictions** - Limit API key permissions if using automated trading\n\nWe recommend enabling all security features for maximum protection.",
-  "default": "I understand you need help. Could you please provide more details about your question? I can assist with:\n\n- Account login and registration\n- Password and 2FA issues\n- Trading and order placement\n- Deposits and withdrawals\n- Security settings\n- Technical support\n\nOr type 'human' to connect with a live support agent.",
-}
-
-const getAIResponse = (message: string): string => {
-  const lower = message.toLowerCase()
-  
-  if (lower.includes("login") || lower.includes("sign in") || lower.includes("log in")) {
-    return AI_RESPONSES["login"]
-  }
-  if (lower.includes("password") || lower.includes("forgot") || lower.includes("reset")) {
-    return AI_RESPONSES["password"]
-  }
-  if (lower.includes("2fa") || lower.includes("verification") || lower.includes("code") || lower.includes("otp")) {
-    return AI_RESPONSES["2fa"]
-  }
-  if (lower.includes("human") || lower.includes("agent") || lower.includes("support") || lower.includes("speak")) {
-    return AI_RESPONSES["human"]
-  }
-  if (lower.includes("trade") || lower.includes("buy") || lower.includes("sell") || lower.includes("order")) {
-    return AI_RESPONSES["trade"]
-  }
-  if (lower.includes("deposit") || lower.includes("fund") || lower.includes("add money")) {
-    return AI_RESPONSES["deposit"]
-  }
-  if (lower.includes("security") || lower.includes("safe") || lower.includes("protect")) {
-    return AI_RESPONSES["security"]
-  }
-  
-  return AI_RESPONSES["default"]
-}
-
-export function AIAssistantPopup({ isOpen, onClose, context = "dashboard" }: AIAssistantPopupProps) {
+export function AIAssistantPopup({
+  isOpen,
+  onClose,
+  context = "dashboard",
+  isGuestSession = false,
+}: AIAssistantPopupProps) {
+  const surface = context === "login" ? "floating_login" : "floating_dashboard"
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: context === "login" 
-        ? "Hello! I'm Joseline, your Nexus Pro assistant. I can help you with login issues, account creation, 2FA verification, and more. How can I help you today?"
-        : "Hi there! I'm Joseline, your trading assistant. I can help with trading, deposits, security settings, and any questions about Nexus Pro. What would you like to know?",
+      content: getNexusAssistantWelcome(surface, isGuestSession),
       timestamp: new Date(),
     },
   ])
@@ -132,16 +99,21 @@ export function AIAssistantPopup({ isOpen, onClose, context = "dashboard" }: AIA
     setInput("")
     setIsLoading(true)
 
-    // Simulate AI response delay
+    // Response delay (Joelin / DeepSeek)
     await new Promise((r) => setTimeout(r, 1000 + Math.random() * 1000))
 
-    const response = getAIResponse(message)
+    const response = await requestNexusAssistantReply({
+      userMessage: message,
+      surface,
+      isGuest: isGuestSession,
+      tradingUserLevel: TRADING_USER_LEVEL,
+    })
     setMessages((prev) => [
       ...prev,
       { role: "assistant", content: response, timestamp: new Date() },
     ])
     setIsLoading(false)
-  }, [input])
+  }, [input, surface, isGuestSession])
 
   const quickQuestions = QUICK_QUESTIONS[context]
 
@@ -161,10 +133,10 @@ export function AIAssistantPopup({ isOpen, onClose, context = "dashboard" }: AIA
             </div>
             <div>
               <h3 className="font-semibold flex items-center gap-1.5">
-                Joseline
+                Joelin
                 <Sparkles className="h-3.5 w-3.5 text-warning" />
               </h3>
-              <p className="text-xs text-muted-foreground">Your personal assistant</p>
+              <p className="text-xs text-muted-foreground">Nexus PRO guide</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
@@ -264,15 +236,15 @@ export function AIAssistantPopup({ isOpen, onClose, context = "dashboard" }: AIA
           </Button>
         </form>
         <p className="mt-2 text-center text-[10px] text-muted-foreground">
-          Joseline by Nexus Pro | Type &quot;human&quot; for live support
+          Joelin · Nexus PRO | Type &quot;human&quot; for live support
         </p>
       </div>
     </div>
   )
 }
 
-// Floating AI Button Component
-export function FloatingAIButton({ onClick, hasUnread = false }: { onClick: () => void; hasUnread?: boolean }) {
+// Floating Joelin entry (optional shell)
+export function FloatingJoelinButton({ onClick, hasUnread = false }: { onClick: () => void; hasUnread?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -289,3 +261,6 @@ export function FloatingAIButton({ onClick, hasUnread = false }: { onClick: () =
     </button>
   )
 }
+
+/** @deprecated Use {@link FloatingJoelinButton} */
+export const FloatingAIButton = FloatingJoelinButton

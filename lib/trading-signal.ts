@@ -1,5 +1,3 @@
-"use client"
-
 /**
  * CLINE INSTRUCTION: This file defines the STANDARD SIGNAL FORMAT.
  * DO NOT MODIFY the structure. All strategies MUST output this format.
@@ -43,6 +41,10 @@ export interface TradeSignal {
   reason?: string              // Why this signal was generated
   liquiditySweepDetected?: boolean
   sentimentExtreme?: boolean
+  /** BUY: optional fixed USDT spend; overrides risk-based quote size in Commander */
+  quoteOverrideUsd?: number
+  /** SELL: optional fixed base quantity */
+  baseOverrideQuantity?: number
 }
 
 export interface OrderExecution {
@@ -63,6 +65,10 @@ export interface OrderExecution {
   auditTrail: AuditEntry[]     // Every step logged here
   createdAt: string
   updatedAt: string
+  /** Planned MARKET BUY spend (USDT) — set by Commander for live Binance */
+  quoteOrderQtyUsd?: number
+  /** Planned base size for MARKET SELL — set by Commander */
+  baseQuantityPlan?: number
 }
 
 export interface AuditEntry {

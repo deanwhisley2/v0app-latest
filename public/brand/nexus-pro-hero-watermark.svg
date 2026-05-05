@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 280" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="nxphero-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d9488" stop-opacity="0.55"/>
+      <stop offset="50%" stop-color="#14b8a6" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.5"/>
+    </linearGradient>
+    <filter id="nxphero-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="g"/>
+      <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(40,40) scale(2.85)" opacity="0.92" filter="url(#nxphero-glow)">
+    <path d="M11 50V10M11 10L45 50M45 50V10" stroke="url(#nxphero-grad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="11" cy="10" r="2.8" fill="url(#nxphero-grad)"/>
+    <circle cx="28" cy="30" r="2.2" fill="#67e8f9" opacity="0.55"/>
+    <circle cx="45" cy="50" r="2.8" fill="url(#nxphero-grad)"/>
+  </g>
+  <text x="480" y="150" text-anchor="middle" fill="url(#nxphero-grad)" style="font-family:'Space Mono',ui-monospace,monospace;font-size:92px;font-weight:800;letter-spacing:-0.03em">NEXUS</text>
+  <text x="480" y="210" text-anchor="middle" fill="#5eead4" fill-opacity="0.45" style="font-family:'Space Mono',ui-monospace,monospace;font-size:28px;font-weight:700;letter-spacing:0.38em">PRO</text>
+</svg>

@@ -184,6 +184,14 @@ export async function getBinanceDepth(
   })
 }
 
+/** Alias — same as {@link getBinanceDepth} (limit 5–1000 per Binance). */
+export async function getBinanceOrderBook(
+  symbol: string = "BTCUSDT",
+  limit: number = 100
+): Promise<BinanceOrderBook> {
+  return getBinanceDepth(symbol, limit)
+}
+
 /**
  * Get recent trades
  * limit: max 1000

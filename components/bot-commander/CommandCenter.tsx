@@ -1,14 +1,19 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 
+export type CommandContext = {
+  analysisWindowSeconds?: number
+}
+
 interface CommandCenterProps {
-  onCommand: (command: string) => Promise<any>
+  onCommand: (command: string, ctx?: CommandContext) => Promise<any>
 }
 
 export default function CommandCenter({ onCommand }: CommandCenterProps) {
+  const [analysisWindow, setAnalysisWindow] = useState(300)
   const [input, setInput] = useState('')
   const [history, setHistory] = useState<Array<{ type: 'user' | 'bot', text: string, timestamp: Date }>>([
-    { type: 'bot', text: 'W-BRAIN ONLINE. Type a command, e.g., "start Liquidity Warfare on BTC with 1.5% risk"', timestamp: new Date() }
+    { type: 'bot', text: 'W-BRAIN ONLINE. Try "analyze SOL" (time-bound fast paths + Grok) or "start Liquidity Warfare on BTC with 1.5% risk"', timestamp: new Date() }
   ])
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -32,7 +37,7 @@ export default function CommandCenter({ onCommand }: CommandCenterProps) {
     setIsLoading(true)
 
     try {
-      const response = await onCommand(userCommand)
+      const response = await onCommand(userCommand, { analysisWindowSeconds: analysisWindow })
       const botResponse = response.message || (response.success ? 'Command executed successfully.' : 'Command failed.')
       setHistory(prev => [...prev, { 
         type: 'bot', 
@@ -100,6 +105,34 @@ export default function CommandCenter({ onCommand }: CommandCenterProps) {
         )}
       </div>
       
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '8px 16px', borderTop: '1px solid #1E2028', flexWrap: 'wrap' }}>
+        <label style={{ fontSize: '12px', color: '#8B92A5', fontFamily: "'Space Mono', monospace" }}>
+          Analysis window
+        </label>
+        <select
+          value={analysisWindow}
+          onChange={(e) => setAnalysisWindow(parseInt(e.target.value, 10))}
+          disabled={isLoading}
+          style={{
+            backgroundColor: '#1E2028',
+            color: '#F0F2F5',
+            border: '1px solid #00E5FF',
+            borderRadius: '4px',
+            padding: '4px 8px',
+            fontSize: '12px',
+            fontFamily: "'Space Mono', monospace",
+          }}
+        >
+          <option value={60}>1 min</option>
+          <option value={180}>3 min</option>
+          <option value={300}>5 min (default)</option>
+          <option value={600}>10 min</option>
+        </select>
+        <span style={{ fontSize: '10px', color: '#8B92A5', fontFamily: "'Space Mono', monospace" }}>
+          Grok / xAI sentiment within window (analyze SYMBOL)
+        </span>
+      </div>
+
       <div style={{ display: 'flex', borderTop: '1px solid #1E2028' }}>
         <span style={{ padding: '12px 16px', color: '#00E5FF', fontFamily: "'Space Mono', monospace" }}>$</span>
         <input

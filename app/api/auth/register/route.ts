@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 
@@ -7,6 +8,8 @@ type RegisterBody = {
   password?: string
   full_name?: string
   phone?: string
+  preferred_language?: string
+  preferred_currency?: string
 }
 
 /**
@@ -14,6 +17,8 @@ type RegisterBody = {
  * Disable “Confirm email” in Supabase Auth to avoid duplicate mails from Auth SMTP.
  */
 export async function POST(request: Request) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   let body: RegisterBody
   try {
     body = (await request.json()) as RegisterBody
@@ -26,6 +31,10 @@ export async function POST(request: Request) {
   const full_name =
     typeof body.full_name === "string" ? body.full_name.trim() : ""
   const phone = typeof body.phone === "string" ? body.phone.trim() : ""
+  const preferred_language =
+    typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
+  const preferred_currency =
+    typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
@@ -43,6 +52,8 @@ export async function POST(request: Request) {
       data: {
         full_name,
         phone,
+        ...(preferred_language ? { preferred_language } : {}),
+        ...(preferred_currency ? { preferred_currency } : {}),
       },
     },
   })

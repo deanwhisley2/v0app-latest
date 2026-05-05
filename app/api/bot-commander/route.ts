@@ -11,10 +11,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { externalApisBlockedResponse } from '@/lib/dev-local-api-guard'
 import { commanderDecide, executeOrder, getOrderHistory, getSignalsHistory } from '@/lib/strategy-commander'
+import { disableDemoMode } from '@/lib/demo-mode-manager'
 import { BOT_REGISTRY, getBotStatus, updateBotStatus } from '@/lib/bot-registry'
+import { isDemoModeEnabled } from '@/lib/demo-mode-manager'
 
 export async function GET(request: NextRequest) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   const { searchParams } = new URL(request.url)
   const botId = searchParams.get('botId')
   const type = searchParams.get('type') // 'orders' or 'signals'
@@ -45,8 +50,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   const body = await request.json()
-  const { command, botId, action, signal, executionMode, orderId } = body
+  const { command, botId, action, signal, executionMode, orderId, accessLevel: rawAccess } = body
+  const accessLevel = typeof rawAccess === 'number' && Number.isFinite(rawAccess) ? Math.floor(rawAccess) : 3
 
   // Handle natural language command
   if (command) {
@@ -55,6 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         message: "Command not recognized. Examples:\n" +
+          "- 'analyze SOL' (use Bot Commander UI — time-bound analysis)\n" +
           "- 'start Liquidity Warfare on BTC with 1.5% risk'\n" +
           "- 'pause Sentiment Weapon'\n" +
           "- 'show status of all bots'\n" +
@@ -68,7 +77,9 @@ export async function POST(request: NextRequest) {
 
   // Handle trade signal submission (STRATEGIES CALL THIS)
   if (signal) {
-    const order = await commanderDecide(signal, executionMode || "paper")
+    const defaultMode =
+      process.env.NEXUS_REAL_TRADING === "1" ? ("live" as const) : ("paper" as const)
+    const order = await commanderDecide(signal, executionMode || defaultMode)
     return NextResponse.json({
       success: order.status !== "REJECTED",
       order,
@@ -78,10 +89,40 @@ export async function POST(request: NextRequest) {
 
   // Handle order execution (after Commander approval)
   if (orderId && action === 'execute') {
+    if (accessLevel < 2) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Viewer tier cannot execute. Use Trader (2) or Admin (3).',
+        },
+        { status: 403 }
+      )
+    }
+
+    if (accessLevel === 2) {
+      return NextResponse.json({
+        success: true,
+        requiresManualExecution: true,
+        orderId,
+        message: 'Trader tier: signal accepted — place the order manually on your exchange.',
+      })
+    }
+
+    if (process.env.NEXUS_REAL_TRADING === "1") {
+      disableDemoMode()
+    }
+
+    if (isDemoModeEnabled()) {
+      return NextResponse.json({
+        success: true,
+        demo: true,
+        orderId,
+        message: 'Demo mode active — order not sent to the exchange.',
+      })
+    }
+
     try {
-      // Pass your actual broker API here
-      const brokerApi = {} // Replace with your Binance/Bitget API client
-      const executedOrder = await executeOrder(orderId, brokerApi)
+      const executedOrder = await executeOrder(orderId)
       return NextResponse.json({
         success: executedOrder.status === "FILLED",
         order: executedOrder,

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import BotGrid from '@/components/bot-commander/BotGrid'
-import CommandCenter from '@/components/bot-commander/CommandCenter'
+import CommandCenter, { type CommandContext } from '@/components/bot-commander/CommandCenter'
 import SafetyPanel from '@/components/bot-commander/SafetyPanel'
 import { BOT_REGISTRY } from '@/lib/bot-registry'
 import { BotStatusUI } from '@/lib/bot-capability-types'
@@ -39,7 +39,42 @@ export default function BotCommanderPage() {
     return () => clearInterval(interval)
   }, [])
 
-  const handleCommand = async (command: string) => {
+  const handleCommand = async (command: string, ctx?: CommandContext) => {
+    const analyzeMatch = command.match(/^\s*analyze\s+([A-Za-z0-9]+)\s*$/i)
+    if (analyzeMatch) {
+      const symbol = analyzeMatch[1].toUpperCase()
+      const timeWindowSeconds = ctx?.analysisWindowSeconds ?? 300
+      const res = await fetch('/api/analysis/time-bound', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, timeWindowSeconds, includeGrok: true }),
+      })
+      const data = await res.json().catch(() => ({ success: false, error: 'Invalid response' }))
+      if (!res.ok || !data.success) {
+        return {
+          success: false,
+          message:
+            typeof data.error === 'string'
+              ? data.error
+              : `Analysis request failed (${res.status})`,
+        }
+      }
+      const r = data.result as {
+        fusedDecision?: { action: string; confidence: number; reasons: string[]; grokInfluenced: boolean }
+        grokReceived?: boolean
+        totalTimeMs?: number
+        fastPaths?: { orderBookImbalance?: number; fundingRateAnomaly?: number }
+      }
+      const fd = r.fusedDecision
+      const lines = [
+        `Symbol ${symbol} · window ${timeWindowSeconds}s · wall ${r.totalTimeMs ?? '?'}ms`,
+        fd ? `Fused: ${fd.action} (${fd.confidence}% conf, Grok-influenced: ${fd.grokInfluenced})` : 'No fused decision',
+        `Grok in time: ${r.grokReceived ? 'yes' : 'no'}`,
+        fd?.reasons?.length ? `Reasons:\n- ${fd.reasons.join('\n- ')}` : '',
+      ].filter(Boolean)
+      return { success: true, message: lines.join('\n') }
+    }
+
     const res = await fetch('/api/bot-commander', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

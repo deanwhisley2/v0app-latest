@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 
 const BINANCE_BASE = "https://api.binance.com"
 
@@ -98,14 +99,28 @@ async function getPrices(): Promise<Record<string, number>> {
 // ============================================================
 
 export async function POST(request: NextRequest) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   try {
-    const { apiKey, apiSecret } = await request.json()
-
+    const body = await request.json().catch(() => ({}))
+    const envKey = process.env.BINANCE_API_KEY?.trim()
+    const envSecret =
+      process.env.BINANCE_SECRET_KEY?.trim() || process.env.BINANCE_API_SECRET?.trim()
+    let apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : ""
+    let apiSecret = typeof body.apiSecret === "string" ? body.apiSecret.trim() : ""
     if (!apiKey || !apiSecret) {
-      return NextResponse.json(
-        { error: "Missing required fields: apiKey, apiSecret" },
-        { status: 400 }
-      )
+      if (envKey && envSecret) {
+        apiKey = envKey
+        apiSecret = envSecret
+      } else {
+        return NextResponse.json(
+          {
+            error:
+              "Missing apiKey/apiSecret in body, or set BINANCE_API_KEY and BINANCE_SECRET_KEY on the server.",
+          },
+          { status: 400 }
+        )
+      }
     }
 
     // Build query parameters for Binance account endpoint

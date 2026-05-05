@@ -25,21 +25,22 @@ import {
   Activity,
 } from "lucide-react"
 import { useExchangeBalances, type ConnectedExchange } from "@/hooks/use-exchange-balances"
+import { ExchangeBrandLogo } from "@/components/dashboard/exchange-brand-logo"
 
 interface ExchangeBindingProps {
   onSelectExchange?: (exchange: ConnectedExchange) => void
   selectedExchangeId?: string
 }
 
-const SUPPORTED_EXCHANGES: { id: string; name: string; logo: string; color: string }[] = [
-  { id: "binance", name: "Binance", logo: "B", color: "from-yellow-500 to-yellow-600" },
-  { id: "bybit", name: "Bybit", logo: "BY", color: "from-orange-500 to-orange-600" },
-  { id: "bitget", name: "Bitget", logo: "BG", color: "from-cyan-500 to-cyan-600" },
-  { id: "kucoin", name: "KuCoin", logo: "KC", color: "from-green-500 to-green-600" },
-  { id: "blofin", name: "Blofin", logo: "BF", color: "from-purple-500 to-purple-600" },
-  { id: "okx", name: "OKX", logo: "OK", color: "from-white to-gray-300" },
-  { id: "mexc", name: "MEXC", logo: "MX", color: "from-blue-500 to-blue-600" },
-  { id: "gateio", name: "Gate.io", logo: "GT", color: "from-blue-400 to-blue-500" },
+const SUPPORTED_EXCHANGES: { id: string; name: string }[] = [
+  { id: "binance", name: "Binance" },
+  { id: "bybit", name: "Bybit" },
+  { id: "bitget", name: "Bitget" },
+  { id: "kucoin", name: "KuCoin" },
+  { id: "blofin", name: "Blofin" },
+  { id: "okx", name: "OKX" },
+  { id: "mexc", name: "MEXC" },
+  { id: "gateio", name: "Gate.io" },
 ]
 
 export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: ExchangeBindingProps) {
@@ -67,8 +68,11 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
   )
   const totalBalance = balanceState.totalUsd
 
+  const passphraseRequired = ["bitget", "okx", "kucoin"].includes(selectedForBinding || "")
+
   const handleConnect = async () => {
     if (!selectedForBinding || !apiKey || !apiSecret) return
+    if (passphraseRequired && !apiPassphrase.trim()) return
     
     setIsConnecting(true)
     
@@ -125,11 +129,10 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">Connected Exchanges</h3>
           {connectedExchanges.map((exchange) => {
-            const exchangeInfo = SUPPORTED_EXCHANGES.find(e => e.id === exchange.id)
             return (
               <Card 
                 key={exchange.id}
-                className={`border-border bg-card p-3 cursor-pointer transition-all ${
+                className={`group border-border bg-card p-3 cursor-pointer transition-all ${
                   selectedExchangeId === exchange.id ? "ring-2 ring-primary" : ""
                 } ${exchange.isDefault ? "border-primary/50" : ""} ${
                   exchange.frozen ? "opacity-60" : ""
@@ -138,8 +141,12 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${exchangeInfo?.color || "from-primary to-accent"} text-sm font-bold text-white`}>
-                      {exchangeInfo?.logo || exchange.name.slice(0, 2)}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-zinc-900/80 p-1.5 ring-1 ring-black/40 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.08)]">
+                      <ExchangeBrandLogo
+                        exchangeId={exchange.id}
+                        label={exchange.name}
+                        className="h-7 w-7 transition-[filter] duration-200 group-hover:brightness-110"
+                      />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -232,11 +239,16 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
           {availableExchanges.map((exchange) => (
             <button
               key={exchange.id}
+              type="button"
               onClick={() => { setSelectedForBinding(exchange.id); setShowBindModal(true) }}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/50 hover:bg-muted/50"
+              className="group flex items-center gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/50 hover:bg-muted/50"
             >
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${exchange.color} text-xs font-bold text-white`}>
-                {exchange.logo}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-zinc-900/80 p-1 ring-1 ring-black/30 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[0_0_18px_rgba(34,211,238,0.12)]">
+                <ExchangeBrandLogo
+                  exchangeId={exchange.id}
+                  label={exchange.name}
+                  className="h-6 w-6 transition-[filter] duration-200 group-hover:brightness-110"
+                />
               </div>
               <span className="text-sm font-medium">{exchange.name}</span>
               <Link2 className="ml-auto h-4 w-4 text-muted-foreground" />
@@ -250,7 +262,20 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card className="w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Connect {SUPPORTED_EXCHANGES.find(e => e.id === selectedForBinding)?.name}</h3>
+              <div className="flex items-center gap-2">
+                {selectedForBinding && (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/90 p-1">
+                    <ExchangeBrandLogo
+                      exchangeId={selectedForBinding}
+                      label={SUPPORTED_EXCHANGES.find((e) => e.id === selectedForBinding)?.name ?? ""}
+                      className="h-6 w-6"
+                    />
+                  </div>
+                )}
+                <h3 className="text-lg font-semibold">
+                  Connect {SUPPORTED_EXCHANGES.find((e) => e.id === selectedForBinding)?.name}
+                </h3>
+              </div>
               <button onClick={() => setShowBindModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-5 w-5" />
               </button>
@@ -262,7 +287,10 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
                   <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
                   <div className="text-xs text-warning">
                     <p className="font-semibold">Important Security Notice</p>
-                    <p>Only use API keys with trading permissions. Never share your secret key with anyone.</p>
+                    <p>
+                      Prefer <strong>read-only</strong> keys for balances. Never share your secret or passphrase; they
+                      are stored only in this browser unless you use server env vars on the host.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -298,19 +326,35 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium">API Passphrase (optional)</label>
+                <label className="mb-1.5 block text-sm font-medium">
+                  API Passphrase {passphraseRequired ? "(required)" : "(optional)"}
+                </label>
                 <Input
-                  type="text"
+                  type="password"
                   value={apiPassphrase}
                   onChange={(e) => setApiPassphrase(e.target.value)}
-                  placeholder="Required for some exchanges like Bitget"
+                  placeholder={passphraseRequired ? "Bitget / OKX / KuCoin passphrase" : "If your exchange requires it"}
                   className="font-mono text-sm"
+                  autoComplete="off"
                 />
               </div>
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <ExternalLink className="h-3 w-3" />
-                <a href="#" className="hover:text-primary">How to create API keys?</a>
+                <a
+                  href={
+                    selectedForBinding === "bitget"
+                      ? "https://www.bitget.com/support/articles/360007298678"
+                      : selectedForBinding === "binance"
+                        ? "https://www.binance.com/en/my/settings/api-management"
+                        : "https://www.bitget.com/api-doc/common/quick-start"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary"
+                >
+                  How to create API keys?
+                </a>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -320,7 +364,7 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
                 <Button 
                   className="flex-1" 
                   onClick={handleConnect}
-                  disabled={!apiKey || !apiSecret || isConnecting}
+                  disabled={!apiKey || !apiSecret || isConnecting || (passphraseRequired && !apiPassphrase.trim())}
                 >
                   {isConnecting ? (
                     <>

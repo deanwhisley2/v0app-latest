@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 function parsePnL(value: unknown): number | null {
@@ -12,6 +13,8 @@ function parsePnL(value: unknown): number | null {
 
 /** Bot / server scripts: header `x-trade-secret` must match PROCESS_TRADE_SECRET. */
 export async function POST(request: Request) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   try {
     const secret = process.env.PROCESS_TRADE_SECRET
     const headerSecret = request.headers.get("x-trade-secret")

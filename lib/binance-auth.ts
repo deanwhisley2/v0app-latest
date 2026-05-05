@@ -200,9 +200,6 @@ async function authenticatedFetch(
   params: Record<string, string> = {}
 ): Promise<any> {
   const keys = getStoredApiKeys()
-  if (!keys) {
-    throw new Error("Binance API keys not configured. Go to /api-settings to set them up.")
-  }
 
   // Validate endpoint is allowed
   const isAllowed = ALLOWED_ENDPOINTS.some((allowed) => endpoint.startsWith(allowed))
@@ -210,12 +207,11 @@ async function authenticatedFetch(
     throw new Error(`Endpoint ${endpoint} is not allowed (read-only mode)`)
   }
 
-  const queryParams = new URLSearchParams({
-    endpoint,
-    apiKey: keys.apiKey,
-    secretKey: keys.secretKey,
-    ...params,
-  })
+  const queryParams = new URLSearchParams({ endpoint, ...params })
+  if (keys?.apiKey && keys?.secretKey) {
+    queryParams.set("apiKey", keys.apiKey)
+    queryParams.set("secretKey", keys.secretKey)
+  }
 
   const url = `/api/binance-auth?${queryParams.toString()}`
 

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getUserFromBearer } from "@/lib/auth-api"
 
 export async function GET(request: Request) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   try {
     const user = await getUserFromBearer(request)
     if (!user) {

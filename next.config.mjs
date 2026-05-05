@@ -1,4 +1,11 @@
 /** @type {import('next').NextConfig} */
+const extraDevOrigins =
+  process.env.NEXT_PUBLIC_DEV_EXTRA_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []
+
+/**
+ * Hostnames allowed to load Turbopack / `/_next` dev assets (Origin / Referer check).
+ * Next always allows `localhost` + `*.localhost`; add IPv4/IPv6 loopback and any LAN host you open in the browser.
+ */
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
@@ -6,7 +13,19 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  allowedDevOrigins: ['172.20.10.5', 'localhost', '*.local'],
+  /**
+   * Dev-only: browser host must be listed or Turbopack blocks `/_next/*` → "Failed to fetch".
+   * Use http://localhost:PORT (not 127.0.0.1) if you still see errors, or add your LAN IP below / in .env:
+   * NEXT_PUBLIC_DEV_EXTRA_ORIGINS=192.168.1.10,10.0.0.5
+   */
+  allowedDevOrigins: [
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "[::1]",
+    "*.local",
+    ...extraDevOrigins,
+  ],
 }
 
 export default nextConfig

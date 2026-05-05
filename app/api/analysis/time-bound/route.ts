@@ -1,0 +1,70 @@
+import { NextRequest, NextResponse } from "next/server"
+import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
+
+/**
+ * Intentionally not gated by `NEXT_PUBLIC_DEV_LOCAL_ONLY`: fast paths only call
+ * public Binance REST (depth + funding index). Grok runs only when includeGrok
+ * is true and NEXUS_GROK_ENABLED=1.
+ */
+export async function POST(request: NextRequest) {
+  let body: { symbol?: string; timeWindowSeconds?: number; includeGrok?: boolean }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ success: false, error: "Invalid JSON body" }, { status: 400 })
+  }
+
+  const symbol = typeof body.symbol === "string" ? body.symbol.trim() : ""
+  if (!symbol) {
+    return NextResponse.json({ success: false, error: "symbol is required" }, { status: 400 })
+  }
+
+  const timeWindowSeconds =
+    typeof body.timeWindowSeconds === "number" && Number.isFinite(body.timeWindowSeconds)
+      ? Math.floor(body.timeWindowSeconds)
+      : 300
+
+  if (timeWindowSeconds < 60 || timeWindowSeconds > 600) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "timeWindowSeconds must be between 60 and 600 (1–10 minutes)",
+      },
+      { status: 400 }
+    )
+  }
+
+  // Grok only when explicitly requested AND NEXUS_GROK_ENABLED=1 (see time-bound-analysis).
+  const includeGrok = body.includeGrok === true
+  const timeWindowMs = timeWindowSeconds * 1000
+
+  const result = await timeBoundAnalysis.startAnalysis({
+    symbol,
+    timeWindowMs,
+    includeGrok,
+    onPartialResult: (partial) => {
+      console.log(
+        `[api/analysis/time-bound] partial ${partial.phase} · Grok wait ${partial.waitingForGrok} · ${partial.timeRemainingMs}ms left`
+      )
+    },
+    onFinalResult: (final) => {
+      console.log(
+        `[api/analysis/time-bound] final ${final.symbol} ${final.fusedDecision.action} (${final.fusedDecision.confidence}%) grok=${final.grokReceived}`
+      )
+    },
+  })
+
+  return NextResponse.json({ success: true, result })
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const symbol = searchParams.get("symbol")
+  if (!symbol) {
+    return NextResponse.json({ error: "symbol query parameter required" }, { status: 400 })
+  }
+  const key = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "")
+  const cached = timeBoundAnalysis.getLatestResult(key)
+  const status = timeBoundAnalysis.getSessionStatus(key)
+  return NextResponse.json({ symbol: key, cached, status })
+}

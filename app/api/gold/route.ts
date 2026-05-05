@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 
 // Yahoo Finance endpoint for gold futures (GC=F)
 const YAHOO_FINANCE_URL =
@@ -139,6 +140,8 @@ async function fetchFromMetalsAPI(apiKey: string): Promise<GoldPriceResponse | n
 }
 
 export async function GET(request: NextRequest) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   // Check server-side cache first
   const now = Date.now()
   if (cachedResponse && now - lastServerFetch < SERVER_CACHE_MS) {

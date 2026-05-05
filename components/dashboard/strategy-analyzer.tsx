@@ -8,7 +8,6 @@ import {
   CheckCircle,
   ChevronRight,
   X,
-  Sparkles,
   Clock,
   TrendingUp,
   TrendingDown,
@@ -30,11 +29,22 @@ import {
 } from "lucide-react"
 import { tradingStrategies, type Strategy } from "@/lib/trading-strategies"
 import type { Coin } from "@/lib/coins-data"
+import {
+  getLiveRouteLabel,
+  getLiveRouteState,
+  suggestSimilarCoins,
+  type TradableBasesFetchStatus,
+} from "@/lib/exchange-coin-support"
 
 interface StrategyAnalyzerProps {
   coins: Coin[]
   userLevel: number
   isFixedTradeUser: boolean
+  /** When true, user has a linked exchange — we verify symbols against its public list when provided. */
+  exchangeConnected?: boolean
+  /** USDT spot bases from GET /api/exchange/tradable-symbols for the selected venue */
+  tradableBases?: Set<string> | null
+  tradableStatus?: TradableBasesFetchStatus
   onStartAnalysis: (coin: Coin, strategies: string[], expertMode: boolean, analysisSettings: AnalysisSettings) => void
   onClose: () => void
 }
@@ -67,12 +77,21 @@ export function StrategyAnalyzer({
   coins, 
   userLevel, 
   isFixedTradeUser,
-  onStartAnalysis, 
-  onClose 
+  exchangeConnected = false,
+  tradableBases = null,
+  tradableStatus = "idle",
+  onStartAnalysis,
+  onClose,
 }: StrategyAnalyzerProps) {
-  const [step, setStep] = useState<"strategies" | "coin" | "expert">("strategies")
+  const maxStrategies = tradingStrategies.length
+  const showFullStrategyNames = true
+
+  const [step, setStep] = useState<"strategies" | "coin" | "expert">("coin")
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedStrategies, setSelectedStrategies] = useState<string[]>([])
+  const [selectedStrategies, setSelectedStrategies] = useState<string[]>(() => {
+    const ids = tradingStrategies.map((s) => s.id)
+    return ids.slice(0, Math.min(4, ids.length))
+  })
   const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null)
   const [expertMode, setExpertMode] = useState(false)
   const [analysisSettings, setAnalysisSettings] = useState<AnalysisSettings>({
@@ -82,7 +101,7 @@ export function StrategyAnalyzer({
     tradeAmount: 100,
   })
 
-  const canUseExpertMode = userLevel >= 3 || isFixedTradeUser
+  const canUseExpertMode = userLevel >= 1 || isFixedTradeUser
 
   // Filter coins based on search
   const filteredCoins = useMemo(() => {
@@ -94,6 +113,11 @@ export function StrategyAnalyzer({
         coin.name.toLowerCase().includes(query)
     )
   }, [coins, searchQuery])
+
+  const similarCoins = useMemo(
+    () => suggestSimilarCoins(coins, searchQuery, 8),
+    [coins, searchQuery]
+  )
 
   // Group strategies by category
   const groupedStrategies = useMemo(() => {
@@ -111,26 +135,28 @@ export function StrategyAnalyzer({
     setSelectedStrategies((prev) =>
       prev.includes(strategyId)
         ? prev.filter((id) => id !== strategyId)
-        : prev.length < 4
-        ? [...prev, strategyId]
-        : prev
+        : prev.length < maxStrategies
+          ? [...prev, strategyId]
+          : prev
     )
   }
 
-  const handleContinueToCoin = () => {
-    if (selectedStrategies.length >= 1) {
-      setStep("coin")
-    }
+  const applyNexAutoStrategy = () => {
+    const best = [...tradingStrategies].sort(
+      (a, b) => (b.backtestResults?.winRate ?? 0) - (a.backtestResults?.winRate ?? 0)
+    )[0]
+    if (best) setSelectedStrategies([best.id])
+  }
+
+  const handleContinueFromStrategies = () => {
+    if (!selectedCoin || selectedStrategies.length < 1) return
+    if (canUseExpertMode) setStep("expert")
+    else onStartAnalysis(selectedCoin, selectedStrategies, false, analysisSettings)
   }
 
   const handleSelectCoin = (coin: Coin) => {
     setSelectedCoin(coin)
-    if (canUseExpertMode) {
-      setStep("expert")
-    } else {
-      // Go directly to analysis without expert mode
-      onStartAnalysis(coin, selectedStrategies, false, analysisSettings)
-    }
+    setStep("strategies")
   }
 
   const handleStartAnalysis = () => {
@@ -167,8 +193,9 @@ export function StrategyAnalyzer({
             <div>
               <h2 className="font-semibold">Strategy Analyzer</h2>
               <p className="text-xs text-muted-foreground">
-                {step === "strategies" && "Select up to 4 strategies to analyze"}
-                {step === "coin" && "Choose a coin to analyze"}
+                {step === "coin" && "Choose or search a market first"}
+                {step === "strategies" &&
+                  `Pick strategies (${maxStrategies} max for your level) — then continue`}
                 {step === "expert" && "Configure Expert Mode settings"}
               </p>
             </div>
@@ -182,26 +209,32 @@ export function StrategyAnalyzer({
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
-            step === "strategies" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}>
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+          <div
+            className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+              step === "coin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            }`}
+          >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">1</span>
-            Strategies
+            Market
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
-            step === "coin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}>
+          <div
+            className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+              step === "strategies" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            }`}
+          >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">2</span>
-            Select Coin
+            Strategies
           </div>
           {canUseExpertMode && (
             <>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
-                step === "expert" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-              }`}>
+              <div
+                className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+                  step === "expert" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                }`}
+              >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">3</span>
                 Expert Mode
               </div>
@@ -211,13 +244,128 @@ export function StrategyAnalyzer({
 
         {/* Content */}
         <div className="max-h-[60vh] overflow-y-auto p-4">
-          {/* Step 1: Strategy Selection */}
+          {/* Step 1: Coin (catalog / provider list) */}
+          {step === "coin" && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search symbol or name…"
+                  className="w-full rounded-lg border border-border bg-background py-3 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+                  autoFocus
+                />
+              </div>
+
+              {searchQuery.trim() && filteredCoins.length === 0 ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+                  <p className="font-medium text-destructive">❌ COIN NOT FOUND</p>
+                  <p className="mt-1 text-muted-foreground">Nothing in the catalog matches that query. Try:</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {similarCoins.map((c) => (
+                      <button
+                        key={c.symbol}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(c.symbol)
+                        }}
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs hover:border-primary"
+                      >
+                        {c.symbol}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {filteredCoins.map((coin) => {
+                  const routeState = getLiveRouteState(
+                    Boolean(exchangeConnected),
+                    coin.symbol,
+                    tradableBases ?? null,
+                    tradableStatus
+                  )
+                  const route = getLiveRouteLabel(routeState)
+                  const badgeClass =
+                    route.tone === "success"
+                      ? "bg-success/15 text-success"
+                      : route.tone === "warning"
+                        ? "bg-warning/15 text-warning"
+                        : route.tone === "muted"
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-primary/10 text-primary"
+                  return (
+                    <button
+                      key={coin.symbol}
+                      type="button"
+                      onClick={() => handleSelectCoin(coin)}
+                      className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-all hover:border-primary hover:bg-primary/5"
+                    >
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-white"
+                        style={{ backgroundColor: coin.color }}
+                      >
+                        {coin.symbol.slice(0, 3)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{coin.symbol}</span>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${badgeClass}`}>
+                            {route.text}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground truncate">{coin.name}</span>
+                          <span className="text-xs text-muted-foreground">${coin.price.toLocaleString()}</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs">
+                          <span className={coin.change24h >= 0 ? "text-success" : "text-destructive"}>
+                            {coin.change24h >= 0 ? "+" : ""}
+                            {coin.change24h.toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Strategies */}
           {step === "strategies" && (
             <div className="space-y-4">
-              {/* Selected Strategies Preview */}
+              {selectedCoin && (
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">Selected market</span>
+                  <span className="font-semibold">{selectedCoin.symbol}</span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                  onClick={applyNexAutoStrategy}
+                >
+                  <Zap className="h-4 w-4" />
+                  ⚡ Nex Auto-Strategy
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Paid</span>
+                </Button>
+                <span className="text-xs text-muted-foreground">One-tap pick</span>
+              </div>
+
               {selectedStrategies.length > 0 && (
                 <div className="rounded-lg bg-primary/10 p-3">
-                  <p className="mb-2 text-xs font-medium text-primary">Selected Strategies ({selectedStrategies.length}/4)</p>
+                  <p className="mb-2 text-xs font-medium text-primary">
+                    Selected ({selectedStrategies.length}/{maxStrategies})
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {selectedStrategies.map((id) => {
                       const strategy = tradingStrategies.find((s) => s.id === id)
@@ -228,6 +376,7 @@ export function StrategyAnalyzer({
                         >
                           <span>{strategy.shortName}</span>
                           <button
+                            type="button"
                             onClick={() => toggleStrategy(id)}
                             className="hover:text-destructive"
                           >
@@ -240,7 +389,6 @@ export function StrategyAnalyzer({
                 </div>
               )}
 
-              {/* Strategy Categories */}
               {Object.entries(groupedStrategies).map(([category, strategies]) => (
                 <div key={category}>
                   <div className="mb-2 flex items-center gap-2">
@@ -252,37 +400,44 @@ export function StrategyAnalyzer({
                   <div className="grid gap-2 sm:grid-cols-2">
                     {strategies.map((strategy) => {
                       const isSelected = selectedStrategies.includes(strategy.id)
-                      const isDisabled = !isSelected && selectedStrategies.length >= 4
+                      const isDisabled = !isSelected && selectedStrategies.length >= maxStrategies
                       return (
                         <button
                           key={strategy.id}
+                          type="button"
                           onClick={() => !isDisabled && toggleStrategy(strategy.id)}
                           disabled={isDisabled}
                           className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
                             isSelected
                               ? "border-primary bg-primary/10"
                               : isDisabled
-                              ? "cursor-not-allowed border-border bg-muted/30 opacity-50"
-                              : "border-border hover:border-primary/50"
+                                ? "cursor-not-allowed border-border bg-muted/30 opacity-50"
+                                : "border-border hover:border-primary/50"
                           }`}
                         >
-                          <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                            isSelected
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-muted-foreground"
-                          }`}>
+                          <div
+                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                              isSelected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-muted-foreground"
+                            }`}
+                          >
                             {isSelected && <CheckCircle className="h-3 w-3" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{strategy.shortName}</span>
+                              <span className="font-medium text-sm">
+                                {showFullStrategyNames ? strategy.name : strategy.shortName}
+                              </span>
                               {strategy.backtestResults && (
                                 <span className="text-xs text-success">{strategy.backtestResults.winRate}%</span>
                               )}
                             </div>
-                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                              {strategy.description}
-                            </p>
+                            {showFullStrategyNames ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                                {strategy.description}
+                              </p>
+                            ) : null}
                           </div>
                         </button>
                       )
@@ -293,69 +448,7 @@ export function StrategyAnalyzer({
             </div>
           )}
 
-          {/* Step 2: Coin Selection */}
-          {step === "coin" && (
-            <div className="space-y-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search coins..."
-                  className="w-full rounded-lg border border-border bg-background py-3 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
-                  autoFocus
-                />
-              </div>
-
-              {/* Selected Strategies Reminder */}
-              <div className="flex flex-wrap gap-2 rounded-lg bg-muted/50 p-3">
-                <span className="text-xs text-muted-foreground">Analyzing with:</span>
-                {selectedStrategies.map((id) => {
-                  const strategy = tradingStrategies.find((s) => s.id === id)
-                  return strategy ? (
-                    <span key={id} className="rounded bg-primary/20 px-2 py-0.5 text-xs text-primary">
-                      {strategy.shortName}
-                    </span>
-                  ) : null
-                })}
-              </div>
-
-              {/* Coin Grid */}
-              <div className="grid gap-2 sm:grid-cols-2">
-                {filteredCoins.map((coin) => (
-                  <button
-                    key={coin.symbol}
-                    onClick={() => handleSelectCoin(coin)}
-                    className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-all hover:border-primary hover:bg-primary/5"
-                  >
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-white"
-                      style={{ backgroundColor: coin.color }}
-                    >
-                      {coin.symbol.slice(0, 3)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{coin.symbol}</span>
-                        <span className={`text-sm font-medium ${coin.change24h >= 0 ? "text-success" : "text-destructive"}`}>
-                          {coin.change24h >= 0 ? "+" : ""}{coin.change24h.toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground truncate">{coin.name}</span>
-                        <span className="text-xs text-muted-foreground">${coin.price.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Expert Mode Settings (Level 3+ or Fixed Trade Users) */}
+          {/* Step 3: Expert Mode settings */}
           {step === "expert" && (
             <div className="space-y-6">
               {/* Expert Mode Toggle */}
@@ -368,7 +461,7 @@ export function StrategyAnalyzer({
                     <div>
                       <h3 className="font-semibold">Expert Mode</h3>
                       <p className="text-xs text-muted-foreground">
-                        AI analyzes, predicts, and can trade automatically
+                        Advanced execution, structured checks, and optional automated orders
                       </p>
                     </div>
                   </div>
@@ -436,7 +529,7 @@ export function StrategyAnalyzer({
                           <Zap className="h-5 w-5 text-warning" />
                           <div>
                             <p className="font-medium text-sm">Auto Trade (Robot Mode)</p>
-                            <p className="text-xs text-muted-foreground">Let AI execute trades automatically</p>
+                            <p className="text-xs text-muted-foreground">Route orders automatically when enabled</p>
                           </div>
                         </div>
                         <button
@@ -560,10 +653,13 @@ export function StrategyAnalyzer({
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-border p-4">
           <div>
-            {step !== "strategies" && (
+            {step !== "coin" && (
               <Button
                 variant="ghost"
-                onClick={() => setStep(step === "expert" ? "coin" : "strategies")}
+                onClick={() => {
+                  if (step === "expert") setStep("strategies")
+                  else if (step === "strategies") setStep("coin")
+                }}
               >
                 Back
               </Button>
@@ -572,8 +668,8 @@ export function StrategyAnalyzer({
           <div className="flex items-center gap-2">
             {step === "strategies" && (
               <Button
-                onClick={handleContinueToCoin}
-                disabled={selectedStrategies.length < 1}
+                onClick={handleContinueFromStrategies}
+                disabled={selectedStrategies.length < 1 || !selectedCoin}
                 className="gap-2"
               >
                 Continue
@@ -597,7 +693,7 @@ export function StrategyAnalyzer({
           <div className="border-t border-border bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Lock className="h-4 w-4" />
-              <span>Expert Mode requires Level 3+ or active Fixed Trade subscription</span>
+              <span>Expert Mode is not available for this account tier.</span>
             </div>
           </div>
         )}

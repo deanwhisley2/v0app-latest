@@ -14,6 +14,8 @@ export interface MarketData {
   high24h: number
   low24h: number
   volume24h: number
+  /** Optional composite sentiment score (-100 bearish … +100 bullish). Fed from sentiment analysis when available. */
+  sentimentBiasScore?: number
 }
 
 export interface TradeDecision {
@@ -100,7 +102,18 @@ export class NexusTradingEngine {
     }
     totalScore += smartMoneySignalScore * this.weights.smartMoney
     totalWeight += this.weights.smartMoney
-    
+
+    let sentimentNote = ""
+    if (
+      marketData.sentimentBiasScore !== undefined &&
+      Number.isFinite(marketData.sentimentBiasScore)
+    ) {
+      const s = Math.max(-100, Math.min(100, marketData.sentimentBiasScore))
+      totalScore += s * this.weights.sentiment
+      totalWeight += this.weights.sentiment
+      sentimentNote = ` Sentiment composite ${s > 15 ? "bullish" : s < -15 ? "bearish" : "neutral"} (score ${Math.round(s)}).`
+    }
+
     const normalizedScore = totalScore / (totalWeight + 0.001)
     
     let action: TradeDecision["action"]
@@ -131,8 +144,13 @@ export class NexusTradingEngine {
       takeProfit = entryPrice - (atr * 3)
     }
     
-    const reason = this.generateReason(action, confidence, { kalman: kalmanResult, liquidity: liquidityResult, smartMoney: smartMoneyResult })
-    
+    const reason =
+      this.generateReason(action, confidence, {
+        kalman: kalmanResult,
+        liquidity: liquidityResult,
+        smartMoney: smartMoneyResult,
+      }) + sentimentNote
+
     return {
       action,
       confidence: Math.min(confidence, 100),

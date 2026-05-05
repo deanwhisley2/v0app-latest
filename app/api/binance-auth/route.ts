@@ -7,11 +7,13 @@
  * SAFETY: Only allows GET endpoints (read-only).
  * NO TRADE COMMANDS ARE EVER SENT THROUGH THIS PROXY.
  * 
- * Usage: GET /api/binance-auth?endpoint=/api/v3/account&apiKey=xxx&secretKey=xxx
+ * Usage: GET /api/binance-auth?endpoint=/api/v3/account
+ * Optional query: apiKey, secretKey (otherwise server uses BINANCE_API_KEY + BINANCE_SECRET_KEY from .env.local).
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 
 const BINANCE_BASE = "https://api.binance.com"
 
@@ -54,10 +56,15 @@ function generateSignature(queryString: string, secretKey: string): string {
 // ============================================================
 
 export async function GET(request: NextRequest) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   const { searchParams } = new URL(request.url)
   const endpoint = searchParams.get("endpoint")
-  const apiKey = searchParams.get("apiKey")
-  const secretKey = searchParams.get("secretKey")
+  const envKey = process.env.BINANCE_API_KEY?.trim()
+  const envSecret =
+    process.env.BINANCE_SECRET_KEY?.trim() || process.env.BINANCE_API_SECRET?.trim()
+  const apiKey = searchParams.get("apiKey")?.trim() || envKey || ""
+  const secretKey = searchParams.get("secretKey")?.trim() || envSecret || ""
 
   // Validate required parameters
   if (!endpoint) {
@@ -66,7 +73,10 @@ export async function GET(request: NextRequest) {
 
   if (!apiKey || !secretKey) {
     return NextResponse.json(
-      { error: "Missing API key or secret key. Configure them in /api-settings." },
+      {
+        error:
+          "Missing API credentials. Use /api-settings in the browser, or set BINANCE_API_KEY and BINANCE_SECRET_KEY (or BINANCE_API_SECRET) on the server.",
+      },
       { status: 401 }
     )
   }

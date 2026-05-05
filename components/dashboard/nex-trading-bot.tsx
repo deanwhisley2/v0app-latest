@@ -40,7 +40,7 @@ interface NexTradingBotProps {
   onExecuteTrade: (params: TradeParams) => void
 }
 
-interface TradeParams {
+export interface TradeParams {
   coin: string
   amount: number
   exchangeId: string
@@ -108,7 +108,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
   const [analysisTime, setAnalysisTime] = useState(15) // minutes back
   const [enterTime, setEnterTime] = useState(5) // minutes to enter
   
-  // Tri-Model AI States
+  // Tri-model states
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [triModelAnalysis, setTriModelAnalysis] = useState<TriModelAnalysis | null>(null)
@@ -122,7 +122,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
   const [news, setNews] = useState<NewsItem[]>([])
   const [isFetchingNews, setIsFetchingNews] = useState(false)
 
-  // Tri-Model AI Analysis: Gemini + Grok + ChatGPT
+  // Tri-model analysis: Gemini + Grok + ChatGPT
   const runTriModelAnalysis = async () => {
     setIsAnalyzing(true)
     setAnalysisComplete(false)
@@ -187,7 +187,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
     }
   }
 
-  // Start NEX AI Analysis with tri-model
+  // Start NEX tri-model analysis
   const startNexAnalysis = () => {
     runTriModelAnalysis()
   }
@@ -241,7 +241,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
           </div>
           <div>
             <h3 className="font-bold">NEX Trading Bot</h3>
-            <p className="text-xs text-muted-foreground">AI-Powered Trading Assistant</p>
+            <p className="text-xs text-muted-foreground">Joelin-powered trading guide</p>
           </div>
         </div>
         <button onClick={() => setShowSettings(!showSettings)} className="text-muted-foreground hover:text-foreground">
@@ -272,7 +272,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
             }`}
           >
             <Zap className="inline h-3 w-3 mr-1" />
-            NEX AI
+            NEX · Joelin
           </button>
           <button
             onClick={nexTakeFullControl}
@@ -327,10 +327,10 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
         )}
       </div>
 
-      {/* NEX AI Section */}
+      {/* NEX · Joelin */}
       {(mode === "nex" || mode === "nex-tfc") && (
         <>
-          {/* Tri-Model AI Analysis */}
+          {/* Tri-model analysis */}
           <div className="border-b border-border p-4 space-y-4">
             {isAnalyzing && (
               <div className="flex items-center justify-center gap-3 py-6">
@@ -518,7 +518,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
             )}
           </div>
 
-          {/* AI Strategies */}
+          {/* Strategy stack */}
           <div className="border-b border-border p-4">
             <button
               onClick={() => setExpandedSection(expandedSection === "strategies" ? null : "strategies")}
@@ -667,7 +667,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
           ) : mode === "nex" ? (
             <>
               <Zap className="h-5 w-5 mr-2" />
-              Execute with NEX AI
+              Execute with NEX · Joelin
             </>
           ) : (
             <>

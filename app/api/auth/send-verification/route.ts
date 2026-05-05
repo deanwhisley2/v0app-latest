@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 
 /** Brevo sends the message; codes live in public.email_verifications (service role). */
 
 export async function POST(req: Request) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   let email: string | undefined
   try {
     const body = await req.json()

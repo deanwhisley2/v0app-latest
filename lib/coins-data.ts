@@ -88,6 +88,9 @@ export function formatVolume(volume: number): string {
 }
 
 export function formatMarketCap(marketCap: number): string {
+  if (!Number.isFinite(marketCap) || marketCap <= 0) {
+    return "—"
+  }
   if (marketCap >= 1e12) {
     return `$${(marketCap / 1e12).toFixed(2)}T`
   } else if (marketCap >= 1e9) {

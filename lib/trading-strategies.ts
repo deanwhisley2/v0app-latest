@@ -3,7 +3,10 @@
 // NEXUS ENGINE - Replaces old strategy voting system
 // One unified intelligence. No conflicts. No voting.
 
-import { nexusEngine, TradeDecision, MarketData } from '../nexus-core/nexus-engine'
+import { nexusEngine, TradeDecision, MarketData } from "../nexus-core/nexus-engine"
+import { getBinanceOrderBook } from '@/lib/binance-api'
+import { depthToNexusTuples, depthToOrderBookData, toBinanceSpotSymbol } from '@/lib/order-book-mapper'
+import { sentimentWeapon } from '@/lib/sentiment-weapon'
 // Re-export for compatibility with existing UI components
 export type { TradeDecision, MarketData }
 
@@ -160,48 +163,126 @@ export function analyzeWithNexus(marketData: MarketData): TradeDecision {
   return nexusEngine.getTradeSignal(marketData)
 }
 
-// Legacy compatibility for old components that expect StrategySignal[]
-export function analyzeWithAllStrategies(coin: any, historicalData: any[]): TradeAnalysis {
-  const marketData: MarketData = {
+export function sentimentBiasFromReport(compositeSignal: string, compositeConfidence: number): number {
+  const c = Math.min(100, Math.max(0, compositeConfidence))
+  if (compositeSignal === "BULLISH") return c * 0.65
+  if (compositeSignal === "BEARISH") return -c * 0.65
+  return 0
+}
+
+export function buildMarketData(
+  coin: { symbol: string; price: number; change24h: number },
+  historicalData: Array<{ close: number; volume: number }>,
+  orderBook: MarketData["orderBook"],
+  sentimentBiasScore?: number
+): MarketData {
+  const md: MarketData = {
     symbol: coin.symbol,
     currentPrice: coin.price,
-    historicalPrices: historicalData.map(d => d.close),
-    volumes: historicalData.map(d => d.volume),
-    orderBook: { bids: [], asks: [] },
+    historicalPrices: historicalData.map((d) => d.close),
+    volumes: historicalData.map((d) => d.volume),
+    orderBook,
     change24h: coin.change24h,
     high24h: coin.price * 1.02,
     low24h: coin.price * 0.98,
-    volume24h: historicalData.reduce((sum, d) => sum + d.volume, 0)
+    volume24h: historicalData.reduce((sum, d) => sum + d.volume, 0),
   }
-  
-  const decision = nexusEngine.getTradeSignal(marketData)
-  
+  if (sentimentBiasScore !== undefined) {
+    md.sentimentBiasScore = sentimentBiasScore
+  }
+  return md
+}
+
+export function decisionToTradeAnalysis(coin: { symbol: string; price: number }, decision: TradeDecision): TradeAnalysis {
   const oldFormatSignals: TradeAnalysisSignal[] = [
     {
       strategy: "Nexus Unified Engine",
-      signal: decision.action === "STRONG_BUY" ? "BUY" : 
-              decision.action === "BUY" ? "BUY" :
-              decision.action === "STRONG_SELL" ? "SELL" :
-              decision.action === "SELL" ? "SELL" : "HOLD",
+      signal:
+        decision.action === "STRONG_BUY"
+          ? "BUY"
+          : decision.action === "BUY"
+            ? "BUY"
+            : decision.action === "STRONG_SELL"
+              ? "SELL"
+              : decision.action === "SELL"
+                ? "SELL"
+                : "HOLD",
       confidence: decision.confidence,
       reason: decision.reason,
-    }
+    },
   ]
-  
+
   return {
     coin: coin.symbol,
     timestamp: new Date(),
     signals: oldFormatSignals,
-    consensus: decision.action === "STRONG_BUY" ? "STRONG_BUY" :
-               decision.action === "BUY" ? "BUY" :
-               decision.action === "STRONG_SELL" ? "STRONG_SELL" :
-               decision.action === "SELL" ? "SELL" : "NEUTRAL",
+    consensus:
+      decision.action === "STRONG_BUY"
+        ? "STRONG_BUY"
+        : decision.action === "BUY"
+          ? "BUY"
+          : decision.action === "STRONG_SELL"
+            ? "STRONG_SELL"
+            : decision.action === "SELL"
+              ? "SELL"
+              : "NEUTRAL",
     overallConfidence: decision.confidence,
     recommendation: decision.reason,
     riskLevel: decision.confidence > 70 ? "LOW" : decision.confidence > 50 ? "MEDIUM" : "HIGH",
     suggestedEntry: decision.entryPrice || coin.price,
     suggestedSL: decision.stopLoss || coin.price * 0.98,
     suggestedTP: decision.takeProfit || coin.price * 1.04,
-    historicalAccuracy: 68
+    historicalAccuracy: 68,
   }
+}
+
+/** Same as {@link analyzeWithAllStrategiesAsync} but without network — empty book, no sentiment bias. */
+export function analyzeWithAllStrategies(coin: any, historicalData: any[]): TradeAnalysis {
+  if (historicalData.length > 0) {
+    initializeEngine(coin.symbol, historicalData.map((d: { close: number }) => d.close))
+  }
+  const marketData = buildMarketData(coin, historicalData, { bids: [], asks: [] })
+  const decision = nexusEngine.getTradeSignal(marketData)
+  return decisionToTradeAnalysis(coin, decision)
+}
+
+/**
+ * Fetches live Binance depth (via `/api/binance` proxy), maps into Nexus + sentiment bias, then runs Nexus.
+ */
+export async function analyzeWithAllStrategiesAsync(
+  coin: { symbol: string; price: number; change24h: number },
+  historicalData: Array<{ close: number; volume: number }>,
+  depthLimit: number = 100
+): Promise<TradeAnalysis> {
+  if (historicalData.length > 0) {
+    initializeEngine(coin.symbol, historicalData.map((d) => d.close))
+  }
+  const spot = toBinanceSpotSymbol(coin.symbol)
+  let orderBook: MarketData["orderBook"] = { bids: [], asks: [] }
+  let sentimentBias: number | undefined
+
+  try {
+    const depth = await getBinanceOrderBook(spot, depthLimit)
+    orderBook = depthToNexusTuples(depth)
+    const obData = depthToOrderBookData(depth)
+    const lastVol = historicalData.length ? historicalData[historicalData.length - 1]!.volume : 0
+    const prevClose =
+      historicalData.length > 5 ? historicalData[historicalData.length - 6]!.close : coin.price
+    const priceChange5m = prevClose !== 0 ? ((coin.price - prevClose) / prevClose) * 100 : coin.change24h
+    const sentimentReport = sentimentWeapon.analyze(
+      obData,
+      null,
+      coin.symbol,
+      lastVol,
+      coin.price,
+      priceChange5m
+    )
+    sentimentBias = sentimentBiasFromReport(sentimentReport.compositeSignal, sentimentReport.compositeConfidence)
+  } catch (e) {
+    console.warn(`[trading-strategies] Order book fetch failed for ${coin.symbol}, using empty book:`, e)
+  }
+
+  const marketData = buildMarketData(coin, historicalData, orderBook, sentimentBias)
+  const decision = nexusEngine.getTradeSignal(marketData)
+  return decisionToTradeAnalysis(coin, decision)
 }

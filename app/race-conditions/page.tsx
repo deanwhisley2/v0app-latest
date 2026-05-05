@@ -515,7 +515,7 @@ export default function RaceConditionsPage() {
                     </div>
                     <div>
                       <h3 className="font-bold">Nexus Intelligence</h3>
-                      <p className="text-xs text-muted-foreground">AI Prediction Engine</p>
+                      <p className="text-xs text-muted-foreground">Joelin signal engine</p>
                     </div>
                   </div>
 

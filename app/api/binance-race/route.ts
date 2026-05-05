@@ -12,10 +12,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 
 const BINANCE_BASE = "https://api.binance.com"
 
 export async function GET(request: NextRequest) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   const { searchParams } = new URL(request.url)
   const symbol = searchParams.get("symbol") || "BTCUSDT"
   const action = searchParams.get("action") || "predict"

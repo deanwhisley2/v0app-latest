@@ -13,7 +13,7 @@
  * but on live battlefield feedback.
  */
 
-import { PreTradeValidator, TradeRequest } from "./pre-trade-validator"
+import { PreTradeValidator, type TradeRequest } from "./pre-trade-validator"
 
 export interface TradeResult {
   trade_id: string
@@ -49,16 +49,58 @@ export interface RuleChange {
   totalTrades: number
 }
 
+export type StrategyLearnerHooks = {
+  /** Fired after a pattern is blocked and the validator rule is installed (e.g. persist to API). */
+  onPatternBlocked?: (pattern: LearnedPattern) => void
+}
+
+/** Idempotent: replaces existing learned rule with same id on the validator. */
+export function applyLearnedPatternToValidator(
+  validator: PreTradeValidator,
+  pattern: LearnedPattern
+): void {
+  const id = `learned-block-${pattern.pattern.toLowerCase().replace(/\s+/g, "-")}`
+  validator.removeRule(id)
+  const action = pattern.action.toLowerCase()
+  const signal = pattern.signal.toLowerCase()
+  validator.addRule({
+    id,
+    description: `Learned: Block ${pattern.pattern} (${(pattern.winRate * 100).toFixed(0)}% win rate)`,
+    priority: 0,
+    enabled: true,
+    check: (request: TradeRequest) => {
+      if (request.action === action && request.signal === signal) {
+        return {
+          blocked: true,
+          reason: `Learned pattern: ${pattern.pattern} has ${(pattern.winRate * 100).toFixed(0)}% win rate — blocked by strategy learner`,
+        }
+      }
+      return { blocked: false, reason: null }
+    },
+  })
+}
+
 export class StrategyLearner {
   private tradeHistory: TradeResult[] = []
   private patterns: Map<string, LearnedPattern> = new Map()
   private ruleChanges: RuleChange[] = []
   private validator: PreTradeValidator
+  private hooks?: StrategyLearnerHooks
   private readonly MIN_TRADES_FOR_PATTERN = 2 // Minimum trades to identify a pattern
   private readonly BLOCK_THRESHOLD = 0.3 // Block if win rate < 30%
 
-  constructor(validator: PreTradeValidator) {
+  constructor(validator: PreTradeValidator, hooks?: StrategyLearnerHooks) {
     this.validator = validator
+    this.hooks = hooks
+  }
+
+  /**
+   * Restore a blocked pattern from persistence (validator rule + in-memory map).
+   */
+  importBlockedPattern(pattern: LearnedPattern): void {
+    const p: LearnedPattern = { ...pattern, blocked: true }
+    this.patterns.set(p.pattern, p)
+    applyLearnedPatternToValidator(this.validator, p)
   }
 
   /**
@@ -137,33 +179,14 @@ export class StrategyLearner {
     }
     this.ruleChanges.push(change)
 
-    // Add a rule to the validator to block this pattern
-    const action = pattern.action.toLowerCase()
-    const signal = pattern.signal.toLowerCase()
-
-    this.validator.addRule({
-      id: `learned-block-${pattern.pattern.toLowerCase().replace(/\s+/g, "-")}`,
-      description: `Learned: Block ${pattern.pattern} (${(pattern.winRate * 100).toFixed(0)}% win rate)`,
-      priority: 0, // Highest priority
-      enabled: true,
-      check: (request: TradeRequest) => {
-        if (
-          request.action === action &&
-          request.signal === signal
-        ) {
-          return {
-            blocked: true,
-            reason: `Learned pattern: ${pattern.pattern} has ${(pattern.winRate * 100).toFixed(0)}% win rate — blocked by strategy learner`,
-          }
-        }
-        return { blocked: false, reason: null }
-      },
-    })
+    applyLearnedPatternToValidator(this.validator, pattern)
 
     console.log(
       `[StrategyLearner] 🚫 Blocked pattern "${pattern.pattern}" — ` +
       `win rate ${(pattern.winRate * 100).toFixed(0)}% (${pattern.wins}/${pattern.totalTrades})`
     )
+
+    this.hooks?.onPatternBlocked?.(pattern)
   }
 
   /**

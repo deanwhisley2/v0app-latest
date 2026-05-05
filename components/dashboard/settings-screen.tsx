@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Shield,
   Bell,
@@ -28,8 +28,28 @@ import { DepositWithdraw } from "./deposit-withdraw"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
+import type { FiatCurrencyCode } from "@/lib/currency-display"
+import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
+import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
-type SettingsView = "main" | "security" | "notifications" | "nexus-learner" | "currency" | "language" | "theme" | "wire-currency" | "payment-methods" | "privacy" | "about" | "exchanges" | "deposit-withdraw"
+type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
+
+export type SettingsView =
+  | "main"
+  | "security"
+  | "notifications"
+  | "nexus-learner"
+  | "currency"
+  | "language"
+  | "theme"
+  | "wire-currency"
+  | "payment-methods"
+  | "privacy"
+  | "about"
+  | "exchanges"
+  | "deposit-withdraw"
 
 interface SettingItem {
   key: SettingsView
@@ -41,25 +61,71 @@ interface SettingItem {
 
 interface SettingsScreenProps {
   onLogout?: () => void | Promise<void>
+  /** When set, opens this sub-screen (e.g. from a notification deep link). */
+  requestedView?: SettingsView | null
+  onRequestViewConsumed?: () => void
+  isGuestSession?: boolean
+  tradingUserLevel?: number
 }
 
-export function SettingsScreen({ onLogout }: SettingsScreenProps) {
+export function SettingsScreen({
+  onLogout,
+  requestedView,
+  onRequestViewConsumed,
+  isGuestSession = false,
+  tradingUserLevel = 1,
+}: SettingsScreenProps) {
+  const { t, language: appLanguage, currency: appCurrency, setPreferences } = useUserPreferences()
   const [currentView, setCurrentView] = useState<SettingsView>("main")
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark")
-  const [language, setLanguage] = useState("English")
-  const [currency, setCurrency] = useState("USD")
   const [wireCurrency, setWireCurrency] = useState("USD")
   const [securityLevel, setSecurityLevel] = useState<1 | 2 | 3>(1)
   const [mainBalance] = useState(24831.42)
+  const [notifications, setNotifications] = useState({
+    priceAlerts: true,
+    tradeConfirmations: true,
+    security: true,
+    promotions: false,
+    news: true,
+    sound: true,
+  })
+  const [learnerMessages, setLearnerMessages] = useState<LearnerMessage[]>(() => [
+    {
+      id: "welcome",
+      role: "assistant",
+      content: getNexusAssistantWelcome("settings_learner", isGuestSession),
+    },
+  ])
+  const [learnerInput, setLearnerInput] = useState("")
+  const [learnerTyping, setLearnerTyping] = useState(false)
+
+  useEffect(() => {
+    if (!requestedView) return
+    setCurrentView(requestedView)
+    onRequestViewConsumed?.()
+  }, [requestedView, onRequestViewConsumed])
+
+  const languageLabel = LANGUAGE_OPTIONS.find((o) => o.code === appLanguage)?.label ?? appLanguage
+  const currencyLabel = CURRENCY_OPTIONS.find((o) => o.code === appCurrency)?.label ?? appCurrency
 
   const settingsItems: SettingItem[] = [
     { key: "exchanges", icon: <Link2 className="h-5 w-5" />, label: "Connected Exchanges", description: "Binance, Bybit, Bitget, etc.", badge: "New" },
     { key: "security", icon: <Shield className="h-5 w-5" />, label: "Security Center", description: `Level ${securityLevel} of 3`, badge: securityLevel < 3 ? "Setup" : undefined },
     { key: "deposit-withdraw", icon: <ArrowDownUp className="h-5 w-5" />, label: "Deposit & Withdraw", description: "Add or withdraw funds" },
     { key: "notifications", icon: <Bell className="h-5 w-5" />, label: "Notifications", description: "Alerts and push settings" },
-    { key: "nexus-learner", icon: <MessageCircle className="h-5 w-5" />, label: "Nexus Learner", description: "Chat with AI agent" },
-    { key: "currency", icon: <Wallet className="h-5 w-5" />, label: "Default Currency", description: currency },
-    { key: "language", icon: <Globe className="h-5 w-5" />, label: "Language", description: language },
+    { key: "nexus-learner", icon: <MessageCircle className="h-5 w-5" />, label: "Joelin", description: "Nexus PRO product & trust guide" },
+    {
+      key: "currency",
+      icon: <Wallet className="h-5 w-5" />,
+      label: t("settings.item.currency"),
+      description: currencyLabel,
+    },
+    {
+      key: "language",
+      icon: <Globe className="h-5 w-5" />,
+      label: t("settings.item.language"),
+      description: languageLabel,
+    },
     { key: "theme", icon: <Palette className="h-5 w-5" />, label: "Theme", description: theme.charAt(0).toUpperCase() + theme.slice(1) },
     { key: "wire-currency", icon: <Banknote className="h-5 w-5" />, label: "Direct Wire Currency", description: wireCurrency },
     { key: "payment-methods", icon: <CreditCard className="h-5 w-5" />, label: "Payment Methods", description: "Cards and bank accounts" },
@@ -67,16 +133,13 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
     { key: "about", icon: <Info className="h-5 w-5" />, label: "About Us", description: "App info and legal" },
   ]
 
-  const languages = ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Korean", "Russian", "Arabic", "Portuguese"]
-  const currencies = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR", "KRW"]
-
   const renderBackButton = () => (
     <button
       onClick={() => setCurrentView("main")}
       className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
     >
       <ChevronLeft className="h-4 w-4" />
-      Back to Settings
+      {t("settings.back")}
     </button>
   )
 
@@ -187,15 +250,6 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
 
   // Notifications View
   if (currentView === "notifications") {
-    const [notifications, setNotifications] = useState({
-      priceAlerts: true,
-      tradeConfirmations: true,
-      security: true,
-      promotions: false,
-      news: true,
-      sound: true,
-    })
-
     return (
       <div className="space-y-4">
         {renderBackButton()}
@@ -228,23 +282,31 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
     )
   }
 
-  // Nexus Learner Chat
+  // Joelin (Settings chat)
   if (currentView === "nexus-learner") {
-    const [messages, setMessages] = useState([
-      { role: "assistant", content: "Hello! I'm Nexus Learner, your AI trading assistant. How can I help you learn about crypto trading today?" }
-    ])
-    const [input, setInput] = useState("")
-
-    const sendMessage = () => {
-      if (!input.trim()) return
-      setMessages([...messages, { role: "user", content: input }])
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: "That's a great question! Let me explain..." 
-        }])
-      }, 1000)
-      setInput("")
+    const sendMessage = async () => {
+      const trimmed = learnerInput.trim()
+      if (!trimmed || learnerTyping) return
+      const mkId = () =>
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `m-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      const userId = mkId()
+      const assistantId = mkId()
+      setLearnerMessages((prev) => [...prev, { id: userId, role: "user", content: trimmed }])
+      setLearnerInput("")
+      setLearnerTyping(true)
+      try {
+        const reply = await requestNexusAssistantReply({
+          userMessage: trimmed,
+          surface: "settings_learner",
+          isGuest: isGuestSession,
+          tradingUserLevel,
+        })
+        setLearnerMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: reply }])
+      } finally {
+        setLearnerTyping(false)
+      }
     }
 
     return (
@@ -252,37 +314,52 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
         {renderBackButton()}
         <Card className="flex h-[500px] flex-col border-border bg-card">
           <div className="border-b border-border p-4">
-            <h3 className="font-semibold">Nexus Learner</h3>
-            <p className="text-sm text-muted-foreground">AI Trading Assistant</p>
+            <h3 className="font-semibold">Joelin</h3>
+            <p className="text-sm text-muted-foreground">Nexus PRO guide — product & trust only</p>
           </div>
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((msg, i) => (
+            {learnerMessages.map((msg) => (
               <div
-                key={i}
+                key={msg.id}
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed ${
                     msg.role === "user"
                       ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                      : "bg-muted text-foreground"
                   }`}
                 >
-                  {msg.content}
+                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                 </div>
               </div>
             ))}
+            {learnerTyping && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl bg-muted/80 px-4 py-2 text-xs text-muted-foreground">
+                  Joelin is typing…
+                </div>
+              </div>
+            )}
           </div>
           <div className="border-t border-border p-4">
             <div className="flex gap-2">
               <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask anything about trading..."
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                value={learnerInput}
+                onChange={(e) => setLearnerInput(e.target.value)}
+                placeholder="Ask about Nexus PRO (try: help, exchange, security, funding)…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    sendMessage()
+                  }
+                }}
+                disabled={learnerTyping}
                 className="bg-muted/30"
               />
-              <Button onClick={sendMessage}>Send</Button>
+              <Button onClick={sendMessage} disabled={learnerTyping || !learnerInput.trim()}>
+                Send
+              </Button>
             </div>
           </div>
         </Card>
@@ -292,13 +369,35 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
 
   // Connected Exchanges
   if (currentView === "exchanges") {
+    const serverSideUi = process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1"
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <h2 className="text-lg font-semibold">Connected Exchanges</h2>
         <p className="text-sm text-muted-foreground">
-          Connect your exchange accounts to trade directly from Nexus using the NEX AI bot.
+          Connect your exchange accounts to trade directly from Nexus using NEX automation and Joelin when you need guidance.
         </p>
+        {(isGuestSession || serverSideUi) && (
+          <Card className="border-primary/35 bg-primary/5 p-4 text-sm leading-relaxed">
+            <p className="font-medium text-foreground">Guest / terminal + live spot</p>
+            <p className="mt-2 text-muted-foreground">
+              Orders from scripts or{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">curl</code> to{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/trade/execute</code> use{" "}
+              <strong>server</strong> env <code className="text-xs">BINANCE_API_KEY</code> and{" "}
+              <code className="text-xs">BINANCE_SECRET_KEY</code> on the host running Next.js (plus{" "}
+              <code className="text-xs">NEXUS_REAL_TRADING=1</code> and{" "}
+              <code className="text-xs">NEXUS_REAL_TRADE_SECRET</code>). Keys you paste below stay in this browser for
+              balances and desk UI only.
+            </p>
+            {serverSideUi && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                <code className="rounded bg-muted px-1">NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI=1</code> is set —
+                Wall Street real-trade banners assume server keys are configured even without a linked exchange here.
+              </p>
+            )}
+          </Card>
+        )}
         <ExchangeBinding />
       </div>
     )
@@ -328,18 +427,22 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
-          <h3 className="mb-6 text-lg font-semibold">Default Currency</h3>
+          <h3 className="mb-6 text-lg font-semibold">{t("settings.currencyTitle")}</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            {currencies.map((curr) => (
+            {CURRENCY_OPTIONS.map((opt) => (
               <button
-                key={curr}
-                onClick={() => { setCurrency(curr); setCurrentView("main") }}
+                key={opt.code}
+                type="button"
+                onClick={() => {
+                  setPreferences({ currency: opt.code as FiatCurrencyCode })
+                  setCurrentView("main")
+                }}
                 className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
-                  currency === curr ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
+                  appCurrency === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
                 }`}
               >
-                <span className="font-medium">{curr}</span>
-                {currency === curr && <Check className="h-5 w-5" />}
+                <span className="font-medium">{opt.label}</span>
+                {appCurrency === opt.code && <Check className="h-5 w-5" />}
               </button>
             ))}
           </div>
@@ -354,18 +457,23 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
-          <h3 className="mb-6 text-lg font-semibold">Language</h3>
+          <h3 className="mb-6 text-lg font-semibold">{t("settings.languageTitle")}</h3>
+          <p className="mb-4 text-sm text-muted-foreground">{t("settings.languageHint")}</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {languages.map((lang) => (
+            {LANGUAGE_OPTIONS.map((opt) => (
               <button
-                key={lang}
-                onClick={() => { setLanguage(lang); setCurrentView("main") }}
+                key={opt.code}
+                type="button"
+                onClick={() => {
+                  setPreferences({ language: opt.code as AppLanguage })
+                  setCurrentView("main")
+                }}
                 className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
-                  language === lang ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
+                  appLanguage === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
                 }`}
               >
-                <span className="font-medium">{lang}</span>
-                {language === lang && <Check className="h-5 w-5" />}
+                <span className="font-medium">{opt.label}</span>
+                {appLanguage === opt.code && <Check className="h-5 w-5" />}
               </button>
             ))}
           </div>
@@ -420,16 +528,20 @@ export function SettingsScreen({ onLogout }: SettingsScreenProps) {
             Select your preferred currency for direct wire transfers.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {currencies.map((curr) => (
+            {CURRENCY_OPTIONS.map((opt) => (
               <button
-                key={curr}
-                onClick={() => { setWireCurrency(curr); setCurrentView("main") }}
+                key={opt.code}
+                type="button"
+                onClick={() => {
+                  setWireCurrency(opt.code)
+                  setCurrentView("main")
+                }}
                 className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
-                  wireCurrency === curr ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
+                  wireCurrency === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
                 }`}
               >
-                <span className="font-medium">{curr}</span>
-                {wireCurrency === curr && <Check className="h-5 w-5" />}
+                <span className="font-medium">{opt.label}</span>
+                {wireCurrency === opt.code && <Check className="h-5 w-5" />}
               </button>
             ))}
           </div>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
@@ -20,7 +21,7 @@ const spaceMono = Space_Mono({
 
 export const metadata: Metadata = {
   title: 'Nexus Pro - Crypto Trading Dashboard',
-  description: 'Professional crypto trading dashboard with AI-powered analysis, real-time market data, and automated trading strategies.',
+  description: 'Professional crypto trading dashboard with Joelin-guided analysis, real-time market data, and automated trading strategies.',
   generator: 'v0.app',
   viewport: {
     width: 'device-width',
@@ -53,9 +54,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark bg-background">
+    <html lang="en" className="dark bg-background" style={{ backgroundColor: "#070a12", color: "#e8edf5" }}>
       <body
         className={`${inter.variable} ${spaceMono.variable} font-sans antialiased bg-background`}
+        style={{ backgroundColor: "#070a12", color: "#e8edf5", minHeight: "100%" }}
         suppressHydrationWarning
       >
         {/* Prevent browser extension errors from wallet injectors */}
@@ -74,7 +76,9 @@ export default function RootLayout({
             `,
           }}
         />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <UserPreferencesProvider>{children}</UserPreferencesProvider>
+        </AuthProvider>
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

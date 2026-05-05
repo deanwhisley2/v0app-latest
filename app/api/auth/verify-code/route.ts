@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
+import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
 
 /** Validates code from public.email_verifications (issued via Brevo). */
 
 export async function POST(request: Request) {
+  const blocked = externalApisBlockedResponse()
+  if (blocked) return blocked
   try {
     let email: string | undefined
     let codeRaw: string | undefined

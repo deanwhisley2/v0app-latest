@@ -164,9 +164,12 @@ export function useExchangeBalances() {
 
   // Poll balances every second
   useEffect(() => {
-    const activeExchanges = exchanges.filter(
-      (ex) => !ex.frozen && ex.apiKey && ex.apiSecret
-    )
+    const needsPassphrase = new Set(["bitget", "okx", "kucoin"])
+    const activeExchanges = exchanges.filter((ex) => {
+      if (ex.frozen || !ex.apiKey || !ex.apiSecret) return false
+      if (needsPassphrase.has(ex.id) && !(ex.apiPassphrase || "").trim()) return false
+      return true
+    })
 
     if (activeExchanges.length === 0) {
       setBalanceState((prev) => ({

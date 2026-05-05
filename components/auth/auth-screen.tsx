@@ -27,6 +27,9 @@ import {
   Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
+import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
+import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
 type AuthStep = "signin" | "signup" | "2fa" | "forgot-password" | "reset-password" | "video-recovery"
 type OtpMethod = "email" | "phone"
@@ -54,14 +57,14 @@ interface UserAccount {
   securityLevel?: 1 | 2 | 3
 }
 
-// Demo account with all levels unlocked + registered users stored in localStorage
+// Demo account at level 1 (same as guest / new users) + registered users stored in localStorage
 const DEMO_ACCOUNT: UserAccount = {
   email: "dean@gmail.com",
   username: "dean",
   password: "123456",
   fullName: "Dean",
   phone: "+256700000000",
-  level: 5,
+  level: TRADING_USER_LEVEL,
   isDemo: true,
 }
 
@@ -102,7 +105,7 @@ const INSTRUCTIONS = [
   "Sign in with your email/phone and password to access your trading account.",
   "New users must create an account with verified email and phone number.",
   "2FA verification is required for all logins to ensure account security.",
-  "Click Joseline button below for help anytime.",
+  "Click the Joelin button below for help anytime.",
 ]
 
 const QUICK_QUESTIONS = [
@@ -111,23 +114,6 @@ const QUICK_QUESTIONS = [
   { icon: MessageCircle, label: "2FA issues", query: "I'm not receiving my 2FA code" },
   { icon: Headphones, label: "Human support", query: "I need to speak with a human agent" },
 ]
-
-const AI_RESPONSES: Record<string, string> = {
-  login: "To log in to your Nexus Pro account:\n\n1. Enter your registered email or phone number\n2. Enter your password\n3. Click 'Continue to 2FA'\n4. Select your preferred verification method (email or SMS)\n5. Enter the 6-digit code sent to you\n\nIf you're a new user, click 'Sign Up' to create an account first.",
-  password: "To reset your password:\n\n1. Click 'Forgot Password' on the login screen\n2. Enter your registered email address\n3. Check your email for the reset link\n4. Create a new password (minimum 10 characters)\n5. Log in with your new password\n\nNote: Password reset links expire after 24 hours.",
-  "2fa": "If you're not receiving your 2FA verification code:\n\n1. Check your spam/junk folder for email codes\n2. Ensure your phone has signal for SMS codes\n3. Try switching between email and phone verification\n4. Wait 60 seconds before requesting a new code\n5. If issues persist, contact our support team\n\nCodes expire after 10 minutes.",
-  human: "I've notified our support team about your request. A human agent will contact you shortly.\n\nTicket Reference: #NXP-" + Date.now().toString().slice(-6) + "\n\nExpected Response Time:\n- Business hours: 15-30 minutes\n- After hours: Within 4 hours\n\nYou'll receive an email notification when an agent responds.",
-  default: "I understand you need help. Could you please provide more details about your question? I can assist with:\n\n- Account login and registration\n- Password and 2FA issues\n- Account security\n- Technical support\n\nOr type 'human' to connect with a live support agent.",
-}
-
-const getAIResponse = (message: string): string => {
-  const lower = message.toLowerCase()
-  if (lower.includes("login") || lower.includes("sign in") || lower.includes("log in")) return AI_RESPONSES.login
-  if (lower.includes("password") || lower.includes("forgot") || lower.includes("reset")) return AI_RESPONSES.password
-  if (lower.includes("2fa") || lower.includes("verification") || lower.includes("code") || lower.includes("otp")) return AI_RESPONSES["2fa"]
-  if (lower.includes("human") || lower.includes("agent") || lower.includes("support") || lower.includes("speak")) return AI_RESPONSES.human
-  return AI_RESPONSES.default
-}
 
 interface AuthScreenProps {
   onAuthenticated: (user: { email: string; username: string; fullName: string; level: number }) => void
@@ -181,7 +167,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
   const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
     {
       role: "assistant",
-      content: "Hello! I'm Joseline, your Nexus Pro assistant. I can help you with login issues, account creation, 2FA verification, and more. How can I help you today?",
+      content: getNexusAssistantWelcome("auth_screen", false),
       timestamp: new Date(),
     },
   ])
@@ -269,7 +255,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         password: signupPassword,
         fullName: signupName,
         phone: signupPhone,
-        level: 1, // New users start at level 1
+        level: TRADING_USER_LEVEL,
       }
       saveUser(newUser)
 
@@ -393,10 +379,16 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 
     await new Promise((r) => setTimeout(r, 1000 + Math.random() * 1000))
 
-    const response = getAIResponse(message)
+    const response = await requestNexusAssistantReply({
+      userMessage: message,
+      surface: "auth_screen",
+      authStep: step,
+      tradingUserLevel: TRADING_USER_LEVEL,
+      isGuest: false,
+    })
     setAssistantMessages((prev) => [...prev, { role: "assistant", content: response, timestamp: new Date() }])
     setIsAssistantLoading(false)
-  }, [assistantInput])
+  }, [assistantInput, step])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
@@ -1203,7 +1195,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
                         email: "recovered@example.com",
                         username: "recovered_user",
                         fullName: "Recovered User",
-                        level: 1,
+                        level: TRADING_USER_LEVEL,
                       })
                     }, 2000)
                   }
@@ -1230,7 +1222,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         </div>
       </div>
 
-      {/* Floating Joseline Button */}
+      {/* Floating Joelin button */}
       <button
         onClick={() => setShowAssistant(true)}
         className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/30 transition-all hover:scale-110 active:scale-95 ${showAssistant ? "opacity-0 pointer-events-none" : "opacity-100"}`}
@@ -1240,7 +1232,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-success" />
       </button>
 
-      {/* Joseline Popup */}
+      {/* Joelin popup */}
       {showAssistant && (
         <div className="fixed bottom-4 right-4 z-[100] w-[380px] max-h-[550px] animate-in slide-in-from-bottom-5 slide-in-from-right-5 duration-300 rounded-2xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col">
           {/* Header */}
@@ -1252,10 +1244,10 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
                 </div>
                 <div>
                   <h3 className="font-semibold flex items-center gap-1.5">
-                    Joseline
+                    Joelin
                     <Sparkles className="h-3.5 w-3.5 text-warning" />
                   </h3>
-                  <p className="text-xs text-muted-foreground">Your personal assistant</p>
+                  <p className="text-xs text-muted-foreground">Nexus PRO guide</p>
                 </div>
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowAssistant(false)}>
@@ -1332,7 +1324,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
               </Button>
             </form>
             <p className="mt-2 text-center text-[10px] text-muted-foreground">
-              Joseline by Nexus Pro | Type &quot;human&quot; for live support
+              Joelin · Nexus PRO | Type &quot;human&quot; for live support
             </p>
           </div>
         </div>

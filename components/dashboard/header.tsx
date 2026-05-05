@@ -23,7 +23,10 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NotificationPanel } from "./notification-panel"
+import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { GlobalSearch } from "./global-search"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 
 interface HeaderProps {
   activeTab: string
@@ -34,6 +37,8 @@ interface HeaderProps {
 }
 
 export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogout }: HeaderProps) {
+  const { t } = useUserPreferences()
+  const { unreadCount } = useNexusNotifications()
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -112,7 +117,12 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [showSearch])
   
-  const tabs = ["Trade", "Wallstreet", "Wallet", "Settings"]
+  const mainTabs = [
+    { id: "trade", labelKey: "nav.trade" },
+    { id: "wallstreet", labelKey: "nav.wallstreet" },
+    { id: "wallet", labelKey: "nav.wallet" },
+    { id: "settings", labelKey: "nav.settings" },
+  ] as const
 
   return (
     <>
@@ -128,17 +138,18 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
 
           {/* Center Navigation */}
           <nav className="hidden items-center gap-1 md:flex">
-            {tabs.map((tab) => (
+            {mainTabs.map((tab) => (
               <button
-                key={tab}
-                onClick={() => onTabChange(tab.toLowerCase())}
+                key={tab.id}
+                type="button"
+                onClick={() => onTabChange(tab.id)}
                 className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab.toLowerCase()
+                  activeTab === tab.id
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                {tab}
+                {t(tab.labelKey)}
               </button>
             ))}
           </nav>
@@ -152,7 +163,7 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
             >
               <Search className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
               <span className="hidden sm:inline text-muted-foreground group-hover:text-foreground">
-                <span className="animate-pulse">Can&apos;t find it?</span>
+                <span className="animate-pulse">{t("header.cantFind")}</span>
               </span>
               <kbd className="hidden lg:inline-flex items-center rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 /
@@ -169,9 +180,11 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
               }}
             >
               <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold text-destructive-foreground">
-                3
-              </span>
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold text-destructive-foreground">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </Button>
 
             {/* User Avatar - opens floating profile menu */}
@@ -219,7 +232,7 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
                               <h4 className="truncate font-semibold text-foreground">{currentUser?.fullName || "User"}</h4>
                               <p className="text-sm text-muted-foreground">@{currentUser?.username || "user"}</p>
                               <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/20 px-2 py-0.5 text-xs font-semibold text-success">
-                                <Check className="h-3 w-3" /> Level {currentUser?.level || 1}
+                                <Check className="h-3 w-3" /> Level {TRADING_USER_LEVEL}
                               </span>
                             </div>
                           </div>

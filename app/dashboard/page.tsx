@@ -1,26 +1,42 @@
 "use client"
 
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { PriceChart } from "@/components/dashboard/price-chart"
-import { OrderBook } from "@/components/dashboard/order-book"
-import { TradingPanel } from "@/components/dashboard/trading-panel"
 import { MarketTable } from "@/components/dashboard/market-table"
 import { AIPanel } from "@/components/dashboard/ai-panel"
-import { NewsSection } from "@/components/dashboard/news-section"
 import { BottomNav } from "@/components/dashboard/bottom-nav"
 import { ToastNotification, useToast } from "@/components/dashboard/toast-notification"
 import { WalletScreen } from "@/components/dashboard/wallet-screen"
-import { SettingsScreen } from "@/components/dashboard/settings-screen"
+import { SettingsScreen, type SettingsView } from "@/components/dashboard/settings-screen"
 import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
-import { NexTradingBot } from "@/components/dashboard/nex-trading-bot"
+import { TradeCoinExplorer } from "@/components/dashboard/trade-coin-explorer"
+import { PremiumTradeWorkspace } from "@/components/dashboard/premium/premium-trade-workspace"
+import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
+import { OrderHistoryScreen } from "@/components/dashboard/order-history-screen"
+import { CoinListScreen } from "@/components/dashboard/coin-list-screen"
+import { TradingAnalyticsScreen } from "@/components/dashboard/trading-analytics-screen"
+import { TradeSubnavChips } from "@/components/dashboard/trade-subnav-chips"
 import { coinsData } from "@/lib/coins-data"
+import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
+import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
+import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { useDashboardTestimonialNotifs } from "@/hooks/use-dashboard-testimonial-notifs"
+import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
+import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
+import {
+  buildActivitySnapshot,
+  clearDashboardActivity,
+  readDashboardActivity,
+  resolveCoinForSession,
+  writeDashboardActivity,
+} from "@/lib/dashboard-activity-session"
 
 interface CurrentUser {
   email: string
@@ -29,10 +45,36 @@ interface CurrentUser {
   level: number
 }
 
+type MarketFeedState = {
+  status: "loading" | "live" | "error" | "disabled"
+  gainers: Coin[]
+  volumeLeaders: Coin[]
+  catalog: Coin[]
+  updatedAt?: number
+  error?: string
+}
+
+const initialMarketFeed: MarketFeedState = {
+  status: "loading",
+  gainers: [],
+  volumeLeaders: [],
+  catalog: [],
+}
+
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, isLoading: authLoading, signOut } = useAuth()
+  const { registerAppNavigator } = useNexusNotifications()
+  const { user, isLoading: authLoading, signOut, isGuestSession } = useAuth()
+  const activityUserId = user?.id ?? "guest"
+  const { formatUserMoney } = useUserPreferences()
+  const testimonialNotif = useDashboardTestimonialNotifs({
+    enabled: Boolean(user) && !isGuestSession,
+    userId: user?.id,
+    formatUserMoney,
+  })
   const [activeTab, setActiveTab] = useState("trade")
+  const [tradeView, setTradeView] = useState<DashboardTradeView>("live-trading")
+  const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
@@ -43,6 +85,96 @@ export default function DashboardPage() {
   const [fundPhone, setFundPhone] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
   const { toast, showToast, hideToast } = useToast()
+
+  const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch("/api/binance/live-market", { cache: "no-store" })
+        const data = (await res.json()) as {
+          ok?: boolean
+          source?: string
+          updatedAt?: number
+          gainers?: Coin[]
+          volumeLeaders?: Coin[]
+          catalog?: Coin[]
+          error?: string
+        }
+        if (cancelled) return
+        if (res.status === 503) {
+          setMarketFeed((prev) => ({
+            status: "disabled",
+            error: data.error,
+            gainers: prev.gainers,
+            volumeLeaders: prev.volumeLeaders,
+            catalog: prev.catalog,
+          }))
+          return
+        }
+        if (!res.ok || !data.ok || !data.catalog?.length) {
+          setMarketFeed((prev) => ({
+            status: "error",
+            error: data.error || `HTTP ${res.status}`,
+            gainers: prev.gainers,
+            volumeLeaders: prev.volumeLeaders,
+            catalog: prev.catalog,
+            updatedAt: prev.updatedAt,
+          }))
+          return
+        }
+        setMarketFeed({
+          status: "live",
+          gainers: data.gainers ?? [],
+          volumeLeaders: data.volumeLeaders ?? [],
+          catalog: data.catalog,
+          updatedAt: data.updatedAt,
+        })
+      } catch (e) {
+        if (!cancelled) {
+          setMarketFeed((prev) => ({
+            status: "error",
+            error: e instanceof Error ? e.message : "Network error",
+            gainers: prev.gainers,
+            volumeLeaders: prev.volumeLeaders,
+            catalog: prev.catalog,
+          }))
+        }
+      }
+    }
+    void load()
+    const id = window.setInterval(load, 45_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [])
+
+  const offlineGainers = useMemo(
+    () => [...coinsData].sort((a, b) => b.change24h - a.change24h).slice(0, 28),
+    []
+  )
+  const offlineVolume = useMemo(
+    () => [...coinsData].sort((a, b) => b.volume - a.volume).slice(0, 28),
+    []
+  )
+
+  const tradeCatalog = useMemo(() => {
+    if (marketFeed.catalog.length > 0) return marketFeed.catalog
+    return coinsData
+  }, [marketFeed.catalog])
+
+  const exploreGainers = marketFeed.gainers.length > 0 ? marketFeed.gainers : offlineGainers
+  const exploreVolume = marketFeed.volumeLeaders.length > 0 ? marketFeed.volumeLeaders : offlineVolume
+  const isBinanceCatalogLive = marketFeed.status === "live" && marketFeed.catalog.length > 0
+
+  const tickerCoins = useMemo(() => {
+    const src = tradeCatalog.length >= 8 ? tradeCatalog : coinsData
+    return src.slice(0, 28)
+  }, [tradeCatalog])
+
+  const headerSearchCoins = useMemo(() => tradeCatalog.slice(0, 40), [tradeCatalog])
   
   // Security and Exchange State
   const [securityLevel, setSecurityLevel] = useState<1 | 2 | 3>(1)
@@ -83,6 +215,96 @@ export default function DashboardPage() {
     tradeAmount: 100,
   })
 
+  const activityHydratedRef = useRef(false)
+  const activityLastSerializedRef = useRef<string>("")
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return
+    const snap = readDashboardActivity(activityUserId)
+    if (snap) {
+      setActiveTab(snap.activeTab)
+      setTradeView(snap.tradeView)
+      setSelectedCoinSymbol(snap.selectedCoinSymbol)
+      setShowBalance(snap.showBalance)
+      const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
+      let liveActive = snap.live.active
+      const coin = liveActive ? resolveCoinForSession(snap.live.coinSymbol, catalog) : null
+      if (liveActive && !coin) liveActive = false
+      setLiveAnalysis({
+        active: liveActive,
+        coin: liveActive ? coin : null,
+        strategies: snap.live.strategies,
+        expertMode: snap.live.expertMode,
+        autoTrade: snap.live.autoTrade,
+        tradeAmount: snap.live.tradeAmount,
+      })
+    }
+    activityHydratedRef.current = true
+    activityLastSerializedRef.current = JSON.stringify(
+      buildActivitySnapshot(activityUserId, {
+        activeTab: snap?.activeTab ?? "trade",
+        tradeView: snap?.tradeView ?? "live-trading",
+        selectedCoinSymbol: snap?.selectedCoinSymbol ?? "BTC",
+        showBalance: snap?.showBalance ?? true,
+        liveAnalysis: snap
+          ? (() => {
+              const cat = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
+              let a = snap.live.active
+              const c = a ? resolveCoinForSession(snap.live.coinSymbol, cat) : null
+              if (a && !c) a = false
+              return {
+                active: a,
+                coin: a ? c : null,
+                strategies: snap.live.strategies,
+                expertMode: snap.live.expertMode,
+                autoTrade: snap.live.autoTrade,
+                tradeAmount: snap.live.tradeAmount,
+              }
+            })()
+          : {
+              active: false,
+              coin: null,
+              strategies: [],
+              expertMode: false,
+              autoTrade: false,
+              tradeAmount: 100,
+            },
+      })
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per session user; catalog resolved inside
+  }, [activityUserId])
+
+  useEffect(() => {
+    if (!activityHydratedRef.current) return
+    const snap = buildActivitySnapshot(activityUserId, {
+      activeTab,
+      tradeView,
+      selectedCoinSymbol,
+      showBalance,
+      liveAnalysis,
+    })
+    const serialized = JSON.stringify(snap)
+    if (serialized === activityLastSerializedRef.current) return
+    activityLastSerializedRef.current = serialized
+    writeDashboardActivity(snap)
+  }, [activityUserId, activeTab, tradeView, selectedCoinSymbol, showBalance, liveAnalysis])
+
+  useEffect(() => {
+    if (!liveAnalysis.active || !liveAnalysis.coin?.symbol) return
+    const next = resolveCoinForSession(liveAnalysis.coin.symbol, tradeCatalog)
+    if (!next) return
+    if (
+      next.price === liveAnalysis.coin.price &&
+      next.change24h === liveAnalysis.coin.change24h &&
+      next.volume === liveAnalysis.coin.volume
+    ) {
+      return
+    }
+    setLiveAnalysis((prev) =>
+      prev.active && prev.coin?.symbol === next.symbol ? { ...prev, coin: next } : prev
+    )
+  }, [tradeCatalog, liveAnalysis.active, liveAnalysis.coin])
+
   const currentUser = useMemo((): CurrentUser | null => {
     if (!user) return null
     const meta = user.user_metadata as Record<string, unknown> | undefined
@@ -95,19 +317,18 @@ export default function DashboardPage() {
       typeof meta?.username === "string" && meta.username
         ? meta.username
         : email.split("@")[0] || "user"
-    const level =
-      typeof meta?.level === "number" && Number.isFinite(meta.level) ? meta.level : 1
-    return { email, username, fullName, level }
+    return { email, username, fullName, level: TRADING_USER_LEVEL }
   }, [user])
 
   useEffect(() => {
+    if (isGuestSession) return
     if (!authLoading && !user) {
       router.replace("/auth/login")
     }
-  }, [authLoading, user, router])
+  }, [authLoading, user, isGuestSession, router])
 
   useEffect(() => {
-    if (authLoading || !user) return
+    if (authLoading || !user || isGuestSession) return
     ;(async () => {
       const { data } = await supabase
         .from("profiles")
@@ -119,10 +340,10 @@ export default function DashboardPage() {
         await signOut()
       }
     })()
-  }, [authLoading, user, router, signOut])
+  }, [authLoading, user, isGuestSession, router, signOut])
 
   useEffect(() => {
-    if (authLoading || !user) return
+    if (authLoading || !user || isGuestSession) return
     ;(async () => {
       const {
         data: { session },
@@ -142,28 +363,86 @@ export default function DashboardPage() {
       setMainBalance(Number(json.available_balance ?? 0))
       setTotalEarnings(Number(json.total_earnings ?? 0))
     })()
-  }, [authLoading, user])
+  }, [authLoading, user, isGuestSession])
 
   const handleLogout = useCallback(async () => {
+    const uid = user?.id ?? ""
     const { error } = await signOut()
     if (error) console.error(error)
     try {
       localStorage.removeItem("nexus_session")
+      sessionStorage.removeItem(`nexus_login_testimonial_strip_v1:${uid}`)
+      sessionStorage.removeItem(`nexus_dash_visible_ms_v1:${uid}`)
+      clearDashboardActivity()
     } catch {
       /* ignore */
     }
     router.replace("/")
     router.refresh()
-  }, [signOut, router])
+  }, [signOut, router, user?.id])
 
   const selectedCoin = useMemo(
-    () => coinsData.find((c) => c.symbol === selectedCoinSymbol) || coinsData[0],
-    [selectedCoinSymbol]
+    () => tradeCatalog.find((c) => c.symbol === selectedCoinSymbol) || coinsData[0],
+    [tradeCatalog, selectedCoinSymbol]
   )
 
   const handleCoinSelect = useCallback((symbol: string) => {
     setSelectedCoinSymbol(symbol)
   }, [])
+
+  const handleTradeViewChange = useCallback((view: DashboardTradeView) => {
+    setTradeView(view)
+    setActiveTab("trade")
+  }, [])
+
+  const handleHeaderTabChange = useCallback((tab: string) => {
+    setActiveTab(tab)
+    setSettingsRequestedView(null)
+  }, [])
+
+  const handleSettingsRequestConsumed = useCallback(() => {
+    setSettingsRequestedView(null)
+  }, [])
+
+  const handleNotificationNav = useCallback(
+    (nav: NexusNotificationNav) => {
+      switch (nav.kind) {
+        case "trade":
+          setSelectedCoinSymbol(nav.symbol ?? "BTC")
+          setTradeView("live-trading")
+          setActiveTab("trade")
+          break
+        case "wallet":
+          setActiveTab("wallet")
+          break
+        case "settings":
+          setSettingsRequestedView(nav.view as SettingsView)
+          setActiveTab("settings")
+          break
+        case "orders":
+          setTradeView("order-history")
+          setActiveTab("trade")
+          break
+        default:
+          break
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    registerAppNavigator(handleNotificationNav)
+    try {
+      const pending = sessionStorage.getItem("nexus_pending_nav")
+      if (pending) {
+        sessionStorage.removeItem("nexus_pending_nav")
+        handleNotificationNav(JSON.parse(pending) as NexusNotificationNav)
+      }
+    } catch {
+      /* ignore */
+    }
+    return () => registerAppNavigator(null)
+  }, [registerAppNavigator, handleNotificationNav])
 
   const handleOrder = useCallback(
     (type: "buy" | "sell", amount: number, leverage: number) => {
@@ -176,24 +455,33 @@ export default function DashboardPage() {
   )
 
   // Navigate from Wallstreet to Trade with analysis
-  const handleNavigateToTrade = useCallback((
-    coin: Coin,
-    strategies: string[],
-    expertMode: boolean,
-    settings: { autoTrade: boolean; tradeAmount: number }
-  ) => {
-    setSelectedCoinSymbol(coin.symbol)
-    setLiveAnalysis({
-      active: true,
-      coin,
-      strategies,
-      expertMode,
-      autoTrade: settings.autoTrade,
-      tradeAmount: settings.tradeAmount,
-    })
-    setActiveTab("trade")
-    showToast(`Live analysis started for ${coin.symbol} with ${strategies.length} strategies`, "success")
-  }, [showToast])
+  const handleNavigateToTrade = useCallback(
+    (
+      coin: Coin,
+      strategies: string[],
+      expertMode: boolean,
+      settings: { autoTrade: boolean; tradeAmount: number; executionMode?: "nex_auto" | "manual" }
+    ) => {
+      const mode = settings.executionMode ?? (settings.autoTrade ? "nex_auto" : "manual")
+      const autoTrade = mode === "nex_auto"
+      setSelectedCoinSymbol(coin.symbol)
+      setLiveAnalysis({
+        active: true,
+        coin,
+        strategies,
+        expertMode,
+        autoTrade,
+        tradeAmount: settings.tradeAmount,
+      })
+      setTradeView("live-trading")
+      setActiveTab("trade")
+      showToast(
+        `${mode === "nex_auto" ? "Nex Auto-Trade" : "Manual trade"} desk opened for ${coin.symbol} (${strategies.length} strategies)`,
+        "success"
+      )
+    },
+    [showToast]
+  )
 
   const handleLiveAnalysisTrade = useCallback((type: "buy" | "sell", amount: number) => {
     if (liveAnalysis.coin) {
@@ -236,19 +524,35 @@ export default function DashboardPage() {
     )
   }
 
+  const sidebarPanel = (
+    <Sidebar
+      coins={tradeCatalog.slice(0, 16)}
+      portfolioTotal={mainBalance}
+      portfolioChange={12.4}
+      activeTradeView={tradeView}
+      onTradeViewChange={handleTradeViewChange}
+    />
+  )
+
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
       {/* Header */}
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
-        coins={coinsData}
+        onTabChange={handleHeaderTabChange}
+        coins={headerSearchCoins}
         currentUser={currentUser ?? undefined}
         onLogout={handleLogout}
       />
 
-      {/* Ticker */}
-      <Ticker coins={coinsData.slice(0, 15)} />
+      <LiveMarketFeedBar
+        status={marketFeed.status}
+        updatedAt={marketFeed.updatedAt}
+        errorMessage={marketFeed.error}
+      />
+
+      {/* Ticker — live catalog when market feed is active */}
+      <Ticker coins={tickerCoins} />
 
       {/* Main Balance Card */}
       <div className="mx-auto max-w-[1600px] px-4 pt-4">
@@ -266,7 +570,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">Available balance</p>
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     Bot earnings (total):{" "}
-                    {showBalance ? `$${totalEarnings.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••"}
+                    {showBalance ? formatUserMoney(totalEarnings) : "••••"}
                   </span>
                   <button
                     onClick={() => setShowBalance(!showBalance)}
@@ -286,7 +590,7 @@ export default function DashboardPage() {
                   </button>
                 </div>
                 <p className="font-mono text-2xl font-bold text-foreground">
-                  {showBalance ? `$${mainBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••••••"}
+                  {showBalance ? formatUserMoney(mainBalance) : "••••••••"}
                 </p>
               </div>
             </div>
@@ -439,85 +743,98 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="mx-auto max-w-[1600px] px-4 pb-24 md:pb-4">
         {activeTab === "trade" && (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            {/* Sidebar - hidden on mobile */}
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
-              <Sidebar
-                coins={coinsData}
-                portfolioTotal={mainBalance}
-                portfolioChange={12.4}
-              />
-            </div>
+          <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">
+            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
 
-            {/* Main Area */}
             <main className="flex min-w-0 flex-1 flex-col gap-4">
-              {/* Chart with Live Analysis Overlay */}
-              <div className="relative">
-                <PriceChart
-                  selectedCoin={selectedCoin}
-                  onCoinSelect={handleCoinSelect}
-                  coins={coinsData}
-                />
-                {liveAnalysis.active && liveAnalysis.coin && (
-                  <LiveAnalysisOverlay
-                    coin={liveAnalysis.coin}
-                    strategies={liveAnalysis.strategies}
-                    expertMode={liveAnalysis.expertMode}
-                    autoTrade={liveAnalysis.autoTrade}
-                    tradeAmount={liveAnalysis.tradeAmount}
-                    onClose={() => setLiveAnalysis((prev) => ({ ...prev, active: false }))}
-                    onTrade={handleLiveAnalysisTrade}
-                    onToggleAutoTrade={() => setLiveAnalysis((prev) => ({ ...prev, autoTrade: !prev.autoTrade }))}
+              <TradeSubnavChips active={tradeView} onChange={handleTradeViewChange} className="lg:hidden" />
+
+              {tradeView === "live-trading" && (
+                <>
+                  <TradeCoinExplorer
+                    newCoins={exploreGainers}
+                    trendingCoins={exploreVolume}
+                    leftColumnTitle={isBinanceCatalogLive ? "24h gainers" : "Sample 24h gainers"}
+                    rightColumnTitle={isBinanceCatalogLive ? "24h volume leaders" : "Sample volume"}
+                    selectedSymbol={selectedCoinSymbol}
+                    onSelectSymbol={handleCoinSelect}
                   />
-                )}
-              </div>
 
-              {/* Trading Row - stacks on mobile, 3 columns on desktop */}
-              <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
-                {/* Order Book */}
-                <div className="w-full">
-                  <OrderBook selectedCoin={selectedCoin} />
-                </div>
+                  <PremiumTradeWorkspace
+                    selectedCoin={selectedCoin}
+                    tradeCatalog={tradeCatalog}
+                    onCoinSelect={handleCoinSelect}
+                    onOrder={handleOrder}
+                    connectedExchanges={connectedExchanges}
+                    onNexExecute={(params) => {
+                      showToast(
+                        `NEX ${params.mode === "auto" ? "Joelin " : ""}trade executed — ${params.strategy} on ${params.coin} ($${params.amount})`,
+                        "success"
+                      )
+                    }}
+                    chartOverlay={
+                      liveAnalysis.active && liveAnalysis.coin ? (
+                        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-2 sm:p-4">
+                          <LiveAnalysisOverlay
+                            coin={liveAnalysis.coin}
+                            strategies={liveAnalysis.strategies}
+                            expertMode={liveAnalysis.expertMode}
+                            autoTrade={liveAnalysis.autoTrade}
+                            tradeAmount={liveAnalysis.tradeAmount}
+                            onClose={() => setLiveAnalysis((prev) => ({ ...prev, active: false }))}
+                            onTrade={handleLiveAnalysisTrade}
+                            onToggleAutoTrade={() => setLiveAnalysis((prev) => ({ ...prev, autoTrade: !prev.autoTrade }))}
+                          />
+                        </div>
+                      ) : null
+                    }
+                  />
+                </>
+              )}
 
-                {/* NEX Trading Bot or Classic Trading Panel */}
-                <div className="w-full">
-                  {connectedExchanges.length > 0 ? (
-                    <NexTradingBot 
-                      selectedCoin={selectedCoin} 
-                      connectedExchanges={connectedExchanges}
-                      onExecuteTrade={(params) => {
-                        showToast(
-                          `NEX ${params.mode === "auto" ? "AI" : ""} Trade Executed - ${params.strategy} strategy applied to ${params.coin} with $${params.amount}`,
-                          "success"
-                        )
-                      }}
-                    />
-                  ) : (
-                    <TradingPanel selectedCoin={selectedCoin} onOrder={handleOrder} />
-                  )}
+              {tradeView === "order-history" && (
+                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
+                  <OrderHistoryScreen />
                 </div>
+              )}
 
-                {/* News */}
-                <div className="w-full">
-                  <NewsSection />
+              {tradeView === "watchlist" && (
+                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
+                  <CoinListScreen
+                    mode="watchlist"
+                    catalog={tradeCatalog}
+                    onSelectSymbol={handleCoinSelect}
+                    onOpenLiveTrading={() => handleTradeViewChange("live-trading")}
+                  />
                 </div>
-              </div>
+              )}
+
+              {tradeView === "favorites" && (
+                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
+                  <CoinListScreen
+                    mode="favorites"
+                    catalog={tradeCatalog}
+                    onSelectSymbol={handleCoinSelect}
+                    onOpenLiveTrading={() => handleTradeViewChange("live-trading")}
+                  />
+                </div>
+              )}
+
+              {tradeView === "analytics" && (
+                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
+                  <TradingAnalyticsScreen availableBalance={mainBalance} />
+                </div>
+              )}
             </main>
           </div>
         )}
 
         {activeTab === "markets" && (
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
-              <Sidebar
-                coins={coinsData}
-                portfolioTotal={mainBalance}
-                portfolioChange={12.4}
-              />
-            </div>
+            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
               <MarketTable
-                coins={coinsData}
+                coins={tradeCatalog}
                 onCoinSelect={handleCoinSelect}
                 selectedCoin={selectedCoin}
               />
@@ -527,19 +844,33 @@ export default function DashboardPage() {
 
         {activeTab === "wallstreet" && (
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
-              <Sidebar
-                coins={coinsData}
-                portfolioTotal={mainBalance}
-                portfolioChange={12.4}
-              />
-            </div>
+            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              <AIPanel 
-                coins={coinsData} 
-                selectedCoin={selectedCoin} 
+              <AIPanel
+                coins={tradeCatalog}
+                selectedCoin={selectedCoin}
                 onNavigateToTrade={handleNavigateToTrade}
-                userLevel={(currentUser?.level || 1) as 1 | 2 | 3 | 4 | 5}
+                onStrategyCoinChange={(c) => setSelectedCoinSymbol(c.symbol)}
+                hasExchangeConnection={
+                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                  connectedExchanges.length > 0
+                }
+                defaultExchangeId={
+                  selectedExchangeId ??
+                  connectedExchanges.find((e) => e.isDefault)?.id ??
+                  connectedExchanges[0]?.id
+                }
+                realTradeEligible={
+                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                  (connectedExchanges.length > 0 &&
+                    connectedExchanges.some((e) => (e.balance ?? 0) > 0))
+                }
+                exchangePermissionsOk={
+                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                  connectedExchanges.length > 0
+                }
+                userLevel={TRADING_USER_LEVEL}
+                isGuestSession={isGuestSession}
               />
             </main>
           </div>
@@ -547,37 +878,31 @@ export default function DashboardPage() {
 
         {activeTab === "wallet" && (
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
-              <Sidebar
-                coins={coinsData}
-                portfolioTotal={mainBalance}
-                portfolioChange={12.4}
-              />
-            </div>
+            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              <WalletScreen coins={coinsData} />
+              <WalletScreen coins={tradeCatalog.slice(0, 24)} />
             </main>
           </div>
         )}
 
         {activeTab === "settings" && (
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">
-              <Sidebar
-                coins={coinsData}
-                portfolioTotal={mainBalance}
-                portfolioChange={12.4}
-              />
-            </div>
+            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              <SettingsScreen onLogout={handleLogout} />
+              <SettingsScreen
+                onLogout={handleLogout}
+                requestedView={settingsRequestedView}
+                onRequestViewConsumed={handleSettingsRequestConsumed}
+                isGuestSession={isGuestSession}
+                tradingUserLevel={TRADING_USER_LEVEL}
+              />
             </main>
           </div>
         )}
       </div>
 
       {/* Mobile Bottom Nav */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={handleHeaderTabChange} isGuestSession={isGuestSession} />
 
       {/* Toast */}
       <ToastNotification
@@ -585,6 +910,12 @@ export default function DashboardPage() {
         type={toast.type}
         isVisible={toast.isVisible}
         onClose={hideToast}
+      />
+
+      <DashboardTestimonialStrip
+        visible={testimonialNotif.visible}
+        text={testimonialNotif.text}
+        onDismiss={testimonialNotif.dismiss}
       />
     </div>
   )

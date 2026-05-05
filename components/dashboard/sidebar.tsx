@@ -12,23 +12,37 @@ import {
 import { Card } from "@/components/ui/card"
 import { formatPrice, getTopGainers, getTopLosers } from "@/lib/coins-data"
 import type { Coin } from "@/lib/coins-data"
+import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
+import { TRADE_VIEW_LABELS } from "@/lib/dashboard-trade-view"
+import { cn } from "@/lib/utils"
 
 interface SidebarProps {
   coins: Coin[]
   portfolioTotal: number
   portfolioChange: number
+  activeTradeView?: DashboardTradeView
+  onTradeViewChange?: (view: DashboardTradeView) => void
 }
 
-export function Sidebar({ coins, portfolioTotal, portfolioChange }: SidebarProps) {
-  const topMovers = [...getTopGainers(coins, 3), ...getTopLosers(coins, 2)]
+const NAV_ITEMS: {
+  id: DashboardTradeView
+  icon: typeof Activity
+}[] = [
+  { id: "live-trading", icon: Activity },
+  { id: "order-history", icon: Clock },
+  { id: "watchlist", icon: Bookmark },
+  { id: "favorites", icon: Star },
+  { id: "analytics", icon: BarChart3 },
+]
 
-  const navItems = [
-    { icon: Activity, label: "Live Trading", active: true },
-    { icon: Clock, label: "Order History", active: false },
-    { icon: Bookmark, label: "Watchlist", active: false },
-    { icon: Star, label: "Favorites", active: false },
-    { icon: BarChart3, label: "Analytics", active: false },
-  ]
+export function Sidebar({
+  coins,
+  portfolioTotal,
+  portfolioChange,
+  activeTradeView = "live-trading",
+  onTradeViewChange,
+}: SidebarProps) {
+  const topMovers = [...getTopGainers(coins, 3), ...getTopLosers(coins, 2)]
 
   return (
     <aside className="hidden w-[240px] flex-shrink-0 lg:block">
@@ -38,17 +52,20 @@ export function Sidebar({ coins, portfolioTotal, portfolioChange }: SidebarProps
           Markets
         </p>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => (
+          {NAV_ITEMS.map(({ id, icon: Icon }) => (
             <button
-              key={item.label}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                item.active
+              key={id}
+              type="button"
+              onClick={() => onTradeViewChange?.(id)}
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                activeTradeView === id
                   ? "border-l-2 border-primary bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
+              )}
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              <Icon className="h-4 w-4 shrink-0" />
+              {TRADE_VIEW_LABELS[id]}
             </button>
           ))}
         </nav>

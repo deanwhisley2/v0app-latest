@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 56" role="img" aria-label="NEXUS PRO">
+  <defs>
+    <linearGradient id="nxpfile-lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0fdfa"/>
+      <stop offset="45%" stop-color="#a5f3fc"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0,2)">
+    <path d="M11 50V10M11 10L45 50M45 50V10" stroke="url(#nxpfile-lg)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="11" cy="10" r="2.8" fill="url(#nxpfile-lg)"/>
+    <circle cx="28" cy="30" r="2.2" fill="#e0f2fe" opacity="0.95"/>
+    <circle cx="45" cy="50" r="2.8" fill="url(#nxpfile-lg)"/>
+  </g>
+  <text x="62" y="38" fill="url(#nxpfile-lg)" style="font-family:'Space Mono',ui-monospace,monospace;font-size:28px;font-weight:800;letter-spacing:-0.02em">NEXUS</text>
+  <text x="62" y="52" fill="#cffafe" style="font-family:'Space Mono',ui-monospace,monospace;font-size:10px;font-weight:700;letter-spacing:0.32em">PRO</text>
+</svg>

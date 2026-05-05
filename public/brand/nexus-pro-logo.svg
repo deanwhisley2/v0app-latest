@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 56" role="img" aria-label="NEXUS PRO">
+  <defs>
+    <linearGradient id="nxpfile-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f7669"/>
+      <stop offset="45%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <filter id="nxpfile-soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(0,2)" filter="url(#nxpfile-soft)">
+    <path d="M11 50V10M11 10L45 50M45 50V10" stroke="url(#nxpfile-grad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="11" cy="10" r="2.8" fill="url(#nxpfile-grad)"/>
+    <circle cx="28" cy="30" r="2.2" fill="#67e8f9" opacity="0.95"/>
+    <circle cx="45" cy="50" r="2.8" fill="url(#nxpfile-grad)"/>
+  </g>
+  <text x="62" y="38" fill="url(#nxpfile-grad)" style="font-family:'Space Mono',ui-monospace,monospace;font-size:28px;font-weight:800;letter-spacing:-0.02em">NEXUS</text>
+  <text x="62" y="52" fill="#5eead4" style="font-family:'Space Mono',ui-monospace,monospace;font-size:10px;font-weight:700;letter-spacing:0.32em">PRO</text>
+</svg>

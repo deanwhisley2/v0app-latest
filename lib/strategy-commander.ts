@@ -15,6 +15,21 @@ import { TradeSignal, OrderExecution, AuditEntry, createAuditEntry, SIGNAL_RULES
 import { NexusTradingEngine, MarketData, TradeDecision } from '../nexus-core/nexus-engine'
 import { liquidityWarfare } from './liquidity-warfare'
 import { sentimentWeapon } from './sentiment-weapon'
+import { disableDemoMode } from "./demo-mode-manager"
+import {
+  assertRealTradingEnabled,
+  isRealTradingEnvEnabled,
+  getRealTradeAllowedSymbols,
+  validateRealTradeRequest,
+  maxRiskUsdForTrade,
+} from "./server/real-trade-guard"
+import { serverPreTradeValidate } from "./server/server-pre-trade"
+import {
+  getBinanceCredentialsFromEnv,
+  binanceMarketBuyQuote,
+  binanceMarketSellBase,
+  waitOrderTerminal,
+} from "./server/binance-signed-order"
 
 // ============================================================
 // UUID helper (avoids external dependency)
@@ -57,6 +72,49 @@ function isMarketSessionAllowed(symbol: string): boolean {
 // Risk limits check
 // ============================================================
 
+function toSpotSymbol(sym: string): string {
+  const s = sym.toUpperCase().replace(/[^A-Z0-9]/g, "")
+  return s.endsWith("USDT") ? s : `${s}USDT`
+}
+
+/** Planned MARKET sizing from signal (spot USDT pair). */
+export function computeLiveSizing(signal: TradeSignal, portfolioUsd = 20): {
+  pair: string
+  quoteOrderQtyUsd?: number
+  baseQuantityPlan?: number
+} {
+  const pair = toSpotSymbol(signal.symbol)
+  const entry = signal.entry
+  const stop = signal.stopLoss
+  const movePct = Math.abs(entry - stop) / entry
+  const riskUsd = Math.min(
+    portfolioUsd * (signal.riskPercent / 100),
+    maxRiskUsdForTrade(portfolioUsd)
+  )
+  let notional = movePct > 1e-8 ? riskUsd / movePct : portfolioUsd * 0.05
+  notional = Math.min(notional, portfolioUsd * 0.5)
+  const minQuote = Math.min(5, Math.max(1, portfolioUsd * 0.05))
+  notional = Math.max(notional, minQuote)
+  if (notional > portfolioUsd) notional = portfolioUsd
+
+  if (signal.action === "BUY") {
+    if (signal.quoteOverrideUsd != null && Number.isFinite(signal.quoteOverrideUsd) && signal.quoteOverrideUsd > 0) {
+      const q = Math.min(signal.quoteOverrideUsd, portfolioUsd)
+      return { pair, quoteOrderQtyUsd: Math.floor(q * 100) / 100 }
+    }
+    return { pair, quoteOrderQtyUsd: Math.floor(notional * 100) / 100 }
+  }
+  if (signal.action === "SELL" && signal.baseOverrideQuantity != null && Number.isFinite(signal.baseOverrideQuantity)) {
+    const decimals = pair.startsWith("BTC") ? 5 : 4
+    const q = Math.floor(signal.baseOverrideQuantity * 10 ** decimals) / 10 ** decimals
+    return { pair, baseQuantityPlan: q }
+  }
+  const base = notional / entry
+  const decimals = pair.startsWith("BTC") ? 5 : 4
+  const baseQuantityPlan = Math.floor(base * 10 ** decimals) / 10 ** decimals
+  return { pair, baseQuantityPlan }
+}
+
 function checkRiskLimits(signal: TradeSignal): { allowed: boolean; reason?: string } {
   // Daily loss limit check
   if (riskState.dailyLoss >= riskState.dailyLossLimit) {
@@ -91,9 +149,11 @@ export function validateSignal(signal: TradeSignal): { valid: boolean; reason?: 
     }
   }
 
-  // Check confidence threshold
-  if (signal.confidence < SIGNAL_RULES.MIN_CONFIDENCE) {
-    return { valid: false, reason: `Confidence too low: ${signal.confidence} < ${SIGNAL_RULES.MIN_CONFIDENCE}` }
+  // Confidence: allow 0–1 or 0–100 scale
+  const conf =
+    signal.confidence > 1 ? Math.min(1, signal.confidence / 100) : signal.confidence
+  if (conf < SIGNAL_RULES.MIN_CONFIDENCE) {
+    return { valid: false, reason: `Confidence too low: ${conf} < ${SIGNAL_RULES.MIN_CONFIDENCE}` }
   }
 
   // Check action is valid
@@ -142,6 +202,50 @@ export function validateSignal(signal: TradeSignal): { valid: boolean; reason?: 
 export async function commanderDecide(signal: TradeSignal, executionMode: "paper" | "live" = "paper"): Promise<OrderExecution> {
   const orderId = generateId()
   const auditTrail: AuditEntry[] = []
+
+  if (isRealTradingEnvEnabled() && executionMode === "paper") {
+    auditTrail.push(createAuditEntry("VALIDATION", "FAIL", "Paper mode disabled while NEXUS_REAL_TRADING=1"))
+    const order: OrderExecution = {
+      id: orderId,
+      signalId: signal.id,
+      strategyId: signal.strategyId,
+      symbol: signal.symbol,
+      action: signal.action,
+      status: "REJECTED",
+      executionMode,
+      rejectionReason: "Paper execution disabled when NEXUS_REAL_TRADING=1",
+      auditTrail,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    ordersStore.set(orderId, order)
+    signalsHistory.push(signal)
+    return order
+  }
+
+  if (isRealTradingEnvEnabled() && signal.action !== "HOLD") {
+    const pair = toSpotSymbol(signal.symbol)
+    const allowedSyms = getRealTradeAllowedSymbols()
+    if (!allowedSyms.has(pair)) {
+      auditTrail.push(createAuditEntry("VALIDATION", "FAIL", `Symbol ${pair} not in real-trade allowlist`))
+      const order: OrderExecution = {
+        id: orderId,
+        signalId: signal.id,
+        strategyId: signal.strategyId,
+        symbol: signal.symbol,
+        action: signal.action,
+        status: "REJECTED",
+        executionMode,
+        rejectionReason: `Only ${[...allowedSyms].join(", ")} allowed when NEXUS_REAL_TRADING=1`,
+        auditTrail,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      ordersStore.set(orderId, order)
+      signalsHistory.push(signal)
+      return order
+    }
+  }
 
   // Step 1: Validation
   const validation = validateSignal(signal)
@@ -238,20 +342,25 @@ export async function commanderDecide(signal: TradeSignal, executionMode: "paper
     riskPercent: signal.riskPercent
   }))
 
+  const portfolioUsd = Number(process.env.NEXUS_TRADE_PORTFOLIO_USD ?? "20") || 20
+  const sizing = computeLiveSizing(signal, portfolioUsd)
+
   const order: OrderExecution = {
     id: orderId,
     signalId: signal.id,
     strategyId: signal.strategyId,
-    symbol: signal.symbol,
+    symbol: sizing.pair,
     action: signal.action,
     status: "PENDING",
     executionMode,
     entryPrice: signal.entry,
     stopLoss: signal.stopLoss,
     takeProfit: signal.takeProfit,
+    quoteOrderQtyUsd: sizing.quoteOrderQtyUsd,
+    baseQuantityPlan: sizing.baseQuantityPlan,
     auditTrail,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   }
 
   ordersStore.set(orderId, order)
@@ -263,7 +372,7 @@ export async function commanderDecide(signal: TradeSignal, executionMode: "paper
 /**
  * Execute a pending order (call this after Commander approval)
  */
-export async function executeOrder(orderId: string, brokerApi?: any): Promise<OrderExecution> {
+export async function executeOrder(orderId: string, _brokerApi?: unknown): Promise<OrderExecution> {
   const order = ordersStore.get(orderId)
   if (!order) {
     throw new Error(`Order ${orderId} not found`)
@@ -273,62 +382,151 @@ export async function executeOrder(orderId: string, brokerApi?: any): Promise<Or
     throw new Error(`Order ${orderId} is not in PENDING state (current: ${order.status})`)
   }
 
+  if (order.executionMode === "live" && isRealTradingEnvEnabled()) {
+    disableDemoMode()
+  }
+
   // Update status to SENT
   order.status = "SENT"
   order.auditTrail.push(createAuditEntry("SENT_TO_BROKER", "PENDING", "Sending order to broker", {
     symbol: order.symbol,
     action: order.action,
-    entry: order.entryPrice
+    entry: order.entryPrice,
+    quoteOrderQtyUsd: order.quoteOrderQtyUsd,
+    baseQuantityPlan: order.baseQuantityPlan,
   }))
   order.updatedAt = new Date().toISOString()
   ordersStore.set(order.id, order)
 
   if (order.executionMode === "paper") {
-    // Paper trading: simulate fill
+    if (isRealTradingEnvEnabled()) {
+      order.status = "FAILED"
+      order.rejectionReason = "Paper fills disabled while NEXUS_REAL_TRADING=1"
+      order.auditTrail.push(createAuditEntry("FAILED", "FAIL", order.rejectionReason))
+      order.updatedAt = new Date().toISOString()
+      ordersStore.set(order.id, order)
+      return order
+    }
     order.status = "FILLED"
     order.brokerOrderId = `PAPER_${order.id}`
-    order.fillQuantity = 0.001 // Example quantity
+    order.fillQuantity =
+      order.baseQuantityPlan ??
+      (order.quoteOrderQtyUsd && order.entryPrice
+        ? order.quoteOrderQtyUsd / order.entryPrice
+        : 0.0001)
     order.fillTimestamp = new Date().toISOString()
     order.auditTrail.push(createAuditEntry("BROKER_CONFIRMATION", "COMPLETE", "Paper trade simulated fill", {
       brokerOrderId: order.brokerOrderId,
-      fillPrice: order.entryPrice
+      fillPrice: order.entryPrice,
     }))
     order.updatedAt = new Date().toISOString()
     ordersStore.set(order.id, order)
     return order
   }
 
-  // Live trading: call actual broker API
+  // Live: Binance spot MARKET (env BINANCE_*), gated by NEXUS_REAL_TRADING=1
   try {
-    // Replace with your actual exchange API call
-    // const brokerResponse = await brokerApi.placeOrder({
-    //   symbol: order.symbol,
-    //   side: order.action.toLowerCase(),
-    //   type: "LIMIT",
-    //   price: order.entryPrice,
-    //   quantity: calculateQuantity(order.riskPercent, order.entryPrice, order.stopLoss)
-    // })
+    assertRealTradingEnabled()
+    disableDemoMode()
 
-    // Simulate broker response for now
-    const brokerResponse = {
-      orderId: `BROKER_${Date.now()}`,
-      status: "NEW",
-      fills: [{ price: order.entryPrice, quantity: 0.001 }]
+    const creds = getBinanceCredentialsFromEnv()
+    if (!creds) {
+      throw new Error("Missing BINANCE_API_KEY / BINANCE_SECRET_KEY in server environment")
     }
 
-    order.brokerOrderId = brokerResponse.orderId
-    order.status = "FILLED"
-    order.fillQuantity = brokerResponse.fills?.[0]?.quantity
-    order.fillTimestamp = new Date().toISOString()
-    order.auditTrail.push(createAuditEntry("BROKER_CONFIRMATION", "COMPLETE", "Broker confirmed order", {
-      brokerOrderId: order.brokerOrderId,
-      brokerStatus: brokerResponse.status
-    }))
+    const portfolioUsd = Number(process.env.NEXUS_TRADE_PORTFOLIO_USD ?? "20") || 20
+    const entry = order.entryPrice ?? 0
 
+    if (order.action === "BUY") {
+      const spend = order.quoteOrderQtyUsd ?? 0
+      const g = validateRealTradeRequest({
+        symbol: order.symbol,
+        action: "BUY",
+        quoteSpendUsd: spend,
+        portfolioUsd,
+      })
+      if (!g.ok) throw new Error(g.reason)
+
+      const pt = serverPreTradeValidate({
+        symbol: order.symbol,
+        action: "buy",
+        quantity: spend / entry,
+        price: entry,
+        portfolioUsd,
+        stopLoss: order.stopLoss,
+        maxRiskUsd: maxRiskUsdForTrade(portfolioUsd),
+      })
+      if (!pt.ok) throw new Error(pt.reason)
+
+      console.log(`[executeOrder] LIVE MARKET BUY ${order.symbol} quoteOrderQty=${spend} USDT`)
+      const raw = await binanceMarketBuyQuote(order.symbol, spend.toFixed(2), creds.apiKey, creds.apiSecret)
+      const oid = raw.orderId
+      order.brokerOrderId = String(oid)
+      const terminal = await waitOrderTerminal(order.symbol, oid, creds.apiKey, creds.apiSecret, 90_000)
+      order.fillQuantity = parseFloat(terminal.executedQty || "0")
+      order.entryPrice = spend / Math.max(order.fillQuantity, 1e-12)
+      order.status = terminal.status === "FILLED" ? "FILLED" : "FAILED"
+      if (order.status === "FAILED") {
+        order.rejectionReason = `Order ended ${terminal.status}`
+      }
+      order.fillTimestamp = new Date().toISOString()
+      order.auditTrail.push(
+        createAuditEntry("BROKER_CONFIRMATION", order.status === "FILLED" ? "COMPLETE" : "FAIL", "Binance MARKET BUY", {
+          brokerOrderId: order.brokerOrderId,
+          binanceStatus: terminal.status,
+          executedQty: terminal.executedQty,
+          quoteQty: terminal.cummulativeQuoteQty,
+        })
+      )
+    } else if (order.action === "SELL") {
+      const qty = order.baseQuantityPlan ?? 0
+      const g = validateRealTradeRequest({
+        symbol: order.symbol,
+        action: "SELL",
+        baseQuantity: qty,
+        portfolioUsd,
+      })
+      if (!g.ok) throw new Error(g.reason)
+
+      const pt = serverPreTradeValidate({
+        symbol: order.symbol,
+        action: "sell",
+        quantity: qty,
+        price: entry,
+        portfolioUsd,
+        stopLoss: order.stopLoss,
+        maxRiskUsd: maxRiskUsdForTrade(portfolioUsd),
+      })
+      if (!pt.ok) throw new Error(pt.reason)
+
+      console.log(`[executeOrder] LIVE MARKET SELL ${order.symbol} qty=${qty}`)
+      const raw = await binanceMarketSellBase(order.symbol, String(qty), creds.apiKey, creds.apiSecret)
+      const oid = raw.orderId
+      order.brokerOrderId = String(oid)
+      const terminal = await waitOrderTerminal(order.symbol, oid, creds.apiKey, creds.apiSecret, 90_000)
+      order.fillQuantity = parseFloat(terminal.executedQty || "0")
+      order.status = terminal.status === "FILLED" ? "FILLED" : "FAILED"
+      if (order.status === "FAILED") {
+        order.rejectionReason = `Order ended ${terminal.status}`
+      }
+      order.fillTimestamp = new Date().toISOString()
+      order.auditTrail.push(
+        createAuditEntry("BROKER_CONFIRMATION", order.status === "FILLED" ? "COMPLETE" : "FAIL", "Binance MARKET SELL", {
+          brokerOrderId: order.brokerOrderId,
+          binanceStatus: terminal.status,
+          executedQty: terminal.executedQty,
+        })
+      )
+    } else {
+      order.status = "FAILED"
+      order.rejectionReason = "HOLD cannot execute on exchange"
+      order.auditTrail.push(createAuditEntry("FAILED", "FAIL", order.rejectionReason))
+    }
   } catch (error) {
     order.status = "FAILED"
     order.rejectionReason = error instanceof Error ? error.message : "Unknown broker error"
     order.auditTrail.push(createAuditEntry("FAILED", "FAIL", order.rejectionReason))
+    console.error("[executeOrder] LIVE failed:", order.rejectionReason)
   }
 
   order.updatedAt = new Date().toISOString()

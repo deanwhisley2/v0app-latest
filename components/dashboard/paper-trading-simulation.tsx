@@ -2,7 +2,7 @@
 
 /**
  * Paper Trading Simulation - End-to-End Live Demo
- * Executes: Market Analysis → AI Signal → Trade Execution → Monitoring → Closure → Reporting
+ * Executes: Market Analysis → Joelin signal → Trade execution → monitoring → closure → reporting
  */
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -205,7 +205,7 @@ export function PaperTradingSimulation() {
       const consensus = buySignals === totalSignals ? "STRONG_BUY" as const : 
                         buySignals >= totalSignals / 2 ? "BUY" as const : "NEUTRAL" as const
 
-      // Generate AI recommendation
+      // Generate Joelin-style recommendation
       const entryPrice = BASE_PRICE
       const recommendation: AITradeRecommendation = {
         entryPrice,
@@ -709,12 +709,12 @@ export function PaperTradingSimulation() {
                     ))}
                   </div>
 
-                  {/* AI Recommendation */}
+                  {/* Joelin recommendation */}
                   {state.recommendation && (
                     <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5 p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <MessageSquare className="h-4 w-4 text-primary" />
-                        <span className="font-semibold text-sm">AI Trading Recommendation</span>
+                        <span className="font-semibold text-sm">Joelin trading recommendation</span>
                       </div>
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="rounded-lg bg-background/50 p-2 text-center">
@@ -930,7 +930,7 @@ export function PaperTradingSimulation() {
                 </div>
                 <h4 className="text-xl font-bold mb-2">Ready to Simulate</h4>
                 <p className="text-sm text-muted-foreground mb-6 max-w-md">
-                  Experience the full NEX trading pipeline: market analysis, AI signal generation, 
+                  Experience the full NEX trading pipeline: market analysis, Joelin signal generation, 
                   trade execution, and live position monitoring — all with simulated data.
                 </p>
                 <div className="grid grid-cols-3 gap-4 mb-8 w-full max-w-lg">
