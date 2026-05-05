@@ -1,8 +1,5 @@
-import {
-  binanceAccountInfo,
-  binanceExchangeInfo,
-  getBinanceCredentialsFromEnv,
-} from "@/lib/server/binance-signed-order"
+import { binanceAccountInfo, binanceExchangeInfo } from "@/lib/server/binance-signed-order"
+import type { BinanceCreds } from "@/lib/expert/user-binance"
 
 export type ExchangePreCheckResult = {
   valid: true
@@ -12,21 +9,18 @@ export type ExchangePreCheckResult = {
   minQty?: number
 }
 
-export async function validateExchange(userId: string, symbol: string, amount: number): Promise<ExchangePreCheckResult> {
+export async function validateExchange(
+  binance: BinanceCreds,
+  symbol: string,
+  amount: number
+): Promise<ExchangePreCheckResult> {
   const minAmount = 1
-  if (!userId) {
-    throw new Error("AUTH_REQUIRED")
-  }
   if (!symbol.endsWith("USDT")) {
     throw new Error("UNSUPPORTED_SYMBOL_PAIR")
   }
-  const creds = getBinanceCredentialsFromEnv()
-  if (!creds) {
-    throw new Error("BINANCE_CREDENTIALS_MISSING")
-  }
 
   const [account, exchangeInfo] = await Promise.all([
-    binanceAccountInfo(creds.apiKey, creds.apiSecret),
+    binanceAccountInfo(binance.apiKey, binance.apiSecret),
     binanceExchangeInfo(symbol),
   ])
   const spotTradingEnabled = account.permissions?.includes("SPOT") ?? false

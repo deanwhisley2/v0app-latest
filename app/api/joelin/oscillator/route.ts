@@ -1,5 +1,7 @@
+import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import type { JoelinResponse } from "@/lib/expert/phase2-types"
+import { pickTradableNow } from "@/lib/expert/joelin-ranking"
 import { phase2Store } from "@/lib/expert/phase2-store"
 import { getFundingRateAnomaly, getOrderBookImbalance, toBinanceSymbol } from "@/lib/server/fast-paths-core"
 
@@ -61,11 +63,14 @@ async function refreshCoins() {
   phase2Store.joelin = updated
 }
 
-export async function GET() {
+export async function GET(_req: NextRequest) {
   await refreshCoins()
   const now = new Date()
+  const coins = phase2Store.joelin
+  const tradableNow = pickTradableNow(coins, 10)
   const response: JoelinResponse = {
-    coins: phase2Store.joelin,
+    coins,
+    tradableNow,
     lastUpdated: now.toISOString(),
     nextRefresh: new Date(now.getTime() + 300_000).toISOString(),
   }

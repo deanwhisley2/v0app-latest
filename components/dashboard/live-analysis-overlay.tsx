@@ -241,7 +241,7 @@ export function LiveAnalysisOverlay({
       </div>
 
       {showTradeStats && (autoTrade || totalFills > 0) && (
-        <div className="pointer-events-auto absolute right-3 top-11 z-30 w-[min(100vw-1.5rem,16rem)] rounded-xl border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur-sm sm:right-4">
+        <div className="pointer-events-auto absolute right-3 top-11 z-30 w-64 max-w-[calc(100%-1.5rem)] min-w-0 rounded-xl border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur-sm sm:right-4">
           <div className="mb-2 flex items-center gap-2 font-semibold text-foreground">
             <Activity className="h-3.5 w-3.5 text-success" />
             Live session fills
@@ -264,7 +264,7 @@ export function LiveAnalysisOverlay({
         </div>
       )}
 
-      <div className="pointer-events-auto absolute bottom-4 left-4 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-border bg-card/95 backdrop-blur-sm sm:w-64">
+      <div className="pointer-events-auto absolute bottom-4 left-4 right-4 w-auto max-w-64 rounded-xl border border-border bg-card/95 backdrop-blur-sm sm:right-auto sm:w-64">
         <div className="border-b border-border p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium">Strategy Signals</span>
@@ -316,7 +316,7 @@ export function LiveAnalysisOverlay({
         </div>
       </div>
 
-      <div className="pointer-events-auto absolute bottom-4 right-4 w-[min(calc(100vw-2rem),18rem)] rounded-xl border border-border bg-card/95 backdrop-blur-sm sm:w-72">
+      <div className="pointer-events-auto absolute bottom-4 left-4 right-4 w-auto max-w-72 rounded-xl border border-border bg-card/95 backdrop-blur-sm sm:left-auto sm:right-4 sm:w-72">
         {analysis.overallSignal && (
           <div
             className={`border-b p-4 ${

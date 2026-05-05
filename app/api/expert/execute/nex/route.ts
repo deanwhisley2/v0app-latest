@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
-import {
-  appendChatMessage,
-  createSession,
-  getUserId,
-  makeId,
-  upsertOrders,
-  updateSession,
-} from "@/lib/expert/phase2-store"
+import { requireExpertUserId } from "@/lib/expert/auth-server"
+import { appendChatMessage, createSession, makeId, upsertOrders, updateSession } from "@/lib/expert/phase2-store"
 import { validateExchange } from "@/lib/expert/exchange-precheck"
+import { resolveBinanceCredentialsForExecution } from "@/lib/expert/user-binance"
 import type { AutoTradeConfig, TradeOrder, TradeSession } from "@/lib/expert/phase2-types"
 import {
   binanceMarketBuyQuote,
   waitOrderTerminal,
 } from "@/lib/server/binance-signed-order"
 import {
+  assertBinanceCredentials,
   enforceAnalysisFreshness,
-  enforceRealTradingGuard,
+  enforceRealTradingEnvFlag,
   enforceSymbolConsistency,
   ERROR_CODES,
   errorResponse,
@@ -29,11 +25,24 @@ type RequestBody = {
 }
 
 export async function POST(req: NextRequest) {
+  const userOrRes = await requireExpertUserId()
+  if (userOrRes instanceof NextResponse) return userOrRes
+  const userId = userOrRes
+
   try {
-    enforceRealTradingGuard()
+    enforceRealTradingEnvFlag()
   } catch (error) {
     return errorResponse(error, ERROR_CODES.REAL_TRADING_DISABLED, 403)
   }
+
+  let credsPack: Awaited<ReturnType<typeof resolveBinanceCredentialsForExecution>>
+  try {
+    credsPack = await resolveBinanceCredentialsForExecution(userId)
+    assertBinanceCredentials(credsPack.creds)
+  } catch (error) {
+    return errorResponse(error, ERROR_CODES.MISSING_BINANCE_KEYS, 400)
+  }
+  const { creds } = credsPack
 
   let body: RequestBody
   try {
@@ -43,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
   let analysis: Awaited<ReturnType<typeof enforceAnalysisFreshness>>
   try {
-    analysis = await enforceAnalysisFreshness(body.analysisId, 60)
+    analysis = await enforceAnalysisFreshness(body.analysisId, 60, { userId })
     enforceSymbolConsistency(analysis.symbol, body.symbol)
   } catch (error) {
     return errorResponse(error, ERROR_CODES.EXCHANGE_VALIDATION_FAILED, 400)
@@ -56,7 +65,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await validateExchange(getUserId(), analysis.symbol, body.config.totalAmount)
+    await validateExchange(creds, analysis.symbol, body.config.totalAmount)
   } catch (error) {
     const message = error instanceof Error ? error.message : "Exchange validation failed"
     return NextResponse.json({ code: mapErrorCode(message), error: message }, { status: 400 })
@@ -66,7 +75,7 @@ export async function POST(req: NextRequest) {
   const executeAt = new Date(Date.now() + Math.max(0, body.config.entryDelayMinutes) * 60_000)
   const session: TradeSession = {
     id: sessionId,
-    userId: getUserId(),
+    userId,
     symbol: analysis.symbol,
     mode: "NEX",
     status: "PENDING",
@@ -85,8 +94,7 @@ export async function POST(req: NextRequest) {
   })
 
   const orders: TradeOrder[] = []
-  const apiKey = process.env.BINANCE_API_KEY!.trim()
-  const apiSecret = (process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || "").trim()
+  const { apiKey, apiSecret } = creds
   let failedReason: string | null = null
   try {
     const buy = await binanceMarketBuyQuote(analysis.symbol, body.config.totalAmount.toFixed(8), apiKey, apiSecret)
@@ -97,7 +105,7 @@ export async function POST(req: NextRequest) {
     orders.push({
       id: makeId("row"),
       sessionId,
-      userId: getUserId(),
+      userId,
       symbol: analysis.symbol,
       orderId: String(buy.orderId),
       type: "BUY",

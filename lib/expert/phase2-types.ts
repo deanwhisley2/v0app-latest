@@ -76,6 +76,8 @@ export interface JoelinCoin {
 
 export interface JoelinResponse {
   coins: JoelinCoin[]
+  /** Top picks: BUY/SELL, confidence ≥ 65, safety not LOW — best ranked by tradable score. */
+  tradableNow: JoelinCoin[]
   lastUpdated: string
   nextRefresh: string
 }

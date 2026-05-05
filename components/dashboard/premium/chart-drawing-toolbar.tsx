@@ -114,7 +114,7 @@ export function ChartDrawingToolbar({
             side={vertical ? "right" : "bottom"}
             align="start"
             sideOffset={8}
-            className="w-[min(100vw-2rem,340px)] border-white/[0.1] bg-[#0a0c10] p-2 shadow-2xl sm:w-[320px]"
+            className="w-[min(340px,calc(100%-2rem))] max-w-[340px] border-white/[0.1] bg-[#0a0c10] p-2 shadow-2xl sm:w-[320px]"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">

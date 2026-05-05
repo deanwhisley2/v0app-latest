@@ -73,6 +73,31 @@ function ExpertModeContent() {
   const [sessionHistory, setSessionHistory] = useState<Array<{ sessionId: string; status: string; pnl: number; endedAt: string }>>([])
   const [pendingSince, setPendingSince] = useState<number | null>(null)
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/expert/sessions", { cache: "no-store" })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as {
+          sessions?: Array<{ id: string; status: string; endTime?: string; startTime: string }>
+        }
+        const rows = (data.sessions ?? []).slice(0, 15).map((s) => ({
+          sessionId: s.id,
+          status: s.status,
+          pnl: 0,
+          endedAt: s.endTime ?? s.startTime,
+        }))
+        if (rows.length) setSessionHistory(rows)
+      } catch {
+        // ignore
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const canExecute = useMemo(() => result?.status === "completed" && !!result.analysisId, [result])
   const pendingSeconds = useMemo(() => {
     if (!pendingSince) return 0
@@ -86,9 +111,16 @@ function ExpertModeContent() {
     const res = await fetch("/api/expert/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ symbol, timeWindowSeconds, useNex }),
     })
-    const data = (await res.json()) as AnalysisResult
+    const data = (await res.json()) as AnalysisResult & { error?: string; code?: string }
+    if (!res.ok) {
+      setSessionStatus(data.error ?? `Analysis failed (${res.status})`)
+      setResult(null)
+      setAnalysisLoading(false)
+      return
+    }
     setResult(data)
     setAnalysisLoading(false)
     if (typeof window !== "undefined" && "Notification" in window && data.status === "completed") {
@@ -109,7 +141,8 @@ function ExpertModeContent() {
     const res = await fetch("/api/expert/execute/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ analysisId: result.analysisId, config: manualConfig }),
+      credentials: "include",
+      body: JSON.stringify({ analysisId: result.analysisId, symbol, config: manualConfig }),
     })
     const data = await res.json()
     setSessionStatus(`Manual: ${data.status} (session ${data.sessionId})`)
@@ -122,7 +155,8 @@ function ExpertModeContent() {
     const res = await fetch("/api/expert/execute/nex", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ analysisId: result.analysisId, config: nexConfig }),
+      credentials: "include",
+      body: JSON.stringify({ analysisId: result.analysisId, symbol, config: nexConfig }),
     })
     const data = await res.json()
     setSessionStatus(`Nex: ${data.status} (session ${data.sessionId})`)
@@ -136,7 +170,10 @@ function ExpertModeContent() {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/expert/session/${encodeURIComponent(activeSessionId)}/status`, { cache: "no-store" })
+        const res = await fetch(`/api/expert/session/${encodeURIComponent(activeSessionId)}/status`, {
+          cache: "no-store",
+          credentials: "include",
+        })
         if (!res.ok) return
         const data = (await res.json()) as SessionStatusResponse
         if (cancelled) return

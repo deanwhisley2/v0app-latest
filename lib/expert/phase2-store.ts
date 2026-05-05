@@ -45,10 +45,26 @@ const g = globalThis as unknown as {
   }
 }
 
+/** Liquid USDT spot majors — refreshed live in `/api/joelin/oscillator`. */
+const JOELIN_BASE_SYMBOLS = [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "BNBUSDT",
+  "XRPUSDT",
+  "DOGEUSDT",
+  "ADAUSDT",
+  "AVAXUSDT",
+  "LINKUSDT",
+  "DOTUSDT",
+  "TRXUSDT",
+  "LTCUSDT",
+]
+
 function initJoelin(): JoelinCoin[] {
   const now = Date.now()
   const next = new Date(now + 300_000).toISOString()
-  return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"].map((symbol, idx) => ({
+  return JOELIN_BASE_SYMBOLS.map((symbol, idx) => ({
     symbol,
     action: idx % 3 === 0 ? "BUY" : idx % 3 === 1 ? "SELL" : "HOLD",
     confidence: 62 + idx * 6,
@@ -187,6 +203,39 @@ export async function createSession(session: TradeSession) {
     }
   }
   phase2Store.sessions.set(session.id, session)
+}
+
+export async function listTradeSessionsForUser(userId: string, limit = 100): Promise<TradeSession[]> {
+  const admin = adminOrNull()
+  if (admin) {
+    const { data, error } = await admin
+      .from("TradeSession")
+      .select("*")
+      .eq("userId", userId)
+      .order("startTime", { ascending: false })
+      .limit(limit)
+    if (!error && data?.length) {
+      return data.map(
+        (row: Record<string, unknown>) =>
+          ({
+            id: row.id,
+            userId: row.userId,
+            symbol: row.symbol,
+            mode: row.mode,
+            status: row.status,
+            totalAmount: row.totalAmount,
+            usedAmount: row.usedAmount,
+            startTime: row.startTime,
+            endTime: row.endTime ?? undefined,
+            config: row.config,
+          }) as TradeSession
+      )
+    }
+  }
+  return Array.from(phase2Store.sessions.values())
+    .filter((s) => s.userId === userId)
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+    .slice(0, limit)
 }
 
 export async function getSessionById(sessionId: string): Promise<TradeSession | null> {

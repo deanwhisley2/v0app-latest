@@ -164,7 +164,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed bottom-4 right-4 z-[100] flex w-[min(100vw-2rem,380px)] max-h-[min(100dvh-2rem,600px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-5 slide-in-from-right-5 duration-300"
+      className="fixed bottom-4 left-4 right-4 z-[100] flex max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-5 slide-in-from-right-5 duration-300 sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
     >
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2">

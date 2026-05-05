@@ -133,12 +133,33 @@
 }
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    max-width: 100%;
+    position: relative;
   }
+}
+
+/* Full-width app shell: locks flex/grid children from forcing page wider than viewport */
+#nexus-app-root {
+  min-height: 100dvh;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Custom scrollbar */
@@ -261,6 +282,14 @@ html {
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   position: relative;
+}
+
+/* Intentional horizontal scroll (tables, chip rows) — keep inside this, not on html/body */
+.scroll-container {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Prevent scroll chaining on nested scrollable areas */

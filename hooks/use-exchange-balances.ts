@@ -45,7 +45,7 @@ export function useExchangeBalances() {
     exchangesRef.current = exchanges
   }, [exchanges])
 
-  // Load exchanges from localStorage first, then account metadata for cross-device continuity.
+  // Signed-in: Supabase user_metadata is source of truth for cross-device keys. Local cache fills in when logged out.
   useEffect(() => {
     if (typeof window === "undefined") return
     const mapRows = (rows: any[]): ConnectedExchange[] =>
@@ -61,6 +61,12 @@ export function useExchangeBalances() {
         lastSync: ex.lastSync ? new Date(ex.lastSync) : undefined,
       }))
 
+    const profileRows = (user?.user_metadata as any)?.nexus_exchanges
+    if (user && Array.isArray(profileRows) && profileRows.length > 0) {
+      setExchanges(mapRows(profileRows))
+      return
+    }
+
     const stored = localStorage.getItem("nexus_exchanges")
     if (stored) {
       try {
@@ -69,11 +75,6 @@ export function useExchangeBalances() {
       } catch (e) {
         console.error("Failed to parse exchanges:", e)
       }
-    }
-
-    const profileRows = (user?.user_metadata as any)?.nexus_exchanges
-    if (Array.isArray(profileRows) && profileRows.length > 0) {
-      setExchanges(mapRows(profileRows))
     }
   }, [user])
 

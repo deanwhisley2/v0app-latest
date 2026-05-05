@@ -56,7 +56,7 @@ export function SymbolBrowserPanel({
       <aside
         className={cn(
           "flex h-full shrink-0 flex-col border-r border-white/[0.12] bg-[#06080c]",
-          "w-[min(50vw,520px)] min-w-[260px] max-w-[min(92vw,520px)] shadow-[8px_0_48px_rgba(0,0,0,0.55)]",
+          "min-w-0 w-[min(50%,520px)] max-w-[min(92%,520px)] shadow-[8px_0_48px_rgba(0,0,0,0.55)]",
           "sm:min-w-[300px]"
         )}
       >

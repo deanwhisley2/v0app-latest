@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
-import { createAnalysis, createNotification, getUserId, makeId } from "@/lib/expert/phase2-store"
+import { requireExpertUserId } from "@/lib/expert/auth-server"
+import { createAnalysis, createNotification, makeId } from "@/lib/expert/phase2-store"
 import type { AnalyzeRequest, AnalyzeResponse } from "@/lib/expert/phase2-types"
 
 export async function POST(req: NextRequest) {
+  const userOrRes = await requireExpertUserId()
+  if (userOrRes instanceof NextResponse) return userOrRes
+  const userId = userOrRes
+
   let body: AnalyzeRequest
   try {
     body = await req.json()
@@ -33,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   await createAnalysis({
     id: analysisId,
-    userId: getUserId(),
+    userId,
     symbol,
     timeWindow: body.timeWindowSeconds,
     action: result.fusedDecision.action,
@@ -44,7 +49,7 @@ export async function POST(req: NextRequest) {
   })
   await createNotification({
     id: makeId("notif"),
-    userId: getUserId(),
+    userId,
     analysisId,
     symbol,
     action: result.fusedDecision.action,

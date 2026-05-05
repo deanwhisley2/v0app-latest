@@ -1,3 +1,4 @@
+import { pickTradableNow } from "@/lib/expert/joelin-ranking"
 import { phase2Store } from "@/lib/expert/phase2-store"
 
 export async function GET(request: Request) {
@@ -32,8 +33,10 @@ export async function GET(request: Request) {
       }
 
       const emit = () => {
+        const coins = phase2Store.joelin
         const payload = {
-          coins: phase2Store.joelin,
+          coins,
+          tradableNow: pickTradableNow(coins, 10),
           lastUpdated: new Date().toISOString(),
           nextRefresh: new Date(Date.now() + 300_000).toISOString(),
         }

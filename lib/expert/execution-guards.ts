@@ -17,6 +17,8 @@ export const ERROR_CODES = {
   ANALYSIS_NOT_FOUND: "ANALYSIS_NOT_FOUND",
   INVALID_REQUEST: "INVALID_REQUEST",
   EXCHANGE_VALIDATION_FAILED: "EXCHANGE_VALIDATION_FAILED",
+  UNAUTHORIZED: "UNAUTHORIZED",
+  FORBIDDEN_SESSION: "FORBIDDEN_SESSION",
 } as const
 
 export class ExpertRouteError extends Error {
@@ -37,7 +39,8 @@ function normalizeSymbol(value: string): string {
   return clean.endsWith("USDT") ? clean : `${clean}USDT`
 }
 
-export function enforceRealTradingGuard() {
+/** Real-money execution toggle only; Binance keys may come from the signed-in user or env. */
+export function enforceRealTradingEnvFlag() {
   if (process.env.NEXUS_REAL_TRADING !== "1") {
     throw new ExpertRouteError(
       ERROR_CODES.REAL_TRADING_DISABLED,
@@ -45,19 +48,47 @@ export function enforceRealTradingGuard() {
       403
     )
   }
+}
+
+/** @deprecated Use enforceRealTradingEnvFlag + resolveBinanceCredentialsForExecution */
+export function enforceRealTradingGuard() {
+  enforceRealTradingEnvFlag()
   if (!process.env.BINANCE_API_KEY || !(process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET)) {
     throw new ExpertRouteError(
       ERROR_CODES.MISSING_BINANCE_KEYS,
-      "MISSING_BINANCE_KEYS: Configure BINANCE_API_KEY and BINANCE_SECRET_KEY",
+      "MISSING_BINANCE_KEYS: Configure BINANCE_API_KEY and BINANCE_SECRET_KEY (or connect Binance on your account)",
       500
     )
   }
 }
 
-export async function enforceAnalysisFreshness(analysisId: string, maxAgeSeconds = 60): Promise<AnalysisRecord> {
+export function assertBinanceCredentials(creds: { apiKey?: string; apiSecret?: string } | null) {
+  const apiKey = creds?.apiKey?.trim()
+  const apiSecret = creds?.apiSecret?.trim()
+  if (!apiKey || !apiSecret) {
+    throw new ExpertRouteError(
+      ERROR_CODES.MISSING_BINANCE_KEYS,
+      "MISSING_BINANCE_KEYS: Add Binance in Account / API settings, or set BINANCE_API_KEY and BINANCE_SECRET_KEY on the server.",
+      400
+    )
+  }
+}
+
+export async function enforceAnalysisFreshness(
+  analysisId: string,
+  maxAgeSeconds = 60,
+  opts?: { userId?: string }
+): Promise<AnalysisRecord> {
   const analysis = await getAnalysisById(analysisId)
   if (!analysis) {
     throw new ExpertRouteError(ERROR_CODES.ANALYSIS_NOT_FOUND, "analysisId not found", 404)
+  }
+  if (opts?.userId && analysis.userId !== opts.userId) {
+    throw new ExpertRouteError(
+      ERROR_CODES.FORBIDDEN_SESSION,
+      "FORBIDDEN_SESSION: Analysis belongs to another account.",
+      403
+    )
   }
   const ageSeconds = (Date.now() - new Date(analysis.timestamp).getTime()) / 1000
   if (ageSeconds > maxAgeSeconds) {

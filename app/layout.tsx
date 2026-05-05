@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/AuthContext'
@@ -20,16 +20,15 @@ const spaceMono = Space_Mono({
   display: 'swap',
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export const metadata: Metadata = {
   title: 'Nexus Pro - Crypto Trading Dashboard',
   description: 'Professional crypto trading dashboard with Joelin-guided analysis, real-time market data, and automated trading strategies.',
   generator: 'v0.app',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
   icons: {
     icon: [
       {
@@ -77,11 +76,13 @@ export default function RootLayout({
             `,
           }}
         />
-        <AuthProvider>
-          <NexusNotificationsProvider>
-            <UserPreferencesProvider>{children}</UserPreferencesProvider>
-          </NexusNotificationsProvider>
-        </AuthProvider>
+        <div id="nexus-app-root">
+          <AuthProvider>
+            <NexusNotificationsProvider>
+              <UserPreferencesProvider>{children}</UserPreferencesProvider>
+            </NexusNotificationsProvider>
+          </AuthProvider>
+        </div>
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

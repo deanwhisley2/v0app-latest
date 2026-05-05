@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireExpertUserId } from "@/lib/expert/auth-server"
 import { makeId, phase2Store } from "@/lib/expert/phase2-store"
 import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
 import { binanceBookTicker } from "@/lib/server/binance-signed-order"
@@ -15,6 +16,9 @@ function calculateSafetyLevel(confidence: number, imbalance: number): "HIGH" | "
 }
 
 export async function POST(req: NextRequest) {
+  const userOrRes = await requireExpertUserId()
+  if (userOrRes instanceof NextResponse) return userOrRes
+
   const body = (await req.json().catch(() => ({}))) as { symbol?: string; timeWindowSeconds?: number }
   const symbol = body.symbol?.trim().toUpperCase()
   if (!symbol) return NextResponse.json({ error: "symbol is required" }, { status: 400 })

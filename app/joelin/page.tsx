@@ -20,6 +20,7 @@ type JoelinCoin = {
 export default function JoelinPage() {
   const router = useRouter()
   const [coins, setCoins] = useState<JoelinCoin[]>([])
+  const [tradableNow, setTradableNow] = useState<JoelinCoin[]>([])
   const [search, setSearch] = useState("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [countdown, setCountdown] = useState(300)
@@ -28,6 +29,7 @@ export default function JoelinPage() {
     const res = await fetch("/api/joelin/oscillator", { cache: "no-store" })
     const data = await res.json()
     setCoins(data.coins ?? [])
+    setTradableNow(data.tradableNow ?? [])
     setLastUpdated(data.lastUpdated ? new Date(data.lastUpdated) : new Date())
     setCountdown(300)
   }
@@ -44,8 +46,13 @@ export default function JoelinPage() {
     const es = new EventSource("/api/joelin/stream")
     const onUpdate = (event: MessageEvent) => {
       try {
-        const payload = JSON.parse(event.data) as { coins: JoelinCoin[]; lastUpdated: string }
+        const payload = JSON.parse(event.data) as {
+          coins: JoelinCoin[]
+          tradableNow?: JoelinCoin[]
+          lastUpdated: string
+        }
         setCoins(payload.coins ?? [])
+        setTradableNow(payload.tradableNow ?? [])
         setLastUpdated(payload.lastUpdated ? new Date(payload.lastUpdated) : new Date())
         setCountdown(300)
       } catch {
@@ -111,6 +118,24 @@ export default function JoelinPage() {
         onChange={(e) => setSearch(e.target.value)}
         className="mb-4 max-w-sm"
       />
+
+      {tradableNow.length > 0 && (
+        <Card className="mb-6 border-primary/30 bg-primary/5 p-4">
+          <h2 className="mb-2 text-sm font-semibold text-foreground">Top tradable now (BUY/SELL, ≥65% conf., not LOW safety)</h2>
+          <div className="flex flex-wrap gap-2">
+            {tradableNow.map((c) => (
+              <Badge
+                key={c.symbol}
+                variant={c.action === "BUY" ? "default" : c.action === "SELL" ? "destructive" : "secondary"}
+                className="cursor-pointer font-mono text-xs"
+                onClick={() => router.push(`/expert-mode?symbol=${encodeURIComponent(c.symbol)}`)}
+              >
+                {c.symbol.replace("USDT", "")} · {c.action} {c.confidence}%
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredCoins.map((coin) => (

@@ -11,10 +11,22 @@ need() {
 need curl
 need jq
 
+# Each analyze/re-analyze call uses the API minimum window (60s) and blocks until it elapses.
+# Expect ~60s for Phase 1, ~60s for Phase 3 (~2 min total when RUN_LIVE_ORDERS=0).
+CURL_LONG_OPTS=( -sS --max-time 180 )
+
 echo "=== PHASE 1: ANALYSIS TESTS ==="
-ANALYSIS=$(curl -sS -X POST "$BASE_URL/api/expert/analyze" \
+echo "    (server enforces a 60s analysis window — this request takes ~60s, not a hang)"
+ANALYSIS=$(curl "${CURL_LONG_OPTS[@]}" -X POST "$BASE_URL/api/expert/analyze" \
   -H "Content-Type: application/json" \
   -d '{"symbol":"BTCUSDT","timeWindowSeconds":60,"useNex":false}')
+
+if echo "$ANALYSIS" | jq -e '.code == "UNAUTHORIZED"' >/dev/null 2>&1; then
+  echo "❌ /api/expert/analyze returned UNAUTHORIZED — Expert APIs require a signed-in user."
+  echo "   For headless tests (curl), set server env NEXUS_EXPERT_FALLBACK_USER_ID to a real auth.users UUID"
+  echo "   (Dashboard → Authentication → Users), or run tests from a browser session with cookies."
+  exit 1
+fi
 
 echo "$ANALYSIS" | jq -e '.analysisId and .result.action and (.result.confidence|type=="number")' >/dev/null
 ANALYSIS_ID="$(echo "$ANALYSIS" | jq -r '.analysisId')"
@@ -22,7 +34,7 @@ SYMBOL="BTCUSDT"
 echo "✅ Analysis created: $ANALYSIS_ID"
 
 echo "=== PHASE 2: SAFETY GATE TESTS ==="
-HOLD_OR_LOW=$(curl -sS -X POST "$BASE_URL/api/expert/execute/manual" \
+HOLD_OR_LOW=$(curl "${CURL_LONG_OPTS[@]}" -X POST "$BASE_URL/api/expert/execute/manual" \
   -H "Content-Type: application/json" \
   -d "{\"analysisId\":\"$ANALYSIS_ID\",\"symbol\":\"$SYMBOL\",\"config\":{\"buyPrice\":1,\"sellPrice\":1,\"stopLossPercent\":2,\"timeInTradeMinutes\":1,\"repeatCount\":1,\"amountPerTrade\":5}}")
 
@@ -33,14 +45,15 @@ else
   echo "✅ Execution route accepted current analysis (signal passed thresholds)"
 fi
 
-MISMATCH=$(curl -sS -X POST "$BASE_URL/api/expert/execute/manual" \
+MISMATCH=$(curl "${CURL_LONG_OPTS[@]}" -X POST "$BASE_URL/api/expert/execute/manual" \
   -H "Content-Type: application/json" \
   -d "{\"analysisId\":\"$ANALYSIS_ID\",\"symbol\":\"ETHUSDT\",\"config\":{\"buyPrice\":1,\"sellPrice\":1,\"stopLossPercent\":2,\"timeInTradeMinutes\":1,\"repeatCount\":1,\"amountPerTrade\":5}}")
 
 echo "$MISMATCH" | jq -e '.code=="SYMBOL_MISMATCH"' >/dev/null && echo "✅ Symbol mismatch blocked"
 
 echo "=== PHASE 3: JOELIN RE-ANALYSIS TEST ==="
-REANALYZE=$(curl -sS -X POST "$BASE_URL/api/joelin/re-analyze" \
+echo "    (another 60s bounded analysis — ~60s wait)"
+REANALYZE=$(curl "${CURL_LONG_OPTS[@]}" -X POST "$BASE_URL/api/joelin/re-analyze" \
   -H "Content-Type: application/json" \
   -d "{\"symbol\":\"$SYMBOL\",\"timeWindowSeconds\":60}")
 echo "$REANALYZE" | jq -e '.result.action and (.result.confidence|type=="number")' >/dev/null
@@ -52,7 +65,7 @@ if [[ "$RUN_LIVE_ORDERS" != "1" ]]; then
   exit 0
 fi
 
-LIVE=$(curl -sS -X POST "$BASE_URL/api/expert/execute/manual" \
+LIVE=$(curl "${CURL_LONG_OPTS[@]}" -X POST "$BASE_URL/api/expert/execute/manual" \
   -H "Content-Type: application/json" \
   -d "{\"analysisId\":\"$ANALYSIS_ID\",\"symbol\":\"$SYMBOL\",\"config\":{\"buyPrice\":1,\"sellPrice\":1,\"stopLossPercent\":2,\"timeInTradeMinutes\":1,\"repeatCount\":1,\"amountPerTrade\":5}}")
 
