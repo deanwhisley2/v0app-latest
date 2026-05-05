@@ -1,7 +1,15 @@
+import {
+  binanceAccountInfo,
+  binanceExchangeInfo,
+  getBinanceCredentialsFromEnv,
+} from "@/lib/server/binance-signed-order"
+
 export type ExchangePreCheckResult = {
   valid: true
   availableUSDT: number
   minAmount: number
+  stepSize?: number
+  minQty?: number
 }
 
 export async function validateExchange(userId: string, symbol: string, amount: number): Promise<ExchangePreCheckResult> {
@@ -12,27 +20,50 @@ export async function validateExchange(userId: string, symbol: string, amount: n
   if (!symbol.endsWith("USDT")) {
     throw new Error("UNSUPPORTED_SYMBOL_PAIR")
   }
-  // TODO: wire real exchange account permission checks.
-  const spotTradingEnabled = true
-  const marginTradingEnabled = true
-  const availableUSDT = 10_000
-  const remainingRate = 50
+  const creds = getBinanceCredentialsFromEnv()
+  if (!creds) {
+    throw new Error("BINANCE_CREDENTIALS_MISSING")
+  }
 
+  const [account, exchangeInfo] = await Promise.all([
+    binanceAccountInfo(creds.apiKey, creds.apiSecret),
+    binanceExchangeInfo(symbol),
+  ])
+  const spotTradingEnabled = account.permissions?.includes("SPOT") ?? false
   if (!spotTradingEnabled) {
     throw new Error("EXCHANGE_SPOT_TRADING_DISABLED")
   }
-  if (!marginTradingEnabled) {
-    // non-fatal according to spec (warn only)
-    console.warn("Margin trading disabled - spot only")
+
+  const usdtBalance = account.balances.find((b) => b.asset === "USDT")?.free ?? "0"
+  const availableUSDT = Number.parseFloat(usdtBalance)
+  if (!Number.isFinite(availableUSDT)) {
+    throw new Error("BALANCE_PARSE_FAILED")
   }
+
+  const symbolInfo = exchangeInfo.symbols?.find((s) => s.symbol === symbol)
+  if (!symbolInfo || symbolInfo.status !== "TRADING") {
+    throw new Error("SYMBOL_NOT_TRADABLE")
+  }
+  const lotSizeFilter = symbolInfo.filters?.find((f) => f.filterType === "LOT_SIZE")
+  const minNotionalFilter = symbolInfo.filters?.find((f) => f.filterType === "MIN_NOTIONAL")
+  const minNotional = Number.parseFloat(minNotionalFilter?.minNotional ?? "10")
+  const minQty = Number.parseFloat(lotSizeFilter?.minQty ?? "0")
+  const stepSize = Number.parseFloat(lotSizeFilter?.stepSize ?? "0")
+
   if (amount < minAmount) {
     throw new Error(`MIN_ORDER_SIZE: Need at least $${minAmount}`)
+  }
+  if (Number.isFinite(minNotional) && amount < minNotional) {
+    throw new Error(`MIN_NOTIONAL: Need at least $${minNotional}`)
   }
   if (availableUSDT < amount) {
     throw new Error(`INSUFFICIENT_BALANCE: Have $${availableUSDT}, need $${amount}`)
   }
-  if (remainingRate < 5) {
-    throw new Error("RATE_LIMIT_APPROACHING: Pausing 60 seconds")
+  return {
+    valid: true,
+    availableUSDT,
+    minAmount: Number.isFinite(minNotional) ? Math.max(minAmount, minNotional) : minAmount,
+    minQty: Number.isFinite(minQty) ? minQty : undefined,
+    stepSize: Number.isFinite(stepSize) ? stepSize : undefined,
   }
-  return { valid: true, availableUSDT, minAmount }
 }

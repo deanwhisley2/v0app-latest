@@ -96,6 +96,41 @@ export async function binanceGetOrder(symbol: string, orderId: number, apiKey: s
   }) as Promise<{ status: string; executedQty: string; cummulativeQuoteQty: string }>
 }
 
+export async function binanceAccountInfo(apiKey: string, apiSecret: string) {
+  return signedGet("/api/v3/account", apiKey, apiSecret, {}) as Promise<{
+    permissions?: string[]
+    balances: Array<{ asset: string; free: string; locked: string }>
+  }>
+}
+
+export async function binanceExchangeInfo(symbol?: string) {
+  const params: Record<string, string> = {}
+  if (symbol) params.symbol = symbol
+  const url = new URL(`${BINANCE}/api/v3/exchangeInfo`)
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v)
+  }
+  const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(20_000) })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Binance /api/v3/exchangeInfo HTTP ${res.status}: ${text.slice(0, 400)}`)
+  return JSON.parse(text) as {
+    symbols?: Array<{
+      symbol: string
+      status: string
+      filters?: Array<{ filterType: string; minQty?: string; stepSize?: string; minNotional?: string }>
+    }>
+  }
+}
+
+export async function binanceBookTicker(symbol: string) {
+  const url = new URL(`${BINANCE}/api/v3/ticker/bookTicker`)
+  url.searchParams.set("symbol", symbol)
+  const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(10_000) })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Binance /api/v3/ticker/bookTicker HTTP ${res.status}: ${text.slice(0, 400)}`)
+  return JSON.parse(text) as { symbol: string; bidPrice: string; askPrice: string }
+}
+
 export async function binanceOpenOrders(symbol: string | undefined, apiKey: string, apiSecret: string) {
   const params: Record<string, string> = {}
   if (symbol) params.symbol = symbol

@@ -211,6 +211,29 @@ export async function getSessionById(sessionId: string): Promise<TradeSession | 
   return phase2Store.sessions.get(sessionId) ?? null
 }
 
+export async function updateSession(sessionId: string, patch: Partial<TradeSession>) {
+  const existing = (await getSessionById(sessionId)) ?? phase2Store.sessions.get(sessionId)
+  if (!existing) return null
+  const next: TradeSession = { ...existing, ...patch }
+  const admin = adminOrNull()
+  if (admin) {
+    const { error } = await admin
+      .from("TradeSession")
+      .update({
+        status: next.status,
+        usedAmount: next.usedAmount,
+        endTime: next.endTime ?? null,
+        config: next.config,
+      })
+      .eq("id", sessionId)
+    if (error) {
+      console.warn("[phase2] updateSession fallback:", error.message)
+    }
+  }
+  phase2Store.sessions.set(sessionId, next)
+  return next
+}
+
 export async function upsertOrders(sessionId: string, orders: TradeOrder[]) {
   const admin = adminOrNull()
   if (admin && orders.length > 0) {

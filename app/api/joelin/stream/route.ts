@@ -1,26 +1,55 @@
 import { phase2Store } from "@/lib/expert/phase2-store"
 
-export async function GET() {
+export async function GET(request: Request) {
   const encoder = new TextEncoder()
+  let intervalId: ReturnType<typeof setInterval> | undefined
+  let heartbeatId: ReturnType<typeof setInterval> | undefined
+
+  const cleanup = () => {
+    if (intervalId !== undefined) {
+      clearInterval(intervalId)
+      intervalId = undefined
+    }
+    if (heartbeatId !== undefined) {
+      clearInterval(heartbeatId)
+      heartbeatId = undefined
+    }
+  }
+
+  request.signal.addEventListener("abort", cleanup)
+
   const stream = new ReadableStream({
     start(controller) {
+      let closed = false
+      const safeEnqueue = (chunk: Uint8Array) => {
+        if (closed) return
+        try {
+          controller.enqueue(chunk)
+        } catch {
+          closed = true
+          cleanup()
+        }
+      }
+
       const emit = () => {
         const payload = {
           coins: phase2Store.joelin,
           lastUpdated: new Date().toISOString(),
           nextRefresh: new Date(Date.now() + 300_000).toISOString(),
         }
-        controller.enqueue(encoder.encode(`event: joelin-update\ndata: ${JSON.stringify(payload)}\n\n`))
+        safeEnqueue(encoder.encode(`event: joelin-update\ndata: ${JSON.stringify(payload)}\n\n`))
       }
       emit()
-      const interval = setInterval(emit, 300_000)
-      const heartbeat = setInterval(() => controller.enqueue(encoder.encode(`event: ping\ndata: {}\n\n`)), 20_000)
-      return () => {
-        clearInterval(interval)
-        clearInterval(heartbeat)
-      }
+      intervalId = setInterval(emit, 300_000)
+      heartbeatId = setInterval(() => {
+        safeEnqueue(encoder.encode(`event: ping\ndata: {}\n\n`))
+      }, 20_000)
+    },
+    cancel() {
+      cleanup()
     },
   })
+
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
