@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,7 +42,7 @@ type SessionStatusResponse = {
   pnl: number
 }
 
-export default function ExpertModePage() {
+function ExpertModeContent() {
   const params = useSearchParams()
   const initialSymbol = params.get("symbol")?.toUpperCase() ?? "BTCUSDT"
   const [symbol, setSymbol] = useState(initialSymbol)
@@ -361,5 +361,13 @@ export default function ExpertModePage() {
         </div>
       </Card>
     </div>
+  )
+}
+
+export default function ExpertModePage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-5xl p-6 text-sm text-muted-foreground">Loading Expert Mode...</div>}>
+      <ExpertModeContent />
+    </Suspense>
   )
 }
