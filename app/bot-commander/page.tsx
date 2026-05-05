@@ -1,15 +1,62 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from "next/navigation"
 import BotGrid from '@/components/bot-commander/BotGrid'
 import CommandCenter, { type CommandContext } from '@/components/bot-commander/CommandCenter'
 import SafetyPanel from '@/components/bot-commander/SafetyPanel'
 import { BOT_REGISTRY } from '@/lib/bot-registry'
 import { BotStatusUI } from '@/lib/bot-capability-types'
+import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
+import { saveExpertAnalysis } from "@/lib/expert-analysis-store"
 
 export default function BotCommanderPage() {
+  const router = useRouter()
+  const { addNotification } = useNexusNotifications()
   const [bots] = useState(BOT_REGISTRY)
   const [statuses, setStatuses] = useState<Record<string, BotStatusUI>>({})
   const [loading, setLoading] = useState(true)
+  const [analysisSoundEnabled, setAnalysisSoundEnabled] = useState(true)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("nexus_analysis_sound_v1")
+      if (raw === "0") setAnalysisSoundEnabled(false)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const playCompleteSound = () => {
+    if (!analysisSoundEnabled) return
+    try {
+      const audio = new Audio("/sounds/analysis-complete.mp3")
+      void audio.play().catch(() => {
+        // Optional sound; ignore playback failures.
+      })
+    } catch {
+      // Optional sound; ignore playback failures.
+    }
+  }
+
+  const notifyBrowser = (analysisId: string, symbol: string, action: string, confidence: number) => {
+    if (typeof window === "undefined" || !("Notification" in window)) return
+    const title = `Analysis Complete: ${symbol}`
+    const body = `${action} with ${confidence}% confidence`
+    const spawn = () => {
+      const n = new Notification(title, { body, tag: `analysis-${analysisId}` })
+      n.onclick = () => {
+        window.focus()
+        router.push(`/expert-mode/analysis/${analysisId}`)
+      }
+    }
+    if (Notification.permission === "granted") {
+      spawn()
+    } else if (Notification.permission !== "denied") {
+      void Notification.requestPermission().then((permission) => {
+        if (permission === "granted") spawn()
+      })
+    }
+  }
   const refreshStatuses = async () => {
     const res = await fetch('/api/bot-commander')
     const data = await res.json()
@@ -66,6 +113,42 @@ export default function BotCommanderPage() {
         fastPaths?: { orderBookImbalance?: number; fundingRateAnomaly?: number }
       }
       const fd = r.fusedDecision
+      if (fd) {
+        const analysisId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+        const nowIso = new Date().toISOString()
+        saveExpertAnalysis({
+          id: analysisId,
+          symbol,
+          action: fd.action as "BUY" | "SELL" | "HOLD",
+          confidence: fd.confidence,
+          timestamp: nowIso,
+          durationSeconds: timeWindowSeconds,
+          completedAt: nowIso,
+          entryPrice: undefined,
+          keyIndicators: fd.reasons.slice(0, 4),
+          riskAssessment:
+            fd.action === "HOLD"
+              ? "Unsafe: avoid entry until signal improves."
+              : fd.confidence >= 70
+                ? "Safe to consider entry with standard safeguards."
+                : "Risky: proceed only with reduced size and strict stop-loss.",
+        })
+        addNotification({
+          type: "analysis",
+          title: `Analysis Complete: ${symbol}`,
+          message: `${fd.action} with ${fd.confidence}% confidence`,
+          nav: { kind: "expert-analysis", analysisId },
+          analysis: {
+            analysisId,
+            symbol,
+            action: fd.action as "BUY" | "SELL" | "HOLD",
+            confidence: fd.confidence,
+            timestamp: nowIso,
+          },
+        })
+        playCompleteSound()
+        notifyBrowser(analysisId, symbol, fd.action, fd.confidence)
+      }
       const lines = [
         `Symbol ${symbol} · window ${timeWindowSeconds}s · wall ${r.totalTimeMs ?? '?'}ms`,
         fd ? `Fused: ${fd.action} (${fd.confidence}% conf, Grok-influenced: ${fd.grokInfluenced})` : 'No fused decision',
@@ -151,6 +234,22 @@ export default function BotCommanderPage() {
           NEXUS PRO — BOT COMMANDER
         </h1>
         <p style={{ color: '#8B92A5', fontSize: '14px' }}>One dashboard to rule all bots. Start, pause, configure, and monitor.</p>
+        <label style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "8px", color: "#8B92A5", fontSize: "13px" }}>
+          <input
+            type="checkbox"
+            checked={analysisSoundEnabled}
+            onChange={(e) => {
+              const enabled = e.target.checked
+              setAnalysisSoundEnabled(enabled)
+              try {
+                localStorage.setItem("nexus_analysis_sound_v1", enabled ? "1" : "0")
+              } catch {
+                // ignore
+              }
+            }}
+          />
+          Play sound when analysis completes
+        </label>
       </div>
 
       {/* Main Grid */}

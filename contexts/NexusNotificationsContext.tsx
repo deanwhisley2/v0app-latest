@@ -15,7 +15,15 @@ import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
 /** Bump when seed shape changes so dev/demo inbox refreshes without manual clear. */
 const STORAGE_KEY = "nexus_notifications_v2"
 
-export type NexusNotificationType = "price" | "trade" | "security" | "promo" | "system"
+export type NexusNotificationType = "price" | "trade" | "security" | "promo" | "system" | "analysis"
+
+export type AnalysisNotificationPayload = {
+  analysisId: string
+  symbol: string
+  action: "BUY" | "SELL" | "HOLD"
+  confidence: number
+  timestamp: string
+}
 
 export type NexusNotificationItem = {
   id: string
@@ -25,6 +33,7 @@ export type NexusNotificationItem = {
   timestamp: string
   read: boolean
   nav?: NexusNotificationNav
+  analysis?: AnalysisNotificationPayload
 }
 
 function iso(d: Date) {
@@ -141,6 +150,9 @@ type NexusNotificationsContextValue = {
   deleteFromInbox: (id: string) => void
   archiveFromInbox: (id: string) => void
   clearInbox: () => void
+  addNotification: (item: Omit<NexusNotificationItem, "id" | "timestamp" | "read"> & { id?: string; timestamp?: string }) => string
+  deleteFromHistory: (id: string) => void
+  clearHistory: () => void
 }
 
 const NexusNotificationsContext = createContext<NexusNotificationsContextValue | null>(null)
@@ -214,6 +226,29 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     })
   }, [])
 
+  const addNotification = useCallback(
+    (item: Omit<NexusNotificationItem, "id" | "timestamp" | "read"> & { id?: string; timestamp?: string }) => {
+      const createdId = item.id ?? `n-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const nextItem: NexusNotificationItem = {
+        ...item,
+        id: createdId,
+        timestamp: item.timestamp ?? new Date().toISOString(),
+        read: false,
+      }
+      setInbox((prev) => [nextItem, ...prev])
+      return createdId
+    },
+    []
+  )
+
+  const deleteFromHistory = useCallback((id: string) => {
+    setHistory((prev) => prev.filter((n) => n.id !== id))
+  }, [])
+
+  const clearHistory = useCallback(() => {
+    setHistory([])
+  }, [])
+
   const value = useMemo<NexusNotificationsContextValue>(
     () => ({
       inbox,
@@ -226,6 +261,9 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       deleteFromInbox,
       archiveFromInbox,
       clearInbox,
+      addNotification,
+      deleteFromHistory,
+      clearHistory,
     }),
     [
       inbox,
@@ -238,6 +276,9 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       deleteFromInbox,
       archiveFromInbox,
       clearInbox,
+      addNotification,
+      deleteFromHistory,
+      clearHistory,
     ]
   )
 

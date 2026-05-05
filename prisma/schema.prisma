@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AnalysisHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  symbol        String
+  timeWindow    Int
+  action        String
+  confidence    Int
+  reasons       String[]
+  entryPrice    Float?
+  timestamp     DateTime @default(now())
+  tradeExecuted Boolean  @default(false)
+  tradeResult   Json?
+}
+
+model NotificationRecord {
+  id         String   @id @default(cuid())
+  userId     String
+  analysisId String
+  symbol     String
+  action     String
+  confidence Int
+  read       Boolean  @default(false)
+  deleted    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model TradeSession {
+  id          String   @id @default(cuid())
+  userId      String
+  symbol      String
+  mode        String
+  status      String
+  totalAmount Float
+  usedAmount  Float    @default(0)
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  config      Json
+}
+
+model TradeOrder {
+  id          String   @id @default(cuid())
+  sessionId   String
+  userId      String
+  symbol      String
+  orderId     String
+  type        String
+  price       Float
+  quantity    Float
+  quoteAmount Float
+  status      String
+  createdAt   DateTime @default(now())
+  filledAt    DateTime?
+}

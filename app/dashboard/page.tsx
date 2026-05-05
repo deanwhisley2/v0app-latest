@@ -423,11 +423,14 @@ export default function DashboardPage() {
           setTradeView("order-history")
           setActiveTab("trade")
           break
+        case "expert-analysis":
+          router.push(`/expert-mode/analysis/${encodeURIComponent(nav.analysisId)}`)
+          break
         default:
           break
       }
     },
-    []
+    [router]
   )
 
   useEffect(() => {

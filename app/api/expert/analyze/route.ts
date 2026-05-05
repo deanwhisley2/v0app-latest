@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from "next/server"
+import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
+import { createAnalysis, createNotification, getUserId, makeId } from "@/lib/expert/phase2-store"
+import type { AnalyzeRequest, AnalyzeResponse } from "@/lib/expert/phase2-types"
+
+export async function POST(req: NextRequest) {
+  let body: AnalyzeRequest
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
+  const symbol = body.symbol?.trim().toUpperCase()
+  if (!symbol) return NextResponse.json({ error: "symbol is required" }, { status: 400 })
+  if (!Number.isFinite(body.timeWindowSeconds) || body.timeWindowSeconds < 60 || body.timeWindowSeconds > 600) {
+    return NextResponse.json({ error: "timeWindowSeconds must be 60-600" }, { status: 400 })
+  }
+  if (body.cancelToken) {
+    const cancelled: AnalyzeResponse = {
+      analysisId: body.cancelToken,
+      status: "cancelled",
+    }
+    return NextResponse.json(cancelled)
+  }
+
+  const analysisId = makeId("analysis")
+  const result = await timeBoundAnalysis.startAnalysis({
+    symbol,
+    timeWindowMs: body.timeWindowSeconds * 1000,
+    includeGrok: Boolean(body.useNex),
+  })
+
+  await createAnalysis({
+    id: analysisId,
+    userId: getUserId(),
+    symbol,
+    timeWindow: body.timeWindowSeconds,
+    action: result.fusedDecision.action,
+    confidence: result.fusedDecision.confidence,
+    reasons: result.fusedDecision.reasons,
+    entryPrice: undefined,
+    tradeExecuted: false,
+  })
+  await createNotification({
+    id: makeId("notif"),
+    userId: getUserId(),
+    analysisId,
+    symbol,
+    action: result.fusedDecision.action,
+    confidence: result.fusedDecision.confidence,
+    read: false,
+    deleted: false,
+    createdAt: new Date().toISOString(),
+  })
+
+  const response: AnalyzeResponse = {
+    analysisId,
+    status: "completed",
+    result: {
+      action: result.fusedDecision.action,
+      confidence: result.fusedDecision.confidence,
+      reasons: result.fusedDecision.reasons,
+      entryPrice: undefined,
+    },
+  }
+  return NextResponse.json(response)
+}

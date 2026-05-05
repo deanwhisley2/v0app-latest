@@ -4,4 +4,5 @@ export type NexusNotificationNav =
   | { kind: "wallet" }
   | { kind: "settings"; view: "security" | "about" | "notifications" }
   | { kind: "orders" }
+  | { kind: "expert-analysis"; analysisId: string }
   | { kind: "detail" }

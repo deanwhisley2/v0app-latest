@@ -196,6 +196,11 @@ class TimeBoundAnalysisManager {
     }
 
     const grokMissedWindow = grokEnabled && !grokResult
+    // Enforce user-selected analysis window: finalize only at/after deadline.
+    const settleDelay = Math.max(0, deadline - Date.now())
+    if (settleDelay > 0) {
+      await sleep(settleDelay)
+    }
     const finalResult = fuseDecision(symbol, startTime, fastPaths, grokResult, grokMissedWindow)
     this.latestFinal.set(symbol, { final: finalResult, at: Date.now() })
     request.onFinalResult?.(finalResult)

@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Bell, Gift, Info, Shield, TrendingUp, Zap } from "lucide-react"
+import { ArrowLeft, Bell, Compass, Gift, Info, Shield, TrendingUp, Zap, Trash2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
 import { Card } from "@/components/ui/card"
@@ -24,6 +24,8 @@ const icon = (type: NexusNotificationType) => {
       return <Gift className="h-4 w-4 text-accent" />
     case "system":
       return <Info className="h-4 w-4 text-muted-foreground" />
+    case "analysis":
+      return <Compass className="h-4 w-4 text-cyan-400" />
   }
 }
 
@@ -39,6 +41,8 @@ const border = (type: NexusNotificationType) => {
       return "border-l-accent"
     case "system":
       return "border-l-muted-foreground"
+    case "analysis":
+      return "border-l-cyan-400"
   }
 }
 
@@ -50,7 +54,7 @@ function formatWhen(iso: string) {
 export default function NotificationsHistoryPage() {
   const router = useRouter()
   const { user, isLoading: authLoading, isGuestSession } = useAuth()
-  const { inbox, history, markRead } = useNexusNotifications()
+  const { inbox, history, markRead, deleteFromHistory, clearHistory } = useNexusNotifications()
 
   useEffect(() => {
     if (isGuestSession) return
@@ -103,6 +107,14 @@ export default function NotificationsHistoryPage() {
             <h1 className="text-2xl font-bold tracking-tight">Notification history</h1>
             <p className="text-sm text-muted-foreground">Inbox and archived items on this device ({merged.length} total)</p>
           </div>
+          <button
+            type="button"
+            onClick={clearHistory}
+            className="ml-auto inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Clear history
+          </button>
         </div>
 
         <Card className="divide-y divide-border border-border">
@@ -110,31 +122,50 @@ export default function NotificationsHistoryPage() {
             <div className="p-12 text-center text-sm text-muted-foreground">No notifications yet.</div>
           ) : (
             merged.map((n) => (
-              <button
+              <div
                 key={n.id}
-                type="button"
-                onClick={() => {
-                  if (n.nav && n.nav.kind !== "detail") openLinked(n)
-                  else markRead(n.id)
-                }}
                 className={cn(
                   "flex w-full gap-3 border-l-4 p-4 text-left transition-colors hover:bg-muted/40",
                   border(n.type),
                   !n.read && "bg-primary/[0.04]"
                 )}
               >
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                <button
+                  type="button"
+                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted"
+                  onClick={() => {
+                    if (n.nav && n.nav.kind !== "detail") openLinked(n)
+                    else markRead(n.id)
+                  }}
+                >
                   {icon(n.type)}
-                </div>
+                </button>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-foreground">{n.title}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (n.nav && n.nav.kind !== "detail") openLinked(n)
+                      else markRead(n.id)
+                    }}
+                    className="text-left"
+                  >
+                    <p className="font-semibold text-foreground">{n.title}</p>
+                  </button>
                   <p className="mt-1 text-sm text-muted-foreground">{n.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground/80">{formatWhen(n.timestamp)}</p>
                   {n.nav && n.nav.kind !== "detail" && (
                     <p className="mt-1 text-xs font-medium text-primary">Tap to open linked screen</p>
                   )}
                 </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => deleteFromHistory(n.id)}
+                  className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted"
+                  aria-label="Delete notification"
+                >
+                  <Trash2 className="mx-auto h-4 w-4" />
+                </button>
+              </div>
             ))
           )}
         </Card>
