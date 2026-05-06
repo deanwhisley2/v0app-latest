@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { binanceGetOrder } from "@/lib/server/binance-signed-order"
 import { resolveBinanceCredentialsForExecution } from "@/lib/expert/user-binance"
@@ -28,6 +29,7 @@ function requireAdmin() {
 async function logDivergence(userId: string, sessionId: string, symbol: string, d: Divergence) {
   const admin = requireAdmin()
   const { error } = await admin.from("ExchangeReconciliationLog").insert({
+    id: `erl_${randomUUID()}`,
     userId,
     sessionId,
     symbol,

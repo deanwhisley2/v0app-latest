@@ -313,6 +313,7 @@ async function logGovernanceApproval(input: {
 }) {
   const admin = requireAdmin()
   const { error } = await admin.from("GovernanceApprovalLog").insert({
+    id: `gal_${randomUUID()}`,
     workerId: input.workerId,
     lane: input.lane,
     userId: input.userId,
