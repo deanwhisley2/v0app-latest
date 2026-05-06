@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
 import { requireExpertUserId } from "@/lib/expert/auth-server"
+import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/lib/market-state-authority"
+import { computeAnalysisTtlSeconds } from "@/lib/expert/analysis-ttl"
 import { createAnalysis, createNotification, makeId } from "@/lib/expert/phase2-store"
+import { calibrateConfidence } from "@/lib/confidence-calibration"
 import type { AnalyzeRequest, AnalyzeResponse } from "@/lib/expert/phase2-types"
 
 export async function POST(req: NextRequest) {
@@ -34,7 +37,27 @@ export async function POST(req: NextRequest) {
     symbol,
     timeWindowMs: body.timeWindowSeconds * 1000,
     includeGrok: Boolean(body.useNex),
+    fastMode: Boolean(body.fastMode),
   })
+
+  const ttlSeconds = computeAnalysisTtlSeconds({
+    mode: result.mode,
+    timeWindowSeconds: body.timeWindowSeconds,
+  })
+  const rawConfidence = result.fusedDecision.confidence
+  const liveMarket = await resolveAuthoritativeMarketState({
+    consumer: "expert-analyze",
+    minRefreshMs: 45_000,
+  })
+  const calibration = await calibrateConfidence({
+    userId,
+    symbol,
+    decision: result.fusedDecision.action,
+    rawConfidence,
+    marketRegime: regimeBucketForTradeMemory(liveMarket.marketRegime),
+    liveMarketRegimeForPenalty: liveMarket.degraded ? "UNKNOWN" : liveMarket.marketRegime,
+  })
+  const calibratedConfidence = calibration.final
 
   await createAnalysis({
     id: analysisId,
@@ -42,10 +65,15 @@ export async function POST(req: NextRequest) {
     symbol,
     timeWindow: body.timeWindowSeconds,
     action: result.fusedDecision.action,
-    confidence: result.fusedDecision.confidence,
+    // Legacy transitional field named `confidence`; now written as canonical calibrated confidence.
+    confidence: calibratedConfidence,
+    rawConfidence,
+    calibratedConfidence,
+    confidenceExplanation: calibration,
     reasons: result.fusedDecision.reasons,
     entryPrice: undefined,
     tradeExecuted: false,
+    ttlSeconds,
   })
   await createNotification({
     id: makeId("notif"),
@@ -53,7 +81,7 @@ export async function POST(req: NextRequest) {
     analysisId,
     symbol,
     action: result.fusedDecision.action,
-    confidence: result.fusedDecision.confidence,
+    confidence: calibratedConfidence,
     read: false,
     deleted: false,
     createdAt: new Date().toISOString(),
@@ -64,7 +92,11 @@ export async function POST(req: NextRequest) {
     status: "completed",
     result: {
       action: result.fusedDecision.action,
-      confidence: result.fusedDecision.confidence,
+      confidence: calibratedConfidence,
+      rawConfidence,
+      calibratedConfidence,
+      uiDisplayConfidence: calibratedConfidence,
+      confidenceExplanation: calibration,
       reasons: result.fusedDecision.reasons,
       entryPrice: undefined,
     },

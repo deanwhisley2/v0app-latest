@@ -34,6 +34,8 @@ export interface FinalAnalysisResult {
   fastPaths: FastPathsResult
   grok?: GrokResponse
   fusedDecision: FusedDecision
+  /** Present when produced by `startAnalysis`: fast path vs full timed window. */
+  mode?: "FAST" | "DEEP"
 }
 
 export interface FastPathsResult {
@@ -151,7 +153,7 @@ function fuseDecision(
 class TimeBoundAnalysisManager {
   private readonly latestFinal = new Map<string, { final: FinalAnalysisResult; at: number }>()
 
-  async startAnalysis(request: AnalysisRequest): Promise<FinalAnalysisResult> {
+  async startAnalysis(request: AnalysisRequest & { fastMode?: boolean }): Promise<FinalAnalysisResult> {
     const startTime = Date.now()
     const deadline = startTime + request.timeWindowMs
     const symbol = request.symbol.toUpperCase().replace(/[^A-Z0-9]/g, "")
@@ -160,14 +162,32 @@ class TimeBoundAnalysisManager {
       request.includeGrok && process.env.NEXUS_GROK_ENABLED === "1"
 
     const fastPathsPromise = this.runFastPaths(symbol, deadline)
-    const grokPromise = grokEnabled
-      ? callGrok(symbol, grokBudget).catch((err) => {
-          console.error("[ANALYSIS] Grok failed:", err)
-          return null
-        })
-      : Promise.resolve(null)
+    const grokPromise =
+      request.fastMode === true
+        ? Promise.resolve(null)
+        : grokEnabled
+          ? callGrok(symbol, grokBudget).catch((err) => {
+              console.error("[ANALYSIS] Grok failed:", err)
+              return null
+            })
+          : Promise.resolve(null)
 
     const fastPaths = await fastPathsPromise
+
+    if (request.fastMode === true) {
+      request.onPartialResult?.({
+        phase: "FAST_PATHS_COMPLETE",
+        timestamp: fastPaths.timestamp,
+        fastPaths,
+        waitingForGrok: false,
+        timeRemainingMs: Math.max(0, deadline - Date.now()),
+      })
+      const fastFinal = fuseDecision(symbol, startTime, fastPaths, null, false)
+      const fastOut: FinalAnalysisResult = { ...fastFinal, mode: "FAST" }
+      this.latestFinal.set(symbol, { final: fastOut, at: Date.now() })
+      request.onFinalResult?.(fastOut)
+      return fastOut
+    }
 
     request.onPartialResult?.({
       phase: "FAST_PATHS_COMPLETE",
@@ -202,9 +222,10 @@ class TimeBoundAnalysisManager {
       await sleep(settleDelay)
     }
     const finalResult = fuseDecision(symbol, startTime, fastPaths, grokResult, grokMissedWindow)
-    this.latestFinal.set(symbol, { final: finalResult, at: Date.now() })
-    request.onFinalResult?.(finalResult)
-    return finalResult
+    const deepOut: FinalAnalysisResult = { ...finalResult, mode: "DEEP" }
+    this.latestFinal.set(symbol, { final: deepOut, at: Date.now() })
+    request.onFinalResult?.(deepOut)
+    return deepOut
   }
 
   private async runFastPaths(symbol: string, deadline: number): Promise<FastPathsResult> {

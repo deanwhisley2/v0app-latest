@@ -12,6 +12,14 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { config } from "dotenv"
+import {
+  acquireOrchestrationLease,
+  getDaemonSymbolRuntime,
+  heartbeatOrchestrationLease,
+  updateDaemonSymbolRuntime,
+} from "../lib/daemon-runtime-authority"
+import { requestGovernanceApproval } from "../lib/global-execution-governor"
+import { getResumeGate } from "../lib/startup-recovery"
 
 config({ path: path.resolve(process.cwd(), ".env.local") })
 config({ path: path.resolve(process.cwd(), ".env") })
@@ -55,46 +63,26 @@ const DAILY_LOSS_LIMIT_USD = Number(process.env.AUTO_TRADER_DAILY_LOSS_LIMIT_USD
 const SL_PCT = Number(process.env.AUTO_TRADER_STOP_LOSS_PERCENT) || 2
 const TP_PCT = Number(process.env.AUTO_TRADER_TAKE_PROFIT_PERCENT) || 4
 const CONF_MIN = Math.max(50, Number(process.env.AUTO_TRADER_CONFIDENCE_MIN) || 65)
-const CONSEC_LOSS_PAUSE_MS = 60 * 60 * 1000
+const workerId = `atd_${Math.random().toString(36).slice(2, 10)}`
 
-type Side = "long"
-
-type OpenPosition = {
-  pair: string
-  side: Side
-  entry: number
-  quantity: number
-  stopLoss: number
-  takeProfit: number
-  openedAt: number
-  quoteSpentUsd: number
-}
-
-const state = {
-  open: new Map<string, OpenPosition>(),
-  dailyKey: new Date().toISOString().slice(0, 10),
-  realizedPnlUsd: 0,
-  consecutiveLosses: 0,
-  pausedUntil: 0,
-}
-
-function rollDay() {
-  const k = new Date().toISOString().slice(0, 10)
-  if (k !== state.dailyKey) {
-    state.dailyKey = k
-    state.realizedPnlUsd = 0
-    log(`Daily stats reset (${k})`)
+async function startupSafeToResume() {
+  const gate = await getResumeGate()
+  if (gate.status !== "SAFE_TO_RESUME") {
+    log(
+      `[resume-blocked] auto-trader gate=${gate.status} unresolved=${gate.unresolvedCount} reason=${gate.reason ?? "-"}`
+    )
+    return false
   }
+  return true
 }
 
-function isPaused(): boolean {
-  return Date.now() < state.pausedUntil
+function daemonUserId(): string | null {
+  const v = process.env.NEXUS_EXPERT_FALLBACK_USER_ID?.trim()
+  return v || null
 }
 
-function totalExposureUsd(): number {
-  let s = 0
-  for (const p of state.open.values()) s += p.quoteSpentUsd
-  return s
+async function runtimeForPair(pair: string, userId: string) {
+  return getDaemonSymbolRuntime({ daemonType: "auto-trader-daemon", userId, symbol: pair })
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -238,6 +226,20 @@ function levelsFor(side: "BUY" | "SELL", entry: number) {
 }
 
 async function openLong(pair: string, spendUsd: number) {
+  const userId = daemonUserId()
+  if (!userId) throw new Error("NEXUS_EXPERT_FALLBACK_USER_ID missing")
+  const gov = await requestGovernanceApproval({
+    workerId,
+    lane: "auto-trader-daemon",
+    userId,
+    symbol: pair,
+    action: "BUY",
+    requestedQuoteUsd: spendUsd,
+  })
+  if (!gov.approved) {
+    log(`[worker-governance] BUY denied symbol=${pair} status=${gov.status} reason=${gov.reason ?? "-"}`)
+    return
+  }
   const ref = await fetchSpotPrice(pair)
   const { stopLoss, takeProfit } = levelsFor("BUY", ref)
   log(`OPEN LONG ${pair} spend≈$${spendUsd} ref≈${ref} SL=${stopLoss.toFixed(4)} TP=${takeProfit.toFixed(4)}`)
@@ -260,27 +262,43 @@ async function openLong(pair: string, spendUsd: number) {
     log(`OPEN ${pair}: bad fill qty, not tracking`)
     return
   }
-  state.open.set(pair, {
-    pair,
-    side: "long",
-    entry,
-    quantity: qty,
-    stopLoss: lv.stopLoss,
-    takeProfit: lv.takeProfit,
-    openedAt: Date.now(),
-    quoteSpentUsd: spendUsd,
-  })
+  const rt = await runtimeForPair(pair, userId)
+  await updateDaemonSymbolRuntime(
+    { daemonType: "auto-trader-daemon", userId, symbol: pair, expectedVersion: rt.version },
+    {
+      positionStatus: "LONG",
+      openQuantity: qty,
+      openEntryPrice: entry,
+      openEntryCost: spendUsd,
+      lastEntryAt: new Date().toISOString(),
+      lastExecutionAt: new Date().toISOString(),
+    }
+  )
+  log(`[execution-authority] symbol=${pair} worker=${workerId} position=LONG`)
   log(`OPEN OK ${pair} qty=${qty} entry≈${entry.toFixed(4)} SL=${lv.stopLoss.toFixed(4)} TP=${lv.takeProfit.toFixed(4)}`)
 }
 
 async function closeLong(pair: string, reason: string) {
-  const p = state.open.get(pair)
-  if (!p) return
+  const userId = daemonUserId()
+  if (!userId) return
+  const gov = await requestGovernanceApproval({
+    workerId,
+    lane: "auto-trader-daemon",
+    userId,
+    symbol: pair,
+    action: "SELL",
+  })
+  if (!gov.approved) {
+    log(`[worker-governance] SELL denied symbol=${pair} status=${gov.status} reason=${gov.reason ?? "-"}`)
+    return
+  }
+  const p = await runtimeForPair(pair, userId)
+  if (p.positionStatus !== "LONG" || !p.openQuantity || !p.openEntryPrice) return
   const px = await fetchSpotPrice(pair)
-  const estPnl = (px - p.entry) * p.quantity
-  log(`CLOSE ${pair} reason=${reason} qty=${p.quantity} estPnl≈$${estPnl.toFixed(4)}`)
+  const estPnl = (px - p.openEntryPrice) * p.openQuantity
+  log(`CLOSE ${pair} reason=${reason} qty=${p.openQuantity} estPnl≈$${estPnl.toFixed(4)}`)
   try {
-    const res = await tradeClose({ symbol: pair, baseQuantity: p.quantity })
+    const res = await tradeClose({ symbol: pair, baseQuantity: p.openQuantity })
     if (!res.ok) {
       log(`CLOSE FAILED ${pair}: ${res.error ?? "unknown"} — will retry`)
       return
@@ -290,31 +308,33 @@ async function closeLong(pair: string, reason: string) {
     log(`CLOSE ERROR ${pair}: ${e instanceof Error ? e.message : String(e)} — will retry`)
     return
   }
-  state.open.delete(pair)
-  rollDay()
-  state.realizedPnlUsd += estPnl
-  log(`Daily realized PnL ≈ $${state.realizedPnlUsd.toFixed(4)} (UTC day ${state.dailyKey})`)
-  if (estPnl < 0) {
-    state.consecutiveLosses += 1
-    if (state.consecutiveLosses >= 2) {
-      state.pausedUntil = Date.now() + CONSEC_LOSS_PAUSE_MS
-      log(`PAUSE 1h after 2 consecutive losses (until ${new Date(state.pausedUntil).toISOString()})`)
+  const lossWindow = estPnl < 0 ? p.totalLossWindow + Math.abs(estPnl) : p.totalLossWindow
+  await updateDaemonSymbolRuntime(
+    { daemonType: "auto-trader-daemon", userId, symbol: pair, expectedVersion: p.version },
+    {
+      positionStatus: "FLAT",
+      openQuantity: null,
+      openEntryPrice: null,
+      openEntryCost: null,
+      lastEntryAt: null,
+      lastExecutionAt: new Date().toISOString(),
+      tradeCountWindow: p.tradeCountWindow + 1,
+      totalLossWindow: lossWindow,
+      windowStart: p.windowStart ?? new Date().toISOString(),
     }
-  } else {
-    state.consecutiveLosses = 0
-  }
-  if (state.realizedPnlUsd <= -DAILY_LOSS_LIMIT_USD) {
-    const until = Date.now() + 24 * 60 * 60 * 1000
-    state.pausedUntil = Math.max(state.pausedUntil, until)
-    log(`Daily loss limit hit (realized≈$${state.realizedPnlUsd.toFixed(2)}). Paused until ${new Date(state.pausedUntil).toISOString()}`)
-  }
+  )
+  log(`[risk-window] symbol=${pair} trades=${p.tradeCountWindow + 1} lossWindow=$${lossWindow.toFixed(4)}`)
 }
 
 async function monitorPositions() {
-  if (isPaused()) return
-  rollDay()
-  for (const [pair, p] of [...state.open.entries()]) {
-    const age = Date.now() - p.openedAt
+  if (!(await startupSafeToResume())) return
+  const userId = daemonUserId()
+  if (!userId) return
+  for (const sym of symbols) {
+    const pair = `${sym}USDT`
+    const p = await runtimeForPair(pair, userId)
+    if (p.positionStatus !== "LONG" || !p.lastEntryAt || !p.openEntryPrice) continue
+    const age = Date.now() - new Date(p.lastEntryAt).getTime()
     let price: number
     try {
       price = await fetchSpotPrice(pair)
@@ -325,11 +345,11 @@ async function monitorPositions() {
       await closeLong(pair, "max_hold_time")
       continue
     }
-    if (price >= p.takeProfit) {
+    if (price >= p.openEntryPrice * (1 + TP_PCT / 100)) {
       await closeLong(pair, "take_profit")
       continue
     }
-    if (price <= p.stopLoss) {
+    if (price <= p.openEntryPrice * (1 - SL_PCT / 100)) {
       await closeLong(pair, "stop_loss")
       continue
     }
@@ -343,23 +363,50 @@ async function monitorPositions() {
 }
 
 async function analysisCycle() {
-  rollDay()
+  if (!(await startupSafeToResume())) return
+  const userId = daemonUserId()
+  if (!userId) {
+    log("NEXUS_EXPERT_FALLBACK_USER_ID missing")
+    return
+  }
+  const lease = await acquireOrchestrationLease({
+    leaseKey: "auto-trader-daemon:global",
+    workerId,
+    ttlMs: Math.max(120_000, ANALYSIS_MS * 2),
+  })
+  if (!lease.acquired) {
+    log(`[worker-takeover] leaseOwner=${lease.ownerId}`)
+    return
+  }
+  await heartbeatOrchestrationLease({
+    leaseKey: "auto-trader-daemon:global",
+    workerId,
+    ttlMs: Math.max(120_000, ANALYSIS_MS * 2),
+  })
+
   if (process.env.AUTO_TRADER_ENABLED !== "true") {
     log("AUTO_TRADER_ENABLED is not true — idle")
     return
   }
-  if (isPaused()) {
-    log(`Paused until ${new Date(state.pausedUntil).toISOString()}`)
-    return
+
+  let openCount = 0
+  let exposure = 0
+  let totalLossWindow = 0
+  for (const sym of symbols) {
+    const pair = `${sym}USDT`
+    const rt = await runtimeForPair(pair, userId)
+    if (rt.positionStatus === "LONG") {
+      openCount += 1
+      exposure += rt.openEntryCost ?? 0
+    }
+    totalLossWindow += rt.totalLossWindow
   }
-  if (state.realizedPnlUsd <= -DAILY_LOSS_LIMIT_USD) {
-    state.pausedUntil = Date.now() + 24 * 60 * 60 * 1000
-    log("Daily loss limit — pausing 24h")
+  if (totalLossWindow >= DAILY_LOSS_LIMIT_USD) {
+    log(`loss window reached $${totalLossWindow.toFixed(2)} (limit $${DAILY_LOSS_LIMIT_USD})`)
     return
   }
 
   for (const sym of symbols) {
-    if (isPaused()) break
     const pair = `${sym}USDT`
     let fused: { action: string; confidence: number } | null = null
     try {
@@ -374,7 +421,8 @@ async function analysisCycle() {
 
     if (confidence <= CONF_MIN || action === "HOLD") continue
 
-    const hasLong = state.open.has(pair)
+    const runtime = await runtimeForPair(pair, userId)
+    const hasLong = runtime.positionStatus === "LONG"
 
     if (action === "SELL") {
       if (hasLong) await closeLong(pair, "signal_sell_exit")
@@ -387,17 +435,19 @@ async function analysisCycle() {
         log(`${pair} BUY skipped — already long`)
         continue
       }
-      if (state.open.size >= MAX_POSITIONS) {
+      if (openCount >= MAX_POSITIONS) {
         log(`BUY skipped — max positions ${MAX_POSITIONS}`)
         continue
       }
       const spend = pickSpendUsd()
-      if (totalExposureUsd() + spend > MAX_EXPOSURE_USD) {
+      if (exposure + spend > MAX_EXPOSURE_USD) {
         log(`BUY skipped — would exceed exposure $${MAX_EXPOSURE_USD}`)
         continue
       }
       try {
         await openLong(pair, spend)
+        openCount += 1
+        exposure += spend
       } catch (e) {
         log(`OPEN exception ${pair}: ${e instanceof Error ? e.message : String(e)}`)
       }

@@ -1,9 +1,11 @@
-import { phase2Store } from "@/lib/expert/phase2-store"
+import { listChatMessagesForSession, phase2Store } from "@/lib/expert/phase2-store"
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const sessionId = searchParams.get("sessionId")
   if (!sessionId) return new Response(JSON.stringify({ error: "sessionId required" }), { status: 400 })
+
+  await listChatMessagesForSession(sessionId)
 
   const encoder = new TextEncoder()
   let intervalId: ReturnType<typeof setInterval> | undefined

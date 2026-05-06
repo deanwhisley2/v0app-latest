@@ -13,12 +13,17 @@ model AnalysisHistory {
   symbol        String
   timeWindow    Int
   action        String
+  /// Legacy transitional field. New writes should treat this as canonical calibrated confidence.
   confidence    Int
+  rawConfidence Float?
+  calibratedConfidence Float?
+  confidenceExplanation Json?
   reasons       String[]
   entryPrice    Float?
   timestamp     DateTime @default(now())
   tradeExecuted Boolean  @default(false)
   tradeResult   Json?
+  ttlSeconds    Int?
 }
 
 model NotificationRecord {
@@ -59,4 +64,609 @@ model TradeOrder {
   status      String
   createdAt   DateTime @default(now())
   filledAt    DateTime?
+}
+
+model TradeMemory {
+  id                   String   @id @default(cuid())
+  createdAt            DateTime @default(now())
+  symbol               String
+  marketRegime         String
+  decision             String
+  rawConfidence        Float?
+  calibratedConfidence Float?
+  signalStreak         Int?
+  kalmanScore          Float?
+  liquidityScore       Float?
+  sentimentScore       Float?
+  raceScore            Float?
+  entryPrice           Float?
+  exitPrice            Float?
+  quantity             Float?
+  pnlUsd               Float?
+  holdDurationMs       BigInt?
+  wasWin               Boolean?
+  cooldownActive       Boolean?
+  notes                String?
+  analysisId           String?
+  sessionId            String?
+}
+
+model PositionState {
+  id        String   @id @default(cuid())
+  userId    String
+  symbol    String
+  sessionId String?
+  status    String
+  quantity  Float?
+  entryPrice Float?
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, symbol])
+}
+
+model CooldownState {
+  id              String   @id @default(cuid())
+  userId          String
+  symbol          String
+  cooldownUntil   DateTime?
+  pauseUntil      DateTime?
+  lastExecutionAt DateTime?
+  tradeCountWindow Int?
+  tradeWindowStart DateTime?
+  version         Int      @default(1)
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, symbol])
+}
+
+model RiskState {
+  id               String   @id @default(cuid())
+  userId           String
+  dayKey           String
+  realizedPnlUsd   Float    @default(0)
+  consecutiveLosses Int     @default(0)
+  tradeCount       Int      @default(0)
+  pauseUntil       DateTime?
+  version          Int      @default(1)
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, dayKey])
+}
+
+model ExecutionState {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  userId    String
+  symbol    String
+  status    String
+  lastError String?
+  reconciliationStatus String? @default("HEALTHY")
+  lastReconciledAt DateTime?
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+}
+
+model EngineRuntimeStateEvent {
+  id        String   @id
+  createdAt DateTime @default(now())
+  userId    String
+  symbol    String
+  sessionId String?
+  stateType String
+  transition String
+  details   Json?
+}
+
+model ExecutionLock {
+  lockId     String   @id
+  ownerId    String
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+}
+
+model ExecutionIdempotency {
+  eventKey  String   @id
+  userId    String
+  symbol    String
+  sessionId String?
+  status    String
+  response  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ExchangeReconciliationLog {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  userId             String
+  sessionId          String
+  symbol             String
+  severity           String
+  category           String
+  dbOrderId          String?
+  exchangeOrderId    String?
+  divergence         String
+  actionTaken        String?
+  recoveryStatus     String
+  details            Json?
+}
+
+model StartupRecoveryState {
+  id                 String   @id @default(cuid())
+  scope              String   @unique
+  status             String
+  reason             String?
+  lastRunAt          DateTime?
+  lastCompletedAt    DateTime?
+  unresolvedCount    Int      @default(0)
+  details            Json?
+  updatedAt          DateTime @updatedAt
+}
+
+model DaemonSymbolState {
+  id                String   @id @default(cuid())
+  daemonType        String
+  userId            String
+  symbol            String
+  positionStatus    String   @default("FLAT")
+  openSessionId     String?
+  openQuantity      Float?
+  openEntryPrice    Float?
+  openEntryCost     Float?
+  streakAction      String?
+  streakCount       Int      @default(0)
+  streakUpdatedAt   DateTime?
+  lastExecutionAt   DateTime?
+  lastEntryAt       DateTime?
+  tradeCountWindow  Int      @default(0)
+  totalLossWindow   Float    @default(0)
+  windowStart       DateTime?
+  version           Int      @default(1)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([daemonType, userId, symbol])
+}
+
+model OrchestrationLease {
+  leaseKey    String   @id
+  ownerId     String
+  heartbeatAt DateTime @default(now())
+  expiresAt   DateTime
+}
+
+model EngineGovernanceState {
+  id                       String   @id @default(cuid())
+  scope                    String   @unique
+  mode                     String   @default("NORMAL")
+  healthState              String   @default("HEALTHY")
+  reason                   String?
+  maxPortfolioExposureUsd  Float    @default(100)
+  maxSymbolExposureUsd     Float    @default(30)
+  maxActiveSessions        Int      @default(20)
+  maxConcurrentLiquidations Int     @default(5)
+  maxDailyLossUsd          Float    @default(20)
+  marketRegime             String   @default("TRENDING")
+  systemicRiskState        String   @default("NORMAL")
+  effectiveExposureMultiplier Float @default(1)
+  correlationUncertainty   Float    @default(0.2)
+  updatedAt                DateTime @updatedAt
+}
+
+model GovernanceApprovalLog {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  workerId         String
+  lane             String
+  userId           String
+  symbol           String
+  action           String
+  status           String
+  reason           String?
+  governanceMode   String
+  healthState      String
+  exposureSnapshot Json?
+  details          Json?
+}
+
+model AssetCorrelationState {
+  id                 String   @id @default(cuid())
+  baseSymbol         String
+  relatedSymbol      String
+  cluster            String
+  correlation        Float
+  betaWeight         Float    @default(1)
+  volatilityWeight   Float    @default(1)
+  updatedAt          DateTime @updatedAt
+
+  @@unique([baseSymbol, relatedSymbol])
+}
+
+model LiveStructureState {
+  id                   String   @id @default(cuid())
+  scope                String   @unique
+  marketRegime         String
+  systemicRiskState    String
+  volatilityScore      Float
+  liquidityStressScore Float
+  correlationScore     Float
+  regimeConfidence     Float
+  transitionFrom       String?
+  transitionAt         DateTime?
+  details              Json?
+  updatedAt            DateTime @updatedAt
+}
+
+model MarketStructureSnapshot {
+  id                   String   @id @default(cuid())
+  createdAt            DateTime @default(now())
+  scope                String
+  marketRegime         String
+  systemicRiskState    String
+  volatilityScore      Float
+  liquidityStressScore Float
+  correlationScore     Float
+  details              Json?
+}
+
+model RegimePerformanceSnapshot {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  userId             String
+  marketRegime       String
+  trades             Int
+  winRate            Float
+  avgPnlUsd          Float
+  avgHoldDurationMs  Float
+  confidenceReliability Float
+  details            Json?
+}
+
+model GovernanceEffectivenessSnapshot {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  userId            String
+  approvals         Int
+  denials           Int
+  denialRate        Float
+  blockedWouldBeWinRate Float?
+  approvedLossRate  Float?
+  details           Json?
+}
+
+model ExecutionQualitySnapshot {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  userId            String
+  avgFillLatencyMs  Float
+  avgQuotePerSecond Float?
+  stressPenalty     Float
+  details           Json?
+}
+
+model ConfidenceAuditSnapshot {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  userId                String
+  sampleSize            Int
+  highConfidenceLosses  Int
+  lowConfidenceWins     Int
+  reliabilityError      Float
+  byRegime              Json?
+}
+
+model BehavioralBaseline {
+  id          String   @id @default(cuid())
+  userId      String
+  windowDays  Int      @default(14)
+  metrics     Json
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, windowDays])
+}
+
+model StabilitySnapshot {
+  id                      String   @id @default(cuid())
+  createdAt               DateTime @default(now())
+  userId                  String
+  driftLevel              String
+  stabilityPressure       Float
+  regimeInstabilityScore  Float
+  executionConsistencyScore Float
+  baselineMetrics         Json?
+  currentMetrics          Json?
+  details                 Json?
+}
+
+model StabilityPressureHistory {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  userId            String
+  stabilityPressure Float
+  driftLevel        String
+  source            String?
+}
+
+model DriftEvent {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  userId         String
+  subsystem      String
+  driftLevel     String
+  baselineValue  Float?
+  currentValue   Float?
+  deltaRatio     Float?
+  reason         String?
+  details        Json?
+}
+
+model DriftDetectionState {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  driftLevel        String
+  stabilityPressure Float
+  details           Json?
+  updatedAt         DateTime @updatedAt
+}
+
+/// Future adaptation proposals — never applied by automation in this phase; evaluation-only.
+model AdaptationProposal {
+  id                     String    @id @default(cuid())
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  userId                 String
+  status                 String
+  subsystem              String
+  parameterKey           String
+  currentValueSnapshot   Json?
+  proposedValue          Json
+  expectedImprovement    String?
+  evidence               Json?
+  stabilityImpactEstimate Json?
+  rollbackPlan           String?
+  evaluatorConfidence    Float?
+  evaluationVerdict      String?
+  evaluationDetails      Json?
+  rejectionReason        String?
+  reviewedAt             DateTime?
+}
+
+model RollbackCheckpoint {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  userId       String
+  label        String
+  proposalId   String?
+  snapshot     Json
+}
+
+model EvolutionAuditEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String
+  proposalId String?
+  eventType  String
+  details    Json?
+}
+
+/// Reusable in-memory governance override templates — never synced to EngineGovernanceState automatically.
+model SandboxGovernanceProfile {
+  id                   String   @id @default(cuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  userId               String
+  label                String
+  governanceOverrides  Json
+  notes                String?
+}
+
+/// Recorded sandbox / shadow / counterfactual run — observational persistence only (no promotion to prod).
+model SimulationRun {
+  id                          String    @id @default(cuid())
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  userId                      String
+  symbol                      String
+  mode                        String
+  replayFrom                  DateTime?
+  replayTo                    DateTime?
+  proposalId                  String?
+  sandboxProfileId            String?
+  baselineGovernanceFingerprint String?
+  inputSnapshot               Json
+  shadowExecutionResult       Json?
+  counterfactualComparison    Json?
+  adaptationSimulationSummary Json?
+  simulationReliability       Json?
+}
+
+/// Multi-world comparative shadow evaluation — persists fitness + survivability aggregates only.
+model ComparativeSimulationRun {
+  id                       String    @id @default(cuid())
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  userId                   String
+  symbol                   String
+  suiteLabel               String
+  replayFrom               DateTime?
+  replayTo                 DateTime?
+  proposalId               String?
+  sandboxProfileId         String?
+  baselineRealityPnlUsd    Float
+  worldsDefinition         Json
+  perWorldResults          Json
+  evolutionFitnessSnapshot Json
+  survivabilityProfile     Json
+  crossWorldComparison     Json
+  metaSimulationReliability Json
+  stressScenarioResults    Json
+}
+
+/// Long-horizon temporal evolution evaluation — era-sliced sandbox + structural rotation (observational only).
+model TemporalEvolutionRun {
+  id                         String   @id @default(cuid())
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  userId                     String
+  symbol                     String
+  suiteLabel                 String
+  replayFrom                 DateTime?
+  replayTo                   DateTime?
+  proposalId                 String?
+  sandboxProfileId           String?
+  eraSplitMode               String
+  eraStrideDays              Int?
+  erasDefinition             Json
+  perEraResults              Json
+  longHorizonFitnessSnapshot Json
+  evolutionPersistenceRecord Json
+  structuralCycleStressSummary Json
+  temporalSurvivabilityProfile Json
+  temporalReliability        Json
+}
+
+/// Recursive meta-governance assessment snapshot (supervises adaptation process only).
+model MetaGovernanceSnapshot {
+  id                          String   @id @default(cuid())
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  userId                      String
+  supervisoryWindowDays       Int
+  metaStabilityScore          Float
+  adaptationDisciplineProfile Json
+  constitutionalIntegrityStatus Json
+  recursivePressure           Json
+  supervisorySkepticismHealth Json
+  authoritySegmentation       Json
+  rollbackHealth              Json
+  rawSignals                  Json
+}
+
+/// Discrete supervisory events (typically WARN/ALERT recursive-pressure flags).
+model MetaGovernanceEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String
+  snapshotId String?
+  severity   String
+  category   String
+  eventKey   String
+  details    Json?
+}
+
+/// Pluralistic cognitive council snapshot (specialist debate + diversity metrics; observational only).
+model PluralisticCognitiveSnapshot {
+  id                          String   @id @default(cuid())
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  userId                      String
+  cognitiveWindowDays         Int
+  metaStabilityCorrelation    Float
+  metaSnapshotId              String?
+  disagreementStabilityScore  Float
+  epistemicDiversityHealthScore Float
+  specialistAssessments       Json
+  governanceDebate            Json
+  cognitiveAuthorityBalance   Json
+  diversityDiagnostics        Json
+  disagreementIntegrityScore  Float
+  metaGovernanceSummary       Json
+}
+
+/// Council events (diversity warnings, adversarial challenge records).
+model PluralisticGovernanceEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String
+  snapshotId String?
+  severity   String
+  category   String
+  eventKey   String
+  details    Json?
+}
+
+/// Institutional triad: epistemic memory + opportunity balance + anti-concentration (advisory payloads only).
+model InstitutionalCognitiveSnapshot {
+  id                            String   @id @default(cuid())
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  userId                        String
+  assessmentWindowDays          Int
+  epistemicInstitutionalMemory   Json
+  opportunitySurvivabilityBalance Json
+  antiConcentrationEquilibrium    Json
+  epistemicMemoryIndex          Float
+  opportunityBalanceIndex       Float
+  constitutionalEquilibriumIndex Float
+  pluralisticCouncilRef         String?
+}
+
+model InstitutionalGovernanceEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String
+  snapshotId String?
+  phase      String
+  severity   String
+  category   String
+  eventKey   String
+  details    Json?
+}
+
+/// Institutional indices vs execution-grounding artefacts (market-truth calibration; advisory).
+model EpistemicCalibrationSnapshot {
+  id                          String   @id @default(cuid())
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  userId                      String
+  calibrationWindowDays       Int
+  institutionalIndicesSummary Json
+  executionRealitySummary     Json
+  marketTruthCorrelation      Json
+  realityDivergence           Json
+  antiSelfReferentialSafeguards Json
+  executionGroundingState     Json
+  epistemicCalibrationIndex     Float
+  realityGroundingScore       Float
+  institutionalHumilityScore  Float
+}
+
+model EpistemicCalibrationEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String
+  snapshotId String?
+  severity   String
+  category   String
+  eventKey   String
+  details    Json?
+}
+
+/// Probabilistic causal framing over calibration outputs — not deterministic causal ID.
+model CausalGovernanceSnapshot {
+  id                            String   @id @default(cuid())
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  userId                        String
+  causalWindowDays              Int
+  counterfactualGovernanceAnalysis Json
+  probabilisticTruthState       Json
+  attributionUncertaintyState   Json
+  antiOverfittingState          Json
+  marketRealityCausalAlignment  Json
+  causalDivergenceState         Json
+  causalGovernanceIndex         Float
+  probabilisticHumilityScore    Float
+  epistemicCalibrationSummary   Json
+}
+
+model CausalGovernanceEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String
+  snapshotId String?
+  severity   String
+  category   String
+  eventKey   String
+  details    Json?
 }

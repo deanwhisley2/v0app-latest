@@ -2,6 +2,8 @@ export interface AnalyzeRequest {
   symbol: string
   timeWindowSeconds: number
   useNex: boolean
+  /** When true, runs time-bound analysis in FAST mode (short TTL on stored analysis). */
+  fastMode?: boolean
   cancelToken?: string
 }
 
@@ -10,7 +12,22 @@ export interface AnalyzeResponse {
   status: "processing" | "completed" | "cancelled"
   result?: {
     action: "BUY" | "SELL" | "HOLD"
+    /** Canonical confidence for UI + execution authority (calibrated, uncertainty-aware). */
     confidence: number
+    /** Pre-calibration fusion/model output; research/debug only, never execution-authoritative. */
+    rawConfidence?: number
+    /** Post-calibration confidence; execution-authoritative. */
+    calibratedConfidence?: number
+    /** Presentation value derived from calibratedConfidence; never used for execution logic. */
+    uiDisplayConfidence?: number
+    confidenceExplanation?: {
+      raw: number
+      historicalFactor: number
+      regimePenalty: number
+      recentPenalty: number
+      final: number
+      sampleSize: number
+    }
     reasons: string[]
     entryPrice?: number
   }

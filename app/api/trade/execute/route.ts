@@ -3,6 +3,7 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { assertRealTradeApiSecret } from "@/lib/server/trade-api-auth"
 import { commanderDecide, executeOrder } from "@/lib/strategy-commander"
 import type { TradeSignal } from "@/lib/trading-signal"
+import { requestGovernanceApproval } from "@/lib/global-execution-governor"
 
 async function fetchSpotPrice(symbol: string): Promise<number> {
   const u = new URL("https://api.binance.com/api/v3/ticker/price")
@@ -56,6 +57,21 @@ export async function POST(request: NextRequest) {
   }
 
   const pair = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`
+  const governance = await requestGovernanceApproval({
+    workerId: `api_trade_${Date.now()}`,
+    lane: "api-trade-execute",
+    userId: process.env.NEXUS_EXPERT_FALLBACK_USER_ID?.trim() || "api-trade-user",
+    symbol: pair,
+    action: action as "BUY" | "SELL",
+    requestedQuoteUsd: action === "BUY" ? Number(body.quoteSpendUsd ?? 0) : undefined,
+  })
+  if (!governance.approved) {
+    return NextResponse.json(
+      { ok: false, error: `Governance denied (${governance.status})${governance.reason ? `: ${governance.reason}` : ""}` },
+      { status: 409 }
+    )
+  }
+
   let entry: number
   try {
     entry = typeof body.entry === "number" ? body.entry : Number(body.entry)

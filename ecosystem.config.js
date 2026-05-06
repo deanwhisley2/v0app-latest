@@ -8,7 +8,8 @@ module.exports = {
       name: "nexus",
       cwd: __dirname,
       script: "npm",
-      args: "start",
+      /** Reconciliation + gate before Next binds PORT — requires NEXUS_EXPERT_FALLBACK_USER_ID / Supabase keys in env. */
+      args: "run start:with-recovery",
       env: {
         NODE_ENV: "production",
       },

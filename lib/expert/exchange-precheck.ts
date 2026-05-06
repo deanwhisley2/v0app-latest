@@ -9,6 +9,30 @@ export type ExchangePreCheckResult = {
   minQty?: number
 }
 
+function hasSpotPermission(permissions: string[] | undefined): boolean {
+  if (!Array.isArray(permissions)) return false
+  return permissions.some((p) => p === "SPOT" || p.startsWith("TRD_GRP_"))
+}
+
+function resolveMinNotional(symbolFilters: Array<{ filterType: string; minNotional?: string }> | undefined): {
+  value: number
+  source: "NOTIONAL" | "MIN_NOTIONAL" | "fallback"
+} {
+  const notionalFilter = symbolFilters?.find((f) => f.filterType === "NOTIONAL")
+  const minNotionalFromNotional = Number.parseFloat(notionalFilter?.minNotional ?? "")
+  if (Number.isFinite(minNotionalFromNotional)) {
+    return { value: minNotionalFromNotional, source: "NOTIONAL" }
+  }
+
+  const minNotionalFilter = symbolFilters?.find((f) => f.filterType === "MIN_NOTIONAL")
+  const minNotionalFromLegacy = Number.parseFloat(minNotionalFilter?.minNotional ?? "")
+  if (Number.isFinite(minNotionalFromLegacy)) {
+    return { value: minNotionalFromLegacy, source: "MIN_NOTIONAL" }
+  }
+
+  return { value: 10, source: "fallback" }
+}
+
 export async function validateExchange(
   binance: BinanceCreds,
   symbol: string,
@@ -23,7 +47,10 @@ export async function validateExchange(
     binanceAccountInfo(binance.apiKey, binance.apiSecret),
     binanceExchangeInfo(symbol),
   ])
-  const spotTradingEnabled = account.permissions?.includes("SPOT") ?? false
+  const spotTradingEnabled = hasSpotPermission(account.permissions)
+  console.log(
+    `[exchange-precheck] permissions=${JSON.stringify(account.permissions ?? [])} · hasSpotPermission=${spotTradingEnabled}`
+  )
   if (!spotTradingEnabled) {
     throw new Error("EXCHANGE_SPOT_TRADING_DISABLED")
   }
@@ -39,10 +66,14 @@ export async function validateExchange(
     throw new Error("SYMBOL_NOT_TRADABLE")
   }
   const lotSizeFilter = symbolInfo.filters?.find((f) => f.filterType === "LOT_SIZE")
-  const minNotionalFilter = symbolInfo.filters?.find((f) => f.filterType === "MIN_NOTIONAL")
-  const minNotional = Number.parseFloat(minNotionalFilter?.minNotional ?? "10")
+  const marketLotSizeFilter = symbolInfo.filters?.find((f) => f.filterType === "MARKET_LOT_SIZE")
+  const resolvedNotional = resolveMinNotional(symbolInfo.filters)
+  const minNotional = resolvedNotional.value
   const minQty = Number.parseFloat(lotSizeFilter?.minQty ?? "0")
   const stepSize = Number.parseFloat(lotSizeFilter?.stepSize ?? "0")
+  console.log(
+    `[exchange-precheck] filters=${JSON.stringify(symbolInfo.filters ?? [])} · notionalSource=${resolvedNotional.source} · minNotional=${minNotional} · lotSize(minQty=${lotSizeFilter?.minQty ?? "n/a"},stepSize=${lotSizeFilter?.stepSize ?? "n/a"}) · marketLotSize(minQty=${marketLotSizeFilter?.minQty ?? "n/a"},stepSize=${marketLotSizeFilter?.stepSize ?? "n/a"})`
+  )
 
   if (amount < minAmount) {
     throw new Error(`MIN_ORDER_SIZE: Need at least $${minAmount}`)

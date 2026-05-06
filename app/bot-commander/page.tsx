@@ -38,10 +38,16 @@ export default function BotCommanderPage() {
     }
   }
 
-  const notifyBrowser = (analysisId: string, symbol: string, action: string, confidence: number) => {
+  const notifyBrowser = (
+    analysisId: string,
+    symbol: string,
+    action: string,
+    calibratedConfidence: number,
+    rawConfidence?: number
+  ) => {
     if (typeof window === "undefined" || !("Notification" in window)) return
     const title = `Analysis Complete: ${symbol}`
-    const body = `${action} with ${confidence}% confidence`
+    const body = `${action} with ${calibratedConfidence}% calibrated confidence${typeof rawConfidence === "number" ? ` (raw ${rawConfidence}%)` : ""}`
     const spawn = () => {
       const n = new Notification(title, { body, tag: `analysis-${analysisId}` })
       n.onclick = () => {
@@ -107,20 +113,38 @@ export default function BotCommanderPage() {
         }
       }
       const r = data.result as {
-        fusedDecision?: { action: string; confidence: number; reasons: string[]; grokInfluenced: boolean }
+        fusedDecision?: {
+          action: string
+          confidence: number
+          rawConfidence?: number
+          calibratedConfidence?: number
+          uiDisplayConfidence?: number
+          confidenceExplanation?: {
+            raw: number
+            historicalFactor: number
+            regimePenalty: number
+            recentPenalty: number
+            final: number
+            sampleSize: number
+          }
+          reasons: string[]
+          grokInfluenced: boolean
+        }
         grokReceived?: boolean
         totalTimeMs?: number
         fastPaths?: { orderBookImbalance?: number; fundingRateAnomaly?: number }
       }
       const fd = r.fusedDecision
       if (fd) {
+        const calibrated = fd.calibratedConfidence ?? fd.confidence
+        const raw = typeof fd.rawConfidence === 'number' ? fd.rawConfidence : undefined
         const analysisId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
         const nowIso = new Date().toISOString()
         saveExpertAnalysis({
           id: analysisId,
           symbol,
           action: fd.action as "BUY" | "SELL" | "HOLD",
-          confidence: fd.confidence,
+          confidence: calibrated,
           timestamp: nowIso,
           durationSeconds: timeWindowSeconds,
           completedAt: nowIso,
@@ -129,29 +153,31 @@ export default function BotCommanderPage() {
           riskAssessment:
             fd.action === "HOLD"
               ? "Unsafe: avoid entry until signal improves."
-              : fd.confidence >= 70
+              : calibrated >= 70
                 ? "Safe to consider entry with standard safeguards."
                 : "Risky: proceed only with reduced size and strict stop-loss.",
         })
         addNotification({
           type: "analysis",
           title: `Analysis Complete: ${symbol}`,
-          message: `${fd.action} with ${fd.confidence}% confidence`,
+          message: `${fd.action} with ${calibrated}% calibrated confidence${typeof raw === "number" ? ` (raw ${raw}%)` : ""}`,
           nav: { kind: "expert-analysis", analysisId },
           analysis: {
             analysisId,
             symbol,
             action: fd.action as "BUY" | "SELL" | "HOLD",
-            confidence: fd.confidence,
+            confidence: calibrated,
             timestamp: nowIso,
           },
         })
         playCompleteSound()
-        notifyBrowser(analysisId, symbol, fd.action, fd.confidence)
+        notifyBrowser(analysisId, symbol, fd.action, calibrated, raw)
       }
       const lines = [
         `Symbol ${symbol} · window ${timeWindowSeconds}s · wall ${r.totalTimeMs ?? '?'}ms`,
-        fd ? `Fused: ${fd.action} (${fd.confidence}% conf, Grok-influenced: ${fd.grokInfluenced})` : 'No fused decision',
+        fd
+          ? `Fused: ${fd.action} (${fd.calibratedConfidence ?? fd.confidence}% calibrated${typeof fd.rawConfidence === "number" ? `, raw ${fd.rawConfidence}%` : ""}, Grok-influenced: ${fd.grokInfluenced})`
+          : 'No fused decision',
         `Grok in time: ${r.grokReceived ? 'yes' : 'no'}`,
         fd?.reasons?.length ? `Reasons:\n- ${fd.reasons.join('\n- ')}` : '',
       ].filter(Boolean)

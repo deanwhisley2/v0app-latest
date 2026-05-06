@@ -7,6 +7,8 @@
     "dev:webpack": "next dev --webpack --port 3000",
     "build": "next build",
     "start": "next start",
+    "start:with-recovery": "npx tsx scripts/reconcile-on-start.ts && next start",
+    "operational:smoke": "npx tsx scripts/operational-smoke-check.ts",
     "lint": "eslint .",
     "test-trade": "npx tsx scripts/test-trade-comparison.ts",
     "test-trade-safe": "npx tsx scripts/test-trade-with-safety.ts",

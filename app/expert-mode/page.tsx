@@ -11,7 +11,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 type AnalysisResult = {
   analysisId: string
   status: "processing" | "completed" | "cancelled"
-  result?: { action: "BUY" | "SELL" | "HOLD"; confidence: number; reasons: string[]; entryPrice?: number }
+  result?: {
+    action: "BUY" | "SELL" | "HOLD"
+    confidence: number
+    rawConfidence?: number
+    calibratedConfidence?: number
+    confidenceExplanation?: {
+      raw: number
+      historicalFactor: number
+      regimePenalty: number
+      recentPenalty: number
+      final: number
+      sampleSize: number
+    }
+    reasons: string[]
+    entryPrice?: number
+  }
 }
 
 type TradeOrder = {
@@ -46,10 +61,12 @@ function ExpertModeContent() {
   const params = useSearchParams()
   const initialSymbol = params.get("symbol")?.toUpperCase() ?? "BTCUSDT"
   const [symbol, setSymbol] = useState(initialSymbol)
-  const [timeWindowMinutes, setTimeWindowMinutes] = useState(5)
+  const [timeWindowMinutes, setTimeWindowMinutes] = useState(1)
   const [useNex, setUseNex] = useState(true)
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  /** Shown under Analysis — API errors, sign-in, etc. (not mixed with trade session status). */
+  const [analysisNotice, setAnalysisNotice] = useState<string | null>(null)
 
   const [manualConfig, setManualConfig] = useState({
     buyPrice: 0,
@@ -77,7 +94,10 @@ function ExpertModeContent() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch("/api/expert/sessions", { cache: "no-store" })
+        const res = await fetch("/api/expert/sessions", {
+          cache: "no-store",
+          credentials: "include",
+        })
         if (!res.ok || cancelled) return
         const data = (await res.json()) as {
           sessions?: Array<{ id: string; status: string; endTime?: string; startTime: string }>
@@ -106,33 +126,51 @@ function ExpertModeContent() {
 
   async function startAnalysis() {
     setAnalysisLoading(true)
+    setAnalysisNotice(null)
     setSessionStatus(null)
     const timeWindowSeconds = Math.max(60, Math.min(600, Math.floor(timeWindowMinutes * 60)))
-    const res = await fetch("/api/expert/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ symbol, timeWindowSeconds, useNex }),
-    })
-    const data = (await res.json()) as AnalysisResult & { error?: string; code?: string }
-    if (!res.ok) {
-      setSessionStatus(data.error ?? `Analysis failed (${res.status})`)
-      setResult(null)
-      setAnalysisLoading(false)
-      return
-    }
-    setResult(data)
-    setAnalysisLoading(false)
-    if (typeof window !== "undefined" && "Notification" in window && data.status === "completed") {
-      const spawn = () => new Notification(`Analysis Complete: ${symbol}`, { body: `${data.result?.action} with ${data.result?.confidence}% confidence` })
-      if (Notification.permission === "granted") spawn()
-      else if (Notification.permission !== "denied") void Notification.requestPermission().then((p) => p === "granted" && spawn())
-    }
     try {
-      const audio = new Audio("/sounds/analysis-complete.mp3")
-      void audio.play().catch(() => {})
-    } catch {
-      // ignore optional sound failure
+      const res = await fetch("/api/expert/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ symbol, timeWindowSeconds, useNex }),
+      })
+      let data: (AnalysisResult & { error?: string; code?: string }) | null = null
+      try {
+        data = (await res.json()) as AnalysisResult & { error?: string; code?: string }
+      } catch {
+        setAnalysisNotice(`Analysis failed: could not read response (${res.status}).`)
+        setResult(null)
+        return
+      }
+      if (!res.ok) {
+        const msg =
+          data.code === "UNAUTHORIZED" || res.status === 401
+            ? "Sign in required. Use Log in, then try Start Analysis again."
+            : data.error ?? `Analysis failed (HTTP ${res.status}).`
+        setAnalysisNotice(msg)
+        setResult(null)
+        return
+      }
+      setResult(data)
+      setAnalysisNotice(null)
+      if (typeof window !== "undefined" && "Notification" in window && data.status === "completed") {
+        const spawn = () => new Notification(`Analysis Complete: ${symbol}`, { body: `${data.result?.action} with ${data.result?.confidence}% confidence` })
+        if (Notification.permission === "granted") spawn()
+        else if (Notification.permission !== "denied") void Notification.requestPermission().then((p) => p === "granted" && spawn())
+      }
+      try {
+        const audio = new Audio("/sounds/analysis-complete.mp3")
+        void audio.play().catch(() => {})
+      } catch {
+        // ignore optional sound failure
+      }
+    } catch (e) {
+      setAnalysisNotice(e instanceof Error ? e.message : "Network error starting analysis.")
+      setResult(null)
+    } finally {
+      setAnalysisLoading(false)
     }
   }
 
@@ -224,6 +262,9 @@ function ExpertModeContent() {
 
       <Card className="space-y-3 p-4">
         <h2 className="font-semibold">Analysis</h2>
+        <p className="text-xs text-muted-foreground">
+          The server runs the full time window before returning (minimum 1 minute). Keep this tab open — &quot;Analyzing...&quot; is normal until it finishes.
+        </p>
         <div className="grid gap-3 md:grid-cols-3">
           <div>
             <Label>Symbol</Label>
@@ -243,11 +284,16 @@ function ExpertModeContent() {
             <Button type="button" variant={useNex ? "default" : "outline"} onClick={() => setUseNex((v) => !v)}>
               Nex {useNex ? "ON" : "OFF"}
             </Button>
-            <Button onClick={() => void startAnalysis()} disabled={analysisLoading}>
+            <Button type="button" onClick={() => void startAnalysis()} disabled={analysisLoading}>
               {analysisLoading ? "Analyzing..." : "Start Analysis"}
             </Button>
           </div>
         </div>
+        {analysisNotice && (
+          <p className="text-sm text-destructive" role="alert">
+            {analysisNotice}
+          </p>
+        )}
       </Card>
 
       <Card className="space-y-2 p-4">
@@ -258,8 +304,11 @@ function ExpertModeContent() {
             {result.result && (
               <div className="text-sm">
                 <p>
-                  Action: {result.result.action} ({result.result.confidence}%)
+                  Action: {result.result.action} ({result.result.confidence}% calibrated)
                 </p>
+                {typeof result.result.rawConfidence === "number" && (
+                  <p>Raw confidence: {result.result.rawConfidence}%</p>
+                )}
                 <ul className="list-disc pl-4">
                   {result.result.reasons.map((r) => (
                     <li key={r}>{r}</li>
@@ -289,7 +338,9 @@ function ExpertModeContent() {
               <Input placeholder="Repeat Count" type="number" value={manualConfig.repeatCount} onChange={(e) => setManualConfig((p) => ({ ...p, repeatCount: Number(e.target.value) }))} />
               <Input placeholder="Amount per Trade" type="number" value={manualConfig.amountPerTrade} onChange={(e) => setManualConfig((p) => ({ ...p, amountPerTrade: Number(e.target.value) }))} />
             </div>
-            <Button onClick={() => void executeManual()} disabled={!canExecute}>Start Manual Session</Button>
+            <Button type="button" onClick={() => void executeManual()} disabled={!canExecute}>
+              Start Manual Session
+            </Button>
           </TabsContent>
 
           <TabsContent value="nex" className="space-y-3 pt-3">
@@ -300,7 +351,9 @@ function ExpertModeContent() {
               <Input placeholder="Stop Loss %" type="number" value={nexConfig.stopLossPercent} onChange={(e) => setNexConfig((p) => ({ ...p, stopLossPercent: Number(e.target.value) }))} />
               <Input placeholder="Entry Delay (min)" type="number" value={nexConfig.entryDelayMinutes} onChange={(e) => setNexConfig((p) => ({ ...p, entryDelayMinutes: Number(e.target.value) }))} />
             </div>
-            <Button onClick={() => void executeNex()} disabled={!canExecute}>Schedule Nex Session</Button>
+            <Button type="button" onClick={() => void executeNex()} disabled={!canExecute}>
+              Schedule Nex Session
+            </Button>
           </TabsContent>
         </Tabs>
         {sessionStatus && <p className="mt-3 text-sm text-muted-foreground">{sessionStatus}</p>}

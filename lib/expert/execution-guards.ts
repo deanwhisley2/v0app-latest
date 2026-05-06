@@ -34,6 +34,15 @@ export class ExpertRouteError extends Error {
 
 type AnalysisRecord = NonNullable<Awaited<ReturnType<typeof getAnalysisById>>>
 
+function parseAnalysisTimestampMs(value: string): number {
+  // DB `timestamp` (without timezone) can be interpreted as local time by JS Date parsing.
+  // Treat timezone-less values as UTC to avoid false stale detections (e.g. ~3h offset).
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+  const normalized = hasTimezone ? value : `${value}Z`
+  const ms = new Date(normalized).getTime()
+  return Number.isFinite(ms) ? ms : Number.NaN
+}
+
 function normalizeSymbol(value: string): string {
   const clean = value.trim().toUpperCase()
   return clean.endsWith("USDT") ? clean : `${clean}USDT`
@@ -76,7 +85,6 @@ export function assertBinanceCredentials(creds: { apiKey?: string; apiSecret?: s
 
 export async function enforceAnalysisFreshness(
   analysisId: string,
-  maxAgeSeconds = 60,
   opts?: { userId?: string }
 ): Promise<AnalysisRecord> {
   const analysis = await getAnalysisById(analysisId)
@@ -90,7 +98,19 @@ export async function enforceAnalysisFreshness(
       403
     )
   }
-  const ageSeconds = (Date.now() - new Date(analysis.timestamp).getTime()) / 1000
+  const createdAtMs = parseAnalysisTimestampMs(analysis.timestamp)
+  if (!Number.isFinite(createdAtMs)) {
+    throw new ExpertRouteError(
+      ERROR_CODES.INVALID_REQUEST,
+      `INVALID_REQUEST: Analysis timestamp is invalid (${analysis.timestamp})`,
+      400
+    )
+  }
+  const ageSeconds = (Date.now() - createdAtMs) / 1000
+  const maxAgeSeconds = analysis.ttlSeconds ?? 60
+  console.log(
+    `[expert-execute] analysis freshness · id=${analysis.id} · createdAt=${analysis.timestamp} · ttlSeconds=${maxAgeSeconds} · ageSeconds=${Math.round(ageSeconds)}`
+  )
   if (ageSeconds > maxAgeSeconds) {
     throw new ExpertRouteError(
       ERROR_CODES.ANALYSIS_STALE,
@@ -101,10 +121,20 @@ export async function enforceAnalysisFreshness(
   if (analysis.action === "HOLD") {
     throw new ExpertRouteError(ERROR_CODES.ANALYSIS_HOLD, "ANALYSIS_HOLD: Cannot execute trade on HOLD signal.", 400)
   }
-  if (analysis.confidence < 65) {
+  // Confidence authority contract:
+  // - rawConfidence: model/fusion output for analytics/debug
+  // - calibratedConfidence: execution-authoritative confidence
+  // - legacy `confidence`: transitional fallback for old rows
+  const rawConfidence = analysis.rawConfidence ?? analysis.confidence
+  const calibratedConfidence = analysis.calibratedConfidence ?? analysis.confidence
+  const executionConfidence = calibratedConfidence ?? analysis.confidence
+  console.log(
+    `[confidence-authority] raw=${rawConfidence} calibrated=${calibratedConfidence} usedForExecution=${executionConfidence} source=${analysis.calibratedConfidence != null ? "calibratedConfidence" : "legacy-confidence"}`
+  )
+  if (executionConfidence < 65) {
     throw new ExpertRouteError(
       ERROR_CODES.ANALYSIS_LOW_CONFIDENCE,
-      `ANALYSIS_LOW_CONFIDENCE: ${analysis.confidence}% < 65% threshold.`,
+      `ANALYSIS_LOW_CONFIDENCE: ${executionConfidence}% < 65% threshold.`,
       400
     )
   }

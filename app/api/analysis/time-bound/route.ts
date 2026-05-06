@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
+import { calibrateConfidence } from "@/lib/confidence-calibration"
+import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/lib/market-state-authority"
 
 /**
  * Intentionally not gated by `NEXT_PUBLIC_DEV_LOCAL_ONLY`: fast paths only call
@@ -53,8 +55,35 @@ export async function POST(request: NextRequest) {
       )
     },
   })
+  const rawConfidence = result.fusedDecision.confidence
+  const liveMarket = await resolveAuthoritativeMarketState({
+    consumer: "api-time-bound",
+    minRefreshMs: 45_000,
+  })
+  const calibration = await calibrateConfidence({
+    symbol: result.symbol,
+    decision: result.fusedDecision.action,
+    rawConfidence,
+    marketRegime: regimeBucketForTradeMemory(liveMarket.marketRegime),
+    liveMarketRegimeForPenalty: liveMarket.degraded ? "UNKNOWN" : liveMarket.marketRegime,
+  })
+  const calibratedConfidence = calibration.final
+  result.fusedDecision.confidence = calibratedConfidence
 
-  return NextResponse.json({ success: true, result })
+  return NextResponse.json({
+    success: true,
+    result: {
+      ...result,
+      fusedDecision: {
+        ...result.fusedDecision,
+        confidence: calibratedConfidence,
+        rawConfidence,
+        calibratedConfidence,
+        uiDisplayConfidence: calibratedConfidence,
+        confidenceExplanation: calibration,
+      },
+    },
+  })
 }
 
 export async function GET(request: NextRequest) {

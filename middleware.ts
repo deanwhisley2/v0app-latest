@@ -1,21 +1,50 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
+import { createServerClient } from "@supabase/ssr"
 
 /**
- * When `NEXT_PUBLIC_DEV_LOCAL_ONLY=1`, skip all `/auth/*` screens → dashboard (no login UI).
+ * Refresh Supabase auth cookies on each request so App Router Route Handlers
+ * (Expert APIs, etc.) see `supabase.auth.getUser()` via `createRouteHandlerSupabaseClient`.
+ *
+ * When `NEXT_PUBLIC_DEV_LOCAL_ONLY=1`, `/auth/*` still redirects to `/dashboard` (no login UI).
  */
-export function middleware(request: NextRequest) {
-  if (process.env.NEXT_PUBLIC_DEV_LOCAL_ONLY !== "1") {
-    return NextResponse.next()
+export async function middleware(request: NextRequest) {
+  if (process.env.NEXT_PUBLIC_DEV_LOCAL_ONLY === "1") {
+    if (request.nextUrl.pathname.startsWith("/auth/")) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
   }
 
-  if (request.nextUrl.pathname.startsWith("/auth/")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+  let supabaseResponse = NextResponse.next({ request })
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
+  if (!url.trim() || !anonKey.trim()) {
+    return supabaseResponse
   }
 
-  return NextResponse.next()
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll()
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+        supabaseResponse = NextResponse.next({ request })
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        )
+      },
+    },
+  })
+
+  await supabase.auth.getUser()
+
+  return supabaseResponse
 }
 
 export const config = {
-  matcher: ["/auth/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 }

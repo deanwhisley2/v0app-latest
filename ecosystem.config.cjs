@@ -1,10 +1,14 @@
+/**
+ * Legacy server path preset. Prefer repo `ecosystem.config.js`:
+ * `npm run start:with-recovery` runs reconciliation before `next start`.
+ */
 module.exports = {
   apps: [
     {
       name: "nexus-pro",
       cwd: "/var/www/nexus-pro",
-      script: "node_modules/next/dist/bin/next",
-      args: "start -p 3000",
+      script: "npm",
+      args: "run start:with-recovery",
       instances: 1,
       exec_mode: "fork",
       autorestart: true,

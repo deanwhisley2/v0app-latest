@@ -7,6 +7,9 @@ const extraDevOrigins =
  * Next always allows `localhost` + `*.localhost`; add IPv4/IPv6 loopback and any LAN host you open in the browser.
  */
 const nextConfig = {
+  experimental: {
+    instrumentationHook: true,
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

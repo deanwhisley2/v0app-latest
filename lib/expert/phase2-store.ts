@@ -13,13 +13,29 @@ type AnalysisRow = {
   symbol: string
   timeWindow: number
   action: "BUY" | "SELL" | "HOLD"
+  /**
+   * Legacy transitional field: historically this carried raw confidence.
+   * New writes should treat this as canonical calibrated confidence for execution compatibility.
+   */
   confidence: number
+  rawConfidence?: number
+  calibratedConfidence?: number
+  confidenceExplanation?: {
+    raw: number
+    historicalFactor: number
+    regimePenalty: number
+    recentPenalty: number
+    final: number
+    sampleSize: number
+  }
   reasons: string[]
   entryPrice?: number
   timestamp: string
   tradeExecuted: boolean
   tradeResult?: unknown
   cancelled?: boolean
+  /** Max age (seconds) before execution rejects analysis as stale; see computeAnalysisTtlSeconds */
+  ttlSeconds?: number
 }
 
 type NotificationRow = {
@@ -78,6 +94,7 @@ function initJoelin(): JoelinCoin[] {
   }))
 }
 
+/** In-process read cache only — populated after successful DB writes or DB reads. */
 export const phase2Store =
   g.__phase2 ??
   (g.__phase2 = {
@@ -93,16 +110,13 @@ export function makeId(prefix: string): string {
   return `${prefix}_${randomUUID()}`
 }
 
-export function getUserId(): string {
-  // TODO: wire real auth identity from session.
-  return "demo-user"
-}
-
-function adminOrNull() {
+function requireAdmin() {
   try {
     return createAdminClient()
-  } catch {
-    return null
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("[phase2] DB_WRITE_FAILED: admin client unavailable:", msg)
+    throw new Error(`DB_WRITE_FAILED: ${msg}`)
   }
 }
 
@@ -113,196 +127,273 @@ export async function createAnalysis(data: {
   timeWindow: number
   action: "BUY" | "SELL" | "HOLD"
   confidence: number
+  rawConfidence?: number
+  calibratedConfidence?: number
+  confidenceExplanation?: {
+    raw: number
+    historicalFactor: number
+    regimePenalty: number
+    recentPenalty: number
+    final: number
+    sampleSize: number
+  }
   reasons: string[]
   entryPrice?: number
   tradeExecuted: boolean
+  ttlSeconds: number
 }) {
   const row: AnalysisRow = {
     ...data,
     timestamp: new Date().toISOString(),
   }
-  const admin = adminOrNull()
-  if (admin) {
-    const { error } = await admin.from("AnalysisHistory").insert({
-      id: row.id,
-      userId: row.userId,
-      symbol: row.symbol,
-      timeWindow: row.timeWindow,
-      action: row.action,
-      confidence: row.confidence,
-      reasons: row.reasons,
-      entryPrice: row.entryPrice ?? null,
-      tradeExecuted: row.tradeExecuted,
-    })
-    if (error) {
-      console.warn("[phase2] createAnalysis fallback:", error.message)
-      phase2Store.analyses.set(row.id, row)
-      return row
-    }
-    phase2Store.analyses.set(row.id, row)
-    return row
+  const admin = requireAdmin()
+  const { error } = await admin.from("AnalysisHistory").insert({
+    id: row.id,
+    userId: row.userId,
+    symbol: row.symbol,
+    timeWindow: row.timeWindow,
+    action: row.action,
+    confidence: row.confidence,
+    rawConfidence: row.rawConfidence ?? row.confidence,
+    calibratedConfidence: row.calibratedConfidence ?? row.confidence,
+    confidenceExplanation: row.confidenceExplanation ?? null,
+    reasons: row.reasons,
+    entryPrice: row.entryPrice ?? null,
+    tradeExecuted: row.tradeExecuted,
+    ttlSeconds: row.ttlSeconds,
+  })
+  if (error) {
+    console.error("[phase2] createAnalysis DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: AnalysisHistory insert — ${error.message}`)
   }
   phase2Store.analyses.set(row.id, row)
   return row
 }
 
 export async function getAnalysisById(id: string): Promise<AnalysisRow | null> {
-  const admin = adminOrNull()
-  if (admin) {
-    const { data, error } = await admin
-      .from("AnalysisHistory")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle()
-    if (!error && data) {
-      return {
-        id: data.id,
-        userId: data.userId,
-        symbol: data.symbol,
-        timeWindow: data.timeWindow,
-        action: data.action,
-        confidence: data.confidence,
-        reasons: data.reasons ?? [],
-        entryPrice: data.entryPrice ?? undefined,
-        timestamp: data.timestamp,
-        tradeExecuted: data.tradeExecuted ?? false,
-      }
-    }
+  const admin = requireAdmin()
+  const { data, error } = await admin
+    .from("AnalysisHistory")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) {
+    console.error("[phase2] getAnalysisById DB_READ_FAILED:", error.message)
+    throw new Error(`DB_READ_FAILED: AnalysisHistory select — ${error.message}`)
   }
-  return phase2Store.analyses.get(id) ?? null
+  if (!data) return null
+  const mapped: AnalysisRow = {
+    id: data.id,
+    userId: data.userId,
+    symbol: data.symbol,
+    timeWindow: data.timeWindow,
+    action: data.action,
+    confidence: data.confidence,
+    rawConfidence:
+      typeof data.rawConfidence === "number" && Number.isFinite(data.rawConfidence)
+        ? data.rawConfidence
+        : data.confidence,
+    calibratedConfidence:
+      typeof data.calibratedConfidence === "number" && Number.isFinite(data.calibratedConfidence)
+        ? data.calibratedConfidence
+        : data.confidence,
+    confidenceExplanation:
+      data.confidenceExplanation &&
+      typeof data.confidenceExplanation === "object" &&
+      typeof data.confidenceExplanation.final === "number"
+        ? data.confidenceExplanation
+        : undefined,
+    reasons: data.reasons ?? [],
+    entryPrice: data.entryPrice ?? undefined,
+    timestamp: data.timestamp,
+    tradeExecuted: data.tradeExecuted ?? false,
+    ttlSeconds:
+      typeof data.ttlSeconds === "number" && Number.isFinite(data.ttlSeconds)
+        ? data.ttlSeconds
+        : undefined,
+  }
+  phase2Store.analyses.set(id, mapped)
+  return mapped
 }
 
 export async function createNotification(row: NotificationRow) {
-  const admin = adminOrNull()
-  if (admin) {
-    const { error } = await admin.from("NotificationRecord").insert(row)
-    if (error) {
-      console.warn("[phase2] createNotification fallback:", error.message)
-    }
+  const admin = requireAdmin()
+  const { error } = await admin.from("NotificationRecord").insert(row)
+  if (error) {
+    console.error("[phase2] createNotification DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: NotificationRecord insert — ${error.message}`)
   }
   phase2Store.notifications.set(row.id, row)
 }
 
 export async function createSession(session: TradeSession) {
-  const admin = adminOrNull()
-  if (admin) {
-    const { error } = await admin.from("TradeSession").insert({
-      id: session.id,
-      userId: session.userId,
-      symbol: session.symbol,
-      mode: session.mode,
-      status: session.status,
-      totalAmount: session.totalAmount,
-      usedAmount: session.usedAmount,
-      startTime: session.startTime,
-      endTime: session.endTime ?? null,
-      config: session.config,
-    })
-    if (error) {
-      console.warn("[phase2] createSession fallback:", error.message)
-    }
+  const admin = requireAdmin()
+  const { error } = await admin.from("TradeSession").insert({
+    id: session.id,
+    userId: session.userId,
+    symbol: session.symbol,
+    mode: session.mode,
+    status: session.status,
+    totalAmount: session.totalAmount,
+    usedAmount: session.usedAmount,
+    startTime: session.startTime,
+    endTime: session.endTime ?? null,
+    config: session.config,
+  })
+  if (error) {
+    console.error("[phase2] createSession DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: TradeSession insert — ${error.message}`)
   }
   phase2Store.sessions.set(session.id, session)
 }
 
 export async function listTradeSessionsForUser(userId: string, limit = 100): Promise<TradeSession[]> {
-  const admin = adminOrNull()
-  if (admin) {
-    const { data, error } = await admin
-      .from("TradeSession")
-      .select("*")
-      .eq("userId", userId)
-      .order("startTime", { ascending: false })
-      .limit(limit)
-    if (!error && data?.length) {
-      return data.map(
-        (row: Record<string, unknown>) =>
-          ({
-            id: row.id,
-            userId: row.userId,
-            symbol: row.symbol,
-            mode: row.mode,
-            status: row.status,
-            totalAmount: row.totalAmount,
-            usedAmount: row.usedAmount,
-            startTime: row.startTime,
-            endTime: row.endTime ?? undefined,
-            config: row.config,
-          }) as TradeSession
-      )
-    }
+  const admin = requireAdmin()
+  const { data, error } = await admin
+    .from("TradeSession")
+    .select("*")
+    .eq("userId", userId)
+    .order("startTime", { ascending: false })
+    .limit(limit)
+  if (error) {
+    console.error("[phase2] listTradeSessionsForUser DB_READ_FAILED:", error.message)
+    throw new Error(`DB_READ_FAILED: TradeSession list — ${error.message}`)
   }
-  return Array.from(phase2Store.sessions.values())
-    .filter((s) => s.userId === userId)
-    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-    .slice(0, limit)
+  const rows = data ?? []
+  return rows.map(
+    (row: Record<string, unknown>) =>
+      ({
+        id: row.id,
+        userId: row.userId,
+        symbol: row.symbol,
+        mode: row.mode,
+        status: row.status,
+        totalAmount: row.totalAmount,
+        usedAmount: row.usedAmount,
+        startTime: row.startTime,
+        endTime: row.endTime ?? undefined,
+        config: row.config,
+      }) as TradeSession
+  )
 }
 
 export async function getSessionById(sessionId: string): Promise<TradeSession | null> {
-  const admin = adminOrNull()
-  if (admin) {
-    const { data, error } = await admin.from("TradeSession").select("*").eq("id", sessionId).maybeSingle()
-    if (!error && data) {
-      return {
-        id: data.id,
-        userId: data.userId,
-        symbol: data.symbol,
-        mode: data.mode,
-        status: data.status,
-        totalAmount: data.totalAmount,
-        usedAmount: data.usedAmount,
-        startTime: data.startTime,
-        endTime: data.endTime ?? undefined,
-        config: data.config,
-      } as TradeSession
-    }
+  const admin = requireAdmin()
+  const { data, error } = await admin.from("TradeSession").select("*").eq("id", sessionId).maybeSingle()
+  if (error) {
+    console.error("[phase2] getSessionById DB_READ_FAILED:", error.message)
+    throw new Error(`DB_READ_FAILED: TradeSession select — ${error.message}`)
   }
-  return phase2Store.sessions.get(sessionId) ?? null
+  if (!data) return null
+  const mapped = {
+    id: data.id,
+    userId: data.userId,
+    symbol: data.symbol,
+    mode: data.mode,
+    status: data.status,
+    totalAmount: data.totalAmount,
+    usedAmount: data.usedAmount,
+    startTime: data.startTime,
+    endTime: data.endTime ?? undefined,
+    config: data.config,
+  } as TradeSession
+  phase2Store.sessions.set(sessionId, mapped)
+  return mapped
 }
 
 export async function updateSession(sessionId: string, patch: Partial<TradeSession>) {
-  const existing = (await getSessionById(sessionId)) ?? phase2Store.sessions.get(sessionId)
+  const existing = await getSessionById(sessionId)
   if (!existing) return null
   const next: TradeSession = { ...existing, ...patch }
-  const admin = adminOrNull()
-  if (admin) {
-    const { error } = await admin
-      .from("TradeSession")
-      .update({
-        status: next.status,
-        usedAmount: next.usedAmount,
-        endTime: next.endTime ?? null,
-        config: next.config,
-      })
-      .eq("id", sessionId)
-    if (error) {
-      console.warn("[phase2] updateSession fallback:", error.message)
-    }
+  const admin = requireAdmin()
+  const { error } = await admin
+    .from("TradeSession")
+    .update({
+      status: next.status,
+      usedAmount: next.usedAmount,
+      endTime: next.endTime ?? null,
+      config: next.config,
+    })
+    .eq("id", sessionId)
+  if (error) {
+    console.error("[phase2] updateSession DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: TradeSession update — ${error.message}`)
   }
   phase2Store.sessions.set(sessionId, next)
   return next
 }
 
 export async function upsertOrders(sessionId: string, orders: TradeOrder[]) {
-  const admin = adminOrNull()
-  if (admin && orders.length > 0) {
-    const { error } = await admin.from("TradeOrder").insert(orders)
-    if (error) {
-      console.warn("[phase2] upsertOrders fallback:", error.message)
-    }
+  if (orders.length === 0) {
+    phase2Store.orders.set(sessionId, [])
+    return
+  }
+  const admin = requireAdmin()
+  const { error } = await admin.from("TradeOrder").insert(orders)
+  if (error) {
+    console.error("[phase2] upsertOrders DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: TradeOrder insert — ${error.message}`)
   }
   phase2Store.orders.set(sessionId, orders)
 }
 
 export async function getOrdersBySession(sessionId: string): Promise<TradeOrder[]> {
-  const admin = adminOrNull()
-  if (admin) {
-    const { data, error } = await admin.from("TradeOrder").select("*").eq("sessionId", sessionId).order("createdAt")
-    if (!error && data) {
-      return data as TradeOrder[]
-    }
+  const admin = requireAdmin()
+  const { data, error } = await admin.from("TradeOrder").select("*").eq("sessionId", sessionId).order("createdAt")
+  if (error) {
+    console.error("[phase2] getOrdersBySession DB_READ_FAILED:", error.message)
+    throw new Error(`DB_READ_FAILED: TradeOrder select — ${error.message}`)
   }
-  return phase2Store.orders.get(sessionId) ?? []
+  const list = (data ?? []) as TradeOrder[]
+  phase2Store.orders.set(sessionId, list)
+  return list
+}
+
+function mapExpertChatRowToMessage(row: Record<string, unknown>): ChatMessage {
+  return {
+    id: String(row.id),
+    sessionId: String(row.sessionId),
+    timestamp:
+      typeof row.timestamp === "string"
+        ? row.timestamp
+        : row.timestamp
+          ? new Date(row.timestamp as string).toISOString()
+          : new Date().toISOString(),
+    type: row.type as ChatMessage["type"],
+    content: String(row.content ?? ""),
+    data: row.data && typeof row.data === "object" ? (row.data as ChatMessage["data"]) : undefined,
+  }
+}
+
+async function fetchChatMessagesFromDatabase(sessionId: string): Promise<ChatMessage[]> {
+  const admin = requireAdmin()
+  const { data, error } = await admin
+    .from("ExpertChatMessage")
+    .select("*")
+    .eq("sessionId", sessionId)
+    .order("timestamp", { ascending: true })
+  if (error) {
+    console.error("[phase2] ExpertChatMessage select DB_READ_FAILED:", error.message)
+    throw new Error(`DB_READ_FAILED: ExpertChatMessage select — ${error.message}`)
+  }
+  return (data ?? []).map((r) => mapExpertChatRowToMessage(r as Record<string, unknown>))
+}
+
+/** Loads chat from DB and refreshes read cache. */
+export async function listChatMessagesForSession(sessionId: string): Promise<ChatMessage[]> {
+  const merged = await fetchChatMessagesFromDatabase(sessionId)
+  phase2Store.chats.set(sessionId, merged)
+  return merged
+}
+
+export async function clearChatMessagesForSession(sessionId: string) {
+  const admin = requireAdmin()
+  const { error } = await admin.from("ExpertChatMessage").delete().eq("sessionId", sessionId)
+  if (error) {
+    console.error("[phase2] clearChatMessagesForSession DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: ExpertChatMessage delete — ${error.message}`)
+  }
+  phase2Store.chats.set(sessionId, [])
 }
 
 export async function appendChatMessage(sessionId: string, message: Omit<ChatMessage, "id" | "timestamp" | "sessionId">) {
@@ -312,7 +403,26 @@ export async function appendChatMessage(sessionId: string, message: Omit<ChatMes
     timestamp: new Date().toISOString(),
     ...message,
   }
-  // Chat persistence table can be added later; for now keep in memory and SSE-backed.
+  const admin = requireAdmin()
+  const session = await getSessionById(sessionId)
+  const userId = session?.userId
+  if (!userId) {
+    console.error("[phase2] appendChatMessage DB_WRITE_FAILED: session not found:", sessionId)
+    throw new Error(`DB_WRITE_FAILED: ExpertChatMessage insert — session ${sessionId} not found`)
+  }
+  const { error } = await admin.from("ExpertChatMessage").insert({
+    id: row.id,
+    sessionId: row.sessionId,
+    userId,
+    timestamp: row.timestamp,
+    type: row.type,
+    content: row.content,
+    data: row.data ?? null,
+  })
+  if (error) {
+    console.error("[phase2] ExpertChatMessage insert DB_WRITE_FAILED:", error.message)
+    throw new Error(`DB_WRITE_FAILED: ExpertChatMessage insert — ${error.message}`)
+  }
   const list = phase2Store.chats.get(sessionId) ?? []
   phase2Store.chats.set(sessionId, [...list, row])
   return row
