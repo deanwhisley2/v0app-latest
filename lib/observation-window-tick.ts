@@ -12,6 +12,10 @@ import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/l
 import { refreshStabilityIntelligence } from "@/lib/stability-intelligence-engine"
 import { runSandboxSimulation } from "@/lib/sandbox-execution-engine"
 import { getResumeGate } from "@/lib/startup-recovery"
+import {
+  behaviorIntelligenceToReasons,
+  deriveBehaviorIntelligence,
+} from "@/lib/behavior-market-intelligence"
 
 export type ObservationWindowTickOptions = {
   userId: string
@@ -105,6 +109,11 @@ export async function runObservationWindowTick(opts: ObservationWindowTickOption
       mode: result.mode,
       timeWindowSeconds: opts.analysisWindowSeconds,
     })
+    const behaviorIntel = deriveBehaviorIntelligence(result, {
+      observationWindowSec: opts.analysisWindowSeconds,
+      signalFreshnessSec: 0,
+    })
+    const behaviorReasons = behaviorIntelligenceToReasons(behaviorIntel)
 
     await createAnalysis({
       id: analysisId,
@@ -116,7 +125,12 @@ export async function runObservationWindowTick(opts: ObservationWindowTickOption
       rawConfidence: result.fusedDecision.confidence,
       calibratedConfidence: calibration.final,
       confidenceExplanation: calibration,
-      reasons: [...result.fusedDecision.reasons, "OBSERVATION_WINDOW", "observational-learning-phase"],
+      reasons: [
+        ...result.fusedDecision.reasons,
+        ...behaviorReasons,
+        "OBSERVATION_WINDOW",
+        "observational-learning-phase",
+      ],
       tradeExecuted: false,
       ttlSeconds,
     })

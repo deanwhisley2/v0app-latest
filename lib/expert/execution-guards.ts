@@ -19,6 +19,10 @@ export const ERROR_CODES = {
   EXCHANGE_VALIDATION_FAILED: "EXCHANGE_VALIDATION_FAILED",
   UNAUTHORIZED: "UNAUTHORIZED",
   FORBIDDEN_SESSION: "FORBIDDEN_SESSION",
+  BEHAVIOR_LEARNING_REQUIRED: "BEHAVIOR_LEARNING_REQUIRED",
+  EXECUTION_TIMING_REJECT: "EXECUTION_TIMING_REJECT",
+  FOCUS_UNIVERSE_REQUIRED: "FOCUS_UNIVERSE_REQUIRED",
+  SIGNAL_RHYTHM_REJECT: "SIGNAL_RHYTHM_REJECT",
 } as const
 
 export class ExpertRouteError extends Error {
@@ -46,6 +50,13 @@ function parseAnalysisTimestampMs(value: string): number {
 function normalizeSymbol(value: string): string {
   const clean = value.trim().toUpperCase()
   return clean.endsWith("USDT") ? clean : `${clean}USDT`
+}
+
+function parseReasonValue(reasons: string[] | null | undefined, key: string): string | null {
+  if (!reasons?.length) return null
+  const prefix = `${key}:`
+  const hit = reasons.find((r) => r.startsWith(prefix))
+  return hit ? hit.slice(prefix.length) : null
 }
 
 /** Real-money execution toggle only; Binance keys may come from the signed-in user or env. */
@@ -107,6 +118,7 @@ export async function enforceAnalysisFreshness(
     )
   }
   const ageSeconds = (Date.now() - createdAtMs) / 1000
+  const maxExecutionLatencySec = Math.max(30, Number(process.env.NEXUS_MAX_EXECUTION_LATENCY_SEC) || 120)
   const maxAgeSeconds = analysis.ttlSeconds ?? 60
   console.log(
     `[expert-execute] analysis freshness · id=${analysis.id} · createdAt=${analysis.timestamp} · ttlSeconds=${maxAgeSeconds} · ageSeconds=${Math.round(ageSeconds)}`
@@ -115,6 +127,13 @@ export async function enforceAnalysisFreshness(
     throw new ExpertRouteError(
       ERROR_CODES.ANALYSIS_STALE,
       `ANALYSIS_STALE: ${Math.round(ageSeconds)}s old, max ${maxAgeSeconds}s. Re-analyze before trading.`,
+      400
+    )
+  }
+  if (ageSeconds > maxExecutionLatencySec) {
+    throw new ExpertRouteError(
+      ERROR_CODES.EXECUTION_TIMING_REJECT,
+      `EXECUTION_TIMING_REJECT: analysis-to-execution latency ${Math.round(ageSeconds)}s exceeds ${maxExecutionLatencySec}s.`,
       400
     )
   }
@@ -135,6 +154,50 @@ export async function enforceAnalysisFreshness(
     throw new ExpertRouteError(
       ERROR_CODES.ANALYSIS_LOW_CONFIDENCE,
       `ANALYSIS_LOW_CONFIDENCE: ${executionConfidence}% < 65% threshold.`,
+      400
+    )
+  }
+  const observationWindowSec = Number.parseInt(parseReasonValue(analysis.reasons, "BEHAVIOR_WINDOW_SEC") ?? "", 10)
+  const behaviorClarity = Number.parseInt(parseReasonValue(analysis.reasons, "BEHAVIOR_CLARITY") ?? "", 10)
+  const entryTiming = parseReasonValue(analysis.reasons, "ENTRY_TIMING")
+  const rhythmState = parseReasonValue(analysis.reasons, "SIGNAL_RHYTHM_STATE")
+  const rhythmScore = Number.parseInt(parseReasonValue(analysis.reasons, "SIGNAL_RHYTHM_SCORE") ?? "", 10)
+  const inFocusUniverse = analysis.reasons?.includes("FOCUS_UNIVERSE_MEMBER") === true
+  if (!inFocusUniverse) {
+    throw new ExpertRouteError(
+      ERROR_CODES.FOCUS_UNIVERSE_REQUIRED,
+      "FOCUS_UNIVERSE_REQUIRED: Symbol is outside current Focus-20+ universe.",
+      400
+    )
+  }
+  if (!Number.isFinite(observationWindowSec) || observationWindowSec < 300) {
+    throw new ExpertRouteError(
+      ERROR_CODES.BEHAVIOR_LEARNING_REQUIRED,
+      "BEHAVIOR_LEARNING_REQUIRED: Analysis must include at least 5 minutes of observation before execution.",
+      400
+    )
+  }
+  if (!Number.isFinite(behaviorClarity) || behaviorClarity < 55) {
+    throw new ExpertRouteError(
+      ERROR_CODES.BEHAVIOR_LEARNING_REQUIRED,
+      "BEHAVIOR_LEARNING_REQUIRED: Behavior clarity is too low for safe execution.",
+      400
+    )
+  }
+  if (entryTiming === "LATE" || entryTiming === "CHASE_ENTRY" || entryTiming === "EXHAUSTED_MOVE") {
+    throw new ExpertRouteError(
+      ERROR_CODES.EXECUTION_TIMING_REJECT,
+      `EXECUTION_TIMING_REJECT: Entry timing class ${entryTiming} is blocked.`,
+      400
+    )
+  }
+  if (
+    rhythmState === "EXHAUSTING" ||
+    (rhythmState === "WEAKENING" && Number.isFinite(rhythmScore) && rhythmScore < 62)
+  ) {
+    throw new ExpertRouteError(
+      ERROR_CODES.SIGNAL_RHYTHM_REJECT,
+      `SIGNAL_RHYTHM_REJECT: state=${rhythmState} score=${Number.isFinite(rhythmScore) ? rhythmScore : "n/a"}.`,
       400
     )
   }

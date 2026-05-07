@@ -32,6 +32,65 @@ type RequestBody = {
   config: AutoTradeConfig
 }
 
+function parseReasonValue(reasons: string[] | undefined, key: string): string | null {
+  if (!reasons?.length) return null
+  const prefix = `${key}:`
+  const hit = reasons.find((r) => r.startsWith(prefix))
+  return hit ? hit.slice(prefix.length) : null
+}
+
+function classifyLatency(ms: number): "EARLY" | "OPTIMAL" | "LATE" | "DEGRADED" {
+  if (ms <= 20_000) return "EARLY"
+  if (ms <= 60_000) return "OPTIMAL"
+  if (ms <= 120_000) return "LATE"
+  return "DEGRADED"
+}
+
+function parseAnalysisTimestampMs(value: string): number {
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+  const normalized = hasTimezone ? value : `${value}Z`
+  const ms = new Date(normalized).getTime()
+  return Number.isFinite(ms) ? ms : Date.now()
+}
+
+function deriveAdaptiveExecutionConfig(
+  base: AutoTradeConfig,
+  reasons: string[] | undefined
+): AutoTradeConfig & { adaptedTotalAmount: number; adaptationNote: string } {
+  const tempo = parseReasonValue(reasons, "TEMPO_CLASS") ?? "MEDIUM_TEMPO"
+  const clarity = Number.parseInt(parseReasonValue(reasons, "BEHAVIOR_CLARITY") ?? "60", 10)
+  const rhythm = parseReasonValue(reasons, "SIGNAL_RHYTHM_STATE") ?? "HESITATING"
+
+  let amountMult = 1
+  if (tempo === "FAST_TEMPO" || tempo === "VOLATILITY_EXPANSION") amountMult = 0.85
+  if (tempo === "ERRATIC_TEMPO" || tempo === "MANIPULATIVE_TEMPO") amountMult = 0.65
+  if (tempo === "SLOW_TEMPO") amountMult = 1.1
+  if (rhythm === "HESITATING") amountMult *= 0.8
+
+  const clarityFactor = Math.max(0.55, Math.min(1.05, clarity / 70))
+  amountMult *= clarityFactor
+  const adaptedTotalAmount = Math.max(1, Math.round(base.totalAmount * amountMult * 100) / 100)
+
+  const stopLossMult =
+    tempo === "FAST_TEMPO" || tempo === "VOLATILITY_EXPANSION"
+      ? 0.8
+      : tempo === "SLOW_TEMPO"
+        ? 1.2
+        : tempo === "ERRATIC_TEMPO" || tempo === "MANIPULATIVE_TEMPO"
+          ? 0.75
+          : 1
+  const takeProfitMult = tempo === "FAST_TEMPO" ? 0.9 : tempo === "SLOW_TEMPO" ? 1.15 : 1
+
+  return {
+    ...base,
+    totalAmount: adaptedTotalAmount,
+    stopLossPercent: Math.max(0.2, Number((base.stopLossPercent * stopLossMult).toFixed(2))),
+    stopProfitPercent: Math.max(0.2, Number((base.stopProfitPercent * takeProfitMult).toFixed(2))),
+    adaptedTotalAmount,
+    adaptationNote: `tempo=${tempo} clarity=${clarity} rhythm=${rhythm} amountMult=${amountMult.toFixed(2)}`,
+  }
+}
+
 export async function POST(req: NextRequest) {
   const userOrRes = await requireExpertUserId()
   if (userOrRes instanceof NextResponse) return userOrRes
@@ -72,9 +131,12 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     )
   }
+  const adaptedConfig = deriveAdaptiveExecutionConfig(body.config, analysis.reasons)
+  const analysisToExecutionMs = Math.max(0, Date.now() - parseAnalysisTimestampMs(analysis.timestamp))
+  const analysisLatencyClass = classifyLatency(analysisToExecutionMs)
 
   try {
-    await validateExchange(creds, analysis.symbol, body.config.totalAmount)
+    await validateExchange(creds, analysis.symbol, adaptedConfig.totalAmount)
   } catch (error) {
     const message = error instanceof Error ? error.message : "Exchange validation failed"
     return NextResponse.json({ code: mapErrorCode(message), error: message }, { status: 400 })
@@ -100,7 +162,7 @@ export async function POST(req: NextRequest) {
       userId,
       symbol: analysis.symbol,
       action: "BUY",
-      requestedQuoteUsd: body.config.totalAmount,
+      requestedQuoteUsd: adaptedConfig.totalAmount,
     })
     if (!governance.approved) {
       return NextResponse.json(
@@ -113,19 +175,23 @@ export async function POST(req: NextRequest) {
     }
 
     const sessionId = makeId("session")
-    const executeAt = new Date(Date.now() + Math.max(0, body.config.entryDelayMinutes) * 60_000)
+    const executeAt = new Date(Date.now() + Math.max(0, adaptedConfig.entryDelayMinutes) * 60_000)
     const session: TradeSession = {
     id: sessionId,
     userId,
     symbol: analysis.symbol,
     mode: "NEX",
     status: "PENDING",
-    totalAmount: body.config.totalAmount,
+    totalAmount: adaptedConfig.totalAmount,
     usedAmount: 0,
     startTime: new Date().toISOString(),
     config: {
-      ...body.config,
+      ...adaptedConfig,
       analysisId: body.analysisId,
+      analysisLatencyMs: analysisToExecutionMs,
+      analysisLatencyClass,
+      behaviorAdaptiveExecution: true,
+      behaviorAdaptationNote: adaptedConfig.adaptationNote,
       rawConfidence: analysis.rawConfidence ?? analysis.confidence,
       calibratedConfidence: analysis.calibratedConfidence ?? analysis.confidence,
       marketRegime: String(governance.exposureSnapshot.marketRegime ?? "UNKNOWN"),
@@ -158,16 +224,20 @@ export async function POST(req: NextRequest) {
   await appendChatMessage(sessionId, {
     type: "pending",
     content:
-      body.config.entryDelayMinutes > 0
-        ? `NEX delay configured (${body.config.entryDelayMinutes}m). Executing immediate safety-checked entry now.`
+      adaptedConfig.entryDelayMinutes > 0
+        ? `NEX delay configured (${adaptedConfig.entryDelayMinutes}m). Executing immediate safety-checked entry now.`
         : "NEX executing immediate safety-checked entry.",
+  })
+  await appendChatMessage(sessionId, {
+    type: "status",
+    content: `Execution latency ${analysisToExecutionMs}ms (${analysisLatencyClass}); behavior-adaptive size $${adaptedConfig.totalAmount.toFixed(2)}.`,
   })
 
     const orders: TradeOrder[] = []
     const { apiKey, apiSecret } = creds
     let failedReason: string | null = null
     try {
-    const buy = await binanceMarketBuyQuote(analysis.symbol, body.config.totalAmount.toFixed(8), apiKey, apiSecret)
+    const buy = await binanceMarketBuyQuote(analysis.symbol, adaptedConfig.totalAmount.toFixed(8), apiKey, apiSecret)
     const terminal = await waitOrderTerminal(analysis.symbol, buy.orderId, apiKey, apiSecret, 90_000)
     const executedQty = Number.parseFloat(terminal.executedQty || buy.executedQty || "0")
     const quote = Number.parseFloat(terminal.cummulativeQuoteQty || buy.cummulativeQuoteQty || "0")
@@ -181,12 +251,12 @@ export async function POST(req: NextRequest) {
       type: "BUY",
       price: avgPrice,
       quantity: executedQty,
-      quoteAmount: quote || body.config.totalAmount,
+      quoteAmount: quote || adaptedConfig.totalAmount,
       status: terminal.status === "FILLED" ? "FILLED" : "FAILED",
       createdAt: new Date().toISOString(),
       filledAt: terminal.status === "FILLED" ? new Date().toISOString() : undefined,
     })
-    session.usedAmount = quote || body.config.totalAmount
+    session.usedAmount = quote || adaptedConfig.totalAmount
     session.status = terminal.status === "FILLED" ? "ACTIVE" : "ABORTED"
     if (session.status === "ABORTED") {
       session.endTime = new Date().toISOString()

@@ -22,13 +22,18 @@
 import { config } from "dotenv"
 import { resolve } from "node:path"
 import { runObservationWindowTick } from "../lib/observation-window-tick"
+import { buildFocusUniverse } from "../lib/behavior-market-intelligence"
 
 config({ path: resolve(process.cwd(), ".env.local") })
 config({ path: resolve(process.cwd(), ".env") })
 
 function parseSymbols(raw: string | undefined): string[] {
-  const s = raw?.trim() || "BTCUSDT"
-  return s.split(",").map((x) => x.trim().toUpperCase()).filter(Boolean)
+  const parsed = (raw?.trim() || "")
+    .split(",")
+    .map((x) => x.trim().toUpperCase())
+    .filter(Boolean)
+  const includeGold = process.env.OBSERVATION_INCLUDE_GOLD === "1"
+  return buildFocusUniverse(parsed.length > 0 ? parsed : undefined, includeGold)
 }
 
 async function main() {
