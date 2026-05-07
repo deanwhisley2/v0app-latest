@@ -30,5 +30,19 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    /**
+     * Observational learning window: analysis + governance probe + shadow sandbox only (no live orders).
+     * Set OBSERVATION_UNTIL (ISO8601), NEXUS_EXPERT_FALLBACK_USER_ID, optional OBSERVATION_SYMBOLS / OBSERVATION_INTERVAL_MS.
+     */
+    {
+      name: "nexus-observation-window",
+      cwd: __dirname,
+      script: "node_modules/tsx/dist/cli.mjs",
+      args: "scripts/observation-window.ts",
+      autorestart: false,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 }

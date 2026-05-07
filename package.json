@@ -9,6 +9,7 @@
     "start": "next start",
     "start:with-recovery": "npx tsx scripts/reconcile-on-start.ts && next start",
     "operational:smoke": "npx tsx scripts/operational-smoke-check.ts",
+    "observation:window": "npx tsx scripts/observation-window.ts",
     "lint": "eslint .",
     "test-trade": "npx tsx scripts/test-trade-comparison.ts",
     "test-trade-safe": "npx tsx scripts/test-trade-with-safety.ts",
