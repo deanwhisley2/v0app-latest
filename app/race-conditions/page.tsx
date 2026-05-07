@@ -85,6 +85,13 @@ interface RaceHistory {
   leadTimeMs: number
 }
 
+type DisplayRaceEvent = RaceConditionEvent & {
+  id: string
+  description: string
+  details?: Record<string, number | string>
+  severity: "low" | "medium" | "high"
+}
+
 // ============================================================
 // Race Conditions Dashboard
 // ============================================================
@@ -300,7 +307,37 @@ export default function RaceConditionsPage() {
   const optimalDelay = calculateOptimalEntryDelay(events)
 
   // Recent events for display
-  const recentEvents = events.slice(-50).reverse()
+  const recentEvents: DisplayRaceEvent[] = events
+    .slice(-50)
+    .reverse()
+    .map((event, index) => {
+      const severity: DisplayRaceEvent["severity"] =
+        event.type === "spoof_detected" ? "high" : event.type === "depth_collapse" ? "medium" : "low"
+      const description =
+        event.type === "spoof_detected"
+          ? "Potential spoofing behavior detected"
+          : event.type === "real_liquidity_taking"
+            ? "Real liquidity taking detected"
+            : event.type === "depth_collapse"
+              ? "Order-book depth collapsed"
+              : event.type === "trade_print"
+                ? "Aggressive trade print observed"
+                : "Order-book change detected"
+
+      return {
+        ...event,
+        id: `${event.timestamp}-${index}`,
+        description,
+        severity,
+        details: {
+          price: event.price,
+          size: event.size,
+          latencyMs: event.latency_ms,
+          confidence: Number((event.confidence * 100).toFixed(2)),
+          side: event.side,
+        },
+      }
+    })
 
   // Stats
   const spoofCount = events.filter(e => e.type === "spoof_detected").length
@@ -943,11 +980,8 @@ export default function RaceConditionsPage() {
                             {event.type === "depth_collapse" && (
                               <TrendingDown className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                             )}
-                            {event.type === "order_book_imbalance" && (
+                            {event.type === "order_book_change" && (
                               <BarChart3 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                            )}
-                            {event.type === "price_spike" && (
-                              <TrendingUp className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                             )}
 
                             <div className="min-w-0">
@@ -1106,8 +1140,8 @@ export default function RaceConditionsPage() {
                       <h4 className="text-sm font-semibold mb-2">Bid Side Liquidity</h4>
                       <div className="text-2xl font-bold text-success">
                         {events
-                          .filter(e => e.details?.bidVolume)
-                          .reduce((sum, e) => sum + (e.details?.bidVolume || 0), 0)
+                          .filter((e) => e.side === "buy")
+                          .reduce((sum, e) => sum + e.size, 0)
                           .toFixed(2)}
                       </div>
                       <div className="text-xs text-muted-foreground">Total bid volume detected</div>
@@ -1116,8 +1150,8 @@ export default function RaceConditionsPage() {
                       <h4 className="text-sm font-semibold mb-2">Ask Side Liquidity</h4>
                       <div className="text-2xl font-bold text-destructive">
                         {events
-                          .filter(e => e.details?.askVolume)
-                          .reduce((sum, e) => sum + (e.details?.askVolume || 0), 0)
+                          .filter((e) => e.side === "sell")
+                          .reduce((sum, e) => sum + e.size, 0)
                           .toFixed(2)}
                       </div>
                       <div className="text-xs text-muted-foreground">Total ask volume detected</div>

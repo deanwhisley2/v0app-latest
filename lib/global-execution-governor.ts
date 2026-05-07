@@ -414,9 +414,6 @@ export async function requestGovernanceApproval(input: {
   } else if (mode === "EXECUTION_DISABLED" || mode === "GLOBAL_PAUSE") {
     status = "PAUSED"
     reason = `governance mode=${mode}`
-  } else if (mode === "GOVERNANCE_LOCKED") {
-    status = "GOVERNANCE_LOCKED"
-    reason = "governance locked"
   } else if (mode === "RECOVERY_ONLY") {
     status = "RECOVERY_BLOCKED"
     reason = "recovery-only mode"

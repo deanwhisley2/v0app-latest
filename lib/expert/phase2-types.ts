@@ -89,12 +89,28 @@ export interface JoelinCoin {
   price: number
   volume24h: number
   volatility: number
+  minuteTradeConfirmed?: boolean
+  minuteTradeBlockReason?: string
+  minuteTradeReviewAt?: string
+}
+
+export interface FocusCoinInsight {
+  symbol: string
+  action: "BUY" | "SELL" | "HOLD"
+  confidence: number
+  tradableLevel: number
+  profitabilityScore: number
+  expectedEdgeBps: number
+  analyzedAt: string
+  rationale: string[]
 }
 
 export interface JoelinResponse {
   coins: JoelinCoin[]
   /** Top picks: BUY/SELL, confidence ≥ 65, safety not LOW — best ranked by tradable score. */
   tradableNow: JoelinCoin[]
+  focusDaily: FocusCoinInsight[]
+  analyzedProfitableCoins: FocusCoinInsight[]
   lastUpdated: string
   nextRefresh: string
 }

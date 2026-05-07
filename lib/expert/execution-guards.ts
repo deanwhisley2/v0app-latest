@@ -59,56 +59,12 @@ function parseReasonValue(reasons: string[] | null | undefined, key: string): st
   return hit ? hit.slice(prefix.length) : null
 }
 
-/** Real-money execution toggle only; Binance keys may come from the signed-in user or env. */
-export function enforceRealTradingEnvFlag() {
-  if (process.env.NEXUS_REAL_TRADING !== "1") {
-    throw new ExpertRouteError(
-      ERROR_CODES.REAL_TRADING_DISABLED,
-      "REAL_TRADING_DISABLED: Set NEXUS_REAL_TRADING=1 to execute trades",
-      403
-    )
-  }
-}
+type ExecutionReadinessInput = Pick<
+  AnalysisRecord,
+  "id" | "timestamp" | "ttlSeconds" | "action" | "confidence" | "rawConfidence" | "calibratedConfidence" | "reasons"
+>
 
-/** @deprecated Use enforceRealTradingEnvFlag + resolveBinanceCredentialsForExecution */
-export function enforceRealTradingGuard() {
-  enforceRealTradingEnvFlag()
-  if (!process.env.BINANCE_API_KEY || !(process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET)) {
-    throw new ExpertRouteError(
-      ERROR_CODES.MISSING_BINANCE_KEYS,
-      "MISSING_BINANCE_KEYS: Configure BINANCE_API_KEY and BINANCE_SECRET_KEY (or connect Binance on your account)",
-      500
-    )
-  }
-}
-
-export function assertBinanceCredentials(creds: { apiKey?: string; apiSecret?: string } | null) {
-  const apiKey = creds?.apiKey?.trim()
-  const apiSecret = creds?.apiSecret?.trim()
-  if (!apiKey || !apiSecret) {
-    throw new ExpertRouteError(
-      ERROR_CODES.MISSING_BINANCE_KEYS,
-      "MISSING_BINANCE_KEYS: Add Binance in Account / API settings, or set BINANCE_API_KEY and BINANCE_SECRET_KEY on the server.",
-      400
-    )
-  }
-}
-
-export async function enforceAnalysisFreshness(
-  analysisId: string,
-  opts?: { userId?: string }
-): Promise<AnalysisRecord> {
-  const analysis = await getAnalysisById(analysisId)
-  if (!analysis) {
-    throw new ExpertRouteError(ERROR_CODES.ANALYSIS_NOT_FOUND, "analysisId not found", 404)
-  }
-  if (opts?.userId && analysis.userId !== opts.userId) {
-    throw new ExpertRouteError(
-      ERROR_CODES.FORBIDDEN_SESSION,
-      "FORBIDDEN_SESSION: Analysis belongs to another account.",
-      403
-    )
-  }
+function assertExecutionReadiness(analysis: ExecutionReadinessInput) {
   const createdAtMs = parseAnalysisTimestampMs(analysis.timestamp)
   if (!Number.isFinite(createdAtMs)) {
     throw new ExpertRouteError(
@@ -140,10 +96,6 @@ export async function enforceAnalysisFreshness(
   if (analysis.action === "HOLD") {
     throw new ExpertRouteError(ERROR_CODES.ANALYSIS_HOLD, "ANALYSIS_HOLD: Cannot execute trade on HOLD signal.", 400)
   }
-  // Confidence authority contract:
-  // - rawConfidence: model/fusion output for analytics/debug
-  // - calibratedConfidence: execution-authoritative confidence
-  // - legacy `confidence`: transitional fallback for old rows
   const rawConfidence = analysis.rawConfidence ?? analysis.confidence
   const calibratedConfidence = analysis.calibratedConfidence ?? analysis.confidence
   const executionConfidence = calibratedConfidence ?? analysis.confidence
@@ -201,7 +153,64 @@ export async function enforceAnalysisFreshness(
       400
     )
   }
+}
+
+/** Real-money execution toggle only; Binance keys may come from the signed-in user or env. */
+export function enforceRealTradingEnvFlag() {
+  if (process.env.NEXUS_REAL_TRADING !== "1") {
+    throw new ExpertRouteError(
+      ERROR_CODES.REAL_TRADING_DISABLED,
+      "REAL_TRADING_DISABLED: Set NEXUS_REAL_TRADING=1 to execute trades",
+      403
+    )
+  }
+}
+
+/** @deprecated Use enforceRealTradingEnvFlag + resolveBinanceCredentialsForExecution */
+export function enforceRealTradingGuard() {
+  enforceRealTradingEnvFlag()
+  if (!process.env.BINANCE_API_KEY || !(process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET)) {
+    throw new ExpertRouteError(
+      ERROR_CODES.MISSING_BINANCE_KEYS,
+      "MISSING_BINANCE_KEYS: Configure BINANCE_API_KEY and BINANCE_SECRET_KEY (or connect Binance on your account)",
+      500
+    )
+  }
+}
+
+export function assertBinanceCredentials(creds: { apiKey?: string; apiSecret?: string } | null) {
+  const apiKey = creds?.apiKey?.trim()
+  const apiSecret = creds?.apiSecret?.trim()
+  if (!apiKey || !apiSecret) {
+    throw new ExpertRouteError(
+      ERROR_CODES.MISSING_BINANCE_KEYS,
+      "MISSING_BINANCE_KEYS: Add Binance in Account / API settings, or set BINANCE_API_KEY and BINANCE_SECRET_KEY on the server.",
+      400
+    )
+  }
+}
+
+export async function enforceAnalysisFreshness(
+  analysisId: string,
+  opts?: { userId?: string }
+): Promise<AnalysisRecord> {
+  const analysis = await getAnalysisById(analysisId)
+  if (!analysis) {
+    throw new ExpertRouteError(ERROR_CODES.ANALYSIS_NOT_FOUND, "analysisId not found", 404)
+  }
+  if (opts?.userId && analysis.userId !== opts.userId) {
+    throw new ExpertRouteError(
+      ERROR_CODES.FORBIDDEN_SESSION,
+      "FORBIDDEN_SESSION: Analysis belongs to another account.",
+      403
+    )
+  }
+  assertExecutionReadiness(analysis)
   return analysis
+}
+
+export function enforceExecutionReadinessFromRecord(analysis: ExecutionReadinessInput) {
+  assertExecutionReadiness(analysis)
 }
 
 export function enforceSymbolConsistency(analysisSymbol: string, requestedSymbol?: string) {

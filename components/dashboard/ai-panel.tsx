@@ -903,6 +903,8 @@ export function AIPanel({
                   onClick={() => {
                     const amt = parseFloat(paperAmount) || 100
                     onNavigateToTrade?.(wallStreetCoin, selectedStrategies, false, {
+                      period: "15m",
+                      resultTime: "30m",
                       autoTrade: true,
                       tradeAmount: amt,
                       executionMode: "nex_auto",
@@ -925,6 +927,8 @@ export function AIPanel({
                   onClick={() => {
                     const amt = parseFloat(paperAmount) || 100
                     onNavigateToTrade?.(wallStreetCoin, selectedStrategies, false, {
+                      period: "15m",
+                      resultTime: "30m",
                       autoTrade: false,
                       tradeAmount: amt,
                       executionMode: "manual",

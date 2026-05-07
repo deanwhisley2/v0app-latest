@@ -457,21 +457,25 @@ async function runLoop(): Promise<void> {
           } else {
             console.log(`[background-engine] LIVE BUY · HTTP ${exec.status} · body=${exec.body.slice(0, 400)}`)
             const data = safeJsonParse(exec.body)
+            type BuyFill = { side: "BUY"; avgPrice: number; quantity: number; totalCost: number }
             const buyFill =
               data !== null &&
               typeof data === "object" &&
               "fill" in data &&
               typeof (data as { fill: unknown }).fill === "object" &&
               (data as { fill: unknown }).fill !== null
-                ? ((data as { fill: Record<string, unknown> }).fill)
+                ? ((data as {
+                    fill: { side?: unknown; avgPrice?: unknown; quantity?: unknown; totalCost?: unknown }
+                  }).fill)
                 : null
 
             const isValidBuyFill =
               buyFill !== null &&
-              typeof buyFill === "object" &&
+              buyFill.side === "BUY" &&
               typeof buyFill.avgPrice === "number" &&
               typeof buyFill.quantity === "number" &&
               typeof buyFill.totalCost === "number"
+            const typedBuyFill: BuyFill | null = isValidBuyFill ? (buyFill as BuyFill) : null
 
             if (exec.ok && !isValidBuyFill) {
               console.warn("[background-engine] WARNING (incomplete BUY execution response)")
@@ -488,12 +492,11 @@ async function runLoop(): Promise<void> {
               const buyTrackedOk =
                 isValidBuyFill &&
                 buyFill !== null &&
-                buyFill.side === "BUY" &&
                 typeof sid === "string"
 
-              if (buyTrackedOk && buyFill && typeof sid === "string") {
+              if (buyTrackedOk && typedBuyFill && typeof sid === "string") {
                 console.log(
-                  `[background-engine] LIVE BUY FILLED · avgPrice=${buyFill.avgPrice.toFixed(6)} · qty=${buyFill.quantity.toFixed(8)} · totalCost=$${buyFill.totalCost.toFixed(4)}`
+                  `[background-engine] LIVE BUY FILLED · avgPrice=${typedBuyFill.avgPrice.toFixed(6)} · qty=${typedBuyFill.quantity.toFixed(8)} · totalCost=$${typedBuyFill.totalCost.toFixed(4)}`
                 )
                 const runtimeNow = await getDaemonSymbolRuntime({ daemonType: "background-engine", userId, symbol: SYMBOL })
                 await updateDaemonSymbolRuntime(
@@ -501,15 +504,15 @@ async function runLoop(): Promise<void> {
                   {
                     positionStatus: "LONG",
                     openSessionId: sid,
-                    openEntryCost: buyFill.totalCost,
-                    openEntryPrice: buyFill.avgPrice,
-                    openQuantity: buyFill.quantity,
+                    openEntryCost: typedBuyFill.totalCost,
+                    openEntryPrice: typedBuyFill.avgPrice,
+                    openQuantity: typedBuyFill.quantity,
                     lastEntryAt: new Date().toISOString(),
                   }
                 )
                 logRiskState("after BUY fill", {
                   position: "LONG",
-                  openPosition: { sessionId: sid, quantity: buyFill.quantity },
+                  openPosition: { sessionId: sid, quantity: typedBuyFill.quantity },
                   tradesCount: opportunityTradesCount,
                   totalLoss,
                 })

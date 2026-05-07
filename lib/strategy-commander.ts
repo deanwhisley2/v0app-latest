@@ -643,10 +643,21 @@ export class StrategyCommander {
     // Step 1: Run Nexus Core Engine
     const nexusDecision = this.nexusEngine.getTradeSignal(marketData)
 
+    const topBid = marketData.orderBook.bids[0]?.[0] ?? marketData.currentPrice
+    const topAsk = marketData.orderBook.asks[0]?.[0] ?? marketData.currentPrice
+    const spread = Math.max(0, topAsk - topBid)
+    const spreadPercentage = marketData.currentPrice > 0 ? (spread / marketData.currentPrice) * 100 : 0
+    const orderBookData = {
+      bids: marketData.orderBook.bids.map(([price, size]) => ({ price, size, total: price * size })),
+      asks: marketData.orderBook.asks.map(([price, size]) => ({ price, size, total: price * size })),
+      spread,
+      spreadPercentage,
+    }
+
     // Step 2: Run Liquidity Warfare Engine
     const lwReport = liquidityWarfare.analyze(
       marketData.currentPrice,
-      marketData.orderBook,
+      orderBookData,
       marketData.historicalPrices,
       marketData.volumes
     )
@@ -654,7 +665,7 @@ export class StrategyCommander {
 
     // Step 3: Run Sentiment Weapon
     const sentimentReport = sentimentWeapon.analyze(
-      marketData.orderBook,
+      orderBookData,
       null,
       marketData.symbol,
       marketData.volume24h,

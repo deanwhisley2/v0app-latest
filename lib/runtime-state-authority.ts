@@ -413,7 +413,7 @@ export async function applyRiskTradeClose(input: {
     symbol: input.symbol,
     stateType: "risk-state",
     transition: "TRADE_CLOSED",
-    details: { pnlUsd: input.pnlUsd, dayKey: key, ...next },
+    details: { pnlUsd: input.pnlUsd, ...next },
   })
 }
 

@@ -47,8 +47,9 @@ const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const
 const EMOJI_PRESETS = ["📈", "📉", "🎯", "⚡", "🔥", "💎", "🧠", "✅", "❌", "👀", "💰", "🚀", "📌", "⭐", "🛡️"]
 
 function drawStroke(ctx: CanvasRenderingContext2D, s: StudyStroke) {
-  ctx.strokeStyle = s.color
-  ctx.fillStyle = s.color
+  const color = "color" in s ? s.color : "#ffffff"
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
   ctx.lineWidth = "width" in s ? s.width : 2
   ctx.lineCap = "round"
   ctx.lineJoin = "round"

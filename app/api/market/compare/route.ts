@@ -15,7 +15,7 @@ function toKuCoinSymbol(unified: string): string {
   return unified.includes("-") ? unified : `${unified}-USDT`
 }
 
-function num(s: string | undefined): number | null {
+function num(s: string | undefined | null): number | null {
   if (s == null || s === "") return null
   const n = parseFloat(s)
   return Number.isFinite(n) ? n : null

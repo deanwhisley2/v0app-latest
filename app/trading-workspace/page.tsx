@@ -394,8 +394,8 @@ function ChartCanvas({
 // ============================================================
 export default function TradingWorkspacePage() {
   const router = useRouter()
-  const [layout, setLayout] = useState("single")
-  const [charts, setCharts] = useState([{
+  const [layout, setLayout] = useState<ChartLayoutType>("single")
+  const [charts, setCharts] = useState<ChartConfig[]>([{
     id: "chart-1", symbol: "BTCUSDT", timeframe: "5m", chartStyle: "candlestick",
     indicators: [
       { type: "ma", enabled: false, maPeriods: [20, 50], color: "#3b82f6" },
@@ -409,16 +409,13 @@ export default function TradingWorkspacePage() {
     candleColors: { bullish: "#22c55e", bearish: "#ef4444", wickColor: "#666", showWicks: true, showBorders: true, borderThickness: 1 },
     volumeEnabled: true,
   }])
-  const [candlesMap, setCandlesMap] = useState({})
+  const [candlesMap, setCandlesMap] = useState<Record<string, Candle[]>>({})
   const [teachMode, setTeachMode] = useState(false)
-  const [activeDrawingTool, setActiveDrawingTool] = useState(null)
-  const [drawingColor, setDrawingColor] = useState("red")
+  const [activeDrawingTool, setActiveDrawingTool] = useState<DrawingTool | null>(null)
+  const [drawingColor, setDrawingColor] = useState<DrawingColor>("red")
   const [drawingThickness, setDrawingThickness] = useState(2)
-  const [preferences, setPreferences] = useState({
-    showGrid: true, showCrosshair: true, showVolume: true, showIndicators: true,
-    chartStyle: "candlestick", theme: "dark", soundEnabled: false, notificationsEnabled: true,
-  })
-  const [patternAlerts, setPatternAlerts] = useState([])
+  const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES)
+  const [patternAlerts, setPatternAlerts] = useState<PatternAlert[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [showAssetSearch, setShowAssetSearch] = useState(false)
   const [assetSearch, setAssetSearch] = useState("")
@@ -472,7 +469,7 @@ export default function TradingWorkspacePage() {
         setLowPrice(parseFloat(tickerData.lowPrice))
         setVolume(parseFloat(tickerData.volume))
 
-        const candles = klinesData.map(k => ({
+        const candles: Candle[] = klinesData.map((k: [number, string, string, string, string, string]) => ({
           time: k[0] / 1000,
           open: parseFloat(k[1]),
           high: parseFloat(k[2]),
@@ -482,8 +479,8 @@ export default function TradingWorkspacePage() {
         }))
         setCandlesMap({ "chart-1": candles })
 
-        const bids = depthData.bids.slice(0, 20).map(b => [b[0], b[1]])
-        const asks = depthData.asks.slice(0, 20).map(a => [a[0], a[1]])
+        const bids = depthData.bids.slice(0, 20).map((b: [string, string]) => [b[0], b[1]])
+        const asks = depthData.asks.slice(0, 20).map((a: [string, string]) => [a[0], a[1]])
         setOrderBook({ bids, asks })
         setLastUpdate(new Date())
       } catch (err) {
@@ -604,7 +601,8 @@ export default function TradingWorkspacePage() {
           {/* Chart */}
           <div ref={chartContainerRef} className="flex-1 relative">
             {candlesMap["chart-1"] && candlesMap["chart-1"].length > 0 ? (
-              <ChartComponent
+              <ChartCanvas
+                chartConfig={charts[0]}
                 candles={candlesMap["chart-1"]}
                 width={chartSize.width}
                 height={chartSize.height}
@@ -613,7 +611,12 @@ export default function TradingWorkspacePage() {
                 drawingColor={drawingColor}
                 drawingThickness={drawingThickness}
                 drawings={charts[0]?.drawings || []}
-                setDrawings={(drawings) => setCharts(prev => prev.map((c, i) => i === 0 ? { ...c, drawings } : c))}
+                onDrawingsChange={(drawings: Drawing[]) =>
+                  setCharts((prev) => prev.map((c, i) => (i === 0 ? { ...c, drawings } : c)))
+                }
+                preferences={preferences}
+                patternAlerts={patternAlerts}
+                indicators={charts[0]?.indicators ?? []}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-zinc-600">

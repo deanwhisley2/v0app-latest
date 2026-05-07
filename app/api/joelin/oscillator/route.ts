@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
-import type { JoelinResponse } from "@/lib/expert/phase2-types"
+import type { JoelinCoin, JoelinResponse } from "@/lib/expert/phase2-types"
 import { pickTradableNow } from "@/lib/expert/joelin-ranking"
+import { buildFocusDailyInsights, pickAnalyzedProfitableCoins } from "@/lib/expert/focus-daily-pipeline"
+import { applyMinuteTradeSafetyFilter } from "@/lib/expert/joelin-safety-filter"
 import { phase2Store } from "@/lib/expert/phase2-store"
 import { getFundingRateAnomaly, getOrderBookImbalance, toBinanceSymbol } from "@/lib/server/fast-paths-core"
 
@@ -27,7 +29,7 @@ async function fetchTicker(symbol: string) {
 async function refreshCoins() {
   const now = Date.now()
   const next = new Date(now + 300_000).toISOString()
-  const updated = await Promise.all(
+  const updated: JoelinCoin[] = await Promise.all(
     phase2Store.joelin.map(async (coin) => {
       const [ticker, ob, fr] = await Promise.all([
         fetchTicker(coin.symbol),
@@ -38,15 +40,15 @@ async function refreshCoins() {
       const fundingScore = fr.signal === "NEUTRAL" ? 15 : 30
       const momentumScore = Math.min(30, Math.abs(ticker.changePercent))
       const confidence = Math.max(35, Math.min(98, Math.round(30 + imbalanceScore + fundingScore + momentumScore)))
-      const directional =
+      const directional: JoelinCoin["action"] =
         ob.imbalance > 0.1 || fr.signal === "BULLISH"
           ? "BUY"
           : ob.imbalance < -0.1 || fr.signal === "BEARISH"
             ? "SELL"
             : "HOLD"
-      const safetyLevel = confidence >= 78 ? "HIGH" : confidence >= 62 ? "MEDIUM" : "LOW"
+      const safetyLevel: JoelinCoin["safetyLevel"] = confidence >= 78 ? "HIGH" : confidence >= 62 ? "MEDIUM" : "LOW"
       const tradableLevel = Math.max(0, Math.min(100, Math.round(confidence * 0.7 + Math.abs(ticker.changePercent) * 0.3)))
-      return {
+      const candidate: JoelinCoin = {
         ...coin,
         action: directional,
         confidence,
@@ -58,6 +60,11 @@ async function refreshCoins() {
         volume24h: ticker.volume24h > 0 ? ticker.volume24h : coin.volume24h,
         volatility: Math.max(0.1, Math.abs(ticker.changePercent)),
       }
+      return applyMinuteTradeSafetyFilter(candidate, {
+        orderBookImbalance: ob.imbalance,
+        fundingSignal: fr.signal,
+        reviewInMinutes: 5,
+      })
     })
   )
   phase2Store.joelin = updated
@@ -67,10 +74,14 @@ export async function GET(_req: NextRequest) {
   await refreshCoins()
   const now = new Date()
   const coins = phase2Store.joelin
+  const focusDaily = buildFocusDailyInsights(coins, 20)
+  const analyzedProfitableCoins = pickAnalyzedProfitableCoins(focusDaily, 10)
   const tradableNow = pickTradableNow(coins, 10)
   const response: JoelinResponse = {
     coins,
     tradableNow,
+    focusDaily,
+    analyzedProfitableCoins,
     lastUpdated: now.toISOString(),
     nextRefresh: new Date(now.getTime() + 300_000).toISOString(),
   }

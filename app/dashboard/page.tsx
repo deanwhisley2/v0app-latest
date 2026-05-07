@@ -24,6 +24,7 @@ import { TradeSubnavChips } from "@/components/dashboard/trade-subnav-chips"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
+import type { FocusCoinInsight } from "@/lib/expert/phase2-types"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -61,6 +62,11 @@ const initialMarketFeed: MarketFeedState = {
   catalog: [],
 }
 
+function normalizeSymbol(value: string): string {
+  const upper = value.toUpperCase().trim()
+  return upper.endsWith("USDT") ? upper.slice(0, -4) : upper
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const { registerAppNavigator } = useNexusNotifications()
@@ -87,6 +93,7 @@ export default function DashboardPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
+  const [analyzedProfitableCoins, setAnalyzedProfitableCoins] = useState<FocusCoinInsight[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -151,6 +158,28 @@ export default function DashboardPage() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    const loadJoelinInsights = async () => {
+      try {
+        const res = await fetch("/api/joelin/oscillator", { cache: "no-store" })
+        if (!res.ok) return
+        const data = (await res.json()) as { analyzedProfitableCoins?: FocusCoinInsight[] }
+        if (!cancelled) {
+          setAnalyzedProfitableCoins(data.analyzedProfitableCoins ?? [])
+        }
+      } catch {
+        // keep last good insights
+      }
+    }
+    void loadJoelinInsights()
+    const id = window.setInterval(loadJoelinInsights, 300_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [])
+
   const offlineGainers = useMemo(
     () => [...coinsData].sort((a, b) => b.change24h - a.change24h).slice(0, 28),
     []
@@ -161,9 +190,16 @@ export default function DashboardPage() {
   )
 
   const tradeCatalog = useMemo(() => {
-    if (marketFeed.catalog.length > 0) return marketFeed.catalog
-    return coinsData
-  }, [marketFeed.catalog])
+    const base = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
+    if (analyzedProfitableCoins.length === 0) return base
+    const profitable = new Set(analyzedProfitableCoins.map((c) => normalizeSymbol(c.symbol)))
+    return [...base].sort((a, b) => {
+      const aBoost = profitable.has(normalizeSymbol(a.symbol)) ? 1 : 0
+      const bBoost = profitable.has(normalizeSymbol(b.symbol)) ? 1 : 0
+      if (aBoost !== bBoost) return bBoost - aBoost
+      return b.change24h - a.change24h
+    })
+  }, [marketFeed.catalog, analyzedProfitableCoins])
 
   const exploreGainers = marketFeed.gainers.length > 0 ? marketFeed.gainers : offlineGainers
   const exploreVolume = marketFeed.volumeLeaders.length > 0 ? marketFeed.volumeLeaders : offlineVolume

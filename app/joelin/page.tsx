@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import type { FocusCoinInsight } from "@/lib/expert/phase2-types"
 
 type JoelinCoin = {
   symbol: string
@@ -15,6 +16,9 @@ type JoelinCoin = {
   tradableLevel: number
   price: number
   lastAnalysis: string
+  minuteTradeConfirmed?: boolean
+  minuteTradeBlockReason?: string
+  minuteTradeReviewAt?: string
 }
 
 export default function JoelinPage() {
@@ -24,12 +28,14 @@ export default function JoelinPage() {
   const [search, setSearch] = useState("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [countdown, setCountdown] = useState(300)
+  const [analyzedProfitableCoins, setAnalyzedProfitableCoins] = useState<FocusCoinInsight[]>([])
 
   async function fetchJoelin() {
     const res = await fetch("/api/joelin/oscillator", { cache: "no-store" })
     const data = await res.json()
     setCoins(data.coins ?? [])
     setTradableNow(data.tradableNow ?? [])
+    setAnalyzedProfitableCoins(data.analyzedProfitableCoins ?? [])
     setLastUpdated(data.lastUpdated ? new Date(data.lastUpdated) : new Date())
     setCountdown(300)
   }
@@ -49,10 +55,12 @@ export default function JoelinPage() {
         const payload = JSON.parse(event.data) as {
           coins: JoelinCoin[]
           tradableNow?: JoelinCoin[]
+          analyzedProfitableCoins?: FocusCoinInsight[]
           lastUpdated: string
         }
         setCoins(payload.coins ?? [])
         setTradableNow(payload.tradableNow ?? [])
+        setAnalyzedProfitableCoins(payload.analyzedProfitableCoins ?? [])
         setLastUpdated(payload.lastUpdated ? new Date(payload.lastUpdated) : new Date())
         setCountdown(300)
       } catch {
@@ -137,6 +145,24 @@ export default function JoelinPage() {
         </Card>
       )}
 
+      {analyzedProfitableCoins.length > 0 && (
+        <Card className="mb-6 border-emerald-500/30 bg-emerald-500/5 p-4">
+          <h2 className="mb-2 text-sm font-semibold text-foreground">Analyzed profitable candidates (Focus-20 daily)</h2>
+          <div className="flex flex-wrap gap-2">
+            {analyzedProfitableCoins.map((c) => (
+              <Badge
+                key={c.symbol}
+                variant="outline"
+                className="cursor-pointer font-mono text-xs"
+                onClick={() => router.push(`/expert-mode?symbol=${encodeURIComponent(c.symbol)}`)}
+              >
+                {c.symbol.replace("USDT", "")} · edge {c.expectedEdgeBps}bps · score {c.profitabilityScore}
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredCoins.map((coin) => (
           <Card
@@ -170,6 +196,11 @@ export default function JoelinPage() {
               >
                 Re-analyze
               </Button>
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              {coin.minuteTradeConfirmed
+                ? "Minute-trade confirmed"
+                : `Blocked for minute-trade${coin.minuteTradeBlockReason ? `: ${coin.minuteTradeBlockReason}` : ""}`}
             </div>
 
             <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
