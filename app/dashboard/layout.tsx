@@ -1,8 +1,6 @@
-"use client"
-
 import type { ReactNode } from "react"
-import { NexusNotificationsProvider } from "@/contexts/NexusNotificationsContext"
 
+/** Notifications + bootstrap live under root `app/layout.tsx`. Avoid nesting a second provider here. */
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  return <NexusNotificationsProvider>{children}</NexusNotificationsProvider>
+  return children
 }

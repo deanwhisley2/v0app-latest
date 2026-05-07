@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { fetchAllExchangeBalances, type ExchangeBalance } from "@/lib/exchange-balance-api"
 import { supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
+import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 
 export interface ConnectedExchange {
   id: string
@@ -28,7 +29,8 @@ export interface ExchangeBalanceState {
 const POLL_INTERVAL_MS = 1000 // 1 second polling for real-time accuracy
 
 export function useExchangeBalances() {
-  const { user } = useAuth()
+  const { user, isGuestSession } = useAuth()
+  const op = useOperationalBootstrap()
   const [exchanges, setExchanges] = useState<ConnectedExchange[]>([])
   const [balanceState, setBalanceState] = useState<ExchangeBalanceState>({
     balances: {},
@@ -45,9 +47,10 @@ export function useExchangeBalances() {
     exchangesRef.current = exchanges
   }, [exchanges])
 
-  // Signed-in: Supabase user_metadata is source of truth for cross-device keys. Local cache fills in when logged out.
+  // DB bootstrap (profiles.nexus_exchanges) → JWT metadata → localStorage — never stale-local before server truth for real accounts.
   useEffect(() => {
     if (typeof window === "undefined") return
+
     const mapRows = (rows: any[]): ConnectedExchange[] =>
       rows.map((ex: any) => ({
         id: ex.id,
@@ -57,54 +60,108 @@ export function useExchangeBalances() {
         apiPassphrase: ex._apiPassphrase || "",
         frozen: ex.frozen || false,
         isDefault: ex.isDefault || false,
-        balance: ex.balance || 0,
+        balance: typeof ex.balance === "number" ? ex.balance : 0,
         lastSync: ex.lastSync ? new Date(ex.lastSync) : undefined,
       }))
 
-    const profileRows = (user?.user_metadata as any)?.nexus_exchanges
-    if (user && Array.isArray(profileRows) && profileRows.length > 0) {
-      setExchanges(mapRows(profileRows))
+    if (!user || isGuestSession) {
+      const stored = localStorage.getItem("nexus_exchanges")
+      if (stored) {
+        try {
+          setExchanges(mapRows(JSON.parse(stored)))
+        } catch (e) {
+          console.error("Failed to parse exchanges:", e)
+        }
+      } else {
+        setExchanges([])
+      }
+      return
+    }
+
+    const dbRows = op.snapshot?.exchangeConnections
+    if (Array.isArray(dbRows) && dbRows.length > 0) {
+      setExchanges(mapRows(dbRows as any[]))
+      try {
+        localStorage.setItem("nexus_exchanges", JSON.stringify(dbRows))
+      } catch {
+        /* ignore quota */
+      }
+      return
+    }
+
+    if (op.isLoading) return
+
+    const profileRows = (user.user_metadata as { nexus_exchanges?: unknown } | undefined)?.nexus_exchanges
+    if (Array.isArray(profileRows) && profileRows.length > 0) {
+      setExchanges(mapRows(profileRows as any[]))
       return
     }
 
     const stored = localStorage.getItem("nexus_exchanges")
     if (stored) {
       try {
-        const parsed = JSON.parse(stored)
-        setExchanges(mapRows(parsed))
+        setExchanges(mapRows(JSON.parse(stored)))
       } catch (e) {
         console.error("Failed to parse exchanges:", e)
       }
     }
-  }, [user])
+  }, [user, isGuestSession, op.snapshot, op.isLoading])
 
   // Save exchanges locally and to account metadata (cross-device).
   const saveExchanges = useCallback(async (updated: ConnectedExchange[]) => {
-    if (typeof window !== "undefined") {
-      const toStore = updated.map((ex) => ({
-        id: ex.id,
-        name: ex.name,
-        apiKey: ex.apiKey ? ex.apiKey.slice(0, 8) + "..." + ex.apiKey.slice(-4) : undefined,
-        _apiKey: ex.apiKey,
-        _apiSecret: ex.apiSecret,
-        _apiPassphrase: ex.apiPassphrase,
-        frozen: ex.frozen,
-        isDefault: ex.isDefault,
-        balance: ex.balance,
-        lastSync: ex.lastSync,
-      }))
-      localStorage.setItem("nexus_exchanges", JSON.stringify(toStore))
-      if (user) {
-        const currentMeta = (user.user_metadata as Record<string, unknown>) ?? {}
-        await supabase.auth.updateUser({
-          data: {
-            ...currentMeta,
-            nexus_exchanges: toStore,
-          },
-        })
+    if (typeof window === "undefined") return
+
+    const toStore = updated.map((ex) => ({
+      id: ex.id,
+      name: ex.name,
+      apiKey: ex.apiKey ? ex.apiKey.slice(0, 8) + "..." + ex.apiKey.slice(-4) : undefined,
+      _apiKey: ex.apiKey,
+      _apiSecret: ex.apiSecret,
+      _apiPassphrase: ex.apiPassphrase,
+      frozen: ex.frozen,
+      isDefault: ex.isDefault,
+      balance: ex.balance,
+      lastSync: ex.lastSync,
+    }))
+    localStorage.setItem("nexus_exchanges", JSON.stringify(toStore))
+
+    if (user && !isGuestSession) {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (token) {
+          const res = await fetch("/api/user/exchange-connections", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ connections: toStore }),
+          })
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            console.warn(
+              "[exchange-connections] persistence failed:",
+              typeof body?.error === "string" ? body.error : res.status
+            )
+          }
+        }
+      } catch (e) {
+        console.warn("[exchange-connections]", e)
       }
+
+      const currentMeta = (user.user_metadata as Record<string, unknown>) ?? {}
+      await supabase.auth.updateUser({
+        data: {
+          ...currentMeta,
+          nexus_exchanges: toStore,
+        },
+      })
+      window.dispatchEvent(new Event("nexus-exchanges-synced"))
     }
-  }, [user])
+  }, [user, isGuestSession])
 
   // Toggle freeze/unfreeze for an exchange
   const toggleFreeze = useCallback((exchangeId: string) => {

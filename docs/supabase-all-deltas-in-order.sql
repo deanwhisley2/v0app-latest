@@ -22,6 +22,9 @@
 --   • docs/supabase-delta-institutional-governance.sql
 --   • docs/supabase-delta-epistemic-calibration.sql
 --   • docs/supabase-delta-causal-governance.sql
+--   • docs/supabase-delta-profiles-nexus-exchanges.sql
+--   • docs/supabase-delta-profiles-operational-workspace.sql
+--   • docs/supabase-delta-profiles-operational-preferences.sql
 --
 -- After new features: append new sections HERE and add tables to verification.
 -- =============================================================================
@@ -355,6 +358,51 @@ CREATE TABLE IF NOT EXISTS "CausalGovernanceEvent" (
 );
 CREATE INDEX IF NOT EXISTS idx_causal_event_user ON "CausalGovernanceEvent" ("userId", "createdAt" DESC);
 CREATE INDEX IF NOT EXISTS idx_causal_event_snapshot ON "CausalGovernanceEvent" ("snapshotId", "createdAt" DESC);
+
+
+-- ---------------------------------------------------------------------------
+-- Profiles: canonical exchange payloads (cross-device operational restore)
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS nexus_exchanges JSONB DEFAULT NULL;
+
+COMMENT ON COLUMN public.profiles.nexus_exchanges IS
+  'Canonical stored exchange connection payload (same shape as client nexus_exchanges).';
+
+CREATE INDEX IF NOT EXISTS profiles_nexus_exchanges_not_null
+  ON public.profiles (id)
+  WHERE nexus_exchanges IS NOT NULL;
+
+
+-- ---------------------------------------------------------------------------
+-- Profiles: operational workspace snapshot (command-center parity across devices)
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS operational_workspace JSONB DEFAULT NULL;
+
+COMMENT ON COLUMN public.profiles.operational_workspace IS
+  'Dashboard/command-center JSON (v=2 activity snapshot). Server-authoritative cross-device restore.';
+
+CREATE INDEX IF NOT EXISTS profiles_operational_workspace_not_null
+  ON public.profiles (id)
+  WHERE operational_workspace IS NOT NULL;
+
+
+-- ---------------------------------------------------------------------------
+-- Profiles: operational_preferences (notifications UI + chrome JSON)
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS operational_preferences JSONB DEFAULT NULL;
+
+COMMENT ON COLUMN public.profiles.operational_preferences IS
+  '{ "v": 1, "notifications": { inbox, history }, "uiChrome": {} } — merged via app API.';
+
+CREATE INDEX IF NOT EXISTS profiles_operational_preferences_not_null
+  ON public.profiles (id)
+  WHERE operational_preferences IS NOT NULL;
 
 
 -- ---------------------------------------------------------------------------

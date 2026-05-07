@@ -28,6 +28,33 @@ CREATE TABLE IF NOT EXISTS public.user_balances (
   CONSTRAINT user_balances_user_id_key UNIQUE (user_id)
 );
 
+-- Legacy installs: CREATE TABLE IF NOT EXISTS skips DDL; indexes/policies need snake_case user_id.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'user_balances'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_balances' AND column_name = 'userId'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_balances' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.user_balances RENAME COLUMN "userId" TO user_id;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_balances' AND column_name = 'userid'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_balances' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.user_balances RENAME COLUMN userid TO user_id;
+    END IF;
+  END IF;
+END $$;
+
 COMMENT ON TABLE public.user_balances IS
   'Running totals: bot PnL increases total_earnings and available_balance; optional stake_delta adjusts current_stake.';
 
@@ -44,6 +71,32 @@ CREATE TABLE IF NOT EXISTS public.email_verifications (
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'email_verifications'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'email_verifications' AND column_name = 'userId'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'email_verifications' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.email_verifications RENAME COLUMN "userId" TO user_id;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'email_verifications' AND column_name = 'userid'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'email_verifications' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.email_verifications RENAME COLUMN userid TO user_id;
+    END IF;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS email_verifications_user_id_idx ON public.email_verifications(user_id);
 CREATE INDEX IF NOT EXISTS email_verifications_email_lower_idx ON public.email_verifications(lower(email));
@@ -62,6 +115,32 @@ CREATE TABLE IF NOT EXISTS public.bot_trade_records (
   metadata JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'bot_trade_records'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'bot_trade_records' AND column_name = 'userId'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'bot_trade_records' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.bot_trade_records RENAME COLUMN "userId" TO user_id;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'bot_trade_records' AND column_name = 'userid'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'bot_trade_records' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.bot_trade_records RENAME COLUMN userid TO user_id;
+    END IF;
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.bot_trade_records IS
   'One row per recorded bot trade; optional external_ref dedupes retries (partial unique index below).';

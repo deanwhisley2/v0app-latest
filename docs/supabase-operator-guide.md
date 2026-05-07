@@ -10,6 +10,28 @@ Open this Markdown in your editor (same as the SQL file — no copying from chat
 
 ---
 
+## Runtime topology — browser ⇄ Next.js ⇄ Supabase Postgres
+
+Privileged data does **not** flow browser → Postgres directly. Intended production wiring:
+
+| Leg | Mechanism |
+|-----|-----------|
+| Browser ↔ **Supabase Auth** | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (`lib/supabaseClient.ts`): sign-in; JWT session + cookies via `@supabase/ssr`; `middleware.ts` calls `auth.getUser()` so cookies stay fresh on navigations. |
+| Browser ↔ **your app origin** (same domain / VPS) | `fetch()` to Route Handlers: either `Authorization: Bearer <access_token>` (validated by `getUserFromBearer` in `lib/auth-api.ts` against anon project) **or** cookie-only handlers using `createRouteHandlerSupabaseClient` (`lib/supabase/route-handler.ts`). |
+| **Next server → Postgres** | `SUPABASE_SERVICE_ROLE_KEY` + same project URL (`lib/supabaseAdmin.ts` → `createAdminClient()`): bypasses **RLS**; used for bootstrap, balances, Expert persistence, `profiles` JSONB updates. |
+| Cookie + **RLS** paths | Example: `GET/POST /api/learner-patterns` uses the user-scoped client + RLS on `blocked_trade_patterns`. |
+
+**Post-deploy checks (replace with your domain):**
+
+- `GET /api/health` — Node process responds (no DB).
+- `GET /api/health/supabase` — service-role round-trip to `public.profiles` (confirms secrets + connectivity for the Expert / continuity stack).
+
+Supabase Dashboard → **Authentication → URL Configuration** must list your real site URL for redirects/OAuth. VPS env vars must reference the **same** Supabase project as the SQL you applied.
+
+See also: `docs/SUPABASE_COMPLETE_SQL_INVENTORY.md`, `docs/SUPABASE_APPLY_PIPELINE.md`, `.env.local.example`.
+
+---
+
 ## Part 1 — Step-by-step manual Supabase runbook
 
 ### Supabase manual setup — step by step (do not skip)
@@ -37,6 +59,10 @@ This is the **operator runbook** for anything that must be done **in the Supabas
      - `NEXT_PUBLIC_SUPABASE_ANON_KEY`  
      - `SUPABASE_SERVICE_ROLE_KEY` (server-only; Expert/daemon DB writes use this via `createAdminClient`)  
    - See `.env.local.example` in the repo.
+
+5. **Smoke the wire** — from any host that resolves your deployed origin:  
+   - `curl -sS https://<your-domain>/api/health` → JSON `ok: true`  
+   - `curl -sS https://<your-domain>/api/health/supabase` → JSON `ok: true` and `supabase: "reachable"` (if this fails, Expert and `/api/user/*` continuity routes will misbehave even when tables exist).
 
 ---
 

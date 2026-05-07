@@ -1,5 +1,11 @@
 # Supabase apply pipeline — keep the app and database aligned
 
+**Full DDL catalog + single paste bundle:** [`docs/SUPABASE_COMPLETE_SQL_INVENTORY.md`](./SUPABASE_COMPLETE_SQL_INVENTORY.md) — run `bash scripts/build-supabase-master-bundle.sh` → `docs/supabase-master-bundle.sql`.
+
+If the SQL Editor offers **“Run without RLS”** vs **“Run and enable RLS”**, pick **without RLS** for that bundle — the dashboard helper uses `user_id`, but Phase‑2 DDL uses **`"userId"`** on many tables, which causes `42703` if bulk RLS is applied. Troubleshooting: same file, *Troubleshooting* section.
+
+**Compare live DB to repo:** paste and run **`docs/supabase-remote-schema-inventory.sql`** (one query at a time in the Editor works best); download CSVs or paste results back here to diff against [`docs/supabase-master-bundle.sql`](./supabase-master-bundle.sql). After deploy, **`GET /api/health/supabase`** on your domain should return `ok: true` (service role → `profiles` probe).
+
 **Hands-on operators (one file in `docs/` next to the SQL):** [`docs/supabase-operator-guide.md`](./supabase-operator-guide.md)  
 Step-by-step only: [`docs/SUPABASE_MANUAL_SETUP_STEP_BY_STEP.md`](./SUPABASE_MANUAL_SETUP_STEP_BY_STEP.md)
 

@@ -1,7 +1,6 @@
 /**
- * Persists dashboard navigation + live analysis in sessionStorage so a normal
- * page refresh does not wipe the user's current activity (same browser tab session).
- * Cleared on logout (see dashboard handleLogout).
+ * Persists dashboard navigation + live analysis in sessionStorage for same-tab refresh.
+ * Cross-device truth: `profiles.operational_workspace` via `/api/user/operational-workspace` + bootstrap.
  */
 import type { Coin } from "@/lib/coins-data"
 import { coinsData } from "@/lib/coins-data"
@@ -79,6 +78,14 @@ function parseSnapshot(raw: string): DashboardActivitySnapshot | null {
   } catch {
     return null
   }
+}
+
+/** Remote (Postgres) workspace JSON — same schema as sessionStorage payload. */
+export function hydrateWorkspaceFromRemote(raw: unknown, expectedUserId: string): DashboardActivitySnapshot | null {
+  if (!raw || typeof raw !== "object") return null
+  const j = raw as Partial<DashboardActivitySnapshot>
+  if (j.v !== 2 || typeof j.userId !== "string" || j.userId !== expectedUserId) return null
+  return parseSnapshot(JSON.stringify(raw))
 }
 
 export function readDashboardActivity(currentUserId: string): DashboardActivitySnapshot | null {

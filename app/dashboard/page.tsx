@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
 import { Ticker } from "@/components/dashboard/ticker"
@@ -34,10 +35,13 @@ import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
 import {
   buildActivitySnapshot,
   clearDashboardActivity,
+  hydrateWorkspaceFromRemote,
   readDashboardActivity,
   resolveCoinForSession,
   writeDashboardActivity,
 } from "@/lib/dashboard-activity-session"
+import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
+import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 
 interface CurrentUser {
   email: string
@@ -71,6 +75,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const { registerAppNavigator } = useNexusNotifications()
   const { user, isLoading: authLoading, signOut, isGuestSession } = useAuth()
+  const op = useOperationalBootstrap()
   const activityUserId = user?.id ?? "guest"
   const { formatUserMoney } = useUserPreferences()
   const testimonialNotif = useDashboardTestimonialNotifs({
@@ -217,7 +222,7 @@ export default function DashboardPage() {
   const [connectedExchanges, setConnectedExchanges] = useState<Array<{ id: string; name: string; balance: number; isDefault?: boolean }>>([])
   const [selectedExchangeId, setSelectedExchangeId] = useState<string | undefined>()
   
-  // Load connected exchanges from localStorage + account metadata for cross-device continuity.
+  // Connected exchanges: DB bootstrap (profiles) → JWT metadata → localStorage.
   useEffect(() => {
     if (typeof window === "undefined") return
     const fromRows = (rows: Array<{ id: string; name: string; balance?: number; isDefault?: boolean }>) => {
@@ -225,23 +230,49 @@ export default function DashboardPage() {
         rows.map((e) => ({
           id: e.id,
           name: e.name,
-          balance: e.balance || 0,
+          balance: typeof e.balance === "number" ? e.balance : 0,
           isDefault: e.isDefault,
         }))
       )
       const defaultExchange = rows.find((e) => e.isDefault)
       if (defaultExchange) setSelectedExchangeId(defaultExchange.id)
     }
-    const stored = localStorage.getItem("nexus_exchanges")
-    if (stored) {
-      const exchanges = JSON.parse(stored)
-      fromRows(exchanges)
+
+    if (!user || isGuestSession) {
+      const stored = localStorage.getItem("nexus_exchanges")
+      if (stored) {
+        try {
+          fromRows(JSON.parse(stored))
+        } catch {
+          /* ignore */
+        }
+      }
+      return
     }
-    const metadataExchanges = (user?.user_metadata as Record<string, unknown> | undefined)?.nexus_exchanges
+
+    const dbRows = op.snapshot?.exchangeConnections
+    if (Array.isArray(dbRows) && dbRows.length > 0) {
+      fromRows(dbRows as Array<{ id: string; name: string; balance?: number; isDefault?: boolean }>)
+      return
+    }
+
+    if (op.isLoading) return
+
+    const metadataExchanges = (user.user_metadata as Record<string, unknown> | undefined)?.nexus_exchanges
     if (Array.isArray(metadataExchanges) && metadataExchanges.length > 0) {
       fromRows(metadataExchanges as Array<{ id: string; name: string; balance?: number; isDefault?: boolean }>)
+      return
     }
-  }, [user])
+
+    const stored = localStorage.getItem("nexus_exchanges")
+    if (stored) {
+      try {
+        fromRows(JSON.parse(stored))
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [user, isGuestSession, op.snapshot, op.isLoading])
   
   // Live Analysis State
   const [liveAnalysis, setLiveAnalysis] = useState<{
@@ -262,6 +293,9 @@ export default function DashboardPage() {
 
   const activityHydratedRef = useRef(false)
   const activityLastSerializedRef = useRef<string>("")
+  const persistWorkspaceTimerRef = useRef<number | null>(null)
+  const lastServerWorkspaceAppliedRef = useRef<string>("")
+  const lastWorkspacePostedRef = useRef<string>("")
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return
@@ -333,6 +367,102 @@ export default function DashboardPage() {
     activityLastSerializedRef.current = serialized
     writeDashboardActivity(snap)
   }, [activityUserId, activeTab, tradeView, selectedCoinSymbol, showBalance, liveAnalysis])
+
+  // Authoritative Postgres workspace replaces tab-local snapshot when bootstrap delivers it.
+  useEffect(() => {
+    if (!user?.id || isGuestSession || op.isLoading || !activityHydratedRef.current) return
+    const raw = op.snapshot?.workspaceSnapshot
+    if (!raw || typeof raw !== "object") return
+    const ser = JSON.stringify(raw)
+    if (ser === lastServerWorkspaceAppliedRef.current) return
+    const parsed = hydrateWorkspaceFromRemote(raw, user.id)
+    if (!parsed) return
+    lastServerWorkspaceAppliedRef.current = ser
+    lastWorkspacePostedRef.current = ser
+
+    setActiveTab(parsed.activeTab)
+    setTradeView(parsed.tradeView)
+    setSelectedCoinSymbol(parsed.selectedCoinSymbol)
+    setShowBalance(parsed.showBalance)
+    const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
+    let liveActive = parsed.live.active
+    const coin = liveActive ? resolveCoinForSession(parsed.live.coinSymbol, catalog) : null
+    if (liveActive && !coin) liveActive = false
+    const resolvedLive = {
+      active: liveActive,
+      coin: liveActive ? coin : null,
+      strategies: parsed.live.strategies,
+      expertMode: parsed.live.expertMode,
+      autoTrade: parsed.live.autoTrade,
+      tradeAmount: parsed.live.tradeAmount,
+    }
+    setLiveAnalysis(resolvedLive)
+    writeDashboardActivity(parsed)
+    activityLastSerializedRef.current = JSON.stringify(
+      buildActivitySnapshot(activityUserId, {
+        activeTab: parsed.activeTab,
+        tradeView: parsed.tradeView,
+        selectedCoinSymbol: parsed.selectedCoinSymbol,
+        showBalance: parsed.showBalance,
+        liveAnalysis: resolvedLive,
+      })
+    )
+  }, [
+    user?.id,
+    isGuestSession,
+    op.snapshot?.workspaceSnapshot,
+    op.isLoading,
+    activityUserId,
+    marketFeed.catalog,
+  ])
+
+  // Debounced server persistence for USER_WORKSPACE_STATE (see lib/operational-state-scope.ts).
+  useEffect(() => {
+    if (!activityHydratedRef.current || !user?.id || isGuestSession) return
+    const snap = buildActivitySnapshot(activityUserId, {
+      activeTab,
+      tradeView,
+      selectedCoinSymbol,
+      showBalance,
+      liveAnalysis,
+    })
+    const ser = JSON.stringify(snap)
+    if (ser === lastWorkspacePostedRef.current) return
+
+    if (persistWorkspaceTimerRef.current) window.clearTimeout(persistWorkspaceTimerRef.current)
+    persistWorkspaceTimerRef.current = window.setTimeout(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/operational-workspace", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ workspace: snap }),
+        })
+        if (!res.ok) return
+        lastWorkspacePostedRef.current = ser
+        broadcastOperationalBump("workspace")
+      } catch {
+        /* offline / transient */
+      }
+    }, 950)
+
+    return () => {
+      if (persistWorkspaceTimerRef.current) window.clearTimeout(persistWorkspaceTimerRef.current)
+    }
+  }, [
+    activityUserId,
+    activeTab,
+    tradeView,
+    selectedCoinSymbol,
+    showBalance,
+    liveAnalysis,
+    user?.id,
+    isGuestSession,
+  ])
 
   useEffect(() => {
     if (!liveAnalysis.active || !liveAnalysis.coin?.symbol) return
@@ -409,6 +539,14 @@ export default function DashboardPage() {
       setTotalEarnings(Number(json.total_earnings ?? 0))
     })()
   }, [authLoading, user, isGuestSession])
+
+  useEffect(() => {
+    if (isGuestSession || !user) return
+    const b = op.snapshot?.userBalance
+    if (!b) return
+    setMainBalance(Number(b.available_balance ?? 0))
+    setTotalEarnings(Number(b.total_earnings ?? 0))
+  }, [isGuestSession, user?.id, op.snapshot?.userBalance])
 
   const handleLogout = useCallback(async () => {
     const uid = user?.id ?? ""
@@ -960,6 +1098,12 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {!isGuestSession && (
+        <div className="mx-auto max-w-[1600px] px-4 pb-1">
+          <OperationalContinuityHud />
+        </div>
+      )}
 
       {/* Mobile Bottom Nav */}
       <BottomNav activeTab={activeTab} onTabChange={handleHeaderTabChange} isGuestSession={isGuestSession} />

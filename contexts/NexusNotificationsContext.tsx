@@ -10,31 +10,31 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
+import type {
+  NexusNotificationItem,
+  NexusNotificationType,
+} from "@/lib/nexus-notification-models"
+import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
+import { isDevLocalOnly } from "@/lib/dev-local-mode"
+import {
+  coerceOperationalPreferences,
+  type OperationalPreferencesV1,
+} from "@/lib/operational-preferences-types"
+import { supabase } from "@/lib/supabaseClient"
+
+export type {
+  NexusNotificationType,
+  AnalysisNotificationPayload,
+  NexusNotificationItem,
+} from "@/lib/nexus-notification-models"
+
+export type UiChromePreferences = OperationalPreferencesV1["uiChrome"]
 
 /** Bump when seed shape changes so dev/demo inbox refreshes without manual clear. */
 const STORAGE_KEY = "nexus_notifications_v2"
-
-export type NexusNotificationType = "price" | "trade" | "security" | "promo" | "system" | "analysis"
-
-export type AnalysisNotificationPayload = {
-  analysisId: string
-  symbol: string
-  action: "BUY" | "SELL" | "HOLD"
-  confidence: number
-  timestamp: string
-}
-
-export type NexusNotificationItem = {
-  id: string
-  type: NexusNotificationType
-  title: string
-  message: string
-  timestamp: string
-  read: boolean
-  nav?: NexusNotificationNav
-  analysis?: AnalysisNotificationPayload
-}
 
 function iso(d: Date) {
   return d.toISOString()
@@ -158,13 +158,22 @@ type NexusNotificationsContextValue = {
 const NexusNotificationsContext = createContext<NexusNotificationsContextValue | null>(null)
 
 export function NexusNotificationsProvider({ children }: { children: ReactNode }) {
+  const { user, isGuestSession } = useAuth()
+  const { snapshot, isLoading: bootLoading } = useOperationalBootstrap()
   const [inbox, setInbox] = useState<NexusNotificationItem[]>([])
   const [history, setHistory] = useState<NexusNotificationItem[]>([])
   const [hydrated, setHydrated] = useState(false)
   const navRef = useRef<NavigatorFn | null>(null)
+  const hadLocalPersistedRef = useRef(false)
+  const seedCapturedRef = useRef(false)
+  const initialSeedSigRef = useRef("")
+  const serverNotifSerializedRef = useRef("")
+  const lastPostedJsonRef = useRef("")
+  const persistPrefsTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     const persisted = loadPersisted()
+    hadLocalPersistedRef.current = !!persisted
     if (persisted) {
       setInbox(persisted.inbox)
       setHistory(persisted.history)
@@ -179,6 +188,68 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     if (!hydrated) return
     savePersisted(inbox, history)
   }, [inbox, history, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (seedCapturedRef.current) return
+    seedCapturedRef.current = true
+    initialSeedSigRef.current = JSON.stringify({ inbox, history })
+  }, [hydrated, inbox, history])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (!user?.id || isGuestSession || isDevLocalOnly()) return
+    if (bootLoading) return
+    const prefs = coerceOperationalPreferences(snapshot?.operationalPreferences ?? null)
+    const n = prefs?.notifications
+    const count = (n?.inbox?.length ?? 0) + (n?.history?.length ?? 0)
+    if (!n || count === 0) return
+    const ser = JSON.stringify(n)
+    if (ser === serverNotifSerializedRef.current) return
+    serverNotifSerializedRef.current = ser
+    lastPostedJsonRef.current = ser
+    setInbox(n.inbox ?? [])
+    setHistory(n.history ?? [])
+  }, [hydrated, user?.id, isGuestSession, bootLoading, snapshot?.operationalPreferences])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (!user?.id || isGuestSession || isDevLocalOnly()) return
+    const ser = JSON.stringify({ inbox, history })
+    const initial = initialSeedSigRef.current
+    const unchangedDemo = !hadLocalPersistedRef.current && !!initial && ser === initial
+    if (unchangedDemo) return
+    if (ser === lastPostedJsonRef.current) return
+
+    if (persistPrefsTimerRef.current) window.clearTimeout(persistPrefsTimerRef.current)
+    persistPrefsTimerRef.current = window.setTimeout(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const patch: Partial<OperationalPreferencesV1> = {
+          v: 1,
+          notifications: { inbox, history },
+        }
+        const res = await fetch("/api/user/operational-preferences", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ patch }),
+        })
+        if (!res.ok) return
+        lastPostedJsonRef.current = ser
+        broadcastOperationalBump("notifications")
+      } catch {
+        /* ignore */
+      }
+    }, 950)
+
+    return () => {
+      if (persistPrefsTimerRef.current) window.clearTimeout(persistPrefsTimerRef.current)
+    }
+  }, [hydrated, inbox, history, user?.id, isGuestSession])
 
   const registerAppNavigator = useCallback((fn: NavigatorFn | null) => {
     navRef.current = fn

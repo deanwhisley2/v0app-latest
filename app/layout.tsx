@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { OperationalBootstrapProvider } from '@/contexts/OperationalBootstrapContext'
 import { NexusNotificationsProvider } from '@/contexts/NexusNotificationsContext'
 import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext'
 import { Toaster } from 'react-hot-toast'
@@ -78,9 +79,11 @@ export default function RootLayout({
         />
         <div id="nexus-app-root">
           <AuthProvider>
-            <NexusNotificationsProvider>
-              <UserPreferencesProvider>{children}</UserPreferencesProvider>
-            </NexusNotificationsProvider>
+            <OperationalBootstrapProvider>
+              <NexusNotificationsProvider>
+                <UserPreferencesProvider>{children}</UserPreferencesProvider>
+              </NexusNotificationsProvider>
+            </OperationalBootstrapProvider>
           </AuthProvider>
         </div>
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />

@@ -15,6 +15,32 @@ CREATE TABLE IF NOT EXISTS public.blocked_trade_patterns (
   CONSTRAINT blocked_trade_patterns_pkey PRIMARY KEY (user_id, pattern_key)
 );
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'blocked_trade_patterns'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'blocked_trade_patterns' AND column_name = 'userId'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'blocked_trade_patterns' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.blocked_trade_patterns RENAME COLUMN "userId" TO user_id;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'blocked_trade_patterns' AND column_name = 'userid'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'blocked_trade_patterns' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.blocked_trade_patterns RENAME COLUMN userid TO user_id;
+    END IF;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS blocked_trade_patterns_user_idx
   ON public.blocked_trade_patterns (user_id);
 
