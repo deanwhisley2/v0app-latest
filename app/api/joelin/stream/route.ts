@@ -1,6 +1,7 @@
 import { pickTradableNow } from "@/lib/expert/joelin-ranking"
-import { buildFocusDailyInsights, pickAnalyzedProfitableCoins } from "@/lib/expert/focus-daily-pipeline"
+import { buildGovernedFocus20 } from "@/lib/expert/focus-daily-pipeline"
 import { phase2Store } from "@/lib/expert/phase2-store"
+import type { JoelinCoin } from "@/lib/expert/phase2-types"
 
 export async function GET(request: Request) {
   const encoder = new TextEncoder()
@@ -34,13 +35,26 @@ export async function GET(request: Request) {
       }
 
       const emit = () => {
-        const coins = phase2Store.joelin
-        const focusDaily = buildFocusDailyInsights(coins, 20)
+        const activeTradeSymbols = Array.from(phase2Store.sessions.values())
+          .filter((s) => s.status === "ACTIVE" || s.status === "PENDING")
+          .map((s) => s.symbol.toUpperCase())
+        const governance = buildGovernedFocus20(phase2Store.joelin, { activeTradeSymbols, limit: 20 })
+        const focusSet = new Set(governance.focusSymbols)
+        const coins = phase2Store.joelin.map((coin) => ({
+          ...coin,
+          focusMember: focusSet.has(coin.symbol.toUpperCase()),
+          supervisionLevel: (activeTradeSymbols.includes(coin.symbol.toUpperCase())
+            ? "CRITICAL"
+            : coin.minuteTradeConfirmed
+              ? "HIGH"
+              : "NORMAL") as JoelinCoin["supervisionLevel"],
+        }))
+        phase2Store.joelin = coins
         const payload = {
           coins,
           tradableNow: pickTradableNow(coins, 10),
-          focusDaily,
-          analyzedProfitableCoins: pickAnalyzedProfitableCoins(focusDaily, 10),
+          focusDaily: governance.focusDaily,
+          analyzedProfitableCoins: governance.analyzedProfitableCoins,
           lastUpdated: new Date().toISOString(),
           nextRefresh: new Date(Date.now() + 300_000).toISOString(),
         }

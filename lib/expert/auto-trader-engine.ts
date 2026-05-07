@@ -16,10 +16,18 @@ export class AutoTraderEngine {
 
   private rankCoins(coins: JoelinCoin[]): JoelinCoin[] {
     return coins
-      .filter((c) => c.confidence >= 65 && c.safetyLevel !== "LOW")
+      .filter(
+        (c) =>
+          c.focusMember === true &&
+          c.minuteTradeConfirmed === true &&
+          c.confidence >= 65 &&
+          c.safetyLevel !== "LOW"
+      )
       .sort((a, b) => {
-        const scoreA = a.confidence * 0.6 + a.tradableLevel * 0.4
-        const scoreB = b.confidence * 0.6 + b.tradableLevel * 0.4
+        const supervisionA = a.supervisionLevel === "CRITICAL" ? 18 : a.supervisionLevel === "HIGH" ? 8 : 0
+        const supervisionB = b.supervisionLevel === "CRITICAL" ? 18 : b.supervisionLevel === "HIGH" ? 8 : 0
+        const scoreA = a.confidence * 0.5 + a.tradableLevel * 0.4 + supervisionA
+        const scoreB = b.confidence * 0.5 + b.tradableLevel * 0.4 + supervisionB
         return scoreB - scoreA
       })
   }

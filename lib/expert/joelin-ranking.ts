@@ -9,6 +9,7 @@ export function pickTradableNow(coins: JoelinCoin[], limit = 10): JoelinCoin[] {
   return [...coins]
     .filter(
       (c) =>
+        c.focusMember === true &&
         c.action !== "HOLD" &&
         c.confidence >= 65 &&
         c.safetyLevel !== "LOW" &&

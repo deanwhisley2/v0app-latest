@@ -44,5 +44,20 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    /**
+     * Permanent Focus-20 observer: always-on behavior analysis (no forced trades).
+     */
+    {
+      name: "nexus-focus-observer",
+      cwd: __dirname,
+      script: "node_modules/tsx/dist/cli.mjs",
+      args: "scripts/focus-20-observer-daemon.ts",
+      autorestart: true,
+      max_restarts: 50,
+      min_uptime: "15s",
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 }

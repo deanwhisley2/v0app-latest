@@ -92,6 +92,8 @@ export interface JoelinCoin {
   minuteTradeConfirmed?: boolean
   minuteTradeBlockReason?: string
   minuteTradeReviewAt?: string
+  focusMember?: boolean
+  supervisionLevel?: "NORMAL" | "HIGH" | "CRITICAL"
 }
 
 export interface FocusCoinInsight {
@@ -103,6 +105,8 @@ export interface FocusCoinInsight {
   expectedEdgeBps: number
   analyzedAt: string
   rationale: string[]
+  supervisionLevel?: "NORMAL" | "HIGH" | "CRITICAL"
+  recycledIn?: boolean
 }
 
 export interface JoelinResponse {

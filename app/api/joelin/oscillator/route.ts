@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import type { JoelinCoin, JoelinResponse } from "@/lib/expert/phase2-types"
 import { pickTradableNow } from "@/lib/expert/joelin-ranking"
-import { buildFocusDailyInsights, pickAnalyzedProfitableCoins } from "@/lib/expert/focus-daily-pipeline"
+import { buildGovernedFocus20 } from "@/lib/expert/focus-daily-pipeline"
 import { applyMinuteTradeSafetyFilter } from "@/lib/expert/joelin-safety-filter"
 import { phase2Store } from "@/lib/expert/phase2-store"
 import { getFundingRateAnomaly, getOrderBookImbalance, toBinanceSymbol } from "@/lib/server/fast-paths-core"
@@ -73,9 +73,23 @@ async function refreshCoins() {
 export async function GET(_req: NextRequest) {
   await refreshCoins()
   const now = new Date()
-  const coins = phase2Store.joelin
-  const focusDaily = buildFocusDailyInsights(coins, 20)
-  const analyzedProfitableCoins = pickAnalyzedProfitableCoins(focusDaily, 10)
+  const activeTradeSymbols = Array.from(phase2Store.sessions.values())
+    .filter((s) => s.status === "ACTIVE" || s.status === "PENDING")
+    .map((s) => s.symbol.toUpperCase())
+  const governance = buildGovernedFocus20(phase2Store.joelin, { activeTradeSymbols, limit: 20 })
+  const focusSet = new Set(governance.focusSymbols)
+  const coins = phase2Store.joelin.map((coin) => ({
+    ...coin,
+    focusMember: focusSet.has(coin.symbol.toUpperCase()),
+    supervisionLevel: (activeTradeSymbols.includes(coin.symbol.toUpperCase())
+      ? "CRITICAL"
+      : coin.minuteTradeConfirmed
+        ? "HIGH"
+        : "NORMAL") as JoelinCoin["supervisionLevel"],
+  }))
+  phase2Store.joelin = coins
+  const focusDaily = governance.focusDaily
+  const analyzedProfitableCoins = governance.analyzedProfitableCoins
   const tradableNow = pickTradableNow(coins, 10)
   const response: JoelinResponse = {
     coins,

@@ -19,6 +19,8 @@ type JoelinCoin = {
   minuteTradeConfirmed?: boolean
   minuteTradeBlockReason?: string
   minuteTradeReviewAt?: string
+  focusMember?: boolean
+  supervisionLevel?: "NORMAL" | "HIGH" | "CRITICAL"
 }
 
 export default function JoelinPage() {
@@ -201,6 +203,31 @@ export default function JoelinPage() {
               {coin.minuteTradeConfirmed
                 ? "Minute-trade confirmed"
                 : `Blocked for minute-trade${coin.minuteTradeBlockReason ? `: ${coin.minuteTradeBlockReason}` : ""}`}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Focus-20: {coin.focusMember ? "IN" : "OUT"} · Supervision: {coin.supervisionLevel ?? "NORMAL"}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                variant="default"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  router.push(`/expert-mode?symbol=${encodeURIComponent(coin.symbol)}&mode=auto`)
+                }}
+              >
+                Auto trade
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  router.push(`/expert-mode?symbol=${encodeURIComponent(coin.symbol)}&mode=manual`)
+                }}
+              >
+                Manual trade
+              </Button>
             </div>
 
             <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">

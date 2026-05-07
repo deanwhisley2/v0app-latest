@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
@@ -28,6 +29,7 @@ interface MarketTableProps {
 }
 
 export function MarketTable({ coins, onCoinSelect, selectedCoin }: MarketTableProps) {
+  const router = useRouter()
   const [search, setSearch] = useState("")
   const [sortBy, setSortBy] = useState<"change24h" | "change7d" | "volume" | "marketCap">("change24h")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
@@ -230,6 +232,7 @@ export function MarketTable({ coins, onCoinSelect, selectedCoin }: MarketTablePr
                     <ArrowUpDown className="h-3 w-3" />
                   </span>
                 </th>
+                <th className="pb-3 text-right font-medium">Trade</th>
               </tr>
             </thead>
             <tbody>
@@ -289,6 +292,30 @@ export function MarketTable({ coins, onCoinSelect, selectedCoin }: MarketTablePr
                   </td>
                   <td className="hidden py-3 text-right font-mono text-sm text-muted-foreground lg:table-cell">
                     {formatMarketCap(coin.marketCap)}
+                  </td>
+                  <td className="py-3 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[10px] hover:bg-muted"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/expert-mode?symbol=${encodeURIComponent(coin.symbol)}&mode=auto`)
+                        }}
+                      >
+                        Auto
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[10px] hover:bg-muted"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/expert-mode?symbol=${encodeURIComponent(coin.symbol)}&mode=manual`)
+                        }}
+                      >
+                        Manual
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

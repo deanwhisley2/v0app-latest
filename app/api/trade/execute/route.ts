@@ -4,6 +4,7 @@ import { assertRealTradeApiSecret } from "@/lib/server/trade-api-auth"
 import { commanderDecide, executeOrder } from "@/lib/strategy-commander"
 import type { TradeSignal } from "@/lib/trading-signal"
 import { requestGovernanceApproval } from "@/lib/global-execution-governor"
+import { buildFocusUniverse } from "@/lib/behavior-market-intelligence"
 
 async function fetchSpotPrice(symbol: string): Promise<number> {
   const u = new URL("https://api.binance.com/api/v3/ticker/price")
@@ -57,6 +58,18 @@ export async function POST(request: NextRequest) {
   }
 
   const pair = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`
+  const focusUniverse = new Set(
+    buildFocusUniverse(
+      process.env.NEXUS_FOCUS_SYMBOLS?.split(",").map((s) => s.trim()).filter(Boolean),
+      process.env.NEXUS_FOCUS_INCLUDE_GOLD === "1"
+    )
+  )
+  if (!focusUniverse.has(pair)) {
+    return NextResponse.json(
+      { ok: false, error: `FOCUS_UNIVERSE_REQUIRED: ${pair} is outside active Focus-20 universe.` },
+      { status: 400 }
+    )
+  }
   const governance = await requestGovernanceApproval({
     workerId: `api_trade_${Date.now()}`,
     lane: "api-trade-execute",

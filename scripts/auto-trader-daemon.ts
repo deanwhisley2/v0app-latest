@@ -64,6 +64,7 @@ const SL_PCT = Number(process.env.AUTO_TRADER_STOP_LOSS_PERCENT) || 2
 const TP_PCT = Number(process.env.AUTO_TRADER_TAKE_PROFIT_PERCENT) || 4
 const CONF_MIN = Math.max(50, Number(process.env.AUTO_TRADER_CONFIDENCE_MIN) || 65)
 const workerId = `atd_${Math.random().toString(36).slice(2, 10)}`
+let dynamicSymbols: string[] = [...symbols]
 
 async function startupSafeToResume() {
   const gate = await getResumeGate()
@@ -164,6 +165,26 @@ async function runAnalysis(baseSymbol: string): Promise<{ action: string; confid
     return null
   }
   return data.result.fusedDecision
+}
+
+async function refreshFocusSymbolsFromJoelin() {
+  try {
+    const data = await fetchJson<{
+      focusDaily?: Array<{ symbol?: string }>
+      analyzedProfitableCoins?: Array<{ symbol?: string }>
+    }>(`${base}/api/joelin/oscillator`)
+    const pool = [
+      ...(data.analyzedProfitableCoins ?? []).map((x) => String(x.symbol ?? "")),
+      ...(data.focusDaily ?? []).map((x) => String(x.symbol ?? "")),
+    ]
+      .map((s) => s.toUpperCase().replace(/USDT$/i, ""))
+      .filter(Boolean)
+    if (pool.length >= 3) {
+      dynamicSymbols = Array.from(new Set(pool)).slice(0, 20)
+    }
+  } catch {
+    dynamicSymbols = [...symbols]
+  }
 }
 
 async function tradeExecute(
@@ -392,7 +413,7 @@ async function analysisCycle() {
   let openCount = 0
   let exposure = 0
   let totalLossWindow = 0
-  for (const sym of symbols) {
+  for (const sym of dynamicSymbols) {
     const pair = `${sym}USDT`
     const rt = await runtimeForPair(pair, userId)
     if (rt.positionStatus === "LONG") {
@@ -406,7 +427,8 @@ async function analysisCycle() {
     return
   }
 
-  for (const sym of symbols) {
+  await refreshFocusSymbolsFromJoelin()
+  for (const sym of dynamicSymbols) {
     const pair = `${sym}USDT`
     let fused: { action: string; confidence: number } | null = null
     try {

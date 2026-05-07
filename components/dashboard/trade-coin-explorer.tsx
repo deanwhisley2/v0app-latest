@@ -1,6 +1,7 @@
 "use client"
 
 import { Flame, Sparkles } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { Coin } from "@/lib/coins-data"
 import { formatPrice } from "@/lib/coins-data"
@@ -25,6 +26,7 @@ function CoinRow({
   active: boolean
   onPick: () => void
 }) {
+  const router = useRouter()
   const up = coin.change24h >= 0
   return (
     <button
@@ -56,6 +58,28 @@ function CoinRow({
         {up ? "+" : ""}
         {coin.change24h.toFixed(2)}%
       </span>
+      <div className="flex gap-1">
+        <button
+          type="button"
+          className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted"
+          onClick={(e) => {
+            e.stopPropagation()
+            router.push(`/expert-mode?symbol=${encodeURIComponent(coin.symbol)}&mode=auto`)
+          }}
+        >
+          A
+        </button>
+        <button
+          type="button"
+          className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted"
+          onClick={(e) => {
+            e.stopPropagation()
+            router.push(`/expert-mode?symbol=${encodeURIComponent(coin.symbol)}&mode=manual`)
+          }}
+        >
+          M
+        </button>
+      </div>
     </button>
   )
 }

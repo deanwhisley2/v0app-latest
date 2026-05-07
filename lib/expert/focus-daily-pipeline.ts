@@ -1,4 +1,5 @@
 import type { FocusCoinInsight, JoelinCoin } from "@/lib/expert/phase2-types"
+let lastFocusSymbols = new Set<string>()
 
 function expectedEdgeBps(coin: JoelinCoin): number {
   const confidenceBoost = Math.max(0, coin.confidence - 55) * 3
@@ -48,4 +49,72 @@ export function pickAnalyzedProfitableCoins(insights: FocusCoinInsight[], limit 
     .filter((row) => row.action !== "HOLD" && row.confidence >= 68 && row.profitabilityScore >= 60)
     .sort((a, b) => b.profitabilityScore - a.profitabilityScore)
     .slice(0, limit)
+}
+
+export function buildGovernedFocus20(
+  coins: JoelinCoin[],
+  opts?: { activeTradeSymbols?: string[]; limit?: number }
+): {
+  focusDaily: FocusCoinInsight[]
+  analyzedProfitableCoins: FocusCoinInsight[]
+  focusSymbols: string[]
+  recycledOutSymbols: string[]
+} {
+  const limit = Math.max(20, opts?.limit ?? 20)
+  const active = new Set((opts?.activeTradeSymbols ?? []).map((s) => s.toUpperCase()))
+  const now = new Date().toISOString()
+
+  const scored = [...coins]
+    .map((coin) => {
+      const profitability = profitabilityScore(coin)
+      const carryBonus = lastFocusSymbols.has(coin.symbol.toUpperCase()) ? 6 : 0
+      const activeBonus = active.has(coin.symbol.toUpperCase()) ? 14 : 0
+      const poorPenalty = profitability < 50 ? 10 : 0
+      const selectionScore = profitability + carryBonus + activeBonus - poorPenalty
+      const supervisionLevel: FocusCoinInsight["supervisionLevel"] = active.has(coin.symbol.toUpperCase())
+        ? "CRITICAL"
+        : profitability >= 75
+          ? "HIGH"
+          : "NORMAL"
+      return {
+        coin,
+        profitability,
+        selectionScore,
+        supervisionLevel,
+      }
+    })
+    .sort((a, b) => b.selectionScore - a.selectionScore)
+
+  const selected = scored.slice(0, limit)
+  const selectedSet = new Set(selected.map((x) => x.coin.symbol.toUpperCase()))
+  const recycledOutSymbols = Array.from(lastFocusSymbols).filter((s) => !selectedSet.has(s))
+
+  const focusDaily: FocusCoinInsight[] = selected.map((row) => ({
+    symbol: row.coin.symbol,
+    action: row.coin.action,
+    confidence: row.coin.confidence,
+    tradableLevel: row.coin.tradableLevel,
+    profitabilityScore: row.profitability,
+    expectedEdgeBps: expectedEdgeBps(row.coin),
+    analyzedAt: now,
+    supervisionLevel: row.supervisionLevel,
+    recycledIn: !lastFocusSymbols.has(row.coin.symbol.toUpperCase()),
+    rationale: [
+      `action=${row.coin.action}`,
+      `confidence=${row.coin.confidence}`,
+      `tradableLevel=${row.coin.tradableLevel}`,
+      `volatility=${row.coin.volatility.toFixed(2)}`,
+      `safety=${row.coin.safetyLevel}`,
+      `supervision=${row.supervisionLevel}`,
+      `selectionScore=${row.selectionScore.toFixed(2)}`,
+    ],
+  }))
+
+  lastFocusSymbols = selectedSet
+  return {
+    focusDaily,
+    analyzedProfitableCoins: pickAnalyzedProfitableCoins(focusDaily, 10),
+    focusSymbols: Array.from(selectedSet),
+    recycledOutSymbols,
+  }
 }
