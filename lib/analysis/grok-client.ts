@@ -2,7 +2,15 @@
  * xAI Grok — prefers `POST /v1/responses` (current xAI API); falls back to `/v1/chat/completions`.
  * Set `XAI_API_STYLE=chat` to force legacy only. Default `auto`: try responses, then chat on failure/empty.
  * When XAI_API_KEY is unset: deterministic mock + console.warn (short delay for UX, not 5s).
+ *
+ * Subscription gate: see `lib/grok-pipeline-status.ts` — no network calls until
+ * NEXUS_GROK_SUBSCRIPTION_ACTIVE=1 (and operator enable + key).
  */
+
+import {
+  getGrokPipelineStatus,
+  type GrokPipelineMode,
+} from "@/lib/grok-pipeline-status"
 
 export type Bias = "BULLISH" | "BEARISH" | "NEUTRAL"
 export type NewsSentiment = "POSITIVE" | "NEGATIVE" | "NEUTRAL"
@@ -10,6 +18,8 @@ export type NewsSentiment = "POSITIVE" | "NEGATIVE" | "NEUTRAL"
 export interface GrokResponse {
   /** True when no API key or parse/API failure fell back to mock */
   mock: boolean
+  /** How this row was produced — fusion uses only `live` for scoring */
+  pipelineMode?: GrokPipelineMode
   symbol: string
   xSentiment: {
     hype: number
@@ -41,6 +51,35 @@ function parseJsonFromModelContent(content: string): Record<string, unknown> | n
   }
 }
 
+function getFrozenGrokResponse(
+  symbol: string,
+  analysisTimeMs: number,
+  mode: Extract<GrokPipelineMode, "frozen_subscription" | "frozen_operator_off">
+): GrokResponse {
+  const msg =
+    mode === "frozen_subscription"
+      ? "Pipeline frozen — activate subscription / credits (NEXUS_GROK_SUBSCRIPTION_ACTIVE=1)."
+      : "Grok disabled by operator (NEXUS_GROK_ENABLED≠1)."
+  return {
+    mock: true,
+    pipelineMode: mode,
+    symbol,
+    xSentiment: {
+      hype: 50,
+      fear: 50,
+      bias: "NEUTRAL",
+      keyMentions: [msg],
+    },
+    newsSentiment: "NEUTRAL",
+    newsHeadlines: [],
+    narrativeShift: null,
+    keyLevels: { support: [], resistance: [] },
+    overallBias: "NEUTRAL",
+    confidence: 0,
+    analysisTimeMs,
+  }
+}
+
 function getMockGrokResponse(symbol: string, analysisTimeMs: number): GrokResponse {
   const h = symbol.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
   const hype = 35 + (h % 45)
@@ -49,6 +88,7 @@ function getMockGrokResponse(symbol: string, analysisTimeMs: number): GrokRespon
     hype > fear + 10 ? "BULLISH" : fear > hype + 10 ? "BEARISH" : "NEUTRAL"
   return {
     mock: true,
+    pipelineMode: "mock_no_key",
     symbol,
     xSentiment: {
       hype,
@@ -96,6 +136,7 @@ function mapParsedToGrok(symbol: string, parsed: Record<string, unknown>, analys
 
   return {
     mock: false,
+    pipelineMode: "live",
     symbol,
     xSentiment: {
       hype: Math.min(100, Math.max(0, Number(xs?.hype ?? 50))),
@@ -209,6 +250,15 @@ async function callGrokChatCompletionsApi(
 export async function callGrok(symbol: string, timeoutMs: number): Promise<GrokResponse> {
   const start = Date.now()
   const sym = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "")
+  const status = getGrokPipelineStatus()
+
+  if (!status.subscriptionActive) {
+    return getFrozenGrokResponse(sym, Date.now() - start, "frozen_subscription")
+  }
+  if (!status.operatorEnabled) {
+    return getFrozenGrokResponse(sym, Date.now() - start, "frozen_operator_off")
+  }
+
   const apiKey = process.env.XAI_API_KEY?.trim()
 
   if (!apiKey) {

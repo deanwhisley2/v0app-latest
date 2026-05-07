@@ -6,7 +6,7 @@ import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/l
 /**
  * Intentionally not gated by `NEXT_PUBLIC_DEV_LOCAL_ONLY`: fast paths only call
  * public Binance REST (depth + funding index). Grok runs only when includeGrok
- * is true and NEXUS_GROK_ENABLED=1.
+ * is true and the Grok pipeline is live (`lib/grok-pipeline-status.ts`).
  */
 export async function POST(request: NextRequest) {
   let body: { symbol?: string; timeWindowSeconds?: number; includeGrok?: boolean }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Grok only when explicitly requested AND NEXUS_GROK_ENABLED=1 (see time-bound-analysis).
+  // Grok only when explicitly requested AND operator enables + subscription active + XAI key (see grok-pipeline-status).
   const includeGrok = body.includeGrok === true
   const timeWindowMs = timeWindowSeconds * 1000
 

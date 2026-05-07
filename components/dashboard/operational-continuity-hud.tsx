@@ -22,6 +22,8 @@ export function OperationalContinuityHud({ className }: { className?: string }) 
   const [healthOk, setHealthOk] = useState<boolean | null>(null)
   const [healthAt, setHealthAt] = useState<number | null>(null)
   const [supabaseOk, setSupabaseOk] = useState<boolean | null>(null)
+  const [grokLive, setGrokLive] = useState<boolean | null>(null)
+  const [grokHint, setGrokHint] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -52,6 +54,38 @@ export function OperationalContinuityHud({ className }: { className?: string }) 
     }
     void ping()
     const id = window.setInterval(ping, 45_000)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+    }
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    const loadGrok = async () => {
+      try {
+        const r = await fetch("/api/grok/status", { cache: "no-store" })
+        if (!alive) return
+        if (!r.ok) {
+          setGrokLive(false)
+          setGrokHint("status unavailable")
+          return
+        }
+        const j = (await r.json()) as {
+          pipelineLive?: boolean
+          frozenReason?: string | null
+        }
+        setGrokLive(j.pipelineLive === true)
+        setGrokHint(typeof j.frozenReason === "string" && j.frozenReason ? j.frozenReason : null)
+      } catch {
+        if (alive) {
+          setGrokLive(false)
+          setGrokHint(null)
+        }
+      }
+    }
+    void loadGrok()
+    const id = window.setInterval(loadGrok, 120_000)
     return () => {
       alive = false
       window.clearInterval(id)
@@ -193,6 +227,19 @@ export function OperationalContinuityHud({ className }: { className?: string }) 
             </span>
             <span className={typeof navigator !== "undefined" && navigator.onLine ? "" : "text-amber-500"}>
               Browser online: {typeof navigator !== "undefined" ? (navigator.onLine ? "yes" : "offline") : "—"}
+            </span>
+            <span
+              className="max-w-[min(28rem,85vw)]"
+              title={grokHint ?? undefined}
+            >
+              Grok narrative:{" "}
+              <span
+                className={
+                  grokLive ? "text-emerald-400" : grokLive === false ? "text-muted-foreground" : ""
+                }
+              >
+                {grokLive === null ? "…" : grokLive ? "live" : "frozen"}
+              </span>
             </span>
           </div>
           <button

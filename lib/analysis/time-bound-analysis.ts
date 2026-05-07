@@ -105,7 +105,9 @@ function fuseDecision(
     reasons.push("Funding skew: positive / crowded-long tone")
   }
 
-  const grokUsable = grok && !grok.mock && !grokMissedWindow
+  const effectiveMode =
+    grok?.pipelineMode ?? (grok?.mock === false ? "live" : "mock_no_key")
+  const grokUsable = grok && effectiveMode === "live" && !grokMissedWindow
   let grokInfluenced = false
 
   if (grokUsable) {
@@ -121,8 +123,12 @@ function fuseDecision(
     if (grok.newsSentiment === "NEGATIVE") sellScore += 8
   } else if (grokMissedWindow) {
     reasons.push("Grok not available within the analysis window — fast paths only")
-  } else if (grok?.mock) {
-    reasons.push("Grok mock layer (no XAI_API_KEY or fallback) — not used for directional score")
+  } else if (grok?.pipelineMode === "frozen_subscription") {
+    reasons.push("Grok frozen — subscription / API credits not active (set NEXUS_GROK_SUBSCRIPTION_ACTIVE=1 when billing is ready)")
+  } else if (grok?.pipelineMode === "frozen_operator_off") {
+    reasons.push("Grok frozen — operator has not armed the integration (NEXUS_GROK_ENABLED)")
+  } else if (grok?.mock || grok?.pipelineMode === "mock_no_key") {
+    reasons.push("Grok mock layer (no XAI_API_KEY or parse fallback) — not used for directional score")
   }
 
   let action: "BUY" | "SELL" | "HOLD" = "HOLD"
