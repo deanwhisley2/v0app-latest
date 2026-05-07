@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { fetchAllExchangeBalances, type ExchangeBalance } from "@/lib/exchange-balance-api"
+import {
+  clearPendingExchangeConnections,
+  persistExchangeConnections,
+  stashPendingExchangeConnections,
+  takePendingExchangeConnections,
+} from "@/lib/exchange-connections-client"
 import { supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
@@ -27,6 +33,8 @@ export interface ExchangeBalanceState {
 }
 
 const POLL_INTERVAL_MS = 1000 // 1 second polling for real-time accuracy
+/** Debounce burst writes (toggle default, etc.) into one POST with retries. */
+const PERSIST_DEBOUNCE_MS = 320
 
 export function useExchangeBalances() {
   const { user, isGuestSession } = useAuth()
@@ -41,11 +49,65 @@ export function useExchangeBalances() {
   })
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const exchangesRef = useRef(exchanges)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingServerPayloadRef = useRef<unknown[] | null>(null)
+  const userRef = useRef(user)
+  const isGuestRef = useRef(isGuestSession)
+  /** After bootstrap: upload local-only keys once per user if server has no connections. */
+  const attemptedLocalHydrateRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    userRef.current = user
+    isGuestRef.current = isGuestSession
+  }, [user, isGuestSession])
 
   // Keep ref in sync
   useEffect(() => {
     exchangesRef.current = exchanges
   }, [exchanges])
+
+  const flushServerPersist = useCallback(async () => {
+    const connections = pendingServerPayloadRef.current
+    pendingServerPayloadRef.current = null
+    if (!connections || isGuestRef.current) return
+    const u = userRef.current
+    if (!u?.id) return
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) {
+      stashPendingExchangeConnections(connections)
+      return
+    }
+
+    const result = await persistExchangeConnections(token, connections)
+    if (result.ok) {
+      clearPendingExchangeConnections()
+      if (result.metaSyncFailed) {
+        console.warn("[exchange-connections] profiles saved; JWT mirror:", result.metaSyncFailed)
+      }
+      window.dispatchEvent(new Event("nexus-exchanges-synced"))
+      return
+    }
+
+    stashPendingExchangeConnections(connections)
+    console.warn("[exchange-connections] server persist failed:", result.error)
+
+    try {
+      const currentMeta = (u.user_metadata as Record<string, unknown>) ?? {}
+      await supabase.auth.updateUser({
+        data: {
+          ...currentMeta,
+          nexus_exchanges: connections,
+        },
+      })
+      window.dispatchEvent(new Event("nexus-exchanges-synced"))
+    } catch (e) {
+      console.warn("[exchange-connections] JWT fallback failed:", e)
+    }
+  }, [])
 
   // DB bootstrap (profiles.nexus_exchanges) → JWT metadata → localStorage — never stale-local before server truth for real accounts.
   useEffect(() => {
@@ -107,61 +169,120 @@ export function useExchangeBalances() {
     }
   }, [user, isGuestSession, op.snapshot, op.isLoading])
 
-  // Save exchanges locally and to account metadata (cross-device).
-  const saveExchanges = useCallback(async (updated: ConnectedExchange[]) => {
+  /** If Postgres/JWT have no exchanges but this browser still has keys in localStorage, push once (repair cross-device mount). */
+  useEffect(() => {
+    if (!user?.id) {
+      attemptedLocalHydrateRef.current = null
+      return
+    }
+    if (isGuestSession || op.isLoading) return
+
+    const remote = op.snapshot?.exchangeConnections
+    if (Array.isArray(remote) && remote.length > 0) return
+    if (attemptedLocalHydrateRef.current === user.id) return
+
+    const stored = localStorage.getItem("nexus_exchanges")
+    if (!stored) return
+    let parsed: unknown[]
+    try {
+      parsed = JSON.parse(stored) as unknown[]
+    } catch {
+      return
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) return
+    const hasSecrets = parsed.some(
+      (row) =>
+        typeof row === "object" &&
+        row !== null &&
+        "_apiKey" in row &&
+        typeof (row as { _apiKey?: unknown })._apiKey === "string" &&
+        ((row as { _apiKey: string })._apiKey?.length ?? 0) > 0
+    )
+    if (!hasSecrets) return
+
+    attemptedLocalHydrateRef.current = user.id
+    pendingServerPayloadRef.current = parsed
+    void flushServerPersist()
+  }, [user?.id, isGuestSession, op.isLoading, op.snapshot?.exchangeConnections, flushServerPersist])
+
+  // Retry queued payloads when the tab wakes or the browser goes online.
+  useEffect(() => {
     if (typeof window === "undefined") return
+    if (!user?.id || isGuestSession) return
 
-    const toStore = updated.map((ex) => ({
-      id: ex.id,
-      name: ex.name,
-      apiKey: ex.apiKey ? ex.apiKey.slice(0, 8) + "..." + ex.apiKey.slice(-4) : undefined,
-      _apiKey: ex.apiKey,
-      _apiSecret: ex.apiSecret,
-      _apiPassphrase: ex.apiPassphrase,
-      frozen: ex.frozen,
-      isDefault: ex.isDefault,
-      balance: ex.balance,
-      lastSync: ex.lastSync,
-    }))
-    localStorage.setItem("nexus_exchanges", JSON.stringify(toStore))
-
-    if (user && !isGuestSession) {
-      try {
+    const retryPending = () => {
+      void (async () => {
+        const pending = takePendingExchangeConnections()
+        if (!pending?.length) return
         const {
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
-        if (token) {
-          const res = await fetch("/api/user/exchange-connections", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ connections: toStore }),
-          })
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}))
-            console.warn(
-              "[exchange-connections] persistence failed:",
-              typeof body?.error === "string" ? body.error : res.status
-            )
-          }
+        if (!token) return
+        const r = await persistExchangeConnections(token, pending)
+        if (r.ok) {
+          clearPendingExchangeConnections()
+          window.dispatchEvent(new Event("nexus-exchanges-synced"))
         }
-      } catch (e) {
-        console.warn("[exchange-connections]", e)
+      })()
+    }
+
+    window.addEventListener("online", retryPending)
+    const onVis = () => {
+      if (document.visibilityState === "visible") retryPending()
+    }
+    document.addEventListener("visibilitychange", onVis)
+    retryPending()
+    return () => {
+      window.removeEventListener("online", retryPending)
+      document.removeEventListener("visibilitychange", onVis)
+    }
+  }, [user?.id, isGuestSession])
+
+  useEffect(
+    () => () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+    },
+    []
+  )
+
+  // Save locally immediately; sync to Postgres + Auth via debounced POST (retries + offline queue).
+  const saveExchanges = useCallback(
+    async (updated: ConnectedExchange[]) => {
+      if (typeof window === "undefined") return
+
+      const toStore = updated.map((ex) => ({
+        id: ex.id,
+        name: ex.name,
+        apiKey: ex.apiKey ? ex.apiKey.slice(0, 8) + "..." + ex.apiKey.slice(-4) : undefined,
+        _apiKey: ex.apiKey,
+        _apiSecret: ex.apiSecret,
+        _apiPassphrase: ex.apiPassphrase,
+        frozen: ex.frozen,
+        isDefault: ex.isDefault,
+        balance: ex.balance,
+        lastSync: ex.lastSync,
+      }))
+      try {
+        localStorage.setItem("nexus_exchanges", JSON.stringify(toStore))
+      } catch {
+        /* quota */
       }
 
-      const currentMeta = (user.user_metadata as Record<string, unknown>) ?? {}
-      await supabase.auth.updateUser({
-        data: {
-          ...currentMeta,
-          nexus_exchanges: toStore,
-        },
-      })
-      window.dispatchEvent(new Event("nexus-exchanges-synced"))
-    }
-  }, [user, isGuestSession])
+      if (!userRef.current?.id || isGuestRef.current) return
+
+      pendingServerPayloadRef.current = toStore
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null
+        void flushServerPersist()
+      }, PERSIST_DEBOUNCE_MS)
+    },
+    [flushServerPersist]
+  )
 
   // Toggle freeze/unfreeze for an exchange
   const toggleFreeze = useCallback((exchangeId: string) => {
