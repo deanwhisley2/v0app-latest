@@ -2,6 +2,13 @@
 /**
  * Autonomous spot trading daemon (calls local Next.js APIs).
  *
+ * Analysis alignment: default minimum observation window matches `/api/expert/analyze`
+ * (300s). Set AUTO_TRADER_RELAX_TIME_WINDOW=1 for shorter windows (non-production only).
+ *
+ * Live orders require NEXUS_REAL_TRADING=1; sizing consults profiles.nexus_exchange_balances_snapshot
+ * when present (written by the dashboard exchange poll). Nex UI execution uses
+ * `/api/expert/execute/nex` + AnalysisHistory guards — prefer that path for full policy enforcement.
+ *
  * Prerequisites:
  * - Next.js running (npm run dev or pm2 nexus) at AUTO_TRADER_API_BASE
  * - NEXUS_REAL_TRADING=1, BINANCE keys, NEXUS_REAL_TRADE_SECRET on server (.env.local)
@@ -20,6 +27,7 @@ import {
 } from "../lib/daemon-runtime-authority"
 import { requestGovernanceApproval } from "../lib/global-execution-governor"
 import { getResumeGate } from "../lib/startup-recovery"
+import { loadExchangeBalancesSnapshot } from "../lib/server/load-exchange-balances-snapshot"
 
 config({ path: path.resolve(process.cwd(), ".env.local") })
 config({ path: path.resolve(process.cwd(), ".env") })
@@ -48,7 +56,14 @@ const symbols = (process.env.AUTO_TRADER_SYMBOLS || "BTC,ETH")
 
 const ANALYSIS_MS = Math.max(60_000, Number(process.env.AUTO_TRADER_ANALYSIS_INTERVAL_MS) || 300_000)
 const MONITOR_MS = Math.max(10_000, Number(process.env.AUTO_TRADER_MONITOR_INTERVAL_MS) || 30_000)
-const TIME_WINDOW_SEC = Math.max(60, Number(process.env.AUTO_TRADER_TIME_WINDOW_SECONDS) || 120)
+const RELAX_POLICY_WINDOW = process.env.AUTO_TRADER_RELAX_TIME_WINDOW === "1"
+const MIN_ANALYSIS_WINDOW_SEC = RELAX_POLICY_WINDOW
+  ? Math.max(60, Number(process.env.AUTO_TRADER_MIN_TIME_WINDOW_SECONDS) || 60)
+  : Math.max(300, Number(process.env.AUTO_TRADER_MIN_TIME_WINDOW_SECONDS) || 300)
+const TIME_WINDOW_SEC = Math.max(
+  MIN_ANALYSIS_WINDOW_SEC,
+  Number(process.env.AUTO_TRADER_TIME_WINDOW_SECONDS) || MIN_ANALYSIS_WINDOW_SEC
+)
 const POSITION_MAX_MS = Math.max(60_000, Number(process.env.AUTO_TRADER_POSITION_MAX_MS) || 7_200_000)
 
 const POSITION_USD_MIN = Math.max(1, Number(process.env.AUTO_TRADER_POSITION_SIZE_USD) || 5)
@@ -427,6 +442,17 @@ async function analysisCycle() {
     return
   }
 
+  const balSnap = await loadExchangeBalancesSnapshot(userId)
+  let availFromProfile: number | null = null
+  if (balSnap && Number.isFinite(balSnap.totalUsd)) {
+    availFromProfile = Math.max(0, balSnap.totalUsd - exposure)
+    log(
+      `[balances-profile] totalUsd≈$${balSnap.totalUsd.toFixed(2)} avail≈$${availFromProfile.toFixed(2)} updatedAt=${balSnap.updatedAt}`
+    )
+  } else {
+    log("[balances-profile] no snapshot — sync USD totals by opening the dashboard with exchanges connected")
+  }
+
   await refreshFocusSymbolsFromJoelin()
   for (const sym of dynamicSymbols) {
     const pair = `${sym}USDT`
@@ -461,7 +487,14 @@ async function analysisCycle() {
         log(`BUY skipped — max positions ${MAX_POSITIONS}`)
         continue
       }
-      const spend = pickSpendUsd()
+      let spend = pickSpendUsd()
+      if (availFromProfile !== null) {
+        spend = Math.min(spend, availFromProfile * 0.98)
+      }
+      if (availFromProfile !== null && spend < POSITION_USD_MIN) {
+        log(`BUY skipped ${pair} — profile available USD≈$${availFromProfile.toFixed(2)} (below min position)`)
+        continue
+      }
       if (exposure + spend > MAX_EXPOSURE_USD) {
         log(`BUY skipped — would exceed exposure $${MAX_EXPOSURE_USD}`)
         continue
@@ -488,6 +521,7 @@ function main() {
 
   log("=== nexus-auto-trader daemon start ===")
   log(`API_BASE=${base} symbols=${symbols.join(",")} analysisEvery=${ANALYSIS_MS}ms monitorEvery=${MONITOR_MS}ms`)
+  log(`timeWindowSec=${TIME_WINDOW_SEC} (min ${MIN_ANALYSIS_WINDOW_SEC}${RELAX_POLICY_WINDOW ? " RELAX" : " policy"})`)
   log(`positionUsd=${POSITION_USD_MIN}-${POSITION_USD_MAX} maxPos=${MAX_POSITIONS} maxExposure=$${MAX_EXPOSURE_USD}`)
 
   void analysisCycle()

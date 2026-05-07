@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Cpu,
   GitBranch,
+  Landmark,
   Layers,
   Radio,
   Shield,
@@ -108,6 +109,11 @@ export function OperationalContinuityHud({ className }: { className?: string }) 
   }, [snapshot])
 
   const exch = snapshot?.exchangeConnections?.length ?? 0
+  const profileUsd =
+    snapshot?.exchangeBalancesSnapshot &&
+    typeof snapshot.exchangeBalancesSnapshot.totalUsd === "number"
+      ? snapshot.exchangeBalancesSnapshot.totalUsd
+      : null
   const gate = snapshot?.resumeGate?.status ?? "—"
   const govMode = snapshot?.governance?.mode ?? "—"
   const govHealth = snapshot?.governance?.healthState ?? "—"
@@ -130,6 +136,11 @@ export function OperationalContinuityHud({ className }: { className?: string }) 
           <Metric icon={<Zap className="h-3 w-3" />} label="Execution rows" value={String(summaries.executions)} />
           <Metric icon={<Cpu className="h-3 w-3" />} label="Daemon runtime" value={String(summaries.daemon)} />
           <Metric icon={<Wallet className="h-3 w-3" />} label="Exchanges wired" value={String(exch)} />
+          <Metric
+            icon={<Landmark className="h-3 w-3" />}
+            label="Profile exch. USD"
+            value={profileUsd !== null ? `$${profileUsd.toFixed(2)}` : "—"}
+          />
           <Metric icon={<Shield className="h-3 w-3" />} label="Resume gate" value={gate} />
         </div>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">

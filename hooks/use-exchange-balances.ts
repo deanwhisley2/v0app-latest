@@ -8,6 +8,7 @@ import {
   stashPendingExchangeConnections,
   takePendingExchangeConnections,
 } from "@/lib/exchange-connections-client"
+import type { NexusExchangeBalancesSnapshotV1 } from "@/lib/exchange-balances-snapshot-types"
 import { supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
@@ -35,6 +36,29 @@ export interface ExchangeBalanceState {
 const POLL_INTERVAL_MS = 1000 // 1 second polling for real-time accuracy
 /** Debounce burst writes (toggle default, etc.) into one POST with retries. */
 const PERSIST_DEBOUNCE_MS = 320
+/** Push USD rollup to profiles after polling settles (no API secrets in payload). */
+const SNAPSHOT_DEBOUNCE_MS = 10_000
+
+function buildUsdSnapshot(
+  balances: Record<string, ExchangeBalance>,
+  rows: ConnectedExchange[],
+): NexusExchangeBalancesSnapshotV1 {
+  const updatedAt = new Date().toISOString()
+  let totalUsd = 0
+  const exchanges: NexusExchangeBalancesSnapshotV1["exchanges"] = []
+  for (const ex of rows) {
+    const b = balances[ex.id]
+    const tu = b && !b.error ? b.totalUsd : 0
+    totalUsd += tu
+    exchanges.push({
+      id: ex.id,
+      totalUsd: tu,
+      error: b?.error ? String(b.error) : null,
+      lastSync: b?.timestamp ? new Date(b.timestamp).toISOString() : null,
+    })
+  }
+  return { v: 1, updatedAt, totalUsd, exchanges }
+}
 
 export function useExchangeBalances() {
   const { user, isGuestSession } = useAuth()
@@ -55,6 +79,14 @@ export function useExchangeBalances() {
   const isGuestRef = useRef(isGuestSession)
   /** After bootstrap: upload local-only keys once per user if server has no connections. */
   const attemptedLocalHydrateRef = useRef<string | null>(null)
+  const snapDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSnapRef = useRef<NexusExchangeBalancesSnapshotV1 | null>(null)
+  /** Updated only after a successful snapshot POST (avoid skipping retries). */
+  const lastSnapJsonRef = useRef<string>("")
+
+  useEffect(() => {
+    if (!user?.id) lastSnapJsonRef.current = ""
+  }, [user?.id])
 
   useEffect(() => {
     userRef.current = user
@@ -108,6 +140,56 @@ export function useExchangeBalances() {
       console.warn("[exchange-connections] JWT fallback failed:", e)
     }
   }, [])
+
+  const flushSnapshotPost = useCallback(async () => {
+    const snap = pendingSnapRef.current
+    pendingSnapRef.current = null
+    if (!snap || !userRef.current?.id || isGuestRef.current) return
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return
+
+    try {
+      const res = await fetch("/api/user/exchange-balances-snapshot", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ snapshot: snap }),
+      })
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        console.warn(
+          "[exchange-balances-snapshot]",
+          typeof j.error === "string" ? j.error : res.status
+        )
+        return
+      }
+      lastSnapJsonRef.current = JSON.stringify(snap)
+      window.dispatchEvent(new Event("nexus-balance-snapshot-synced"))
+    } catch (e) {
+      console.warn("[exchange-balances-snapshot]", e)
+    }
+  }, [])
+
+  const scheduleSnapshotPost = useCallback(
+    (snap: NexusExchangeBalancesSnapshotV1) => {
+      const js = JSON.stringify(snap)
+      if (js === lastSnapJsonRef.current) return
+
+      pendingSnapRef.current = snap
+      if (snapDebounceRef.current) clearTimeout(snapDebounceRef.current)
+      snapDebounceRef.current = setTimeout(() => {
+        snapDebounceRef.current = null
+        void flushSnapshotPost()
+      }, SNAPSHOT_DEBOUNCE_MS)
+    },
+    [flushSnapshotPost]
+  )
 
   // DB bootstrap (profiles.nexus_exchanges) → JWT metadata → localStorage — never stale-local before server truth for real accounts.
   useEffect(() => {
@@ -244,6 +326,10 @@ export function useExchangeBalances() {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
+      }
+      if (snapDebounceRef.current) {
+        clearTimeout(snapDebounceRef.current)
+        snapDebounceRef.current = null
       }
     },
     []
@@ -400,6 +486,10 @@ export function useExchangeBalances() {
           error: null,
         })
 
+        if (userRef.current?.id && !isGuestRef.current && exchanges.length > 0) {
+          scheduleSnapshotPost(buildUsdSnapshot(balances, exchanges))
+        }
+
         // Update exchange balances in state
         setExchanges((prev) =>
           prev.map((ex) => {
@@ -431,8 +521,11 @@ export function useExchangeBalances() {
         pollingRef.current = null
       }
     }
-  }, [exchanges.length, exchanges.map((e) => `${e.id}:${e.frozen}:${e.apiKey?.slice(-4)}`).join(",")])
-
+  }, [
+    exchanges.length,
+    exchanges.map((e) => `${e.id}:${e.frozen}:${e.apiKey?.slice(-4)}`).join(","),
+    scheduleSnapshotPost,
+  ])
   return {
     exchanges,
     balanceState,

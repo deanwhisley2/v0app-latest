@@ -86,6 +86,18 @@ export function OperationalBootstrapProvider({ children }: { children: ReactNode
   }, [fetchBootstrap])
 
   useEffect(() => {
+    let last = 0
+    const onBal = () => {
+      const now = Date.now()
+      if (now - last < 3000) return
+      last = now
+      void fetchBootstrap()
+    }
+    window.addEventListener("nexus-balance-snapshot-synced", onBal)
+    return () => window.removeEventListener("nexus-balance-snapshot-synced", onBal)
+  }, [fetchBootstrap])
+
+  useEffect(() => {
     if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return
     let ch: BroadcastChannel | null = null
     let last = 0

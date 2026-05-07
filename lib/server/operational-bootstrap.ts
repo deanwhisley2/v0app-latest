@@ -3,6 +3,7 @@ import { getGovernanceState } from "@/lib/global-execution-governor"
 import { getResumeGate } from "@/lib/startup-recovery"
 import type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operational-bootstrap-types"
 import { coerceOperationalPreferences } from "@/lib/operational-preferences-types"
+import { coerceExchangeBalancesSnapshot } from "@/lib/exchange-balances-snapshot-types"
 
 export type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operational-bootstrap-types"
 
@@ -31,7 +32,9 @@ export async function buildOperationalBootstrapV1(params: {
   ] = await Promise.all([
     admin
       .from("profiles")
-      .select("email, full_name, is_verified, nexus_exchanges, operational_workspace, operational_preferences")
+      .select(
+        "email, full_name, is_verified, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot"
+      )
       .eq("id", params.userId)
       .maybeSingle(),
     admin
@@ -143,6 +146,7 @@ export async function buildOperationalBootstrapV1(params: {
     nexus_exchanges?: StoredExchangePayload[] | null
     operational_workspace?: unknown | null
     operational_preferences?: unknown | null
+    nexus_exchange_balances_snapshot?: unknown | null
   } | null
 
   const metaExchanges = Array.isArray(params.jwtMetadataExchanges)
@@ -182,6 +186,7 @@ export async function buildOperationalBootstrapV1(params: {
         }
       : null,
     exchangeConnections,
+    exchangeBalancesSnapshot: coerceExchangeBalancesSnapshot(rawProfile?.nexus_exchange_balances_snapshot ?? null),
     resumeGate,
     governance: governanceState,
     continuity: {

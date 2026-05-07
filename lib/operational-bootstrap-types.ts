@@ -1,5 +1,6 @@
 /** Shared types for GET /api/user/operational-bootstrap (no server-only imports). */
 
+import type { NexusExchangeBalancesSnapshotV1 } from "@/lib/exchange-balances-snapshot-types"
 import type { OperationalPreferencesV1 } from "@/lib/operational-preferences-types"
 
 export type StoredExchangePayload = Record<string, unknown>
@@ -22,6 +23,8 @@ export interface OperationalBootstrapV1 {
     created_at: string | null
   } | null
   exchangeConnections: StoredExchangePayload[] | null
+  /** profiles.nexus_exchange_balances_snapshot — USD totals for continuity / bots (no secrets). */
+  exchangeBalancesSnapshot: NexusExchangeBalancesSnapshotV1 | null
   resumeGate: { status: string; unresolvedCount: number; reason?: string }
   governance: {
     mode: string

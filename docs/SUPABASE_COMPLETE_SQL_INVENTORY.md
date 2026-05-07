@@ -20,7 +20,7 @@ What the bundle contains (order matters):
 | 2 | `supabase/fix_profiles_registration.sql` | Grants + `handle_new_user` trigger on `auth.users` (safe profile row on signup) |
 | 3 | `supabase/blocked_trade_patterns.sql` | `blocked_trade_patterns` + RLS |
 | 4 | `docs/phase2-supabase-migration.sql` | Full Expert / trading / governance **quoted** tables (`TradeSession`, `AnalysisHistory`, `SimulationRun`, …) |
-| 5 | `docs/supabase-all-deltas-in-order.sql` | Idempotent governance extension replay **plus** `profiles.nexus_exchanges`, `operational_workspace`, `operational_preferences`; ends with verification `SELECT` |
+| 5 | `docs/supabase-all-deltas-in-order.sql` | Idempotent governance extension replay **plus** `profiles` columns (`nexus_exchanges`, `operational_workspace`, `operational_preferences`, **`nexus_exchange_balances_snapshot`**); ends with verification `SELECT` |
 
 **Note:** Step 5 duplicates some DDL already present in step 4 (`CREATE TABLE IF NOT EXISTS` only). Keeping both ensures older projects that skipped part of Phase 2 still pick up **`ALTER TABLE profiles …`** columns that Phase 2 does **not** include.
 
@@ -44,6 +44,7 @@ Apply only when you deliberately want a slice without the mega catch-up:
 - `docs/supabase-delta-profiles-nexus-exchanges.sql`
 - `docs/supabase-delta-profiles-operational-workspace.sql`
 - `docs/supabase-delta-profiles-operational-preferences.sql`
+- `docs/supabase-delta-profiles-exchange-balances-snapshot.sql`
 - `docs/supabase-delta-replace-blocked-trade-patterns-legacy-shape.sql` — **one-time** fix if `blocked_trade_patterns` is wrong shape (`id`/`pattern` instead of `user_id`/`pattern_key`); see *Troubleshooting*
 
 ## App ↔ Supabase ↔ browser (runtime)

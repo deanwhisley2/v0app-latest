@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NEXUS / V0 APP — MASTER SUPABASE BUNDLE (auto-generated)
--- Generated: 2026-05-07T22:01:06Z
+-- Generated: 2026-05-07T23:14:10Z
 -- Regenerate: bash scripts/build-supabase-master-bundle.sh
 --
 -- APPLY: Dashboard → SQL Editor → New query → paste entire file → Run
@@ -1786,6 +1786,20 @@ COMMENT ON COLUMN public.profiles.operational_preferences IS
 CREATE INDEX IF NOT EXISTS profiles_operational_preferences_not_null
   ON public.profiles (id)
   WHERE operational_preferences IS NOT NULL;
+
+-- ---------------------------------------------------------------------------
+-- Profiles: nexus_exchange_balances_snapshot (USD totals for bots / bootstrap)
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS nexus_exchange_balances_snapshot JSONB DEFAULT NULL;
+
+COMMENT ON COLUMN public.profiles.nexus_exchange_balances_snapshot IS
+  'Versioned JSON { v:1, updatedAt, totalUsd, exchanges[] } — no API secrets; see POST /api/user/exchange-balances-snapshot.';
+
+CREATE INDEX IF NOT EXISTS profiles_exchange_bal_snap_not_null
+  ON public.profiles (id)
+  WHERE nexus_exchange_balances_snapshot IS NOT NULL;
 
 
 -- ---------------------------------------------------------------------------

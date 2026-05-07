@@ -404,6 +404,20 @@ CREATE INDEX IF NOT EXISTS profiles_operational_preferences_not_null
   ON public.profiles (id)
   WHERE operational_preferences IS NOT NULL;
 
+-- ---------------------------------------------------------------------------
+-- Profiles: nexus_exchange_balances_snapshot (USD totals for bots / bootstrap)
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS nexus_exchange_balances_snapshot JSONB DEFAULT NULL;
+
+COMMENT ON COLUMN public.profiles.nexus_exchange_balances_snapshot IS
+  'Versioned JSON { v:1, updatedAt, totalUsd, exchanges[] } — no API secrets; see POST /api/user/exchange-balances-snapshot.';
+
+CREATE INDEX IF NOT EXISTS profiles_exchange_bal_snap_not_null
+  ON public.profiles (id)
+  WHERE nexus_exchange_balances_snapshot IS NOT NULL;
+
 
 -- ---------------------------------------------------------------------------
 -- VERIFICATION — expect 17 rows with present = true (full governance extension stack incl. causal)
