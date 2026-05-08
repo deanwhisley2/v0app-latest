@@ -10,6 +10,7 @@ type RegisterBody = {
   phone?: string
   preferred_language?: string
   preferred_currency?: string
+  avatar_url?: string
 }
 
 /**
@@ -35,9 +36,23 @@ export async function POST(request: Request) {
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
   const preferred_currency =
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
+  const avatar_url =
+    typeof body.avatar_url === "string" ? body.avatar_url.trim() : ""
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
+  }
+  if (!avatar_url) {
+    return NextResponse.json(
+      { error: "Security selfie is required at registration." },
+      { status: 400 }
+    )
+  }
+  if (avatar_url.length > 500_000) {
+    return NextResponse.json(
+      { error: "Selfie image payload is too large." },
+      { status: 413 }
+    )
   }
 
   const supabase = await createRouteHandlerSupabaseClient()
@@ -52,6 +67,8 @@ export async function POST(request: Request) {
       data: {
         full_name,
         phone,
+        avatar_url,
+        selfie_enrolled_at: new Date().toISOString(),
         ...(preferred_language ? { preferred_language } : {}),
         ...(preferred_currency ? { preferred_currency } : {}),
       },

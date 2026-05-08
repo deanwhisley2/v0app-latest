@@ -28,6 +28,8 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
+  const [selfieDataUrl, setSelfieDataUrl] = useState("")
+  const [selfiePreview, setSelfiePreview] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
   const [error, setError] = useState<string | null>(null)
@@ -43,11 +45,34 @@ export default function RegisterPage() {
 
   const reg = getRegisterMessages(language)
 
+  async function handleSelfieFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("Selfie must be an image file.")
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setError("Selfie image must be 3MB or smaller.")
+      return
+    }
+    const reader = new FileReader()
+    const result = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(String(reader.result || ""))
+      reader.onerror = () => reject(new Error("Could not read selfie image"))
+      reader.readAsDataURL(file)
+    })
+    setSelfieDataUrl(result)
+    setSelfiePreview(result)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     if (password !== confirmPassword) {
       setError("Passwords do not match.")
+      return
+    }
+    if (!selfieDataUrl) {
+      setError("A selfie picture is required for account security.")
       return
     }
     setIsSubmitting(true)
@@ -69,6 +94,7 @@ export default function RegisterPage() {
           phone: trimmedPhone,
           preferred_language: language,
           preferred_currency: currency,
+          avatar_url: selfieDataUrl,
         }),
       })
 
@@ -220,6 +246,37 @@ export default function RegisterPage() {
               disabled={isSubmitting}
               placeholder="you@example.com"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="register-selfie">Security Selfie (required)</Label>
+            <Input
+              id="register-selfie"
+              type="file"
+              accept="image/*"
+              capture="user"
+              disabled={isSubmitting}
+              onChange={async (e) => {
+                setError(null)
+                const file = e.target.files?.[0]
+                if (!file) return
+                try {
+                  await handleSelfieFile(file)
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Could not process selfie.")
+                }
+              }}
+            />
+            {selfiePreview ? (
+              <img
+                src={selfiePreview}
+                alt="Selfie preview"
+                className="h-24 w-24 rounded-xl border border-border object-cover"
+              />
+            ) : (
+              <p className="text-xs text-warning">
+                Required to protect withdrawals and prevent impersonation.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="register-password">{reg.password}</Label>

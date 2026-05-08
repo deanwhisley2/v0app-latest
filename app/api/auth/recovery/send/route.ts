@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
-import { getBrevoMessageEvent, sendPasswordRecoveryEmail } from "@/lib/brevo"
 
 type Body = { identifier?: string }
 
@@ -43,39 +43,16 @@ export async function POST(request: Request) {
     )
     const redirectTo = `${siteBase}/auth/reset-password`
 
-    const { data, error } = await admin.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo },
+    const supabase = await createRouteHandlerSupabaseClient()
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
     })
-    if (error || !data?.properties?.action_link) {
-      console.error("recovery generateLink:", error)
+    if (error) {
+      console.error("recovery resetPasswordForEmail:", error)
       return NextResponse.json(
-        { error: error?.message || "Could not generate recovery link" },
+        { error: error.message || "Could not send recovery email" },
         { status: 500 }
       )
-    }
-
-    const messageId = await sendPasswordRecoveryEmail(
-      email,
-      data.properties.action_link,
-      "Valued Customer"
-    )
-
-    // Fast feedback: catch immediate soft/hard bounces to avoid false success.
-    if (messageId) {
-      await new Promise((r) => setTimeout(r, 1300))
-      const ev = await getBrevoMessageEvent(messageId)
-      if (ev?.event === "softBounces" || ev?.event === "hardBounces") {
-        console.error("recovery delivery bounce:", ev.reason || ev.event)
-        return NextResponse.json(
-          {
-            error:
-              "Recovery email was blocked by the recipient provider. Try a non-Gmail address, check sender reputation settings, or retry shortly.",
-          },
-          { status: 502 }
-        )
-      }
     }
 
     return NextResponse.json({

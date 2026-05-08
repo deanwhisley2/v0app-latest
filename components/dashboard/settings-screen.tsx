@@ -28,6 +28,7 @@ import { DepositWithdraw } from "./deposit-withdraw"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { supabase } from "@/lib/supabaseClient"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
@@ -98,6 +99,78 @@ export function SettingsScreen({
   ])
   const [learnerInput, setLearnerInput] = useState("")
   const [learnerTyping, setLearnerTyping] = useState(false)
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
+  const [selfieLoading, setSelfieLoading] = useState(false)
+  const [selfieError, setSelfieError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSelfie = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/security-selfie", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = (await res.json().catch(() => ({}))) as {
+          hasSelfie?: boolean
+          avatarUrl?: string | null
+        }
+        if (!cancelled) setSelfieUrl(data.hasSelfie ? data.avatarUrl ?? null : null)
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadSelfie()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function uploadSelfie(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setSelfieError("Please choose an image file.")
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setSelfieError("Selfie image must be 3MB or smaller.")
+      return
+    }
+    setSelfieError(null)
+    setSelfieLoading(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result || ""))
+        reader.onerror = () => reject(new Error("Could not read image"))
+        reader.readAsDataURL(file)
+      })
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Not authenticated")
+      const res = await fetch("/api/user/security-selfie", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ avatar_url: dataUrl }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(out.error || "Could not save selfie")
+      setSelfieUrl(dataUrl)
+    } catch (e) {
+      setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")
+    } finally {
+      setSelfieLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!requestedView) return
@@ -147,6 +220,17 @@ export function SettingsScreen({
   if (currentView === "main") {
     return (
       <div className="space-y-4">
+        {!selfieUrl && (
+          <Card className="border-warning/40 bg-warning/10 p-4">
+            <p className="text-sm font-semibold text-warning">Security required: add your selfie now</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Without a registered selfie, recovery and fund-protection checks are weaker. Open Security Center and enroll your selfie.
+            </p>
+            <Button size="sm" className="mt-3" onClick={() => setCurrentView("security")}>
+              Go to Security Center
+            </Button>
+          </Card>
+        )}
         <Card className="border-border bg-card p-6">
           <h2 className="mb-6 text-xl font-semibold">Settings</h2>
           <div className="space-y-1">
@@ -225,6 +309,32 @@ export function SettingsScreen({
     return (
       <div className="space-y-4">
         {renderBackButton()}
+        <Card className={`p-4 ${selfieUrl ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/10"}`}>
+          <h3 className="font-semibold">
+            {selfieUrl ? "Selfie security is active" : "Selfie required for fund security"}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Selfie verification protects account recovery and reduces impersonation risk.
+          </p>
+          {selfieUrl ? (
+            <img src={selfieUrl} alt="Registered selfie" className="mt-3 h-24 w-24 rounded-xl border border-border object-cover" />
+          ) : null}
+          <div className="mt-3">
+            <Input
+              type="file"
+              accept="image/*"
+              capture="user"
+              disabled={selfieLoading}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                void uploadSelfie(file)
+              }}
+            />
+            {selfieError ? <p className="mt-2 text-xs text-destructive">{selfieError}</p> : null}
+            {selfieLoading ? <p className="mt-2 text-xs text-muted-foreground">Uploading selfie...</p> : null}
+          </div>
+        </Card>
         <Card className="border-border bg-card p-6">
           <h3 className="mb-6 text-lg font-semibold">Security Settings</h3>
           <div className="space-y-3">
