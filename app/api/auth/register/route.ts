@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
+import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 
 type RegisterBody = {
   email?: string
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
   const origin = process.env.NEXT_PUBLIC_SITE_URL?.trim() || new URL(request.url).origin
   const emailRedirectTo = `${origin}/auth/verify`
 
-  const { error: signUpError } = await supabase.auth.signUp({
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -87,6 +88,16 @@ export async function POST(request: Request) {
 
   if (signUpError) {
     return NextResponse.json({ error: signUpError.message }, { status: 400 })
+  }
+
+  // Best-effort enrollment into CompreFace identity store.
+  const newUserId = signUpData.user?.id
+  if (newUserId && isCompreFaceConfigured()) {
+    try {
+      await comprefaceEnrollFace(newUserId, avatar_url)
+    } catch (e) {
+      console.warn("[register] CompreFace enroll warning:", e instanceof Error ? e.message : String(e))
+    }
   }
 
   const issued = await issueEmailVerificationCode(email)

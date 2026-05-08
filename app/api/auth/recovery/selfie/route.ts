@@ -3,10 +3,12 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
+import { comprefaceVerifyFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 
 type Body = {
   identifier?: string
   selfie_hash?: string
+  selfie_image?: string
 }
 
 function hammingDistanceHex(a: string, b: string): number {
@@ -33,6 +35,8 @@ export async function POST(request: Request) {
   const identifier = typeof body.identifier === "string" ? body.identifier.trim() : ""
   const selfieHash =
     typeof body.selfie_hash === "string" ? body.selfie_hash.trim().toLowerCase() : ""
+  const selfieImage =
+    typeof body.selfie_image === "string" ? body.selfie_image.trim() : ""
   if (!identifier || !selfieHash) {
     return NextResponse.json({ error: "identifier and selfie_hash are required" }, { status: 400 })
   }
@@ -55,20 +59,44 @@ export async function POST(request: Request) {
 
     const storedHashRaw = userData.user.user_metadata?.selfie_hash
     const storedHash = typeof storedHashRaw === "string" ? storedHashRaw.toLowerCase() : ""
-    if (!storedHash) {
+    const storedAvatarRaw = userData.user.user_metadata?.avatar_url
+    const storedAvatar = typeof storedAvatarRaw === "string" ? storedAvatarRaw : ""
+    if (!storedHash && !storedAvatar) {
       return NextResponse.json(
         { error: "No enrolled selfie found for this account. Use email recovery." },
         { status: 409 }
       )
     }
 
-    const distance = hammingDistanceHex(storedHash, selfieHash)
-    const threshold = 14
-    if (distance > threshold) {
-      return NextResponse.json(
-        { error: "Selfie verification failed. Use clear face, no hat/covering." },
-        { status: 403 }
-      )
+    if (isCompreFaceConfigured() && selfieImage && storedAvatar) {
+      try {
+        const verify = await comprefaceVerifyFace(selfieImage, storedAvatar)
+        if (!verify.matched) {
+          return NextResponse.json(
+            {
+              error: `Selfie verification failed (score ${verify.score.toFixed(3)} < ${verify.threshold.toFixed(3)}). Use clear face, no hat/covering.`,
+            },
+            { status: 403 }
+          )
+        }
+      } catch (e) {
+        console.warn("[recovery/selfie] CompreFace verify warning:", e instanceof Error ? e.message : String(e))
+        if (!storedHash) {
+          return NextResponse.json(
+            { error: "Face verification service unavailable. Please retry shortly." },
+            { status: 503 }
+          )
+        }
+      }
+    } else {
+      const distance = hammingDistanceHex(storedHash, selfieHash)
+      const threshold = 14
+      if (distance > threshold) {
+        return NextResponse.json(
+          { error: "Selfie verification failed. Use clear face, no hat/covering." },
+          { status: 403 }
+        )
+      }
     }
 
     const siteBase = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "")

@@ -83,7 +83,7 @@ export default function RecoveryPage() {
       const res = await fetch("/api/auth/recovery/selfie", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: value, selfie_hash: selfieHash }),
+        body: JSON.stringify({ identifier: value, selfie_hash: selfieHash, selfie_image: dataUrl }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean

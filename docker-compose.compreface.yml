@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  compreface-postgres:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: compreface
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: compreface
+    volumes:
+      - compreface-postgres-data:/var/lib/postgresql/data
+
+  compreface-core:
+    image: exadel/compreface-core:1.2.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: compreface
+      POSTGRES_URL: jdbc:postgresql://compreface-postgres:5432/compreface
+      ENABLE_EMAIL_SERVER: "false"
+      ADMIN_JAVA_OPTS: -Xmx512m
+    depends_on:
+      - compreface-postgres
+
+  compreface-api:
+    image: exadel/compreface-api:1.2.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: compreface
+      POSTGRES_URL: jdbc:postgresql://compreface-postgres:5432/compreface
+      SPRING_PROFILES_ACTIVE: dev
+    depends_on:
+      - compreface-postgres
+      - compreface-core
+    ports:
+      - "8000:8000"
+
+  compreface-admin:
+    image: exadel/compreface-admin:1.2.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: compreface
+      POSTGRES_URL: jdbc:postgresql://compreface-postgres:5432/compreface
+      SPRING_PROFILES_ACTIVE: dev
+    depends_on:
+      - compreface-postgres
+      - compreface-core
+    ports:
+      - "8001:8080"
+
+  compreface-fe:
+    image: exadel/compreface-fe:1.2.0
+    restart: unless-stopped
+    depends_on:
+      - compreface-api
+      - compreface-admin
+    ports:
+      - "8002:80"
+
+volumes:
+  compreface-postgres-data:

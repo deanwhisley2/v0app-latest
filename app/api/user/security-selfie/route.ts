@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 
 export async function GET(request: Request) {
   try {
@@ -68,6 +69,14 @@ export async function POST(request: Request) {
       },
     })
     if (metaError) return NextResponse.json({ error: metaError.message }, { status: 500 })
+
+    if (isCompreFaceConfigured()) {
+      try {
+        await comprefaceEnrollFace(user.id, avatarUrl)
+      } catch (e) {
+        console.warn("[security-selfie] CompreFace enroll warning:", e instanceof Error ? e.message : String(e))
+      }
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e) {
