@@ -3,6 +3,7 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
+import { sendPasswordRecoveryEmail } from "@/lib/brevo"
 
 type Body = { identifier?: string }
 
@@ -44,15 +45,36 @@ export async function POST(request: Request) {
     const redirectTo = `${siteBase}/auth/reset-password`
 
     const supabase = await createRouteHandlerSupabaseClient()
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
     })
-    if (error) {
-      console.error("recovery resetPasswordForEmail:", error)
-      return NextResponse.json(
-        { error: error.message || "Could not send recovery email" },
-        { status: 500 }
+
+    if (resetError) {
+      // Fallback: still use Supabase recovery token/link, but deliver by Brevo.
+      console.warn("recovery resetPasswordForEmail failed; trying Brevo fallback:", resetError.message)
+      const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: { redirectTo },
+      })
+      if (linkError || !linkData?.properties?.action_link) {
+        console.error("recovery fallback generateLink failed:", linkError)
+        return NextResponse.json(
+          { error: resetError.message || "Could not send recovery email" },
+          { status: 500 }
+        )
+      }
+
+      await sendPasswordRecoveryEmail(
+        email,
+        linkData.properties.action_link,
+        "Valued Customer"
       )
+
+      return NextResponse.json({
+        ok: true,
+        message: `Recovery sent to ${maskEmail(email)} (email only).`,
+      })
     }
 
     return NextResponse.json({
