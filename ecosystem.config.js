@@ -12,6 +12,7 @@ module.exports = {
       args: "run start:with-recovery",
       env: {
         NODE_ENV: "production",
+        NODE_OPTIONS: "--max-old-space-size=512",
       },
     },
     /**
