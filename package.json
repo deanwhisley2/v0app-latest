@@ -38,6 +38,16 @@
     "pm2:stop": "pm2 stop nexus",
     "pm2:restart": "pm2 restart nexus",
     "pm2:logs": "pm2 logs nexus --lines 150",
+    "ops:circle": "bash scripts/ops-circle.sh",
+    "supabase:status": "bash scripts/ops-supabase.sh status",
+    "supabase:login": "bash scripts/ops-supabase.sh login",
+    "supabase:link": "bash scripts/ops-supabase.sh link",
+    "supabase:pull": "bash scripts/ops-supabase.sh pull",
+    "supabase:new": "bash scripts/ops-supabase.sh new",
+    "supabase:reset": "bash scripts/ops-supabase.sh reset",
+    "supabase:dry-run": "bash scripts/ops-supabase.sh dry-run",
+    "supabase:push": "bash scripts/ops-supabase.sh push",
+    "supabase:schema-probe": "bash scripts/ops-supabase.sh schema-probe",
     "trade-secret:gen": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
   },
   "dependencies": {

@@ -88,6 +88,12 @@ const CONF_MIN = Math.max(50, Number(process.env.AUTO_TRADER_CONFIDENCE_MIN) || 
 
 /** Signed POST only — bypasses focus quota when unset or non-"0". Set AUTO_TRADER_FORCE_GROK=0 to save Grok credits on out-of-focus symbols. */
 const FORCE_GROK_DAEMON = Boolean(secret) && process.env.AUTO_TRADER_FORCE_GROK !== "0"
+const GROK_SYMBOL_ALLOWLIST = new Set(
+  (process.env.AUTO_TRADER_GROK_SYMBOLS || "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase().replace(/USDT$/, ""))
+    .filter(Boolean)
+)
 
 /** Default on (unset): fused “combat” pulses while LONG + TP defer rules. Set AUTO_TRADER_POSITION_COMBAT=0 to disable. */
 const POSITION_COMBAT = process.env.AUTO_TRADER_POSITION_COMBAT !== "0"
@@ -105,9 +111,11 @@ const COMBAT_ANALYSIS_MS =
 const COMBAT_EXIT_CONF = Math.max(50, Number(process.env.AUTO_TRADER_COMBAT_EXIT_CONFIDENCE) || 72)
 const COMBAT_HOLD_TP_CONF = Math.max(50, Number(process.env.AUTO_TRADER_COMBAT_HOLD_TP_CONFIDENCE) || 68)
 const COMBAT_MAX_TP_DEFERS = Math.max(0, Math.min(30, Number(process.env.AUTO_TRADER_COMBAT_MAX_TP_DEFERS) || 5))
+const HTTP_TIMEOUT_MS = Math.max(120_000, Number(process.env.AUTO_TRADER_HTTP_TIMEOUT_MS) || 360_000)
 
 const workerId = `atd_${Math.random().toString(36).slice(2, 10)}`
 let dynamicSymbols: string[] = [...symbols]
+const DISABLE_JOELIN_FOCUS = process.env.AUTO_TRADER_DISABLE_JOELIN_FOCUS === "1"
 
 const lastCombatAnalysisAt = new Map<string, number>()
 const tpDeferrals = new Map<string, number>()
@@ -144,7 +152,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
     },
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
   })
   const text = await res.text()
   let j: unknown
@@ -176,7 +184,7 @@ async function postTradeJson(
       "x-nexus-real-trade-secret": secret,
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
   })
   const text = await res.text()
   let data: Record<string, unknown> = {}
@@ -201,11 +209,12 @@ async function fetchSpotPrice(pair: string): Promise<number> {
 
 async function runAnalysis(
   baseSymbol: string,
-  opts?: { combat?: boolean }
+  opts?: { combat?: boolean; includeGrok?: boolean }
 ): Promise<{ action: string; confidence: number } | null> {
   const windowSec = opts?.combat ? COMBAT_WINDOW_SEC : TIME_WINDOW_SEC
   const grokLive = isGrokPipelineLive()
-  const includeGrok = grokLive && (FORCE_GROK_DAEMON || isSymbolEligibleForGrokQuota(baseSymbol))
+  const includeGrokByPolicy = FORCE_GROK_DAEMON || isSymbolEligibleForGrokQuota(baseSymbol)
+  const includeGrok = grokLive && (opts?.includeGrok ?? includeGrokByPolicy)
   const forceGrok = FORCE_GROK_DAEMON && grokLive && includeGrok
 
   const url = `${base}/api/analysis/time-bound`
@@ -230,7 +239,17 @@ async function runAnalysis(
   return data.result.fusedDecision
 }
 
+function shouldUseGrokForTradeCandidate(baseSymbol: string): boolean {
+  if (!isGrokPipelineLive()) return false
+  if (GROK_SYMBOL_ALLOWLIST.size === 0) return false
+  return GROK_SYMBOL_ALLOWLIST.has(baseSymbol.toUpperCase().replace(/USDT$/, ""))
+}
+
 async function refreshFocusSymbolsFromJoelin() {
+  if (DISABLE_JOELIN_FOCUS) {
+    dynamicSymbols = [...symbols]
+    return
+  }
   try {
     const data = await fetchJson<{
       focusDaily?: Array<{ symbol?: string }>
@@ -563,16 +582,33 @@ async function analysisCycle() {
     const pair = `${sym}USDT`
     let fused: { action: string; confidence: number } | null = null
     try {
-      fused = await runAnalysis(sym)
+      // Stage 1: broad scan without Grok to protect API quota.
+      fused = await runAnalysis(sym, { includeGrok: false })
     } catch (e) {
       log(`Analysis error ${sym}: ${e instanceof Error ? e.message : String(e)}`)
       continue
     }
     if (!fused) continue
-    const { action, confidence } = fused
+    let { action, confidence } = fused
     log(`${pair} signal=${action} conf=${confidence}% (min ${CONF_MIN})`)
 
     if (confidence <= CONF_MIN || action === "HOLD") continue
+
+    // Stage 2: only use Grok for explicitly allowlisted trade candidates.
+    if (shouldUseGrokForTradeCandidate(sym)) {
+      try {
+        const grokConfirmed = await runAnalysis(sym, { includeGrok: true })
+        if (grokConfirmed) {
+          action = grokConfirmed.action
+          confidence = grokConfirmed.confidence
+          log(`${pair} grok-confirmed signal=${action} conf=${confidence}%`)
+          if (confidence <= CONF_MIN || action === "HOLD") continue
+        }
+      } catch (e) {
+        log(`${pair} Grok confirm failed: ${e instanceof Error ? e.message : String(e)} — skipping`)
+        continue
+      }
+    }
 
     const runtime = await runtimeForPair(pair, userId)
     const hasLong = runtime.positionStatus === "LONG"
@@ -629,7 +665,7 @@ function main() {
   log(`timeWindowSec=${TIME_WINDOW_SEC} (min ${MIN_ANALYSIS_WINDOW_SEC}${RELAX_POLICY_WINDOW ? " RELAX" : " policy"})`)
   log(`positionUsd=${POSITION_USD_MIN}-${POSITION_USD_MAX} maxPos=${MAX_POSITIONS} maxExposure=$${MAX_EXPOSURE_USD}`)
   log(
-    `grokDaemonForce=${FORCE_GROK_DAEMON} positionCombat=${POSITION_COMBAT} combatEvery=${COMBAT_ANALYSIS_MS}ms combatWindowSec=${COMBAT_WINDOW_SEC}`
+    `grokDaemonForce=${FORCE_GROK_DAEMON} grokAllowlist=${Array.from(GROK_SYMBOL_ALLOWLIST).join(",") || "-"} positionCombat=${POSITION_COMBAT} combatEvery=${COMBAT_ANALYSIS_MS}ms combatWindowSec=${COMBAT_WINDOW_SEC}`
   )
 
   void analysisCycle()
