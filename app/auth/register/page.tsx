@@ -19,6 +19,7 @@ import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
+import { imageDataUrlToHash, validateSelfieQuality } from "@/lib/selfie-hash"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -30,6 +31,7 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState("")
   const [selfieDataUrl, setSelfieDataUrl] = useState("")
   const [selfiePreview, setSelfiePreview] = useState("")
+  const [selfieHash, setSelfieHash] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
   const [error, setError] = useState<string | null>(null)
@@ -60,8 +62,11 @@ export default function RegisterPage() {
       reader.onerror = () => reject(new Error("Could not read selfie image"))
       reader.readAsDataURL(file)
     })
+    await validateSelfieQuality(result)
+    const hash = await imageDataUrlToHash(result)
     setSelfieDataUrl(result)
     setSelfiePreview(result)
+    setSelfieHash(hash)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -95,6 +100,7 @@ export default function RegisterPage() {
           preferred_language: language,
           preferred_currency: currency,
           avatar_url: selfieDataUrl,
+          selfie_hash: selfieHash,
         }),
       })
 

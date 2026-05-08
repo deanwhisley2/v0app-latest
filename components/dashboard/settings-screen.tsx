@@ -29,6 +29,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
+import { imageDataUrlToHash, validateSelfieQuality } from "@/lib/selfie-hash"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
@@ -102,6 +103,7 @@ export function SettingsScreen({
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
   const [selfieLoading, setSelfieLoading] = useState(false)
   const [selfieError, setSelfieError] = useState<string | null>(null)
+  const [selfieCompareInfo, setSelfieCompareInfo] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -149,18 +151,47 @@ export function SettingsScreen({
         reader.onerror = () => reject(new Error("Could not read image"))
         reader.readAsDataURL(file)
       })
+      await validateSelfieQuality(dataUrl)
+      const selfieHash = await imageDataUrlToHash(dataUrl)
       const {
         data: { session },
       } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) throw new Error("Not authenticated")
+      if (selfieUrl) {
+        const cmpRes = await fetch("/api/user/security-selfie", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ selfie_hash: selfieHash }),
+        })
+        const cmpData = (await cmpRes.json().catch(() => ({}))) as {
+          matched?: boolean
+          distance?: number
+          threshold?: number
+          error?: string
+        }
+        if (!cmpRes.ok) {
+          throw new Error(cmpData.error || "Could not compare selfie")
+        }
+        if (!cmpData.matched) {
+          throw new Error("Selfie does not match enrolled identity. Use clear face, no hats/covering.")
+        }
+        setSelfieCompareInfo(
+          `Selfie match passed (distance ${cmpData.distance}/${cmpData.threshold}).`
+        )
+      } else {
+        setSelfieCompareInfo("Initial selfie enrolled for account security.")
+      }
       const res = await fetch("/api/user/security-selfie", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ avatar_url: dataUrl }),
+        body: JSON.stringify({ avatar_url: dataUrl, selfie_hash: selfieHash }),
       })
       const out = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) throw new Error(out.error || "Could not save selfie")
@@ -332,6 +363,9 @@ export function SettingsScreen({
               }}
             />
             {selfieError ? <p className="mt-2 text-xs text-destructive">{selfieError}</p> : null}
+            {selfieCompareInfo ? (
+              <p className="mt-2 text-xs text-success">{selfieCompareInfo}</p>
+            ) : null}
             {selfieLoading ? <p className="mt-2 text-xs text-muted-foreground">Uploading selfie...</p> : null}
           </div>
         </Card>

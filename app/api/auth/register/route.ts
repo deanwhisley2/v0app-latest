@@ -11,6 +11,7 @@ type RegisterBody = {
   preferred_language?: string
   preferred_currency?: string
   avatar_url?: string
+  selfie_hash?: string
 }
 
 /**
@@ -38,6 +39,8 @@ export async function POST(request: Request) {
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
   const avatar_url =
     typeof body.avatar_url === "string" ? body.avatar_url.trim() : ""
+  const selfie_hash =
+    typeof body.selfie_hash === "string" ? body.selfie_hash.trim().toLowerCase() : ""
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
@@ -54,6 +57,12 @@ export async function POST(request: Request) {
       { status: 413 }
     )
   }
+  if (!selfie_hash || !/^[0-9a-f]{16,}$/.test(selfie_hash)) {
+    return NextResponse.json(
+      { error: "Invalid selfie identity hash." },
+      { status: 400 }
+    )
+  }
 
   const supabase = await createRouteHandlerSupabaseClient()
   const origin = process.env.NEXT_PUBLIC_SITE_URL?.trim() || new URL(request.url).origin
@@ -68,6 +77,7 @@ export async function POST(request: Request) {
         full_name,
         phone,
         avatar_url,
+        selfie_hash,
         selfie_enrolled_at: new Date().toISOString(),
         ...(preferred_language ? { preferred_language } : {}),
         ...(preferred_currency ? { preferred_currency } : {}),
