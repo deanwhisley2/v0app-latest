@@ -2,17 +2,9 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@")
-  if (!local || !domain) return email
-  const safeLocal = local.length <= 2 ? `${local[0] || "*"}*` : `${local[0]}***${local.slice(-1)}`
-  return `${safeLocal}@${domain}`
-}
 
 export default function RecoveryPage() {
   const [identifier, setIdentifier] = useState("")
@@ -32,31 +24,21 @@ export default function RecoveryPage() {
 
     setIsSubmitting(true)
     try {
-      const resolveRes = await fetch("/api/auth/resolve-identifier", {
+      const res = await fetch("/api/auth/recovery/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: value }),
       })
-      const resolveData = (await resolveRes.json().catch(() => ({}))) as {
-        email?: string
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        message?: string
         error?: string
       }
-      if (!resolveRes.ok || !resolveData.email) {
-        setError("We could not find that account. Check your entry and try again.")
+      if (!res.ok) {
+        setError(data.error || "Could not start recovery.")
         return
       }
-
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resolveData.email, {
-        redirectTo: `${(process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "")}/auth/reset-password`,
-      })
-      if (resetError) {
-        setError(resetError.message)
-        return
-      }
-
-      setInfo(
-        `Recovery sent. Reset OTP/link was sent to ${maskEmail(resolveData.email)} (email only).`
-      )
+      setInfo(data.message || "Recovery sent. Check your email for reset instructions.")
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start recovery.")
     } finally {
