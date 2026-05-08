@@ -34,6 +34,10 @@ export default function LoginPage() {
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("reset") === "success"
 
+  const sessionCleared =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("reason") === "session_cleared"
+
   const goGuestDashboard = useCallback(() => {
     try {
       sessionStorage.setItem("nexus_guest_enter", "1")
@@ -211,6 +215,13 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          {sessionCleared ? (
+            <p className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100" role="status">
+              Your browser session was reset because the cookies were too large to load safely (often after a large
+              security selfie). Sign in again — your account data is intact.
+            </p>
+          ) : null}
 
           {resetSuccess ? (
             <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">

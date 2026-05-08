@@ -2,6 +2,41 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 
+/** Total Cookie header above this triggers strip (Chrome / nginx often fail around 8–16KB). */
+const COOKIE_HEADER_WARN_BYTES = 6144
+/** Supabase chunks JWT across cookies; any single sb-* chunk over this is suspiciously large. */
+const SINGLE_SB_COOKIE_MAX_CHARS = 3800
+
+function needsCookieRecovery(request: NextRequest): boolean {
+  const cookieHeader = request.headers.get("cookie") ?? ""
+  if (cookieHeader.length > COOKIE_HEADER_WARN_BYTES) return true
+  for (const c of request.cookies.getAll()) {
+    if (c.name.startsWith("sb-") && c.value.length > SINGLE_SB_COOKIE_MAX_CHARS) return true
+  }
+  return false
+}
+
+function buildCookieRecoveryResponse(request: NextRequest) {
+  const login = new URL("/auth/login", request.url)
+  login.searchParams.set("reason", "session_cleared")
+  const res = NextResponse.redirect(login)
+  for (const { name } of request.cookies.getAll()) {
+    const lower = name.toLowerCase()
+    if (
+      name.startsWith("sb-") ||
+      lower.includes("auth") ||
+      lower.includes("token") ||
+      lower.includes("session") ||
+      lower.includes("sidebar")
+    ) {
+      res.cookies.set(name, "", { path: "/", maxAge: 0 })
+    }
+  }
+  res.headers.set("x-cookie-recovery", "1")
+  res.headers.set("Cache-Control", "no-store")
+  return res
+}
+
 /**
  * Refresh Supabase auth cookies on each request so App Router Route Handlers
  * (Expert APIs, etc.) see `supabase.auth.getUser()` via `createRouteHandlerSupabaseClient`.
@@ -9,24 +44,10 @@ import { createServerClient } from "@supabase/ssr"
  * When `NEXT_PUBLIC_DEV_LOCAL_ONLY=1`, `/auth/*` still redirects to `/dashboard` (no login UI).
  */
 export async function middleware(request: NextRequest) {
-  const cookieHeader = request.headers.get("cookie") ?? ""
-  // Emergency recovery for oversized browser cookies causing 431 / headers-too-big loops.
-  if (cookieHeader.length > 12000) {
-    const recoveryResponse = NextResponse.next({ request })
-    for (const { name } of request.cookies.getAll()) {
-      const lower = name.toLowerCase()
-      if (
-        name.startsWith("sb-") ||
-        lower.includes("auth") ||
-        lower.includes("token") ||
-        lower.includes("session") ||
-        lower.includes("sidebar")
-      ) {
-        recoveryResponse.cookies.set(name, "", { path: "/", maxAge: 0 })
-      }
-    }
-    recoveryResponse.headers.set("x-cookie-recovery", "1")
-    return recoveryResponse
+  // Strip oversized sessions BEFORE Supabase SSR runs — avoids ERR_RESPONSE_HEADERS_TOO_BIG / 431 loops
+  // (e.g. legacy JWT metadata contained multi‑MB base64 selfies).
+  if (needsCookieRecovery(request)) {
+    return buildCookieRecoveryResponse(request)
   }
 
   if (process.env.NEXT_PUBLIC_DEV_LOCAL_ONLY === "1") {
