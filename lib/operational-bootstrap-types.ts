@@ -13,6 +13,7 @@ export interface OperationalBootstrapV1 {
     email: string | null
     fullName: string | null
     isVerified: boolean | null
+    tradingUserLevel: 1 | 2 | 5
     nexus_exchanges: StoredExchangePayload[] | null
   } | null
   userBalance: {

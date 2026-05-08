@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { getBearerTokenFromRequest, getUserFromBearer } from "@/lib/auth-api"
 import { buildOperationalBootstrapV1 } from "@/lib/server/operational-bootstrap"
+import { getRequestIpAddress, trackLoginSession } from "@/lib/server/login-session"
 
 /**
  * DB-authoritative operational snapshot after auth (sessions, positions, governance, canonical exchanges).
@@ -15,6 +16,15 @@ export async function GET(request: Request) {
 
     const meta = user.user_metadata as Record<string, unknown> | undefined
     const jwtExchanges = meta?.nexus_exchanges
+    const bearer = getBearerTokenFromRequest(request)
+    if (bearer) {
+      await trackLoginSession({
+        userId: user.id,
+        bearerToken: bearer,
+        userAgent: request.headers.get("user-agent") ?? "",
+        ipAddress: getRequestIpAddress(request),
+      })
+    }
 
     const payload = await buildOperationalBootstrapV1({
       userId: user.id,

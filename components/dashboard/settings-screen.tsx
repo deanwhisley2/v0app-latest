@@ -37,6 +37,25 @@ import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
 type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
+type WhitelistItem = {
+  id: string
+  kind: "mobile_number" | "crypto_address"
+  holder_name: string
+  value: string
+  label?: string | null
+  created_at: string
+}
+type SessionItem = {
+  id: string
+  device_name: string
+  browser_name: string
+  status: string
+  first_seen_at: string
+  last_seen_at: string
+  revoked_at?: string | null
+  is_current: boolean
+  is_online: boolean
+}
 
 export type SettingsView =
   | "main"
@@ -104,6 +123,16 @@ export function SettingsScreen({
   const [selfieLoading, setSelfieLoading] = useState(false)
   const [selfieError, setSelfieError] = useState<string | null>(null)
   const [selfieCompareInfo, setSelfieCompareInfo] = useState<string | null>(null)
+  const [whitelistItems, setWhitelistItems] = useState<WhitelistItem[]>([])
+  const [whitelistKind, setWhitelistKind] = useState<"mobile_number" | "crypto_address">("mobile_number")
+  const [whitelistHolderName, setWhitelistHolderName] = useState("")
+  const [whitelistValue, setWhitelistValue] = useState("")
+  const [whitelistMessage, setWhitelistMessage] = useState<string | null>(null)
+  const [sessionItems, setSessionItems] = useState<SessionItem[]>([])
+  const [sessionsMessage, setSessionsMessage] = useState<string | null>(null)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -134,6 +163,35 @@ export function SettingsScreen({
       }
     }
     void loadSelfie()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSecurityData = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const [wlRes, ssRes] = await Promise.all([
+          fetch("/api/user/withdraw-whitelist", { headers: { Authorization: `Bearer ${token}` } }),
+          fetch("/api/user/sessions", { headers: { Authorization: `Bearer ${token}` } }),
+        ])
+        const wlData = (await wlRes.json().catch(() => ({}))) as { items?: WhitelistItem[]; error?: string }
+        const ssData = (await ssRes.json().catch(() => ({}))) as { items?: SessionItem[]; error?: string }
+        if (!cancelled) {
+          if (wlRes.ok) setWhitelistItems(wlData.items ?? [])
+          if (ssRes.ok) setSessionItems(ssData.items ?? [])
+        }
+      } catch {
+        /* ignore transient failures */
+      }
+    }
+    void loadSecurityData()
     return () => {
       cancelled = true
     }
@@ -212,6 +270,87 @@ export function SettingsScreen({
       setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")
     } finally {
       setSelfieLoading(false)
+    }
+  }
+
+  async function addWhitelistEntry() {
+    setWhitelistMessage(null)
+    if (!whitelistHolderName.trim() || !whitelistValue.trim()) {
+      setWhitelistMessage("Holder name and address/number are required.")
+      return
+    }
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired. Please sign in again.")
+      const res = await fetch("/api/user/withdraw-whitelist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          kind: whitelistKind,
+          holder_name: whitelistHolderName,
+          value: whitelistValue,
+        }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { item?: WhitelistItem; error?: string }
+      if (!res.ok) throw new Error(out.error || "Could not add whitelist entry")
+      setWhitelistItems((prev) => [out.item as WhitelistItem, ...prev])
+      setWhitelistHolderName("")
+      setWhitelistValue("")
+      setWhitelistMessage("Whitelist entry added.")
+    } catch (e) {
+      setWhitelistMessage(e instanceof Error ? e.message : "Could not add whitelist entry")
+    }
+  }
+
+  async function revokeSession(sessionId: string) {
+    setSessionsMessage(null)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired. Please sign in again.")
+      const res = await fetch("/api/user/sessions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(out.error || "Could not revoke session")
+      setSessionItems((prev) => prev.map((s) => (s.id === sessionId ? { ...s, status: "revoked", is_online: false } : s)))
+      setSessionsMessage("Session revoked.")
+    } catch (e) {
+      setSessionsMessage(e instanceof Error ? e.message : "Could not revoke session")
+    }
+  }
+
+  async function changePassword() {
+    setPasswordMessage(null)
+    if (!currentPassword || !newPassword) {
+      setPasswordMessage("Current password and new password are required.")
+      return
+    }
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired. Please sign in again.")
+      const res = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      if (!res.ok) throw new Error(out.error || "Could not change password")
+      setCurrentPassword("")
+      setNewPassword("")
+      setPasswordMessage(out.message || "Password changed.")
+    } catch (e) {
+      setPasswordMessage(e instanceof Error ? e.message : "Could not change password")
     }
   }
 
@@ -344,8 +483,8 @@ export function SettingsScreen({
       { label: "Two-Factor Authentication", status: "Enabled", enabled: true },
       { label: "Biometric Login", status: "Disabled", enabled: false },
       { label: "Anti-Phishing Code", status: "Set", enabled: true },
-      { label: "Withdrawal Whitelist", status: "3 addresses", enabled: true },
-      { label: "Device Management", status: "2 devices", enabled: true },
+      { label: "Withdrawal Whitelist", status: `${whitelistItems.length} active entries`, enabled: true },
+      { label: "Device Management", status: `${sessionItems.length} sessions`, enabled: true },
       { label: "Login Password", status: "Change", enabled: true },
     ]
 
@@ -402,6 +541,70 @@ export function SettingsScreen({
               </div>
             ))}
           </div>
+        </Card>
+        <Card className="border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold">Withdrawal Whitelist</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Add-only user flow: you can add up to 3 entries. Removal is admin-only for security.
+          </p>
+          <div className="mb-4 grid gap-2 md:grid-cols-3">
+            <select
+              value={whitelistKind}
+              onChange={(e) => setWhitelistKind(e.target.value as "mobile_number" | "crypto_address")}
+              className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
+            >
+              <option value="mobile_number">Mobile number</option>
+              <option value="crypto_address">Crypto address</option>
+            </select>
+            <Input value={whitelistHolderName} onChange={(e) => setWhitelistHolderName(e.target.value)} placeholder="Holder name" />
+            <Input value={whitelistValue} onChange={(e) => setWhitelistValue(e.target.value)} placeholder={whitelistKind === "mobile_number" ? "+2567..." : "0x..."} />
+          </div>
+          <Button size="sm" onClick={() => void addWhitelistEntry()} disabled={whitelistItems.length >= 3}>
+            Add whitelist entry
+          </Button>
+          {whitelistMessage ? <p className="mt-2 text-xs text-muted-foreground">{whitelistMessage}</p> : null}
+          <div className="mt-4 space-y-2">
+            {whitelistItems.map((w) => (
+              <div key={w.id} className="rounded-lg bg-muted/30 px-3 py-2 text-sm">
+                <p className="font-medium">{w.holder_name} - {w.kind === "mobile_number" ? "Mobile" : "Crypto"}</p>
+                <p className="font-mono text-xs text-muted-foreground">{w.value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold">Device Management</h3>
+          <div className="space-y-2">
+            {sessionItems.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">{s.device_name} - {s.browser_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {s.is_online ? "Online" : "Offline"} | Last active {new Date(s.last_seen_at).toLocaleString()}
+                    {s.is_current ? " | Current device" : ""}
+                  </p>
+                </div>
+                {!s.is_current && s.status === "active" ? (
+                  <Button size="sm" variant="outline" onClick={() => void revokeSession(s.id)}>Revoke</Button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          {sessionsMessage ? <p className="mt-2 text-xs text-muted-foreground">{sessionsMessage}</p> : null}
+        </Card>
+        <Card className="border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold">Change Password</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Enter your current password first. If unknown, use the face recovery fallback path from login.
+          </p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" />
+            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 8 chars)" />
+          </div>
+          <Button className="mt-3" size="sm" onClick={() => void changePassword()}>
+            Update password
+          </Button>
+          {passwordMessage ? <p className="mt-2 text-xs text-muted-foreground">{passwordMessage}</p> : null}
         </Card>
       </div>
     )
@@ -711,37 +914,14 @@ export function SettingsScreen({
 
   // Payment Methods
   if (currentView === "payment-methods") {
-    const paymentMethods = [
-      { type: "Visa", last4: "4242", expiry: "12/25" },
-      { type: "Mastercard", last4: "8888", expiry: "08/26" },
-    ]
-
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
-          <h3 className="mb-6 text-lg font-semibold">Payment Methods</h3>
-          <div className="space-y-3">
-            {paymentMethods.map((method) => (
-              <div
-                key={method.last4}
-                className="flex items-center justify-between rounded-lg bg-muted/30 px-4 py-4"
-              >
-                <div className="flex items-center gap-3">
-                  <CreditCard className="h-6 w-6 text-primary" />
-                  <div>
-                    <p className="font-medium">{method.type} ****{method.last4}</p>
-                    <p className="text-sm text-muted-foreground">Expires {method.expiry}</p>
-                  </div>
-                </div>
-                <button className="text-sm text-destructive hover:underline">Remove</button>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full">
-              <CreditCard className="mr-2 h-4 w-4" />
-              Add Payment Method
-            </Button>
-          </div>
+          <h3 className="mb-3 text-lg font-semibold">Payment Methods</h3>
+          <p className="text-sm text-muted-foreground">
+            Card/bank rails are intentionally disabled in this phase. Use retailer or crypto/mobile flows only.
+          </p>
         </Card>
       </div>
     )

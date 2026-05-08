@@ -9,6 +9,26 @@ import { createServerClient } from "@supabase/ssr"
  * When `NEXT_PUBLIC_DEV_LOCAL_ONLY=1`, `/auth/*` still redirects to `/dashboard` (no login UI).
  */
 export async function middleware(request: NextRequest) {
+  const cookieHeader = request.headers.get("cookie") ?? ""
+  // Emergency recovery for oversized browser cookies causing 431 / headers-too-big loops.
+  if (cookieHeader.length > 12000) {
+    const recoveryResponse = NextResponse.next({ request })
+    for (const { name } of request.cookies.getAll()) {
+      const lower = name.toLowerCase()
+      if (
+        name.startsWith("sb-") ||
+        lower.includes("auth") ||
+        lower.includes("token") ||
+        lower.includes("session") ||
+        lower.includes("sidebar")
+      ) {
+        recoveryResponse.cookies.set(name, "", { path: "/", maxAge: 0 })
+      }
+    }
+    recoveryResponse.headers.set("x-cookie-recovery", "1")
+    return recoveryResponse
+  }
+
   if (process.env.NEXT_PUBLIC_DEV_LOCAL_ONLY === "1") {
     if (request.nextUrl.pathname.startsWith("/auth/")) {
       return NextResponse.redirect(new URL("/dashboard", request.url))

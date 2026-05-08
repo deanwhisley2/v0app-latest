@@ -33,7 +33,7 @@ export async function buildOperationalBootstrapV1(params: {
     admin
       .from("profiles")
       .select(
-        "email, full_name, is_verified, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot"
+        "email, full_name, is_verified, trading_user_level, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot"
       )
       .eq("id", params.userId)
       .maybeSingle(),
@@ -143,6 +143,7 @@ export async function buildOperationalBootstrapV1(params: {
     email?: string
     full_name?: string | null
     is_verified?: boolean
+    trading_user_level?: number
     nexus_exchanges?: StoredExchangePayload[] | null
     operational_workspace?: unknown | null
     operational_preferences?: unknown | null
@@ -173,6 +174,10 @@ export async function buildOperationalBootstrapV1(params: {
           email: rawProfile.email ?? null,
           fullName: (rawProfile.full_name as string | null) ?? null,
           isVerified: typeof rawProfile.is_verified === "boolean" ? rawProfile.is_verified : null,
+          tradingUserLevel:
+            rawProfile.trading_user_level === 2 || rawProfile.trading_user_level === 5
+              ? rawProfile.trading_user_level
+              : 1,
           nexus_exchanges: profileExchanges,
         }
       : null,

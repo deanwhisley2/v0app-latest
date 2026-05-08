@@ -26,7 +26,6 @@ import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
 import type { FocusCoinInsight } from "@/lib/expert/phase2-types"
-import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useDashboardTestimonialNotifs } from "@/hooks/use-dashboard-testimonial-notifs"
@@ -57,6 +56,26 @@ type MarketFeedState = {
   catalog: Coin[]
   updatedAt?: number
   error?: string
+}
+
+type RetailerRow = {
+  id: string
+  user_id: string
+  payment_numbers: Array<{ label?: string; value?: string }>
+  credit_basin: number
+  under_review: boolean
+  under_review_reason?: string | null
+}
+
+type RetailerFundingRequest = {
+  id: string
+  retailer_id: string
+  amount: number
+  tx_reference: string
+  status: string
+  note?: string | null
+  appeal_note?: string | null
+  created_at: string
 }
 
 const initialMarketFeed: MarketFeedState = {
@@ -95,6 +114,12 @@ export default function DashboardPage() {
   const [fundMethod, setFundMethod] = useState<"mtn" | "airtel" | "bank" | "wallet">("mtn")
   const [fundPhone, setFundPhone] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
+  const [fundTxReference, setFundTxReference] = useState("")
+  const [fundNote, setFundNote] = useState("")
+  const [selectedRetailerId, setSelectedRetailerId] = useState("")
+  const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
+  const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
+  const [retailerPaymentNumbersInput, setRetailerPaymentNumbersInput] = useState("")
   const { toast, showToast, hideToast } = useToast()
 
   const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
@@ -492,8 +517,9 @@ export default function DashboardPage() {
       typeof meta?.username === "string" && meta.username
         ? meta.username
         : email.split("@")[0] || "user"
-    return { email, username, fullName, level: TRADING_USER_LEVEL }
-  }, [user])
+    const level = op.snapshot?.profile?.tradingUserLevel ?? 1
+    return { email, username, fullName, level }
+  }, [user, op.snapshot?.profile?.tradingUserLevel])
 
   useEffect(() => {
     if (isGuestSession) return
@@ -547,6 +573,35 @@ export default function DashboardPage() {
     setMainBalance(Number(b.available_balance ?? 0))
     setTotalEarnings(Number(b.total_earnings ?? 0))
   }, [isGuestSession, user?.id, op.snapshot?.userBalance])
+
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession) return
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/retailer-funding", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (!res.ok) return
+        const json = (await res.json()) as {
+          retailers?: RetailerRow[]
+          requests?: RetailerFundingRequest[]
+        }
+        setRetailerRows(json.retailers ?? [])
+        setFundRequests(json.requests ?? [])
+        if (!selectedRetailerId && (json.retailers?.length ?? 0) > 0) {
+          setSelectedRetailerId(json.retailers?.[0]?.id ?? "")
+        }
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [authLoading, user, isGuestSession, selectedRetailerId])
 
   const handleLogout = useCallback(async () => {
     const uid = user?.id ?? ""
@@ -682,25 +737,91 @@ export default function DashboardPage() {
     const amount = parseFloat(fundAmount)
     if (!amount || amount <= 0) return
     setIsFundProcessing(true)
-    setTimeout(() => {
-      if (showFundModal === "add") {
-        setMainBalance(prev => prev + amount)
-        showToast(`$${amount.toFixed(2)} added to your account`, "success")
-      } else {
-        if (amount > mainBalance) {
-          showToast("Insufficient balance", "error")
-          setIsFundProcessing(false)
-          return
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) throw new Error("Session expired.")
+        const level = currentUser?.level ?? 1
+
+        if (showFundModal === "add" && level === 1) {
+          if (!selectedRetailerId || !fundTxReference.trim()) {
+            throw new Error("Select retailer and provide transaction reference.")
+          }
+          const res = await fetch("/api/user/retailer-funding", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              retailerId: selectedRetailerId,
+              amount,
+              txReference: fundTxReference,
+              note: fundNote,
+            }),
+          })
+          const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
+          if (!res.ok) throw new Error(out.error || "Could not notify retailer")
+          setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
+          showToast("Top-up request sent to retailer for approval.", "success")
+        } else if (showFundModal === "add" && level === 2) {
+          const paymentNumbers = retailerPaymentNumbersInput
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .map((value) => ({ label: "primary", value }))
+          const res = await fetch("/api/user/retailer-profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ paymentNumbers }),
+          })
+          const out = (await res.json().catch(() => ({}))) as { error?: string; profile?: RetailerRow }
+          if (!res.ok) throw new Error(out.error || "Could not save retailer profile")
+          setRetailerRows((prev) => {
+            const filtered = prev.filter((r) => r.id !== out.profile?.id)
+            return out.profile ? [out.profile, ...filtered] : prev
+          })
+          showToast("Retailer payment numbers saved.", "success")
+        } else if (showFundModal === "withdraw") {
+          if (amount > mainBalance) throw new Error("Insufficient balance")
+          setMainBalance((prev) => prev - amount)
+          showToast(`$${amount.toFixed(2)} withdrawal initiated`, "success")
+        } else {
+          showToast("Use level-based funding flow.", "error")
         }
-        setMainBalance(prev => prev - amount)
-        showToast(`$${amount.toFixed(2)} withdrawal initiated`, "success")
+        setShowFundModal(null)
+        setFundAmount("")
+        setFundPhone("")
+        setFundTxReference("")
+        setFundNote("")
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Fund action failed", "error")
+      } finally {
+        setIsFundProcessing(false)
       }
-      setIsFundProcessing(false)
-      setShowFundModal(null)
-      setFundAmount("")
-      setFundPhone("")
-    }, 1800)
-  }, [fundAmount, showFundModal, mainBalance, showToast])
+    })()
+  }, [fundAmount, showFundModal, mainBalance, showToast, currentUser?.level, selectedRetailerId, fundTxReference, fundNote, retailerPaymentNumbersInput])
+
+  const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired.")
+      const res = await fetch("/api/admin/retailer-funding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ requestId, action }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(out.error || "Admin action failed")
+      setFundRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: action === "approve" ? "approved" : action === "reject" ? "rejected" : "resolved" } : r)))
+      showToast(`Request ${action}d.`, "success")
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Admin action failed", "error")
+    }
+  }, [showToast])
 
   if (authLoading || !user) {
     return (
@@ -838,12 +959,11 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Payment Methods */}
+            {/* Payment Methods (no card rails in this phase) */}
             <div className="mb-4 grid grid-cols-2 gap-2">
               {[
                 { id: "mtn" as const, name: "MTN Mobile Money", color: "#FFCC00", textColor: "#000" },
                 { id: "airtel" as const, name: "Airtel Money", color: "#ED1C24", textColor: "#fff" },
-                { id: "bank" as const, name: "Bank Transfer", color: "#1E40AF", textColor: "#fff" },
                 { id: "wallet" as const, name: "Crypto Wallet", color: "#8B5CF6", textColor: "#fff" },
               ].map((m) => (
                 <button
@@ -856,6 +976,111 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
+
+            {(currentUser?.level ?? 1) === 1 && showFundModal === "add" && (
+              <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">Level 1 retailer funding</p>
+                <select
+                  value={selectedRetailerId}
+                  onChange={(e) => setSelectedRetailerId(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Select retailer</option>
+                  {retailerRows.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.payment_numbers?.[0]?.value || r.user_id} {r.under_review ? "(Under review - basin check)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {retailerRows.find((r) => r.id === selectedRetailerId)?.under_review ? (
+                  <p className="text-[11px] text-warning">
+                    Selected retailer is under review due to basin constraints. Approval may be delayed.
+                  </p>
+                ) : null}
+                <input
+                  type="text"
+                  value={fundTxReference}
+                  onChange={(e) => setFundTxReference(e.target.value)}
+                  placeholder="Transaction reference"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <input
+                  type="text"
+                  value={fundNote}
+                  onChange={(e) => setFundNote(e.target.value)}
+                  placeholder="Optional note"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <div className="max-h-32 space-y-1 overflow-y-auto rounded bg-background/60 p-2">
+                  {fundRequests.slice(0, 4).map((r) => (
+                    <div key={r.id} className="text-[11px]">
+                      {r.tx_reference} - {r.status}
+                      {r.status === "rejected" || r.status === "under_review" ? (
+                        <button
+                          type="button"
+                          className="ml-2 text-primary underline"
+                          onClick={async () => {
+                            const appealNote = window.prompt("Appeal note")
+                            if (!appealNote) return
+                            const { data: s } = await supabase.auth.getSession()
+                            const token = s.session?.access_token
+                            if (!token) return
+                            await fetch("/api/user/retailer-funding", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ requestId: r.id, appealNote }),
+                            })
+                            setFundRequests((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: "appealed", appeal_note: appealNote } : x)))
+                          }}
+                        >
+                          Appeal
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(currentUser?.level ?? 1) === 2 && showFundModal === "add" && (
+              <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">Retailer profile setup (Level 2)</p>
+                <input
+                  type="text"
+                  value={retailerPaymentNumbersInput}
+                  onChange={(e) => setRetailerPaymentNumbersInput(e.target.value)}
+                  placeholder="Payment numbers (comma-separated)"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Add real collection numbers. Approvals appear in admin workflow.
+                </p>
+              </div>
+            )}
+
+            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && (
+              <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">Admin review queue (Level 5)</p>
+                <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+                  {fundRequests.slice(0, 8).map((r) => (
+                    <div key={r.id} className="rounded-md bg-background px-2 py-1 text-xs">
+                      <p>Ref: {r.tx_reference} | ${Number(r.amount).toFixed(2)} | {r.status}</p>
+                      <div className="mt-1 flex gap-1">
+                        <button type="button" className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] text-white" onClick={() => void handleAdminFundingAction(r.id, "approve")}>
+                          Approve
+                        </button>
+                        <button type="button" className="rounded bg-rose-600 px-2 py-0.5 text-[10px] text-white" onClick={() => void handleAdminFundingAction(r.id, "reject")}>
+                          Reject
+                        </button>
+                        <button type="button" className="rounded bg-slate-600 px-2 py-0.5 text-[10px] text-white" onClick={() => void handleAdminFundingAction(r.id, "resolve")}>
+                          Resolve
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Amount */}
             <div className="mb-4">
@@ -899,16 +1124,6 @@ export default function DashboardPage() {
                   placeholder="+256 7XX XXX XXX"
                   className="w-full rounded-lg border border-border bg-background py-3 px-4 text-sm outline-none transition-colors focus:border-primary"
                 />
-              </div>
-            )}
-
-            {/* Bank info for deposit */}
-            {fundMethod === "bank" && showFundModal === "add" && (
-              <div className="mb-4 rounded-lg bg-muted/50 p-3 text-xs space-y-1">
-                <p className="font-semibold text-foreground">Bank Transfer Details</p>
-                <div className="flex justify-between"><span className="text-muted-foreground">Bank:</span><span className="font-mono">Nexus Trading Bank</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Account:</span><span className="font-mono">1234567890</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">SWIFT:</span><span className="font-mono">NXTRUGKA</span></div>
               </div>
             )}
 
@@ -1044,32 +1259,41 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 lg:flex-row">
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              <AIPanel
-                coins={tradeCatalog}
-                selectedCoin={selectedCoin}
-                onNavigateToTrade={handleNavigateToTrade}
-                onStrategyCoinChange={(c) => setSelectedCoinSymbol(c.symbol)}
-                hasExchangeConnection={
-                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                  connectedExchanges.length > 0
-                }
-                defaultExchangeId={
-                  selectedExchangeId ??
-                  connectedExchanges.find((e) => e.isDefault)?.id ??
-                  connectedExchanges[0]?.id
-                }
-                realTradeEligible={
-                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                  (connectedExchanges.length > 0 &&
-                    connectedExchanges.some((e) => (e.balance ?? 0) > 0))
-                }
-                exchangePermissionsOk={
-                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                  connectedExchanges.length > 0
-                }
-                userLevel={TRADING_USER_LEVEL}
-                isGuestSession={isGuestSession}
-              />
+              {(currentUser?.level ?? 1) === 1 ? (
+                <div className="rounded-2xl border border-warning/40 bg-warning/10 p-6">
+                  <h3 className="text-lg font-semibold text-warning">Level 1 restricted surface</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Wallstreet AI execution is unlocked at level 2+. Use retailer top-up and basic trading views for now.
+                  </p>
+                </div>
+              ) : (
+                <AIPanel
+                  coins={tradeCatalog}
+                  selectedCoin={selectedCoin}
+                  onNavigateToTrade={handleNavigateToTrade}
+                  onStrategyCoinChange={(c) => setSelectedCoinSymbol(c.symbol)}
+                  hasExchangeConnection={
+                    process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                    connectedExchanges.length > 0
+                  }
+                  defaultExchangeId={
+                    selectedExchangeId ??
+                    connectedExchanges.find((e) => e.isDefault)?.id ??
+                    connectedExchanges[0]?.id
+                  }
+                  realTradeEligible={
+                    process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                    (connectedExchanges.length > 0 &&
+                      connectedExchanges.some((e) => (e.balance ?? 0) > 0))
+                  }
+                  exchangePermissionsOk={
+                    process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                    connectedExchanges.length > 0
+                  }
+                  userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
+                  isGuestSession={isGuestSession}
+                />
+              )}
             </main>
           </div>
         )}
@@ -1092,7 +1316,7 @@ export default function DashboardPage() {
                 requestedView={settingsRequestedView}
                 onRequestViewConsumed={handleSettingsRequestConsumed}
                 isGuestSession={isGuestSession}
-                tradingUserLevel={TRADING_USER_LEVEL}
+                tradingUserLevel={currentUser?.level ?? 1}
               />
             </main>
           </div>
