@@ -122,7 +122,13 @@ export function SettingsScreen({
           hasSelfie?: boolean
           avatarUrl?: string | null
         }
-        if (!cancelled) setSelfieUrl(data.hasSelfie ? data.avatarUrl ?? null : null)
+        if (!cancelled) {
+          const hasSelfie = Boolean(data.hasSelfie)
+          setSelfieUrl(hasSelfie ? data.avatarUrl ?? null : null)
+          if (hasSelfie) {
+            setSelfieCompareInfo("Face added. Recovery selfie security is active.")
+          }
+        }
       } catch {
         /* ignore */
       }
@@ -193,7 +199,7 @@ export function SettingsScreen({
         },
         body: JSON.stringify({ avatar_url: dataUrl, selfie_hash: selfieHash }),
       })
-      const out = (await res.json().catch(() => ({}))) as { error?: string }
+      const out = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
       if (!res.ok) {
         if (res.status === 401) {
           throw new Error("Session expired. Please sign in again, then upload selfie.")
@@ -201,6 +207,7 @@ export function SettingsScreen({
         throw new Error(out.error || "Could not save selfie")
       }
       setSelfieUrl(dataUrl)
+      setSelfieCompareInfo(out.message || "Face added. Recovery selfie security is active.")
     } catch (e) {
       setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")
     } finally {
@@ -351,6 +358,9 @@ export function SettingsScreen({
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Selfie verification protects account recovery and reduces impersonation risk.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Keep this enabled during setup and account lifetime so no one else can use selfie recovery for your profile.
           </p>
           {selfieUrl ? (
             <img src={selfieUrl} alt="Registered selfie" className="mt-3 h-24 w-24 rounded-xl border border-border object-cover" />

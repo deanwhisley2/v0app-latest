@@ -78,7 +78,11 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({
+      ok: true,
+      faceAdded: true,
+      message: "Face added. Selfie fingerprint encoded for secure comparison.",
+    })
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Internal error" },

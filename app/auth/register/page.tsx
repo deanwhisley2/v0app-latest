@@ -268,11 +268,16 @@ export default function RegisterPage() {
               }}
             />
             {selfiePreview ? (
-              <img
-                src={selfiePreview}
-                alt="Selfie preview"
-                className="h-24 w-24 rounded-xl border border-border object-cover"
-              />
+              <div className="space-y-2">
+                <img
+                  src={selfiePreview}
+                  alt="Selfie preview"
+                  className="h-24 w-24 rounded-xl border border-border object-cover"
+                />
+                <p className="text-xs text-emerald-400">
+                  Face added. A compact selfie fingerprint is encoded for secure recovery checks.
+                </p>
+              </div>
             ) : (
               <p className="text-xs text-warning">
                 Required to protect withdrawals and prevent impersonation.

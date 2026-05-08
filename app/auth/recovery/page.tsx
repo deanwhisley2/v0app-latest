@@ -143,6 +143,9 @@ export default function RecoveryPage() {
           <p className="text-xs text-muted-foreground">
             Take a clear selfie (no face cover, no hat). If it matches your enrolled selfie, you will continue directly to reset password.
           </p>
+          <p className="text-xs text-muted-foreground">
+            During setup, always add your face selfie so only your biometric profile can use this recovery path.
+          </p>
           <Input
             type="file"
             accept="image/*"
