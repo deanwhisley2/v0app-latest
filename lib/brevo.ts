@@ -16,7 +16,7 @@ export async function sendVerificationEmail(
   to: string,
   code: string,
   fullName: string = "Valued Customer"
-) {
+): Promise<string> {
   const apiKey = process.env.BREVO_API_KEY
   if (!apiKey) {
     throw new Error("Missing BREVO_API_KEY")
@@ -74,13 +74,15 @@ export async function sendVerificationEmail(
     }
     throw new Error(detail || `Brevo API error (${res.status})`)
   }
+  const body = (await res.json().catch(() => ({}))) as { messageId?: string }
+  return body.messageId || ""
 }
 
 export async function sendPasswordRecoveryEmail(
   to: string,
   recoveryUrl: string,
   fullName: string = "Valued Customer"
-) {
+): Promise<string> {
   const apiKey = process.env.BREVO_API_KEY
   if (!apiKey) {
     throw new Error("Missing BREVO_API_KEY")
@@ -138,6 +140,30 @@ export async function sendPasswordRecoveryEmail(
     }
     throw new Error(detail || `Brevo API error (${res.status})`)
   }
+  const body = (await res.json().catch(() => ({}))) as { messageId?: string }
+  return body.messageId || ""
+}
+
+export async function getBrevoMessageEvent(
+  messageId: string
+): Promise<{ event?: string; reason?: string } | null> {
+  const apiKey = process.env.BREVO_API_KEY
+  if (!apiKey || !messageId) return null
+  const url = `https://api.brevo.com/v3/smtp/statistics/events?messageId=${encodeURIComponent(
+    messageId
+  )}&limit=1&offset=0`
+  const res = await fetch(url, {
+    headers: {
+      accept: "application/json",
+      "api-key": apiKey,
+    },
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) return null
+  const body = (await res.json().catch(() => ({}))) as {
+    events?: Array<{ event?: string; reason?: string }>
+  }
+  return body.events?.[0] ?? null
 }
 
 /** Optional smoke test from a server script or temporary route. */
