@@ -29,7 +29,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
-import { imageDataUrlToHash, validateSelfieQuality } from "@/lib/selfie-hash"
+import { imageDataUrlToHash, optimizeSelfieUpload, validateSelfieQuality } from "@/lib/selfie-hash"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
@@ -138,26 +138,23 @@ export function SettingsScreen({
       setSelfieError("Please choose an image file.")
       return
     }
-    if (file.size > 3 * 1024 * 1024) {
-      setSelfieError("Selfie image must be 3MB or smaller.")
+    if (file.size > 15 * 1024 * 1024) {
+      setSelfieError("Selfie image is too large. Please take a new clear photo.")
       return
     }
     setSelfieError(null)
     setSelfieLoading(true)
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result || ""))
-        reader.onerror = () => reject(new Error("Could not read image"))
-        reader.readAsDataURL(file)
-      })
+      const dataUrl = await optimizeSelfieUpload(file)
       await validateSelfieQuality(dataUrl)
       const selfieHash = await imageDataUrlToHash(dataUrl)
       const {
         data: { session },
       } = await supabase.auth.getSession()
       const token = session?.access_token
-      if (!token) throw new Error("Not authenticated")
+      if (!token) {
+        throw new Error("Session expired. Please sign in again, then upload selfie.")
+      }
       if (selfieUrl) {
         const cmpRes = await fetch("/api/user/security-selfie", {
           method: "PUT",
@@ -174,6 +171,9 @@ export function SettingsScreen({
           error?: string
         }
         if (!cmpRes.ok) {
+          if (cmpRes.status === 401) {
+            throw new Error("Session expired. Please sign in again, then retry selfie verification.")
+          }
           throw new Error(cmpData.error || "Could not compare selfie")
         }
         if (!cmpData.matched) {
@@ -194,7 +194,12 @@ export function SettingsScreen({
         body: JSON.stringify({ avatar_url: dataUrl, selfie_hash: selfieHash }),
       })
       const out = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(out.error || "Could not save selfie")
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Session expired. Please sign in again, then upload selfie.")
+        }
+        throw new Error(out.error || "Could not save selfie")
+      }
       setSelfieUrl(dataUrl)
     } catch (e) {
       setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { imageDataUrlToHash, validateSelfieQuality } from "@/lib/selfie-hash"
+import { imageDataUrlToHash, optimizeSelfieUpload, validateSelfieQuality } from "@/lib/selfie-hash"
 
 export default function RecoveryPage() {
   const [identifier, setIdentifier] = useState("")
@@ -64,19 +64,14 @@ export default function RecoveryPage() {
       setError("Selfie must be an image file.")
       return
     }
-    if (file.size > 3 * 1024 * 1024) {
-      setError("Selfie image must be 3MB or smaller.")
+    if (file.size > 15 * 1024 * 1024) {
+      setError("Selfie image is too large. Please take a new clear photo.")
       return
     }
 
     setSelfieBusy(true)
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result || ""))
-        reader.onerror = () => reject(new Error("Could not read selfie image"))
-        reader.readAsDataURL(file)
-      })
+      const dataUrl = await optimizeSelfieUpload(file)
       await validateSelfieQuality(dataUrl)
       const selfieHash = await imageDataUrlToHash(dataUrl)
 

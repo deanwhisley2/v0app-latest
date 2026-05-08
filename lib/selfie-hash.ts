@@ -1,12 +1,74 @@
 "use client"
 
-export async function imageDataUrlToHash(dataUrl: string): Promise<string> {
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+async function dataUrlToImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image()
     el.onload = () => resolve(el)
     el.onerror = () => reject(new Error("Could not load selfie image"))
     el.src = dataUrl
   })
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ""))
+    reader.onerror = () => reject(new Error("Could not read selfie image"))
+    reader.readAsDataURL(file)
+  })
+}
+
+function canvasToJpegDataUrl(canvas: HTMLCanvasElement, quality: number): string {
+  return canvas.toDataURL("image/jpeg", quality)
+}
+
+/**
+ * Resize/compress selfie for mobile upload reliability.
+ * Returns a JPEG data URL that targets ~0.9MB and max dimension 960px.
+ */
+export async function optimizeSelfieUpload(
+  file: File,
+  opts?: { maxDimension?: number; maxBytes?: number }
+): Promise<string> {
+  const maxDimension = opts?.maxDimension ?? 960
+  const maxBytes = opts?.maxBytes ?? 900_000
+  const srcDataUrl = await fileToDataUrl(file)
+  const img = await dataUrlToImage(srcDataUrl)
+
+  const scale = Math.min(1, maxDimension / Math.max(img.width, img.height))
+  let targetW = Math.max(1, Math.round(img.width * scale))
+  let targetH = Math.max(1, Math.round(img.height * scale))
+
+  const canvas = document.createElement("canvas")
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("Canvas not supported")
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    canvas.width = targetW
+    canvas.height = targetH
+    ctx.clearRect(0, 0, targetW, targetH)
+    ctx.drawImage(img, 0, 0, targetW, targetH)
+
+    const qualities = [0.86, 0.78, 0.7, 0.62]
+    for (const quality of qualities) {
+      const out = canvasToJpegDataUrl(canvas, quality)
+      const approxBytes = Math.ceil((out.length * 3) / 4)
+      if (approxBytes <= maxBytes) return out
+    }
+
+    targetW = Math.max(320, Math.round(targetW * 0.82))
+    targetH = Math.max(320, Math.round(targetH * 0.82))
+  }
+
+  canvas.width = targetW
+  canvas.height = targetH
+  ctx.clearRect(0, 0, targetW, targetH)
+  ctx.drawImage(img, 0, 0, targetW, targetH)
+  return canvasToJpegDataUrl(canvas, 0.58)
+}
+
+export async function imageDataUrlToHash(dataUrl: string): Promise<string> {
+  const img = await dataUrlToImage(dataUrl)
 
   const canvas = document.createElement("canvas")
   canvas.width = 9
@@ -53,12 +115,7 @@ export async function validateSelfieQuality(dataUrl: string): Promise<void> {
   }
   if (!AnyWindow.FaceDetector) return
 
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image()
-    el.onload = () => resolve(el)
-    el.onerror = () => reject(new Error("Could not load selfie image"))
-    el.src = dataUrl
-  })
+  const img = await dataUrlToImage(dataUrl)
   const detector = new AnyWindow.FaceDetector({ fastMode: true, maxDetectedFaces: 1 })
   const faces = await detector.detect(img)
   if (!faces.length) {

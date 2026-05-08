@@ -19,7 +19,7 @@ import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
-import { imageDataUrlToHash, validateSelfieQuality } from "@/lib/selfie-hash"
+import { imageDataUrlToHash, optimizeSelfieUpload, validateSelfieQuality } from "@/lib/selfie-hash"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -52,16 +52,11 @@ export default function RegisterPage() {
       setError("Selfie must be an image file.")
       return
     }
-    if (file.size > 3 * 1024 * 1024) {
-      setError("Selfie image must be 3MB or smaller.")
+    if (file.size > 15 * 1024 * 1024) {
+      setError("Selfie image is too large. Please take a new clear photo.")
       return
     }
-    const reader = new FileReader()
-    const result = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => resolve(String(reader.result || ""))
-      reader.onerror = () => reject(new Error("Could not read selfie image"))
-      reader.readAsDataURL(file)
-    })
+    const result = await optimizeSelfieUpload(file)
     await validateSelfieQuality(result)
     const hash = await imageDataUrlToHash(result)
     setSelfieDataUrl(result)
