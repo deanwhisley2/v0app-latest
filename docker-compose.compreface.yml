@@ -56,6 +56,9 @@ services:
     restart: unless-stopped
     environment:
       CLIENT_MAX_BODY_SIZE: 20M
+      PROXY_READ_TIMEOUT: 300s
+      PROXY_CONNECT_TIMEOUT: 300s
+      PROXY_SEND_TIMEOUT: 300s
     depends_on:
       - compreface-api
       - compreface-admin
