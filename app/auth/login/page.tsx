@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Bot, MessageCircle, X } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
@@ -15,8 +15,9 @@ import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { reenterGuestMode } = useAuth()
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -30,6 +31,7 @@ export default function LoginPage() {
       text: "I am Joelin. I can explain how Nexus works, container mode benefits, and guide you to human support (admin desk coming soon).",
     },
   ])
+  const resetSuccess = searchParams.get("reset") === "success"
 
   const goGuestDashboard = useCallback(() => {
     try {
@@ -60,8 +62,32 @@ export default function LoginPage() {
     }
     setIsSubmitting(true)
     try {
+      const rawIdentifier = identifier.trim()
+      if (!rawIdentifier) {
+        setError("Enter your email, username, or phone number.")
+        return
+      }
+
+      let emailForAuth = rawIdentifier
+      if (!rawIdentifier.includes("@")) {
+        const resolveRes = await fetch("/api/auth/resolve-identifier", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: rawIdentifier }),
+        })
+        const resolveData = (await resolveRes.json().catch(() => ({}))) as {
+          email?: string
+          error?: string
+        }
+        if (!resolveRes.ok || !resolveData.email) {
+          setError("Invalid login credentials.")
+          return
+        }
+        emailForAuth = resolveData.email
+      }
+
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: emailForAuth.trim(),
         password,
       })
       if (signInError) {
@@ -84,7 +110,7 @@ export default function LoginPage() {
       } else if (profile && profile.is_verified === false) {
         await supabase.auth.signOut()
         setError("Verify your email before signing in.")
-        router.replace(`/auth/verify?email=${encodeURIComponent(email.trim())}`)
+        router.replace(`/auth/verify?email=${encodeURIComponent(emailForAuth.trim())}`)
         router.refresh()
         return
       }
@@ -107,37 +133,6 @@ export default function LoginPage() {
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong")
       }
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleForgotPassword() {
-    setError(null)
-    setInfo(null)
-    const trimmedEmail = email.trim()
-    if (!trimmedEmail) {
-      setError("Enter your email first, then click Forgot password.")
-      return
-    }
-    const configIssue = getSupabaseBrowserConfigIssue()
-    if (configIssue) {
-      setError(configIssue)
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: `${window.location.origin}/auth/login`,
-      })
-      if (resetError) {
-        setError(resetError.message)
-        return
-      }
-      setInfo("Password reset email sent. Check inbox and spam.")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send reset email")
     } finally {
       setIsSubmitting(false)
     }
@@ -167,7 +162,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="text-center">
           <h1 className="mt-1 text-2xl font-semibold text-foreground">Sign in</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Use your email and password.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Use your email, username, or phone and password.</p>
           {isDevLocalOnly() ? (
             <p className="mt-3 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200">
               <strong>Local dev mode:</strong> Supabase is off. <strong>Sign in</strong> skips password and opens
@@ -179,14 +174,14 @@ export default function LoginPage() {
 
         <form className="space-y-6" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">
-            <Label htmlFor="login-email">Email</Label>
+            <Label htmlFor="login-identifier">Email, username, or phone</Label>
             <Input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              id="login-identifier"
+              type="text"
+              autoComplete="username"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="you@example.com / username / +2567..."
               required
               disabled={isSubmitting}
               aria-invalid={!!error}
@@ -209,12 +204,18 @@ export default function LoginPage() {
                 type="button"
                 className="text-xs text-primary underline-offset-4 hover:underline disabled:opacity-50"
                 disabled={isSubmitting}
-                onClick={handleForgotPassword}
+                onClick={() => router.push("/auth/recovery")}
               >
                 Forgot password?
               </button>
             </div>
           </div>
+
+          {resetSuccess ? (
+            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
+              Password updated successfully. Sign in with your new password.
+            </p>
+          ) : null}
 
           {info ? (
             <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
