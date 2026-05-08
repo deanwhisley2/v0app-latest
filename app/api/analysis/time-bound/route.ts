@@ -7,10 +7,12 @@ import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/l
  * Intentionally not gated by `NEXT_PUBLIC_DEV_LOCAL_ONLY`: fast paths only call
  * public Binance REST (depth + funding index). Grok runs only when includeGrok
  * is true. Live xAI calls also require the pipeline live and symbol in the quota pool
- * (`lib/grok-symbol-eligibility.ts`). This route does not accept `forceGrok` (public callers cannot bypass quota).
+ * (`lib/grok-symbol-eligibility.ts`), unless `forceGrok` is set by a trusted caller:
+ * same-machine auto-trader must send header `x-nexus-real-trade-secret` matching
+ * `NEXUS_REAL_TRADE_SECRET` (never expose that header publicly).
  */
 export async function POST(request: NextRequest) {
-  let body: { symbol?: string; timeWindowSeconds?: number; includeGrok?: boolean }
+  let body: { symbol?: string; timeWindowSeconds?: number; includeGrok?: boolean; forceGrok?: boolean }
   try {
     body = await request.json()
   } catch {
@@ -37,14 +39,18 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Grok only when explicitly requested AND operator enables + subscription active + XAI key (see grok-pipeline-status).
-  const includeGrok = body.includeGrok === true
+  const tradeSecret = process.env.NEXUS_REAL_TRADE_SECRET?.trim() ?? ""
+  const hdr = request.headers.get("x-nexus-real-trade-secret")?.trim() ?? ""
+  const trustedDaemon = Boolean(tradeSecret && hdr === tradeSecret)
+  const forceGrok = trustedDaemon && body.forceGrok === true
+  const includeGrok = body.includeGrok === true || forceGrok
   const timeWindowMs = timeWindowSeconds * 1000
 
   const result = await timeBoundAnalysis.startAnalysis({
     symbol,
     timeWindowMs,
     includeGrok,
+    forceGrok,
     onPartialResult: (partial) => {
       console.log(
         `[api/analysis/time-bound] partial ${partial.phase} · Grok wait ${partial.waitingForGrok} · ${partial.timeRemainingMs}ms left`

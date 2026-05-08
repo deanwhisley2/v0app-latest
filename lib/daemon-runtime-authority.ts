@@ -102,6 +102,19 @@ export async function getDaemonSymbolRuntime(input: { daemonType: string; userId
   return data as DaemonSymbolRuntime
 }
 
+/** Symbols (e.g. BTCUSDT) currently marked LONG for this daemon worker + user. */
+export async function listDaemonSymbolLongs(input: { daemonType: string; userId: string }) {
+  const admin = requireAdmin()
+  const { data, error } = await admin
+    .from("DaemonSymbolState")
+    .select("symbol")
+    .eq("daemonType", input.daemonType)
+    .eq("userId", input.userId)
+    .eq("positionStatus", "LONG")
+  if (error) throw new Error(`DB_READ_FAILED: DaemonSymbolState list LONG — ${error.message}`)
+  return (data ?? []).map((row) => String((row as { symbol: string }).symbol))
+}
+
 export async function updateDaemonSymbolRuntime(
   input: { daemonType: string; userId: string; symbol: string; expectedVersion: number },
   patch: Partial<Omit<DaemonSymbolRuntime, "daemonType" | "userId" | "symbol" | "version">>

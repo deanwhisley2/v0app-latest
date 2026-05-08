@@ -15,6 +15,10 @@
  * - AUTO_TRADER_ENABLED=true
  *
  * Logs: logs/auto-trader.log (+ stdout)
+ *
+ * Grok + open-position “combat” mode:
+ * - Default: AUTO_TRADER_FORCE_GROK unset → daemon sends signed forceGrok so chosen/Joelin symbols always get live Grok when the pipeline is live (header x-nexus-real-trade-secret). Set AUTO_TRADER_FORCE_GROK=0 to quota-limit only.
+ * - AUTO_TRADER_POSITION_COMBAT unset or non-"0": while LONG, periodic fused analysis can exit early on strong SELL; at take-profit, may defer exit when fused+BUY is still bullish (capped). Set AUTO_TRADER_POSITION_COMBAT=0 to disable. Hard stop-loss and max-hold always apply — SL is never skipped.
  */
 import * as fs from "node:fs"
 import * as path from "node:path"
@@ -23,6 +27,7 @@ import {
   acquireOrchestrationLease,
   getDaemonSymbolRuntime,
   heartbeatOrchestrationLease,
+  listDaemonSymbolLongs,
   updateDaemonSymbolRuntime,
 } from "../lib/daemon-runtime-authority"
 import { requestGovernanceApproval } from "../lib/global-execution-governor"
@@ -80,8 +85,36 @@ const DAILY_LOSS_LIMIT_USD = Number(process.env.AUTO_TRADER_DAILY_LOSS_LIMIT_USD
 const SL_PCT = Number(process.env.AUTO_TRADER_STOP_LOSS_PERCENT) || 2
 const TP_PCT = Number(process.env.AUTO_TRADER_TAKE_PROFIT_PERCENT) || 4
 const CONF_MIN = Math.max(50, Number(process.env.AUTO_TRADER_CONFIDENCE_MIN) || 65)
+
+/** Signed POST only — bypasses focus quota when unset or non-"0". Set AUTO_TRADER_FORCE_GROK=0 to save Grok credits on out-of-focus symbols. */
+const FORCE_GROK_DAEMON = Boolean(secret) && process.env.AUTO_TRADER_FORCE_GROK !== "0"
+
+/** Default on (unset): fused “combat” pulses while LONG + TP defer rules. Set AUTO_TRADER_POSITION_COMBAT=0 to disable. */
+const POSITION_COMBAT = process.env.AUTO_TRADER_POSITION_COMBAT !== "0"
+
+const COMBAT_WINDOW_SEC = Math.max(
+  60,
+  Math.min(600, Number(process.env.AUTO_TRADER_COMBAT_TIME_WINDOW_SECONDS) || Math.min(180, TIME_WINDOW_SEC))
+)
+const COMBAT_ANALYSIS_MS_RAW = Number(process.env.AUTO_TRADER_COMBAT_ANALYSIS_MS)
+const COMBAT_ANALYSIS_MS =
+  Number.isFinite(COMBAT_ANALYSIS_MS_RAW) && COMBAT_ANALYSIS_MS_RAW >= 60_000
+    ? COMBAT_ANALYSIS_MS_RAW
+    : Math.max(180_000, COMBAT_WINDOW_SEC * 1000 + 45_000)
+
+const COMBAT_EXIT_CONF = Math.max(50, Number(process.env.AUTO_TRADER_COMBAT_EXIT_CONFIDENCE) || 72)
+const COMBAT_HOLD_TP_CONF = Math.max(50, Number(process.env.AUTO_TRADER_COMBAT_HOLD_TP_CONFIDENCE) || 68)
+const COMBAT_MAX_TP_DEFERS = Math.max(0, Math.min(30, Number(process.env.AUTO_TRADER_COMBAT_MAX_TP_DEFERS) || 5))
+
 const workerId = `atd_${Math.random().toString(36).slice(2, 10)}`
 let dynamicSymbols: string[] = [...symbols]
+
+const lastCombatAnalysisAt = new Map<string, number>()
+const tpDeferrals = new Map<string, number>()
+
+function baseFromPair(pair: string): string {
+  return pair.toUpperCase().replace(/USDT$/i, "").replace(/[^A-Z0-9]/g, "")
+}
 
 async function startupSafeToResume() {
   const gate = await getResumeGate()
@@ -166,16 +199,29 @@ async function fetchSpotPrice(pair: string): Promise<number> {
   return p
 }
 
-async function runAnalysis(baseSymbol: string): Promise<{ action: string; confidence: number } | null> {
+async function runAnalysis(
+  baseSymbol: string,
+  opts?: { combat?: boolean }
+): Promise<{ action: string; confidence: number } | null> {
+  const windowSec = opts?.combat ? COMBAT_WINDOW_SEC : TIME_WINDOW_SEC
+  const grokLive = isGrokPipelineLive()
+  const includeGrok = grokLive && (FORCE_GROK_DAEMON || isSymbolEligibleForGrokQuota(baseSymbol))
+  const forceGrok = FORCE_GROK_DAEMON && grokLive && includeGrok
+
   const url = `${base}/api/analysis/time-bound`
-  const body = {
+  const body: Record<string, unknown> = {
     symbol: baseSymbol,
-    timeWindowSeconds: TIME_WINDOW_SEC,
-    includeGrok: isGrokPipelineLive() && isSymbolEligibleForGrokQuota(baseSymbol),
+    timeWindowSeconds: windowSec,
+    includeGrok,
   }
+  if (forceGrok) body.forceGrok = true
+
+  const headers: Record<string, string> = {}
+  if (forceGrok) headers["x-nexus-real-trade-secret"] = secret
+
   const data = await fetchJson<{ success?: boolean; result?: { fusedDecision?: { action: string; confidence: number } } }>(
     url,
-    { method: "POST", body: JSON.stringify(body) }
+    { method: "POST", body: JSON.stringify(body), headers }
   )
   if (!data.success || !data.result?.fusedDecision) {
     log(`Analysis failed or empty for ${baseSymbol}`)
@@ -361,6 +407,8 @@ async function closeLong(pair: string, reason: string) {
       windowStart: p.windowStart ?? new Date().toISOString(),
     }
   )
+  lastCombatAnalysisAt.delete(pair)
+  tpDeferrals.delete(pair)
   log(`[risk-window] symbol=${pair} trades=${p.tradeCountWindow + 1} lossWindow=$${lossWindow.toFixed(4)}`)
 }
 
@@ -368,7 +416,18 @@ async function monitorPositions() {
   if (!(await startupSafeToResume())) return
   const userId = daemonUserId()
   if (!userId) return
-  for (const sym of symbols) {
+
+  let longPairs: string[] = []
+  try {
+    longPairs = await listDaemonSymbolLongs({ daemonType: "auto-trader-daemon", userId })
+  } catch (e) {
+    log(`[monitor] list LONG positions failed: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  const basesFromDb = longPairs.map((pairKey) => baseFromPair(pairKey)).filter(Boolean)
+  const basesToScan = Array.from(new Set([...symbols, ...dynamicSymbols, ...basesFromDb]))
+
+  for (const sym of basesToScan) {
     const pair = `${sym}USDT`
     const p = await runtimeForPair(pair, userId)
     if (p.positionStatus !== "LONG" || !p.lastEntryAt || !p.openEntryPrice) continue
@@ -379,16 +438,60 @@ async function monitorPositions() {
     } catch {
       continue
     }
+
+    const tpThreshold = p.openEntryPrice * (1 + TP_PCT / 100)
+    if (price < tpThreshold * 0.997) {
+      tpDeferrals.delete(pair)
+    }
+
     if (age >= POSITION_MAX_MS) {
       await closeLong(pair, "max_hold_time")
       continue
     }
-    if (price >= p.openEntryPrice * (1 + TP_PCT / 100)) {
-      await closeLong(pair, "take_profit")
-      continue
-    }
     if (price <= p.openEntryPrice * (1 - SL_PCT / 100)) {
       await closeLong(pair, "stop_loss")
+      continue
+    }
+
+    if (POSITION_COMBAT) {
+      const lastCombat = lastCombatAnalysisAt.get(pair) ?? 0
+      if (Date.now() - lastCombat >= COMBAT_ANALYSIS_MS) {
+        lastCombatAnalysisAt.set(pair, Date.now())
+        try {
+          const fused = await runAnalysis(sym, { combat: true })
+          if (fused && fused.action === "SELL" && fused.confidence >= COMBAT_EXIT_CONF) {
+            await closeLong(pair, "combat_signal_exit")
+            continue
+          }
+          if (fused) {
+            log(
+              `[combat] ${pair} pulse fused=${fused.action} conf=${fused.confidence}% (exit≥${COMBAT_EXIT_CONF} tpHold≥${COMBAT_HOLD_TP_CONF})`
+            )
+          }
+        } catch (e) {
+          log(`[combat] ${pair} pulse error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+    }
+
+    if (price >= tpThreshold) {
+      if (
+        POSITION_COMBAT &&
+        (tpDeferrals.get(pair) ?? 0) < COMBAT_MAX_TP_DEFERS
+      ) {
+        try {
+          const fused = await runAnalysis(sym, { combat: true })
+          if (fused && fused.action === "BUY" && fused.confidence >= COMBAT_HOLD_TP_CONF) {
+            const n = (tpDeferrals.get(pair) ?? 0) + 1
+            tpDeferrals.set(pair, n)
+            log(`[combat] ${pair} TP deferred (${n}/${COMBAT_MAX_TP_DEFERS}) fused=BUY conf=${fused.confidence}%`)
+            continue
+          }
+        } catch (e) {
+          log(`[combat] ${pair} TP defer error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      await closeLong(pair, "take_profit")
       continue
     }
   }
@@ -525,6 +628,9 @@ function main() {
   log(`API_BASE=${base} symbols=${symbols.join(",")} analysisEvery=${ANALYSIS_MS}ms monitorEvery=${MONITOR_MS}ms`)
   log(`timeWindowSec=${TIME_WINDOW_SEC} (min ${MIN_ANALYSIS_WINDOW_SEC}${RELAX_POLICY_WINDOW ? " RELAX" : " policy"})`)
   log(`positionUsd=${POSITION_USD_MIN}-${POSITION_USD_MAX} maxPos=${MAX_POSITIONS} maxExposure=$${MAX_EXPOSURE_USD}`)
+  log(
+    `grokDaemonForce=${FORCE_GROK_DAEMON} positionCombat=${POSITION_COMBAT} combatEvery=${COMBAT_ANALYSIS_MS}ms combatWindowSec=${COMBAT_WINDOW_SEC}`
+  )
 
   void analysisCycle()
   const t1 = setInterval(() => void analysisCycle(), ANALYSIS_MS)
