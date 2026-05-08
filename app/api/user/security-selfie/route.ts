@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
+
+/** Never return multi‑MB data URLs in JSON — breaks clients and duplicates JWT bloat risk. */
+function clientSafeAvatarRef(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null
+  const t = raw.trim()
+  if (t.startsWith("http://") || t.startsWith("https://")) return t
+  return null
+}
 
 export async function GET(request: Request) {
   try {
@@ -16,10 +25,11 @@ export async function GET(request: Request) {
       .maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+    const rawAvatar = data?.avatar_url ?? null
     return NextResponse.json({
       ok: true,
-      hasSelfie: Boolean(data?.avatar_url),
-      avatarUrl: data?.avatar_url ?? null,
+      hasSelfie: Boolean(rawAvatar),
+      avatarUrl: clientSafeAvatarRef(rawAvatar),
     })
   } catch (e) {
     return NextResponse.json(
@@ -61,12 +71,11 @@ export async function POST(request: Request) {
 
     const currentMeta = (user.user_metadata ?? {}) as Record<string, unknown>
     const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
-      user_metadata: {
-        ...currentMeta,
-        avatar_url: avatarUrl,
+      user_metadata: mergeSafeUserMetadata(currentMeta, {
         selfie_hash: selfieHash,
         selfie_enrolled_at: nowIso,
-      },
+        security_selfie_enrolled: true,
+      }),
     })
     if (metaError) return NextResponse.json({ error: metaError.message }, { status: 500 })
 

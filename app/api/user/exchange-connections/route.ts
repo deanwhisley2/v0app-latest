@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
+import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 /**
@@ -51,7 +52,9 @@ export async function POST(request: Request) {
       if (getErr) throw getErr
       const prev = (current.user?.user_metadata ?? {}) as Record<string, unknown>
       const { error: updateErr } = await admin.auth.admin.updateUserById(user.id, {
-        user_metadata: { ...prev, nexus_exchanges: connections as unknown[] },
+        user_metadata: mergeSafeUserMetadata(prev, {
+          nexus_exchanges: connections as unknown[],
+        }),
       })
       if (updateErr) throw updateErr
     } catch (e) {

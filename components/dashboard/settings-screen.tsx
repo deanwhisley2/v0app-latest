@@ -119,7 +119,9 @@ export function SettingsScreen({
   ])
   const [learnerInput, setLearnerInput] = useState("")
   const [learnerTyping, setLearnerTyping] = useState(false)
+  /** HTTP(S) preview URL only; enrolled-but-data-URL-stored uses selfieEnrolled without a giant src. */
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
+  const [selfieEnrolled, setSelfieEnrolled] = useState(false)
   const [selfieLoading, setSelfieLoading] = useState(false)
   const [selfieError, setSelfieError] = useState<string | null>(null)
   const [selfieCompareInfo, setSelfieCompareInfo] = useState<string | null>(null)
@@ -153,7 +155,8 @@ export function SettingsScreen({
         }
         if (!cancelled) {
           const hasSelfie = Boolean(data.hasSelfie)
-          setSelfieUrl(hasSelfie ? data.avatarUrl ?? null : null)
+          setSelfieEnrolled(hasSelfie)
+          setSelfieUrl(typeof data.avatarUrl === "string" ? data.avatarUrl : null)
           if (hasSelfie) {
             setSelfieCompareInfo("Face added. Recovery selfie security is active.")
           }
@@ -219,7 +222,7 @@ export function SettingsScreen({
       if (!token) {
         throw new Error("Session expired. Please sign in again, then upload selfie.")
       }
-      if (selfieUrl) {
+      if (selfieEnrolled) {
         const cmpRes = await fetch("/api/user/security-selfie", {
           method: "PUT",
           headers: {
@@ -264,6 +267,7 @@ export function SettingsScreen({
         }
         throw new Error(out.error || "Could not save selfie")
       }
+      setSelfieEnrolled(true)
       setSelfieUrl(dataUrl)
       setSelfieCompareInfo(out.message || "Face added. Recovery selfie security is active.")
     } catch (e) {
@@ -402,7 +406,7 @@ export function SettingsScreen({
   if (currentView === "main") {
     return (
       <div className="space-y-4">
-        {!selfieUrl && (
+        {!selfieEnrolled && (
           <Card className="border-warning/40 bg-warning/10 p-4">
             <p className="text-sm font-semibold text-warning">Security required: add your selfie now</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -491,9 +495,9 @@ export function SettingsScreen({
     return (
       <div className="space-y-4">
         {renderBackButton()}
-        <Card className={`p-4 ${selfieUrl ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/10"}`}>
+        <Card className={`p-4 ${selfieEnrolled ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/10"}`}>
           <h3 className="font-semibold">
-            {selfieUrl ? "Selfie security is active" : "Selfie required for fund security"}
+            {selfieEnrolled ? "Selfie security is active" : "Selfie required for fund security"}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Selfie verification protects account recovery and reduces impersonation risk.
@@ -503,6 +507,13 @@ export function SettingsScreen({
           </p>
           {selfieUrl ? (
             <img src={selfieUrl} alt="Registered selfie" className="mt-3 h-24 w-24 rounded-xl border border-border object-cover" />
+          ) : selfieEnrolled ? (
+            <div
+              className="mt-3 flex h-24 w-24 items-center justify-center rounded-xl border border-border bg-muted"
+              title="Selfie stored securely (preview not loaded for performance)"
+            >
+              <Check className="h-10 w-10 text-success" aria-hidden />
+            </div>
           ) : null}
           <div className="mt-3">
             <Input

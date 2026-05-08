@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
+import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
+import { createAdminClient } from "@/lib/supabaseAdmin"
 import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 
 type RegisterBody = {
@@ -69,6 +71,7 @@ export async function POST(request: Request) {
   const origin = process.env.NEXT_PUBLIC_SITE_URL?.trim() || new URL(request.url).origin
   const emailRedirectTo = `${origin}/auth/verify`
 
+  const nowIso = new Date().toISOString()
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
@@ -77,9 +80,9 @@ export async function POST(request: Request) {
       data: {
         full_name,
         phone,
-        avatar_url,
         selfie_hash,
-        selfie_enrolled_at: new Date().toISOString(),
+        selfie_enrolled_at: nowIso,
+        security_selfie_enrolled: true,
         ...(preferred_language ? { preferred_language } : {}),
         ...(preferred_currency ? { preferred_currency } : {}),
       },
@@ -90,8 +93,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: signUpError.message }, { status: 400 })
   }
 
-  // Best-effort enrollment into CompreFace identity store.
   const newUserId = signUpData.user?.id
+  if (newUserId) {
+    try {
+      const admin = createAdminClient()
+      const { error: profileAvatarErr } = await admin
+        .from("profiles")
+        .update({ avatar_url, updated_at: nowIso })
+        .eq("id", newUserId)
+      if (profileAvatarErr) {
+        console.warn("[register] profiles.avatar_url update:", profileAvatarErr.message)
+      }
+      const meta = (signUpData.user?.user_metadata ?? {}) as Record<string, unknown>
+      const { error: metaStripErr } = await admin.auth.admin.updateUserById(newUserId, {
+        user_metadata: mergeSafeUserMetadata(meta, {
+          selfie_hash,
+          selfie_enrolled_at: nowIso,
+          security_selfie_enrolled: true,
+        }),
+      })
+      if (metaStripErr) {
+        console.warn("[register] user_metadata sanitize:", metaStripErr.message)
+      }
+    } catch (e) {
+      console.warn("[register] post-signup profile/metadata:", e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // Best-effort enrollment into CompreFace identity store.
   if (newUserId && isCompreFaceConfigured()) {
     try {
       await comprefaceEnrollFace(newUserId, avatar_url)

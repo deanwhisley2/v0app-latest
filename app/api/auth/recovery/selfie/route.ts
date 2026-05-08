@@ -57,10 +57,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: userError?.message || "Could not load user" }, { status: 500 })
     }
 
+    const { data: profileRow } = await admin
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", userId)
+      .maybeSingle()
+
     const storedHashRaw = userData.user.user_metadata?.selfie_hash
     const storedHash = typeof storedHashRaw === "string" ? storedHashRaw.toLowerCase() : ""
-    const storedAvatarRaw = userData.user.user_metadata?.avatar_url
-    const storedAvatar = typeof storedAvatarRaw === "string" ? storedAvatarRaw : ""
+    const storedAvatarRaw = profileRow?.avatar_url
+    const storedAvatar = typeof storedAvatarRaw === "string" ? storedAvatarRaw.trim() : ""
     if (!storedHash && !storedAvatar) {
       return NextResponse.json(
         { error: "No enrolled selfie found for this account. Use email recovery." },
