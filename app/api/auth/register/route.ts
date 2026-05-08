@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
-  if (avatar_url.length > 500_000) {
+  if (avatar_url.length > 6_000_000) {
     return NextResponse.json(
       { error: "Selfie image payload is too large." },
       { status: 413 }

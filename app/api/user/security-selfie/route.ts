@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     if (!selfieHash || !/^[0-9a-f]{16,}$/.test(selfieHash)) {
       return NextResponse.json({ error: "selfie_hash is required" }, { status: 400 })
     }
-    if (avatarUrl.length > 500_000) {
+    if (avatarUrl.length > 6_000_000) {
       return NextResponse.json({ error: "Selfie payload too large" }, { status: 413 })
     }
 
