@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Bot, MessageCircle, X } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
@@ -15,7 +15,6 @@ import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 
 export default function LoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { reenterGuestMode } = useAuth()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
@@ -31,7 +30,9 @@ export default function LoginPage() {
       text: "I am Joelin. I can explain how Nexus works, container mode benefits, and guide you to human support (admin desk coming soon).",
     },
   ])
-  const resetSuccess = searchParams.get("reset") === "success"
+  const resetSuccess =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("reset") === "success"
 
   const goGuestDashboard = useCallback(() => {
     try {
