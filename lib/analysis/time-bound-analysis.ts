@@ -4,6 +4,8 @@
  */
 
 import { callGrok, type GrokResponse } from "@/lib/analysis/grok-client"
+import { isGrokPipelineLive } from "@/lib/grok-pipeline-status"
+import { getGrokQuotaScope, isSymbolEligibleForGrokQuota } from "@/lib/grok-symbol-eligibility"
 import { getFundingRateAnomaly, getOrderBookImbalance } from "@/lib/server/fast-paths-core"
 
 export { toBinanceSymbol } from "@/lib/server/fast-paths-core"
@@ -12,6 +14,8 @@ export interface AnalysisRequest {
   symbol: string
   timeWindowMs: number
   includeGrok: boolean
+  /** When true, allows a live Grok call even if symbol is outside the quota pool (authenticated expert flows only). */
+  forceGrok?: boolean
   onPartialResult?: (result: PartialAnalysisResult) => void
   onFinalResult?: (result: FinalAnalysisResult) => void
 }
@@ -164,19 +168,23 @@ class TimeBoundAnalysisManager {
     const deadline = startTime + request.timeWindowMs
     const symbol = request.symbol.toUpperCase().replace(/[^A-Z0-9]/g, "")
     const grokBudget = Math.max(500, deadline - startTime)
-    const grokEnabled =
-      request.includeGrok && process.env.NEXUS_GROK_ENABLED === "1"
+    const grokRequested = Boolean(request.includeGrok)
+    const grokLive = isGrokPipelineLive()
+    const quotaOk = request.forceGrok === true || isSymbolEligibleForGrokQuota(symbol)
+    /** Skip HTTP to xAI when user wants Grok but symbol is outside quota (saves credits when pipeline is live). */
+    const skipQuotaSpend = grokRequested && grokLive && !quotaOk
+    const willFetchGrok = grokRequested && request.fastMode !== true && !skipQuotaSpend
 
     const fastPathsPromise = this.runFastPaths(symbol, deadline)
     const grokPromise =
       request.fastMode === true
-        ? Promise.resolve(null)
-        : grokEnabled
+        ? Promise.resolve(null as GrokResponse | null)
+        : willFetchGrok
           ? callGrok(symbol, grokBudget).catch((err) => {
               console.error("[ANALYSIS] Grok failed:", err)
               return null
             })
-          : Promise.resolve(null)
+          : Promise.resolve(null as GrokResponse | null)
 
     const fastPaths = await fastPathsPromise
 
@@ -199,35 +207,49 @@ class TimeBoundAnalysisManager {
       phase: "FAST_PATHS_COMPLETE",
       timestamp: fastPaths.timestamp,
       fastPaths,
-      waitingForGrok: grokEnabled,
+      waitingForGrok: willFetchGrok,
       timeRemainingMs: Math.max(0, deadline - Date.now()),
     })
 
     let grokResult: GrokResponse | null = null
-    if (grokEnabled) {
+    if (willFetchGrok) {
       const remaining = Math.max(0, deadline - Date.now())
       if (remaining > 0) {
         grokResult = await Promise.race([grokPromise, sleep(remaining)])
-        if (grokResult) {
-          request.onPartialResult?.({
-            phase: "GROK_COMPLETE",
-            timestamp: new Date().toISOString(),
-            fastPaths,
-            grokResult,
-            waitingForGrok: false,
-            timeRemainingMs: Math.max(0, deadline - Date.now()),
-          })
-        }
+      } else {
+        grokResult = await grokPromise
+      }
+      if (grokResult) {
+        request.onPartialResult?.({
+          phase: "GROK_COMPLETE",
+          timestamp: new Date().toISOString(),
+          fastPaths,
+          grokResult,
+          waitingForGrok: false,
+          timeRemainingMs: Math.max(0, deadline - Date.now()),
+        })
       }
     }
 
-    const grokMissedWindow = grokEnabled && !grokResult
+    const grokMissedWindow = willFetchGrok && grokLive && !grokResult
     // Enforce user-selected analysis window: finalize only at/after deadline.
     const settleDelay = Math.max(0, deadline - Date.now())
     if (settleDelay > 0) {
       await sleep(settleDelay)
     }
-    const finalResult = fuseDecision(symbol, startTime, fastPaths, grokResult, grokMissedWindow)
+    let finalResult = fuseDecision(symbol, startTime, fastPaths, grokResult, grokMissedWindow)
+    if (skipQuotaSpend) {
+      finalResult = {
+        ...finalResult,
+        fusedDecision: {
+          ...finalResult.fusedDecision,
+          reasons: [
+            ...finalResult.fusedDecision.reasons,
+            `GROK_QUOTA_SKIP: ${symbol} outside Grok quota pool (scope=${getGrokQuotaScope()}). Set NEXUS_GROK_QUOTA_SCOPE=focus_plus_trader, expand NEXUS_FOCUS_SYMBOLS, or pass forceGrok on authenticated expert analyze for a one-off.`,
+          ],
+        },
+      }
+    }
     const deepOut: FinalAnalysisResult = { ...finalResult, mode: "DEEP" }
     this.latestFinal.set(symbol, { final: deepOut, at: Date.now() })
     request.onFinalResult?.(deepOut)

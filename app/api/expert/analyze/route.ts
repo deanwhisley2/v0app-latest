@@ -12,6 +12,7 @@ import {
   deriveSignalRhythmLifecycle,
   signalRhythmToReasons,
 } from "@/lib/behavior-market-intelligence"
+import { grokNarrativeReasonLines } from "@/lib/grok-analysis-reasons"
 import type { AnalyzeRequest, AnalyzeResponse } from "@/lib/expert/phase2-types"
 
 export async function POST(req: NextRequest) {
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
     symbol,
     timeWindowMs: body.timeWindowSeconds * 1000,
     includeGrok: Boolean(body.useNex),
+    forceGrok: body.forceGrok === true,
     fastMode: Boolean(body.fastMode),
   })
 
@@ -83,6 +85,20 @@ export async function POST(req: NextRequest) {
     ? ["FOCUS_UNIVERSE_MEMBER"]
     : ["NO_FORCE_OUTSIDE_FOCUS_UNIVERSE", "FOCUS_UNIVERSE_REQUIRED"]
 
+  const grokLines = grokNarrativeReasonLines(result.grok)
+  const grokSnapshot =
+    result.grok?.pipelineMode === "live" && result.grok.mock === false
+      ? {
+          mock: result.grok.mock,
+          pipelineMode: result.grok.pipelineMode,
+          overallBias: result.grok.overallBias,
+          confidence: result.grok.confidence,
+          newsSentiment: result.grok.newsSentiment,
+          xBias: result.grok.xSentiment.bias,
+          headlines: (result.grok.newsHeadlines ?? []).slice(0, 5),
+        }
+      : undefined
+
   await createAnalysis({
     id: analysisId,
     userId,
@@ -94,7 +110,7 @@ export async function POST(req: NextRequest) {
     rawConfidence,
     calibratedConfidence,
     confidenceExplanation: calibration,
-    reasons: [...result.fusedDecision.reasons, ...behaviorReasons, ...rhythmReasons, ...focusReasons],
+    reasons: [...result.fusedDecision.reasons, ...grokLines, ...behaviorReasons, ...rhythmReasons, ...focusReasons],
     entryPrice: undefined,
     tradeExecuted: false,
     ttlSeconds,
@@ -121,7 +137,8 @@ export async function POST(req: NextRequest) {
       calibratedConfidence,
       uiDisplayConfidence: calibratedConfidence,
       confidenceExplanation: calibration,
-      reasons: [...result.fusedDecision.reasons, ...behaviorReasons, ...rhythmReasons, ...focusReasons],
+      reasons: [...result.fusedDecision.reasons, ...grokLines, ...behaviorReasons, ...rhythmReasons, ...focusReasons],
+      grokSnapshot,
       entryPrice: undefined,
     },
   }

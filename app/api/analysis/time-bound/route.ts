@@ -6,7 +6,8 @@ import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/l
 /**
  * Intentionally not gated by `NEXT_PUBLIC_DEV_LOCAL_ONLY`: fast paths only call
  * public Binance REST (depth + funding index). Grok runs only when includeGrok
- * is true and the Grok pipeline is live (`lib/grok-pipeline-status.ts`).
+ * is true. Live xAI calls also require the pipeline live and symbol in the quota pool
+ * (`lib/grok-symbol-eligibility.ts`). This route does not accept `forceGrok` (public callers cannot bypass quota).
  */
 export async function POST(request: NextRequest) {
   let body: { symbol?: string; timeWindowSeconds?: number; includeGrok?: boolean }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getGrokPipelineStatus } from "@/lib/grok-pipeline-status"
+import { getGrokQuotaScope } from "@/lib/grok-symbol-eligibility"
 
 /** Public-safe Grok pipeline readiness (no secrets). */
 export const dynamic = "force-dynamic"
@@ -12,5 +13,6 @@ export async function GET() {
     operatorEnabled: s.operatorEnabled,
     apiKeyConfigured: s.apiKeyConfigured,
     frozenReason: s.frozenReason,
+    quotaScope: getGrokQuotaScope(),
   })
 }

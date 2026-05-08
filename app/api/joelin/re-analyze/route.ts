@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireExpertUserId } from "@/lib/expert/auth-server"
 import { makeId, phase2Store } from "@/lib/expert/phase2-store"
 import { timeBoundAnalysis } from "@/lib/analysis/time-bound-analysis"
+import { isGrokPipelineLive } from "@/lib/grok-pipeline-status"
+import { isSymbolEligibleForGrokQuota } from "@/lib/grok-symbol-eligibility"
 import { binanceBookTicker } from "@/lib/server/binance-signed-order"
 
 function calculateTradableLevel(confidence: number, imbalance: number, fundingRate: number): number {
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
   const result = await timeBoundAnalysis.startAnalysis({
     symbol,
     timeWindowMs: windowSec * 1000,
-    includeGrok: process.env.NEXUS_GROK_ENABLED === "1",
+    includeGrok: isGrokPipelineLive() && isSymbolEligibleForGrokQuota(symbol),
   })
   const ticker = await binanceBookTicker(symbol).catch(() => null)
   const px = ticker ? Number.parseFloat(ticker.bidPrice || ticker.askPrice || "0") : 0

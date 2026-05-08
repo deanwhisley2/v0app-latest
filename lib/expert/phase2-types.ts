@@ -2,6 +2,8 @@ export interface AnalyzeRequest {
   symbol: string
   timeWindowSeconds: number
   useNex: boolean
+  /** When true, runs Grok even if symbol is outside quota pool (spends API; use sparingly). */
+  forceGrok?: boolean
   /** When true, runs time-bound analysis in FAST mode (short TTL on stored analysis). */
   fastMode?: boolean
   cancelToken?: string
@@ -30,6 +32,16 @@ export interface AnalyzeResponse {
     }
     reasons: string[]
     entryPrice?: number
+    /** Slim Grok narrative (when live Grok ran); for UI + audit. */
+    grokSnapshot?: {
+      mock: boolean
+      pipelineMode?: string
+      overallBias: string
+      confidence: number
+      newsSentiment: string
+      xBias: string
+      headlines: string[]
+    }
   }
 }
 

@@ -28,6 +28,8 @@ import {
 import { requestGovernanceApproval } from "../lib/global-execution-governor"
 import { getResumeGate } from "../lib/startup-recovery"
 import { loadExchangeBalancesSnapshot } from "../lib/server/load-exchange-balances-snapshot"
+import { isGrokPipelineLive } from "../lib/grok-pipeline-status"
+import { isSymbolEligibleForGrokQuota } from "../lib/grok-symbol-eligibility"
 
 config({ path: path.resolve(process.cwd(), ".env.local") })
 config({ path: path.resolve(process.cwd(), ".env") })
@@ -169,7 +171,7 @@ async function runAnalysis(baseSymbol: string): Promise<{ action: string; confid
   const body = {
     symbol: baseSymbol,
     timeWindowSeconds: TIME_WINDOW_SEC,
-    includeGrok: false,
+    includeGrok: isGrokPipelineLive() && isSymbolEligibleForGrokQuota(baseSymbol),
   }
   const data = await fetchJson<{ success?: boolean; result?: { fusedDecision?: { action: string; confidence: number } } }>(
     url,
