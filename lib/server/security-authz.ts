@@ -37,3 +37,35 @@ export async function requireAdminUser(user: User): Promise<void> {
   if (level === 5 || isConfiguredAdminUser(user)) return
   throw new Error("Admin access required")
 }
+
+function readCsvSet(raw: string): Set<string> {
+  return new Set(
+    raw
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
+  )
+}
+
+/** Env-based allowlist for the five designated Level-2 retailer credit accounts (IDs or emails). */
+export function isRetailerCreditSellerFromEnv(userId: string, email: string | null | undefined): boolean {
+  const ids = readCsvSet(process.env.NEXUS_RETAILER_CREDIT_SELLER_IDS ?? "")
+  const emails = new Set(
+    (process.env.NEXUS_RETAILER_CREDIT_SELLER_EMAILS ?? "")
+      .split(",")
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean)
+  )
+  if (ids.has(userId)) return true
+  const em = (email ?? "").toLowerCase()
+  return em ? emails.has(em) : false
+}
+
+/** DB flag (profiles.retailer_credit_seller) OR env allowlist. */
+export function computeRetailerCreditSeller(
+  userId: string,
+  email: string | null | undefined,
+  profileFlag: boolean | null | undefined
+): boolean {
+  return Boolean(profileFlag) || isRetailerCreditSellerFromEnv(userId, email)
+}

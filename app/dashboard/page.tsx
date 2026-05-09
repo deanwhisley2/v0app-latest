@@ -1507,7 +1507,10 @@ export default function DashboardPage() {
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
               {(currentUser?.level ?? 1) <= 2 ? (
-                <ContainerMode userLevel={(currentUser?.level ?? 1) as 1 | 2} />
+                <ContainerMode
+                  userLevel={(currentUser?.level ?? 1) as 1 | 2}
+                  retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
+                />
               ) : (
                 <AIPanel
                   coins={tradeCatalog}

@@ -14,6 +14,8 @@ export interface OperationalBootstrapV1 {
     fullName: string | null
     isVerified: boolean | null
     tradingUserLevel: 1 | 2 | 5
+    /** Level-2 retailer desk: sell credits to L1 + fixed trade (up to five accounts). */
+    retailerCreditSeller?: boolean
     nexus_exchanges: StoredExchangePayload[] | null
   } | null
   userBalance: {

@@ -8,6 +8,7 @@ import {
   fixPeriodDayCount,
   scheduledEarnedUsd,
 } from "@/lib/container-earnings-schedule"
+import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -44,6 +45,7 @@ import {
   Eye,
   RefreshCw,
   MessageSquare,
+  Store,
 } from "lucide-react"
 
 // User levels
@@ -321,9 +323,14 @@ type ContainerTab = "copy" | "fix" | "dashboard"
 
 interface ContainerModeProps {
   userLevel?: UserLevel
+  /** Level 2 only: designated retailer credit seller (profiles.retailer_credit_seller or env allowlist). */
+  retailerCreditSeller?: boolean
 }
 
-export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
+export function ContainerMode({
+  userLevel = 1,
+  retailerCreditSeller = false,
+}: ContainerModeProps) {
   const { formatUserMoney } = useUserPreferences()
   const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
@@ -348,7 +355,7 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
   ])
 
   const [activeFixTrades, setActiveFixTrades] = useState<ActiveFixTrade[]>(() => {
-    const traderId = "tr_002"
+    const traderId = "tr_001"
     const amount = 2000
     const period = 3 as FixPeriod
     const startTime = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
@@ -561,8 +568,15 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
     return () => clearInterval(interval)
   }, [selectedTrader, activeTab, fixAmount])
 
-  const availableTraders = masterTraders.filter(t => t.minLevel <= userLevel)
-  const lockedTraders = masterTraders.filter(t => t.minLevel > userLevel)
+  const availableTraders = masterTraders.filter((t) => t.minLevel <= userLevel)
+  const lockedTraders = masterTraders.filter((t) => t.minLevel > userLevel)
+
+  const fixAvailableTraders = masterTraders.filter(
+    (t) => t.minLevel <= userLevel && traderEligibleForFixedTrade(userLevel, t.riskLevel)
+  )
+  const fixTierLockedTraders = masterTraders.filter(
+    (t) => t.minLevel <= userLevel && !traderEligibleForFixedTrade(userLevel, t.riskLevel)
+  )
 
   const totalStaked = activeCopyTrades.reduce((sum, t) => sum + t.amount, 0) + 
                       activeFixTrades.reduce((sum, t) => sum + t.amount, 0)
@@ -592,6 +606,7 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
   const handleActivateFix = (trader: MasterTrader) => {
     const amount = parseFloat(fixAmount)
     if (isNaN(amount) || amount <= 0) return
+    if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
 
     setIsProcessing(true)
     setTimeout(() => {
@@ -779,6 +794,27 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
         </div>
       </Card>
 
+      {retailerCreditSeller && userLevel === 2 && (
+        <Card className="border-primary/35 bg-gradient-to-r from-primary/10 to-accent/10 p-4">
+          <div className="flex gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
+              <Store className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0 text-sm">
+              <h3 className="font-semibold text-foreground">Retailer credit desk (designated Level 2)</h3>
+              <p className="mt-1 text-muted-foreground">
+                Your account is enabled for retailer credit operations alongside fixed trades. Keep payment collection
+                details current in Dashboard → Add Funds (Level 2 retailer setup). Level 1 users submit funding with a
+                transaction reference for your approval workflow.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Policy: up to five retailer credit accounts platform-wide — align basin limits before approving payouts.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Promo Banner */}
       <Card className="border-warning/30 bg-gradient-to-r from-warning/10 to-success/10 p-4">
         <div className="flex items-center gap-3">
@@ -828,7 +864,13 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
                   </li>
                 </ul>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Level: <span className="font-semibold text-primary">Level {userLevel} ({levelRequirements[userLevel].name})</span>
+                  Level:{" "}
+                  <span className="font-semibold text-primary">
+                    Level {userLevel} ({levelRequirements[userLevel]?.name ?? "Starter"})
+                  </span>
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground border-t border-border/60 pt-2">
+                  {fixedTradeTierHint(userLevel)}
                 </p>
               </div>
             </div>
@@ -1282,6 +1324,9 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
                     <p className="text-xs">- OR <strong className="text-primary">10% daily</strong> (counts toward 70% limit)</p>
                   </div>
                 </div>
+                <div className="mt-3 rounded-md bg-background/40 p-2 text-xs text-muted-foreground">
+                  {fixedTradeTierHint(userLevel)}
+                </div>
                 <div className="mt-3 pt-2 border-t border-warning/20 space-y-1 text-xs">
                   <p>- Your stake is <strong>FROZEN</strong> as share holding for the traded coin</p>
                   <p>- Your funds keep the coin alive during market dips</p>
@@ -1296,10 +1341,10 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
           <div className="space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
               <Unlock className="h-4 w-4 text-success" />
-              Available for Fix ({availableTraders.length})
+              Available for Fix ({fixAvailableTraders.length})
             </h3>
             
-            {availableTraders.map((trader) => {
+            {fixAvailableTraders.map((trader) => {
               const isActive = activeFixTrades.some(t => t.traderId === trader.id)
               
               return (
@@ -1364,6 +1409,48 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
                 </Card>
               )
             })}
+
+            {fixTierLockedTraders.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                  Not available at your level ({fixTierLockedTraders.length})
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  These traders stay visible for transparency. {fixedTradeTierHint(userLevel)}
+                </p>
+                {fixTierLockedTraders.map((trader) => (
+                  <Card
+                    key={`fix-locked-${trader.id}`}
+                    className="border-border bg-card/60 p-4 opacity-75"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                          <Lock className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-semibold">{trader.name}</p>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getRiskColor(trader.riskLevel)}`}>
+                            {trader.riskLevel}
+                          </span>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {userLevel <= 1
+                              ? "Level 1 — Low-risk fixed traders only."
+                              : userLevel === 2 && trader.riskLevel === "High"
+                                ? "Level 2 — High-risk fixed profiles require a higher account tier."
+                                : "Not available for fixed trade at your current tier."}
+                          </p>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" disabled className="shrink-0">
+                        Locked
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1554,7 +1641,11 @@ export function ContainerMode({ userLevel = 1 }: ContainerModeProps) {
               <Button 
                 className={`flex-1 ${activeTab === "fix" ? "bg-warning text-warning-foreground hover:bg-warning/90" : ""}`}
                 onClick={() => activeTab === "copy" ? handleActivateCopy(selectedTrader) : handleActivateFix(selectedTrader)}
-                disabled={isProcessing}
+                disabled={
+                  isProcessing ||
+                  (activeTab === "fix" &&
+                    !traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel))
+                }
               >
                 {isProcessing ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</>

@@ -4,6 +4,7 @@ import { getResumeGate } from "@/lib/startup-recovery"
 import type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operational-bootstrap-types"
 import { coerceOperationalPreferences } from "@/lib/operational-preferences-types"
 import { coerceExchangeBalancesSnapshot } from "@/lib/exchange-balances-snapshot-types"
+import { computeRetailerCreditSeller } from "@/lib/server/security-authz"
 
 export type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operational-bootstrap-types"
 
@@ -33,7 +34,7 @@ export async function buildOperationalBootstrapV1(params: {
     admin
       .from("profiles")
       .select(
-        "email, full_name, is_verified, trading_user_level, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot"
+        "email, full_name, is_verified, trading_user_level, retailer_credit_seller, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot"
       )
       .eq("id", params.userId)
       .maybeSingle(),
@@ -146,6 +147,7 @@ export async function buildOperationalBootstrapV1(params: {
     full_name?: string | null
     is_verified?: boolean
     trading_user_level?: number
+    retailer_credit_seller?: boolean | null
     nexus_exchanges?: StoredExchangePayload[] | null
     operational_workspace?: unknown | null
     operational_preferences?: unknown | null
@@ -180,6 +182,11 @@ export async function buildOperationalBootstrapV1(params: {
             rawProfile.trading_user_level === 2 || rawProfile.trading_user_level === 5
               ? rawProfile.trading_user_level
               : 1,
+          retailerCreditSeller: computeRetailerCreditSeller(
+            params.userId,
+            rawProfile.email ?? null,
+            rawProfile.retailer_credit_seller ?? null
+          ),
           nexus_exchanges: profileExchanges,
         }
       : null,
