@@ -16,6 +16,8 @@ config({ path: resolve(process.cwd(), ".env") })
 
 const SELFIE_META_KEYS = [
   "selfie_hash",
+  "selfie_template_v1",
+  "selfie_template_version",
   "selfie_enrolled_at",
   "security_selfie_enrolled",
   "avatar_url",

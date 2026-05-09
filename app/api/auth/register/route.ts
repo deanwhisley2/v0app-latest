@@ -13,7 +13,8 @@ type RegisterBody = {
   phone?: string
   preferred_language?: string
   preferred_currency?: string
-  avatar_url?: string
+  selfie_image?: string
+  selfie_template?: string
   selfie_hash?: string
 }
 
@@ -40,25 +41,30 @@ export async function POST(request: Request) {
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
   const preferred_currency =
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
-  const avatar_url =
-    typeof body.avatar_url === "string" ? body.avatar_url.trim() : ""
+  const selfie_image =
+    typeof body.selfie_image === "string" ? body.selfie_image.trim() : ""
+  const selfie_template =
+    typeof body.selfie_template === "string" ? body.selfie_template.trim() : ""
   const selfie_hash =
     typeof body.selfie_hash === "string" ? body.selfie_hash.trim().toLowerCase() : ""
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
   }
-  if (!avatar_url) {
+  if (!selfie_image) {
     return NextResponse.json(
       { error: "Security selfie is required at registration." },
       { status: 400 }
     )
   }
-  if (avatar_url.length > 6_000_000) {
+  if (selfie_image.length > 6_000_000) {
     return NextResponse.json(
       { error: "Selfie image payload is too large." },
       { status: 413 }
     )
+  }
+  if (!selfie_template || !/^[A-Za-z0-9_-]{120,600}$/.test(selfie_template)) {
+    return NextResponse.json({ error: "Invalid selfie template." }, { status: 400 })
   }
   if (!selfie_hash || !/^[0-9a-f]{16,}$/.test(selfie_hash)) {
     return NextResponse.json(
@@ -81,6 +87,8 @@ export async function POST(request: Request) {
         full_name,
         phone,
         selfie_hash,
+        selfie_template_v1: selfie_template,
+        selfie_template_version: "v1",
         selfie_enrolled_at: nowIso,
         security_selfie_enrolled: true,
         ...(preferred_language ? { preferred_language } : {}),
@@ -99,7 +107,7 @@ export async function POST(request: Request) {
       const admin = createAdminClient()
       const { error: profileAvatarErr } = await admin
         .from("profiles")
-        .update({ avatar_url, updated_at: nowIso })
+        .update({ avatar_url: null, updated_at: nowIso })
         .eq("id", newUserId)
       if (profileAvatarErr) {
         console.warn("[register] profiles.avatar_url update:", profileAvatarErr.message)
@@ -108,6 +116,8 @@ export async function POST(request: Request) {
       const { error: metaStripErr } = await admin.auth.admin.updateUserById(newUserId, {
         user_metadata: mergeSafeUserMetadata(meta, {
           selfie_hash,
+          selfie_template_v1: selfie_template,
+          selfie_template_version: "v1",
           selfie_enrolled_at: nowIso,
           security_selfie_enrolled: true,
         }),
@@ -123,7 +133,7 @@ export async function POST(request: Request) {
   // Best-effort enrollment into CompreFace identity store.
   if (newUserId && isCompreFaceConfigured()) {
     try {
-      await comprefaceEnrollFace(newUserId, avatar_url)
+      await comprefaceEnrollFace(newUserId, selfie_image)
     } catch (e) {
       console.warn("[register] CompreFace enroll warning:", e instanceof Error ? e.message : String(e))
     }

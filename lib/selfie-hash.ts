@@ -97,6 +97,32 @@ export async function imageDataUrlToHash(dataUrl: string): Promise<string> {
   return hex
 }
 
+/**
+ * Compact biometric template (v1): 16x16 grayscale bytes serialized to base64url.
+ * Typical length is ~342 chars (~256 bytes raw), suitable for metadata storage.
+ */
+export async function imageDataUrlToFaceTemplate(dataUrl: string): Promise<string> {
+  const img = await dataUrlToImage(dataUrl)
+  const canvas = document.createElement("canvas")
+  canvas.width = 16
+  canvas.height = 16
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("Canvas not supported")
+  ctx.drawImage(img, 0, 0, 16, 16)
+  const px = ctx.getImageData(0, 0, 16, 16).data
+  const bytes = new Uint8Array(16 * 16)
+  for (let i = 0; i < bytes.length; i += 1) {
+    const p = i * 4
+    const gray = px[p] * 0.299 + px[p + 1] * 0.587 + px[p + 2] * 0.114
+    bytes[i] = Math.max(0, Math.min(255, Math.round(gray)))
+  }
+  // Browser-safe base64url
+  let binary = ""
+  for (const b of bytes) binary += String.fromCharCode(b)
+  const b64 = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
+  return b64
+}
+
 export function hammingDistanceHex(a: string, b: string): number {
   const len = Math.min(a.length, b.length)
   let dist = Math.abs(a.length - b.length) * 4

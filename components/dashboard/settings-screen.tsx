@@ -29,7 +29,12 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
-import { imageDataUrlToHash, optimizeSelfieUpload, validateSelfieQuality } from "@/lib/selfie-hash"
+import {
+  imageDataUrlToFaceTemplate,
+  imageDataUrlToHash,
+  optimizeSelfieUpload,
+  validateSelfieQuality,
+} from "@/lib/selfie-hash"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
@@ -151,12 +156,11 @@ export function SettingsScreen({
         if (!res.ok) return
         const data = (await res.json().catch(() => ({}))) as {
           hasSelfie?: boolean
-          avatarUrl?: string | null
         }
         if (!cancelled) {
           const hasSelfie = Boolean(data.hasSelfie)
           setSelfieEnrolled(hasSelfie)
-          setSelfieUrl(typeof data.avatarUrl === "string" ? data.avatarUrl : null)
+          setSelfieUrl(null)
           if (hasSelfie) {
             setSelfieCompareInfo("Face added. Recovery selfie security is active.")
           }
@@ -215,6 +219,7 @@ export function SettingsScreen({
       const dataUrl = await optimizeSelfieUpload(file)
       await validateSelfieQuality(dataUrl)
       const selfieHash = await imageDataUrlToHash(dataUrl)
+      const selfieTemplate = await imageDataUrlToFaceTemplate(dataUrl)
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -229,7 +234,7 @@ export function SettingsScreen({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ selfie_hash: selfieHash }),
+          body: JSON.stringify({ selfie_hash: selfieHash, selfie_template: selfieTemplate }),
         })
         const cmpData = (await cmpRes.json().catch(() => ({}))) as {
           matched?: boolean
@@ -258,7 +263,11 @@ export function SettingsScreen({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ avatar_url: dataUrl, selfie_hash: selfieHash }),
+        body: JSON.stringify({
+          selfie_image: dataUrl,
+          selfie_hash: selfieHash,
+          selfie_template: selfieTemplate,
+        }),
       })
       const out = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
       if (!res.ok) {
@@ -268,7 +277,7 @@ export function SettingsScreen({
         throw new Error(out.error || "Could not save selfie")
       }
       setSelfieEnrolled(true)
-      setSelfieUrl(dataUrl)
+      setSelfieUrl(null)
       setSelfieCompareInfo(out.message || "Face added. Recovery selfie security is active.")
     } catch (e) {
       setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")

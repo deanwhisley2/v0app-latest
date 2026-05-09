@@ -19,7 +19,12 @@ import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
-import { imageDataUrlToHash, optimizeSelfieUpload, validateSelfieQuality } from "@/lib/selfie-hash"
+import {
+  imageDataUrlToFaceTemplate,
+  imageDataUrlToHash,
+  optimizeSelfieUpload,
+  validateSelfieQuality,
+} from "@/lib/selfie-hash"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -32,6 +37,7 @@ export default function RegisterPage() {
   const [selfieDataUrl, setSelfieDataUrl] = useState("")
   const [selfiePreview, setSelfiePreview] = useState("")
   const [selfieHash, setSelfieHash] = useState("")
+  const [selfieTemplate, setSelfieTemplate] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
   const [error, setError] = useState<string | null>(null)
@@ -59,9 +65,11 @@ export default function RegisterPage() {
     const result = await optimizeSelfieUpload(file)
     await validateSelfieQuality(result)
     const hash = await imageDataUrlToHash(result)
+    const template = await imageDataUrlToFaceTemplate(result)
     setSelfieDataUrl(result)
     setSelfiePreview(result)
     setSelfieHash(hash)
+    setSelfieTemplate(template)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -73,6 +81,10 @@ export default function RegisterPage() {
     }
     if (!selfieDataUrl) {
       setError("A selfie picture is required for account security.")
+      return
+    }
+    if (!selfieTemplate) {
+      setError("Could not prepare biometric template. Please retake selfie.")
       return
     }
     setIsSubmitting(true)
@@ -94,7 +106,8 @@ export default function RegisterPage() {
           phone: trimmedPhone,
           preferred_language: language,
           preferred_currency: currency,
-          avatar_url: selfieDataUrl,
+          selfie_image: selfieDataUrl,
+          selfie_template: selfieTemplate,
           selfie_hash: selfieHash,
         }),
       })

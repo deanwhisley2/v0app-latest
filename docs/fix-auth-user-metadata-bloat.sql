@@ -2,7 +2,7 @@
 -- Symptom: user cannot load app after enrolling selfie — cookies exceed header limits (431),
 -- or middleware clears sessions when Cookie header size explodes.
 --
--- Selfie images belong in public.profiles.avatar_url only; metadata keeps selfie_hash only.
+-- Selfie images should be transient (enroll/verify only); metadata keeps compact template/hash only.
 -- Run in Supabase SQL Editor as a privileged role. Replace the email if needed.
 
 begin;

@@ -1,7 +1,7 @@
 /**
  * Supabase stores Auth JWT claims from user_metadata. Large blobs (e.g. base64
  * selfies in avatar_url) blow past cookie/header limits → 431 / broken sessions.
- * Keep only small flags/hashes in metadata; store images in public.profiles only.
+ * Keep only compact biometric metadata in JWT claims; never store raw image blobs.
  */
 const BULKY_METADATA_KEYS = new Set(["avatar_url", "selfie_image"])
 

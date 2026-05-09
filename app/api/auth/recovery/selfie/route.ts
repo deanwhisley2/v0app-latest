@@ -3,11 +3,13 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
-import { comprefaceVerifyFace, isCompreFaceConfigured } from "@/lib/server/compreface"
+import { compareFaceTemplateV1 } from "@/lib/server/face-template"
+import { comprefaceRecognizeSubject, isCompreFaceConfigured } from "@/lib/server/compreface"
 
 type Body = {
   identifier?: string
   selfie_hash?: string
+  selfie_template?: string
   selfie_image?: string
 }
 
@@ -35,13 +37,18 @@ export async function POST(request: Request) {
   const identifier = typeof body.identifier === "string" ? body.identifier.trim() : ""
   const selfieHash =
     typeof body.selfie_hash === "string" ? body.selfie_hash.trim().toLowerCase() : ""
+  const selfieTemplate =
+    typeof body.selfie_template === "string" ? body.selfie_template.trim() : ""
   const selfieImage =
     typeof body.selfie_image === "string" ? body.selfie_image.trim() : ""
-  if (!identifier || !selfieHash) {
-    return NextResponse.json({ error: "identifier and selfie_hash are required" }, { status: 400 })
+  if (!identifier || (!selfieHash && !selfieTemplate)) {
+    return NextResponse.json({ error: "identifier and selfie_template (or selfie_hash) are required" }, { status: 400 })
   }
-  if (!/^[0-9a-f]{16,}$/.test(selfieHash)) {
+  if (selfieHash && !/^[0-9a-f]{16,}$/.test(selfieHash)) {
     return NextResponse.json({ error: "Invalid selfie_hash" }, { status: 400 })
+  }
+  if (selfieTemplate && !/^[A-Za-z0-9_-]{120,600}$/.test(selfieTemplate)) {
+    return NextResponse.json({ error: "Invalid selfie_template" }, { status: 400 })
   }
 
   try {
@@ -57,26 +64,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: userError?.message || "Could not load user" }, { status: 500 })
     }
 
-    const { data: profileRow } = await admin
-      .from("profiles")
-      .select("avatar_url")
-      .eq("id", userId)
-      .maybeSingle()
-
     const storedHashRaw = userData.user.user_metadata?.selfie_hash
     const storedHash = typeof storedHashRaw === "string" ? storedHashRaw.toLowerCase() : ""
-    const storedAvatarRaw = profileRow?.avatar_url
-    const storedAvatar = typeof storedAvatarRaw === "string" ? storedAvatarRaw.trim() : ""
-    if (!storedHash && !storedAvatar) {
+    const storedTemplateRaw = userData.user.user_metadata?.selfie_template_v1
+    const storedTemplate = typeof storedTemplateRaw === "string" ? storedTemplateRaw.trim() : ""
+    if (!storedHash && !storedTemplate) {
       return NextResponse.json(
         { error: "No enrolled selfie found for this account. Use email recovery." },
         { status: 409 }
       )
     }
 
-    if (isCompreFaceConfigured() && selfieImage && storedAvatar) {
+    if (isCompreFaceConfigured() && selfieImage) {
       try {
-        const verify = await comprefaceVerifyFace(selfieImage, storedAvatar)
+        const verify = await comprefaceRecognizeSubject(selfieImage, userId)
         if (!verify.matched) {
           return NextResponse.json(
             {
@@ -87,14 +88,30 @@ export async function POST(request: Request) {
         }
       } catch (e) {
         console.warn("[recovery/selfie] CompreFace verify warning:", e instanceof Error ? e.message : String(e))
-        if (!storedHash) {
+        if (!storedTemplate && !storedHash) {
           return NextResponse.json(
             { error: "Face verification service unavailable. Please retry shortly." },
             { status: 503 }
           )
         }
       }
+    }
+
+    if (storedTemplate && selfieTemplate) {
+      const compared = compareFaceTemplateV1(storedTemplate, selfieTemplate)
+      if (!compared.matched) {
+        return NextResponse.json(
+          { error: "Selfie verification failed. Use clear face, no hat/covering." },
+          { status: 403 }
+        )
+      }
     } else {
+      if (!storedHash || !selfieHash) {
+        return NextResponse.json(
+          { error: "No compatible enrolled template found. Use email recovery." },
+          { status: 409 }
+        )
+      }
       const distance = hammingDistanceHex(storedHash, selfieHash)
       const threshold = 14
       if (distance > threshold) {

@@ -5,7 +5,12 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { imageDataUrlToHash, optimizeSelfieUpload, validateSelfieQuality } from "@/lib/selfie-hash"
+import {
+  imageDataUrlToFaceTemplate,
+  imageDataUrlToHash,
+  optimizeSelfieUpload,
+  validateSelfieQuality,
+} from "@/lib/selfie-hash"
 
 export default function RecoveryPage() {
   const [identifier, setIdentifier] = useState("")
@@ -74,11 +79,17 @@ export default function RecoveryPage() {
       const dataUrl = await optimizeSelfieUpload(file)
       await validateSelfieQuality(dataUrl)
       const selfieHash = await imageDataUrlToHash(dataUrl)
+      const selfieTemplate = await imageDataUrlToFaceTemplate(dataUrl)
 
       const res = await fetch("/api/auth/recovery/selfie", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: value, selfie_hash: selfieHash, selfie_image: dataUrl }),
+        body: JSON.stringify({
+          identifier: value,
+          selfie_hash: selfieHash,
+          selfie_template: selfieTemplate,
+          selfie_image: dataUrl,
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean
