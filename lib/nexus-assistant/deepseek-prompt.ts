@@ -4,6 +4,7 @@ import {
   containerCustomerEarningsStory,
   CONTAINER_ILLUSTRATIVE_MICRO_USD30,
   LEVEL_HINT,
+  NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
 } from "./knowledge"
 
 export type JoelinSessionMeta = {
@@ -35,6 +36,8 @@ export function buildJoelinDeepseekSystemPrompt(
     `- ${containerCustomerEarningsStory()}`,
     `- ${CONTAINER_WITHDRAWAL_SUMMARY}`,
     `- ${LEVEL_HINT}`,
+    "",
+    `Funding — retailers vs company crypto:\n${NEXUS_FUNDING_AND_RETAIL_DESK_HINT}`,
     "",
     "If the user asks how much they might earn on a very small fix (around $25–$40), you may add ONE short paragraph using this illustrative reference (label it clearly as illustrative, not a guarantee):",
     `- ${CONTAINER_ILLUSTRATIVE_MICRO_USD30}`,

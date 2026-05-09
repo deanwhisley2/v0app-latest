@@ -66,7 +66,16 @@ type RetailerRow = {
   credit_basin: number
   under_review: boolean
   under_review_reason?: string | null
+  country_code?: string | null
+  is_country_retailer?: boolean
+  liquidity_status?: string | null
+  whatsapp_number?: string | null
+  contact_phone?: string | null
+  registered_payee_names?: string | null
+  estimated_response_minutes?: number | null
 }
+
+type QualifiedRetailer = RetailerRow & { spendable_liquidity?: number }
 
 type RetailerFundingRequest = {
   id: string
@@ -76,6 +85,19 @@ type RetailerFundingRequest = {
   status: string
   note?: string | null
   appeal_note?: string | null
+  fund_channel?: string | null
+  mobile_network?: string | null
+  escalated_to_admin?: boolean | null
+  created_at: string
+}
+
+type IncomingFundReq = {
+  id: string
+  user_id: string
+  amount: number
+  tx_reference: string
+  status: string
+  mobile_network?: string | null
   created_at: string
 }
 
@@ -130,8 +152,6 @@ export default function DashboardPage() {
   const [containerEvents, setContainerEvents] = useState<ContainerBalanceEvent[]>([])
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
   const [fundAmount, setFundAmount] = useState("")
-  const [fundMethod, setFundMethod] = useState<"mtn" | "airtel" | "bank" | "wallet">("mtn")
-  const [fundPhone, setFundPhone] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
   const [fundTxReference, setFundTxReference] = useState("")
   const [fundNote, setFundNote] = useState("")
@@ -139,6 +159,40 @@ export default function DashboardPage() {
   const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
   const [retailerPaymentNumbersInput, setRetailerPaymentNumbersInput] = useState("")
+  const [l1FundSource, setL1FundSource] = useState<"pick" | "crypto" | "local">("pick")
+  const [fundingCountryCodeInput, setFundingCountryCodeInput] = useState("")
+  const [fundMobileNetwork, setFundMobileNetwork] = useState("")
+  const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
+  const [loadingQualifiedRetailers, setLoadingQualifiedRetailers] = useState(false)
+  const [cryptoFundingMeta, setCryptoFundingMeta] = useState<{
+    companyCryptoWallet: string | null
+    companyCryptoNetwork: string
+  } | null>(null)
+  const [retailerOpsBlocked, setRetailerOpsBlocked] = useState(false)
+  const [retailerIncoming, setRetailerIncoming] = useState<IncomingFundReq[]>([])
+  const [retailerTopupRequests, setRetailerTopupRequests] = useState<
+    Array<{ id: string; amount_requested: number; crypto_tx_reference: string; status: string }>
+  >([])
+  const [adminTopupQueue, setAdminTopupQueue] = useState<
+    Array<{
+      id: string
+      retailer_user_id: string
+      amount_requested: number
+      crypto_tx_reference: string
+      status: string
+    }>
+  >([])
+  const [adminFundingQueue, setAdminFundingQueue] = useState<RetailerFundingRequest[]>([])
+  const [topupCryptoRef, setTopupCryptoRef] = useState("")
+  const [topupNote, setTopupNote] = useState("")
+  const [deskCountryCode, setDeskCountryCode] = useState("")
+  const [deskIsCountryRetailer, setDeskIsCountryRetailer] = useState(false)
+  const [deskLiquidityStatus, setDeskLiquidityStatus] = useState<"active" | "busy" | "offline" | "low_liquidity">(
+    "offline"
+  )
+  const [deskWhatsapp, setDeskWhatsapp] = useState("")
+  const [deskContactPhone, setDeskContactPhone] = useState("")
+  const [deskPayeeNames, setDeskPayeeNames] = useState("")
   const { toast, showToast, hideToast } = useToast()
 
   const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
@@ -721,6 +775,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession) return
+    const cc = op.snapshot?.profile?.fundingCountryCode
+    if (typeof cc === "string" && cc.length >= 2) {
+      setFundingCountryCodeInput((prev) => prev || cc.toUpperCase().slice(0, 2))
+    }
     ;(async () => {
       try {
         const {
@@ -734,19 +792,160 @@ export default function DashboardPage() {
         })
         if (!res.ok) return
         const json = (await res.json()) as {
+          userLevel?: number
           retailers?: RetailerRow[]
           requests?: RetailerFundingRequest[]
         }
-        setRetailerRows(json.retailers ?? [])
+        if ((json.userLevel ?? 1) !== 1) {
+          setRetailerRows(json.retailers ?? [])
+        }
         setFundRequests(json.requests ?? [])
-        if (!selectedRetailerId && (json.retailers?.length ?? 0) > 0) {
-          setSelectedRetailerId(json.retailers?.[0]?.id ?? "")
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [authLoading, user, isGuestSession, op.snapshot?.profile?.fundingCountryCode])
+
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession) return
+    if ((op.snapshot?.profile?.tradingUserLevel ?? 1) !== 2) return
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const ps = await fetch("/api/user/retailer-pending-summary", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (!ps.ok) return
+        const sj = (await ps.json()) as { opsBlocked?: boolean }
+        setRetailerOpsBlocked(Boolean(sj.opsBlocked))
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [authLoading, user, isGuestSession, op.snapshot?.profile?.tradingUserLevel])
+
+  useEffect(() => {
+    if (!showFundModal || showFundModal !== "add" || authLoading || !user || isGuestSession) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const rf = await fetch("/api/user/retailer-funding", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (cancelled || !rf.ok) return
+        const j = (await rf.json()) as {
+          requests?: RetailerFundingRequest[]
+          retailers?: RetailerRow[]
+          userLevel?: number
+        }
+        setFundRequests(j.requests ?? [])
+        const lvl = j.userLevel ?? (currentUser?.level ?? 1)
+        if (lvl === 2) {
+          const [pq, pr, ps] = await Promise.all([
+            fetch("/api/user/retailer-incoming-queue", {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            }),
+            fetch("/api/user/retailer-admin-topup", {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            }),
+            fetch("/api/user/retailer-pending-summary", {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            }),
+          ])
+          if (pq.ok) {
+            const pj = (await pq.json()) as { requests?: IncomingFundReq[] }
+            setRetailerIncoming(pj.requests ?? [])
+          }
+          if (pr.ok) {
+            const tj = (await pr.json()) as {
+              requests?: Array<{ id: string; amount_requested: number; crypto_tx_reference: string; status: string }>
+            }
+            setRetailerTopupRequests(tj.requests ?? [])
+          }
+          if (ps.ok) {
+            const sj = (await ps.json()) as { opsBlocked?: boolean }
+            setRetailerOpsBlocked(Boolean(sj.opsBlocked))
+          }
+          const profRes = await fetch("/api/user/retailer-profile", {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          })
+          if (profRes.ok) {
+            const profJson = (await profRes.json()) as { profile?: RetailerRow | null }
+            const p = profJson.profile
+            if (p) {
+              const nums = p.payment_numbers ?? []
+              setRetailerPaymentNumbersInput(nums.map((n) => n.value).join(", "))
+              setDeskCountryCode((p.country_code ?? "").slice(0, 2))
+              setDeskIsCountryRetailer(Boolean(p.is_country_retailer))
+              if (p.liquidity_status === "active" || p.liquidity_status === "busy" || p.liquidity_status === "offline" || p.liquidity_status === "low_liquidity") {
+                setDeskLiquidityStatus(p.liquidity_status)
+              }
+              setDeskWhatsapp(p.whatsapp_number ?? "")
+              setDeskContactPhone(p.contact_phone ?? "")
+              setDeskPayeeNames(p.registered_payee_names ?? "")
+            }
+          }
+        }
+        if (lvl === 5 && isDeanAdmin) {
+          const [aq, rf] = await Promise.all([
+            fetch("/api/admin/retailer-liquidity-topup", {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            }),
+            fetch("/api/admin/retailer-funding", {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            }),
+          ])
+          if (aq.ok) {
+            const aj = (await aq.json()) as {
+              requests?: Array<{
+                id: string
+                retailer_user_id: string
+                amount_requested: number
+                crypto_tx_reference: string
+                status: string
+              }>
+            }
+            setAdminTopupQueue(aj.requests ?? [])
+          }
+          if (rf.ok) {
+            const fj = (await rf.json()) as {
+              requests?: RetailerFundingRequest[]
+            }
+            setAdminFundingQueue(fj.requests ?? [])
+          }
         }
       } catch {
         /* ignore */
       }
     })()
-  }, [authLoading, user, isGuestSession, selectedRetailerId])
+    return () => {
+      cancelled = true
+    }
+  }, [
+    authLoading,
+    user,
+    isGuestSession,
+    showFundModal,
+    currentUser?.level,
+    isDeanAdmin,
+  ])
 
   const handleLogout = useCallback(async () => {
     const uid = user?.id ?? ""
@@ -878,9 +1077,234 @@ export default function DashboardPage() {
     }
   }, [liveAnalysis.coin, showToast])
 
+  const handleRetailerIncomingAction = useCallback(
+    async (requestId: string, action: "approve" | "reject") => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) throw new Error("Session expired.")
+        const res = await fetch("/api/user/retailer-incoming-queue", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ requestId, action }),
+        })
+        const out = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(out.error || "Action failed.")
+        showToast(action === "approve" ? "Customer credited from your Nexus balance." : "Request rejected.", "success")
+        setRetailerIncoming((prev) => prev.filter((x) => x.id !== requestId))
+        const ps = await fetch("/api/user/retailer-pending-summary", { headers: { Authorization: `Bearer ${token}` } })
+        if (ps.ok) {
+          const sj = (await ps.json()) as { opsBlocked?: boolean }
+          setRetailerOpsBlocked(Boolean(sj.opsBlocked))
+        }
+        const rf = await fetch("/api/user/balance", { headers: { Authorization: `Bearer ${token}` } })
+        if (rf.ok) {
+          const j = await rf.json()
+          setMainBalance(Number(j.available_balance ?? 0))
+        }
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Action failed.", "error")
+      }
+    },
+    [showToast]
+  )
+
+  const handleSaveRetailerDesk = useCallback(async () => {
+    const paymentNumbers = retailerPaymentNumbersInput
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((value) => ({ label: "primary", value }))
+    if (paymentNumbers.length === 0) {
+      showToast("Enter at least one payment number.", "error")
+      return
+    }
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired.")
+      const res = await fetch("/api/user/retailer-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          paymentNumbers,
+          countryCode: deskCountryCode.trim().slice(0, 2),
+          isCountryRetailer: deskIsCountryRetailer,
+          liquidityStatus: deskLiquidityStatus,
+          whatsappNumber: deskWhatsapp,
+          contactPhone: deskContactPhone,
+          registeredPayeeNames: deskPayeeNames,
+        }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string; profile?: RetailerRow }
+      if (!res.ok) throw new Error(out.error || "Could not save retailer profile.")
+      setRetailerRows((prev) => {
+        const filtered = prev.filter((r) => r.id !== out.profile?.id)
+        return out.profile ? [out.profile, ...filtered] : prev
+      })
+      showToast("Retailer desk saved.", "success")
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Save failed.", "error")
+    }
+  }, [
+    retailerPaymentNumbersInput,
+    deskCountryCode,
+    deskIsCountryRetailer,
+    deskLiquidityStatus,
+    deskWhatsapp,
+    deskContactPhone,
+    deskPayeeNames,
+    showToast,
+  ])
+
+  const handleRetailerCryptoTopupSubmit = useCallback(async () => {
+    const amt = parseFloat(fundAmount)
+    if (!(amt > 0) || Number.isNaN(amt)) {
+      showToast("Enter requested top-up amount.", "error")
+      return
+    }
+    const refTx = topupCryptoRef.trim()
+    if (!refTx) {
+      showToast("Enter blockchain / payment reference.", "error")
+      return
+    }
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired.")
+      const res = await fetch("/api/user/retailer-admin-topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          amountRequested: amt,
+          cryptoTxReference: refTx,
+          note: topupNote || null,
+        }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(out.error || "Submit failed.")
+      showToast(
+        "Top-up request queued. Wire crypto to the company wallet shown in Funding → crypto. Admin will approve (+5%).",
+        "success",
+      )
+      setTopupCryptoRef("")
+      setTopupNote("")
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Submit failed.", "error")
+    }
+  }, [fundAmount, topupCryptoRef, topupNote, showToast])
+
+  const handleAdminLiquidityTopup = useCallback(
+    async (requestId: string, action: "approve" | "reject") => {
+      if (!isDeanAdmin || (currentUser?.level ?? 1) < 5) {
+        showToast("Admin workflow requires the owner Level-5 desk.", "error")
+        return
+      }
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) throw new Error("Session expired.")
+        const res = await fetch("/api/admin/retailer-liquidity-topup", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ requestId, action }),
+        })
+        const out = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(out.error || "Admin update failed.")
+        setAdminTopupQueue((prev) => prev.filter((x) => x.id !== requestId))
+        showToast(action === "approve" ? "Retailer credited base + commission." : "Top-up rejected.", "success")
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Admin failed.", "error")
+      }
+    },
+    [showToast, isDeanAdmin, currentUser?.level]
+  )
+
+  const handleLoadQualifiedRetailers = useCallback(async () => {
+    const amt = parseFloat(fundAmount)
+    if (!(amt > 0) || Number.isNaN(amt)) {
+      showToast("Enter the amount you will send first.", "error")
+      return
+    }
+    const cc = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+    if (cc.length !== 2) {
+      showToast("Enter your 2-letter country code (e.g. UG, KE).", "error")
+      return
+    }
+    setLoadingQualifiedRetailers(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired.")
+      await fetch("/api/user/funding-country", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: cc }),
+      })
+      const res = await fetch(
+        `/api/user/qualified-retailers?amount=${encodeURIComponent(String(amt))}&country=${encodeURIComponent(cc)}`,
+        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      )
+      const out = (await res.json().catch(() => ({}))) as { error?: string; retailers?: QualifiedRetailer[] }
+      if (!res.ok) throw new Error(out.error || "Could not load retailers.")
+      setQualifiedRetailers(out.retailers ?? [])
+      setSelectedRetailerId("")
+      if ((out.retailers ?? []).length === 0) {
+        showToast("No desks can cover this amount in that country yet. Try Crypto funding or retry later.")
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Load failed.", "error")
+    } finally {
+      setLoadingQualifiedRetailers(false)
+    }
+  }, [fundAmount, fundingCountryCodeInput, showToast])
+
+  useEffect(() => {
+    if (showFundModal !== "add" || l1FundSource !== "crypto") return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/user/funding-meta", { cache: "no-store" })
+        const j = (await res.json().catch(() => ({}))) as {
+          companyCryptoWallet?: string | null
+          companyCryptoNetwork?: string
+        }
+        if (!cancelled) {
+          setCryptoFundingMeta({
+            companyCryptoWallet: j.companyCryptoWallet ?? null,
+            companyCryptoNetwork: j.companyCryptoNetwork ?? "USDT TRC20",
+          })
+        }
+      } catch {
+        if (!cancelled) setCryptoFundingMeta(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showFundModal, l1FundSource])
+
   const handleFundSubmit = useCallback(() => {
     const amount = parseFloat(fundAmount)
-    if (!amount || amount <= 0) return
+    const level = currentUser?.level ?? 1
+    if (!(amount > 0) && !(showFundModal === "withdraw")) {
+      if (showFundModal === "add" && level === 1 && l1FundSource === "crypto") return
+      if (showFundModal === "add" && level === 1 && l1FundSource === "pick") return
+      if (showFundModal === "add" && level === 2) return
+      if (showFundModal === "add" && level === 5) return
+      return
+    }
+
     setIsFundProcessing(true)
     ;(async () => {
       try {
@@ -889,46 +1313,15 @@ export default function DashboardPage() {
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token) throw new Error("Session expired.")
-        const level = currentUser?.level ?? 1
 
-        if (showFundModal === "add" && level === 1) {
-          if (!selectedRetailerId || !fundTxReference.trim()) {
-            throw new Error("Select retailer and provide transaction reference.")
-          }
-          const res = await fetch("/api/user/retailer-funding", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              retailerId: selectedRetailerId,
-              amount,
-              txReference: fundTxReference,
-              note: fundNote,
-            }),
-          })
-          const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
-          if (!res.ok) throw new Error(out.error || "Could not notify retailer")
-          setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
-          showToast("Top-up request sent to retailer for approval.", "success")
-        } else if (showFundModal === "add" && level === 2) {
-          const paymentNumbers = retailerPaymentNumbersInput
-            .split(",")
-            .map((v) => v.trim())
-            .filter(Boolean)
-            .map((value) => ({ label: "primary", value }))
-          const res = await fetch("/api/user/retailer-profile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ paymentNumbers }),
-          })
-          const out = (await res.json().catch(() => ({}))) as { error?: string; profile?: RetailerRow }
-          if (!res.ok) throw new Error(out.error || "Could not save retailer profile")
-          setRetailerRows((prev) => {
-            const filtered = prev.filter((r) => r.id !== out.profile?.id)
-            return out.profile ? [out.profile, ...filtered] : prev
-          })
-          showToast("Retailer payment numbers saved.", "success")
-        } else if (showFundModal === "withdraw") {
+        if (showFundModal === "withdraw") {
+          if (!(amount > 0)) throw new Error("Enter an amount.")
           if (amount > mainBalance) throw new Error("Insufficient balance")
+          if (level === 2 && retailerOpsBlocked) {
+            throw new Error(
+              "You have pending local funding approvals. Clear or approve those requests before withdrawing Nexus balance.",
+            )
+          }
           const res = await fetch("/api/user/main-balance/adjust", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -942,33 +1335,84 @@ export default function DashboardPage() {
           if (!res.ok) throw new Error(out.error || "Withdrawal failed")
           setMainBalance(Number(out.available_balance ?? mainBalance))
           showToast(`$${amount.toFixed(2)} withdrawal initiated`, "success")
-        } else {
-          const res = await fetch("/api/user/main-balance/adjust", {
+          setShowFundModal(null)
+          setFundAmount("")
+          setFundTxReference("")
+          setFundNote("")
+          return
+        }
+
+        if (showFundModal === "add") {
+          if (level !== 1) {
+            throw new Error(
+              level === 2
+                ? "Use “Save retailer desk”, incoming queue actions, or “Submit crypto top-up” in this dialog."
+                : "Use admin queue buttons for approvals — direct balance credit here is disabled.",
+            )
+          }
+          if (l1FundSource !== "local") {
+            throw new Error("Open “Local mobile money”, complete payment off-app, then use Confirm.")
+          }
+          if (!(amount > 0)) throw new Error("Enter the amount you funded.")
+          if (!selectedRetailerId || !fundTxReference.trim()) {
+            throw new Error("Pick a qualified retailer and enter your mobile-money reference.")
+          }
+          const ccSave = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+          if (ccSave.length === 2) {
+            await fetch("/api/user/funding-country", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ code: ccSave }),
+            })
+          }
+          const res = await fetch("/api/user/retailer-funding", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
-              action: "credit",
+              retailerId: selectedRetailerId,
               amount,
-              reason: "Main account top-up from dashboard.",
+              txReference: fundTxReference,
+              note: fundNote,
+              mobileNetwork: fundMobileNetwork || null,
+              fundChannel: "local_mobile",
+              fundingCountryCode: ccSave.length === 2 ? ccSave : undefined,
             }),
           })
-          const out = (await res.json().catch(() => ({}))) as { error?: string; available_balance?: number }
-          if (!res.ok) throw new Error(out.error || "Funding failed")
-          setMainBalance(Number(out.available_balance ?? mainBalance))
-          showToast(`$${amount.toFixed(2)} added to Nexus main balance.`, "success")
+          const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
+          if (!res.ok) throw new Error(out.error || "Could not create pending funding.")
+          setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
+          showToast("Pending funding created — retailer will verify your mobile-money payment.", "success")
+          setQualifiedRetailers([])
+          setSelectedRetailerId("")
+          setFundTxReference("")
+          setL1FundSource("pick")
+          setShowFundModal(null)
+          setFundAmount("")
+          setFundNote("")
+          return
         }
-        setShowFundModal(null)
-        setFundAmount("")
-        setFundPhone("")
-        setFundTxReference("")
-        setFundNote("")
+
+        throw new Error("Unsupported fund action.")
       } catch (e) {
         showToast(e instanceof Error ? e.message : "Fund action failed", "error")
       } finally {
         setIsFundProcessing(false)
       }
     })()
-  }, [fundAmount, showFundModal, mainBalance, showToast, currentUser?.level, selectedRetailerId, fundTxReference, fundNote, retailerPaymentNumbersInput])
+  }, [
+    fundAmount,
+    showFundModal,
+    mainBalance,
+    showToast,
+    currentUser?.level,
+    selectedRetailerId,
+    fundTxReference,
+    fundNote,
+    l1FundSource,
+    fundMobileNetwork,
+    fundingCountryCodeInput,
+    retailerOpsBlocked,
+  ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
     if (!isDeanAdmin || (currentUser?.level ?? 1) < 5) {
@@ -988,7 +1432,11 @@ export default function DashboardPage() {
       })
       const out = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) throw new Error(out.error || "Admin action failed")
-      setFundRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: action === "approve" ? "approved" : action === "reject" ? "rejected" : "resolved" } : r)))
+      const next =
+        action === "approve" ? "approved" : action === "reject" ? "rejected" : "resolved"
+      setAdminFundingQueue((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: next } : r)),
+      )
       showToast(`Request ${action}d.`, "success")
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Admin action failed", "error")
@@ -1095,7 +1543,17 @@ export default function DashboardPage() {
                 Expert Mode {(currentUser?.level ?? 1) <= 2 ? "🔒" : ""}
               </button>
               <button
-                onClick={() => { setShowFundModal("add"); setFundAmount(""); setFundPhone(""); }}
+                onClick={() => {
+                  setShowFundModal("add")
+                  setFundAmount("")
+          setL1FundSource("pick")
+                  setQualifiedRetailers([])
+                  setSelectedRetailerId("")
+                  setFundTxReference("")
+                  setFundNote("")
+                  setFundMobileNetwork("")
+                  setCryptoFundingMeta(null)
+                }}
                 className="flex items-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1104,7 +1562,10 @@ export default function DashboardPage() {
                 Add Funds
               </button>
               <button
-                onClick={() => { setShowFundModal("withdraw"); setFundAmount(""); setFundPhone(""); }}
+                onClick={() => {
+                  setShowFundModal("withdraw")
+                  setFundAmount("")
+                }}
                 className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1195,127 +1656,388 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Payment Methods (no card rails in this phase) */}
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              {[
-                { id: "mtn" as const, name: "MTN Mobile Money", color: "#FFCC00", textColor: "#000" },
-                { id: "airtel" as const, name: "Airtel Money", color: "#ED1C24", textColor: "#fff" },
-                { id: "wallet" as const, name: "Crypto Wallet", color: "#8B5CF6", textColor: "#fff" },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setFundMethod(m.id)}
-                  className={`rounded-xl border-2 px-3 py-3 text-left transition-all ${fundMethod === m.id ? "border-primary" : "border-border"}`}
-                >
-                  <div className="mb-1 h-1.5 w-6 rounded-full" style={{ backgroundColor: m.color }} />
-                  <p className="text-xs font-semibold">{m.name}</p>
-                </button>
-              ))}
-            </div>
+            {showFundModal === "withdraw" ? null : (currentUser?.level ?? 1) === 2 && retailerOpsBlocked ? (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[11px] text-muted-foreground">
+                You have pending local funding requests from Level 1 members. Withdrawals from Nexus main balance are
+                blocked until pending requests are cleared. You can still update your desk, approve queue items, or
+                request liquidity from Admin.
+              </div>
+            ) : null}
 
-            {(currentUser?.level ?? 1) === 1 && showFundModal === "add" && (
-              <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-xs font-semibold text-muted-foreground">Level 1 retailer funding</p>
-                <select
-                  value={selectedRetailerId}
-                  onChange={(e) => setSelectedRetailerId(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">Select retailer</option>
-                  {retailerRows.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.payment_numbers?.[0]?.value || r.user_id} {r.under_review ? "(Under review - basin check)" : ""}
-                    </option>
-                  ))}
-                </select>
-                {retailerRows.find((r) => r.id === selectedRetailerId)?.under_review ? (
-                  <p className="text-[11px] text-warning">
-                    Selected retailer is under review due to basin constraints. Approval may be delayed.
+            {showFundModal === "withdraw" ? null : (currentUser?.level ?? 1) === 1 && showFundModal === "add" ? (
+              <div className="mb-4 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setL1FundSource("crypto")}
+                    className={`rounded-xl border-2 px-3 py-3 text-left text-xs font-semibold transition-all ${
+                      l1FundSource === "crypto" ? "border-primary" : "border-border"
+                    }`}
+                  >
+                    A — Crypto (Intl)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setL1FundSource("local")}
+                    className={`rounded-xl border-2 px-3 py-3 text-left text-xs font-semibold transition-all ${
+                      l1FundSource === "local" ? "border-primary" : "border-border"
+                    }`}
+                  >
+                    B — Local mobile money
+                  </button>
+                </div>
+
+                {l1FundSource === "pick" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Choose Option A (international crypto to the company wallet) or Option B (local mobile money through a
+                    verified in-country desk).
                   </p>
-                ) : null}
-                <input
-                  type="text"
-                  value={fundTxReference}
-                  onChange={(e) => setFundTxReference(e.target.value)}
-                  placeholder="Transaction reference"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <input
-                  type="text"
-                  value={fundNote}
-                  onChange={(e) => setFundNote(e.target.value)}
-                  placeholder="Optional note"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <div className="max-h-32 space-y-1 overflow-y-auto rounded bg-background/60 p-2">
-                  {fundRequests.slice(0, 4).map((r) => (
+                )}
+
+                {l1FundSource === "crypto" && (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+                    <p className="font-semibold text-foreground">Company receive wallet</p>
+                    <p className="text-muted-foreground">
+                      Send only on the advertised network ({cryptoFundingMeta?.companyCryptoNetwork ?? "configure NEXUS_COMPANY_CRYPTO_* in env"})
+                      .
+                    </p>
+                    <p className="break-all rounded bg-background p-2 font-mono text-[11px]">
+                      {cryptoFundingMeta?.companyCryptoWallet ?? "Ask support for today’s treasury address."}
+                    </p>
+                  </div>
+                )}
+
+                {l1FundSource === "local" && (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                    <p className="text-[11px] font-semibold text-muted-foreground">Country + amount + network name</p>
+                    <input
+                      type="text"
+                      maxLength={2}
+                      value={fundingCountryCodeInput}
+                      onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
+                      placeholder="Country ISO (UG, KE, …)"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm uppercase"
+                    />
+                    <select
+                      value={fundMobileNetwork}
+                      onChange={(e) => setFundMobileNetwork(e.target.value)}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Mobile network…</option>
+                      <option value="MTN">MTN Mobile Money</option>
+                      <option value="Airtel">Airtel Money</option>
+                      <option value="MPesa">M-Pesa</option>
+                      <option value="Orange">Orange Money</option>
+                      <option value="Other">Other (note in memo)</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={loadingQualifiedRetailers}
+                      onClick={() => void handleLoadQualifiedRetailers()}
+                      className="w-full rounded-lg bg-muted py-2 text-xs font-semibold hover:bg-muted/80 disabled:opacity-50"
+                    >
+                      {loadingQualifiedRetailers ? "Searching…" : "Find desks with liquidity"}
+                    </button>
+                    <select
+                      value={selectedRetailerId}
+                      onChange={(e) => setSelectedRetailerId(e.target.value)}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Select qualified retailer…</option>
+                      {qualifiedRetailers.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          Desk {String(r.country_code ?? "")} • {r.liquidity_status ?? "—"} • spendable{" "}
+                          {typeof r.spendable_liquidity === "number" ? r.spendable_liquidity.toFixed(0) : "—"}
+                        </option>
+                      ))}
+                    </select>
+                    {qualifiedRetailers.find((r) => r.id === selectedRetailerId) ? (
+                      <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] space-y-1">
+                        <p className="font-semibold text-warning">Payment details — verify before paying</p>
+                        <p>Numbers: {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
+                          .map((p) => `${p.label || ""}:${p.value}`.trim())
+                          .join(" · ") || "(none)"}
+                        </p>
+                        <p>
+                          WhatsApp/call: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.whatsapp_number || "—"}{" "}
+                          / {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.contact_phone || "—"}
+                        </p>
+                        <p>Payee name(s): {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.registered_payee_names || "See numbers above"}</p>
+                        <p>
+                          Desk status: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.liquidity_status} · ETA ~{" "}
+                          {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.estimated_response_minutes ?? "—"} min
+                        </p>
+                        <p className="text-destructive">
+                          Confirm only after you sent mobile money matching these exact identities. Wrong numbers void the
+                          request.
+                        </p>
+                      </div>
+                    ) : null}
+                    <input
+                      type="text"
+                      value={fundTxReference}
+                      onChange={(e) => setFundTxReference(e.target.value)}
+                      placeholder="Mobile money transaction reference…"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={fundNote}
+                      onChange={(e) => setFundNote(e.target.value)}
+                      placeholder="Optional memo"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+
+                <div className="max-h-32 space-y-1 overflow-y-auto rounded bg-muted/40 p-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Your funding timeline</p>
+                  {fundRequests.slice(0, 6).map((r) => (
                     <div key={r.id} className="text-[11px]">
-                      {r.tx_reference} - {r.status}
-                      {r.status === "rejected" || r.status === "under_review" ? (
+                      {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} • {r.status}
+                      {(r.status === "rejected" || r.status === "under_review" || r.status === "pending") && (
                         <button
                           type="button"
                           className="ml-2 text-primary underline"
                           onClick={async () => {
-                            const appealNote = window.prompt("Appeal note")
-                            if (!appealNote) return
+                            const appealNote = window.prompt("Briefly explain the issue (never share PINs/passwords)")
+                            if (!appealNote?.trim()) return
                             const { data: s } = await supabase.auth.getSession()
                             const token = s.session?.access_token
                             if (!token) return
-                            await fetch("/api/user/retailer-funding", {
+                            const res = await fetch("/api/user/retailer-funding", {
                               method: "PATCH",
                               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                              body: JSON.stringify({ requestId: r.id, appealNote }),
+                              body: JSON.stringify({ requestId: r.id, appealNote: appealNote.trim() }),
                             })
-                            setFundRequests((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: "appealed", appeal_note: appealNote } : x)))
+                            if (!res.ok) return
+                            setFundRequests((prev) =>
+                              prev.map((x) =>
+                                x.id === r.id ? { ...x, status: "appealed", appeal_note: appealNote } : x
+                              )
+                            )
                           }}
                         >
                           Appeal
                         </button>
-                      ) : null}
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
 
-            {(currentUser?.level ?? 1) === 2 && showFundModal === "add" && (
-              <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-xs font-semibold text-muted-foreground">Retailer profile setup (Level 2)</p>
+            {showFundModal === "withdraw" ? null : (currentUser?.level ?? 1) === 2 && showFundModal === "add" ? (
+              <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/40 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">Level 2 — retailer desk & liquidity</p>
+                <label className="flex items-center gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={deskIsCountryRetailer}
+                    onChange={(e) => setDeskIsCountryRetailer(e.target.checked)}
+                  />
+                  Offer in-country liquidity (mobile money desks)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={deskCountryCode}
+                    onChange={(e) => setDeskCountryCode(e.target.value.toUpperCase())}
+                    placeholder="Country"
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs uppercase"
+                  />
+                  <select
+                    value={deskLiquidityStatus}
+                    onChange={(e) =>
+                      setDeskLiquidityStatus(e.target.value as "active" | "busy" | "offline" | "low_liquidity")
+                    }
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  >
+                    <option value="offline">offline</option>
+                    <option value="active">active</option>
+                    <option value="busy">busy</option>
+                    <option value="low_liquidity">low_liquidity</option>
+                  </select>
+                </div>
                 <input
                   type="text"
                   value={retailerPaymentNumbersInput}
                   onChange={(e) => setRetailerPaymentNumbersInput(e.target.value)}
-                  placeholder="Payment numbers (comma-separated)"
+                  placeholder="Wallet / MM numbers comma-separated"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Add real collection numbers. Approvals appear in admin workflow.
-                </p>
-              </div>
-            )}
-
-            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && isDeanAdmin && (
-              <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-xs font-semibold text-muted-foreground">Admin review queue (Level 5)</p>
-                <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">
-                  {fundRequests.slice(0, 8).map((r) => (
-                    <div key={r.id} className="rounded-md bg-background px-2 py-1 text-xs">
-                      <p>Ref: {r.tx_reference} | ${Number(r.amount).toFixed(2)} | {r.status}</p>
-                      <div className="mt-1 flex gap-1">
-                        <button type="button" className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] text-white" onClick={() => void handleAdminFundingAction(r.id, "approve")}>
-                          Approve
-                        </button>
-                        <button type="button" className="rounded bg-rose-600 px-2 py-0.5 text-[10px] text-white" onClick={() => void handleAdminFundingAction(r.id, "reject")}>
-                          Reject
-                        </button>
-                        <button type="button" className="rounded bg-slate-600 px-2 py-0.5 text-[10px] text-white" onClick={() => void handleAdminFundingAction(r.id, "resolve")}>
-                          Resolve
-                        </button>
+                <input
+                  type="text"
+                  value={deskPayeeNames}
+                  onChange={(e) => setDeskPayeeNames(e.target.value)}
+                  placeholder="Registered pay-to names shown to users"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={deskWhatsapp}
+                    onChange={(e) => setDeskWhatsapp(e.target.value)}
+                    placeholder="WhatsApp"
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <input
+                    type="text"
+                    value={deskContactPhone}
+                    onChange={(e) => setDeskContactPhone(e.target.value)}
+                    placeholder="Voice line"
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveRetailerDesk()}
+                  className="w-full rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground"
+                >
+                  Save retailer desk
+                </button>
+                <div className="max-h-36 space-y-2 overflow-y-auto rounded border border-border bg-background p-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Incoming local funds</p>
+                  {retailerIncoming.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">No pending approvals.</p>
+                  ) : (
+                    retailerIncoming.map((r) => (
+                      <div key={r.id} className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                        <span>
+                          {Number(r.amount).toFixed(2)} · {r.tx_reference.slice(0, 16)} · {r.mobile_network ?? "MM"}
+                        </span>
+                        <span className="flex gap-1">
+                          <button
+                            type="button"
+                            className="rounded bg-emerald-600 px-2 py-0.5 text-white"
+                            onClick={() => void handleRetailerIncomingAction(r.id, "approve")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded bg-rose-700 px-2 py-0.5 text-white"
+                            onClick={() => void handleRetailerIncomingAction(r.id, "reject")}
+                          >
+                            Reject
+                          </button>
+                        </span>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
+                </div>
+                <div className="rounded border border-primary/40 bg-background p-2 text-[11px] space-y-2">
+                  <p className="font-semibold">Request Nexus liquidity back from Admin (+5% on approval)</p>
+                  <p className="text-muted-foreground">
+                    Send crypto using the treasury address shown in Option A instructions, then paste the explorer ref
+                    here.
+                  </p>
+                  <input
+                    type="text"
+                    value={topupCryptoRef}
+                    onChange={(e) => setTopupCryptoRef(e.target.value)}
+                    placeholder="Crypto txn id / explorer ref…"
+                    className="w-full rounded border border-border bg-background px-2 py-1"
+                  />
+                  <textarea
+                    value={topupNote}
+                    onChange={(e) => setTopupNote(e.target.value)}
+                    placeholder="Admin note…"
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-[11px]"
+                    rows={2}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleRetailerCryptoTopupSubmit()}
+                    className="w-full rounded bg-success py-2 text-xs font-semibold text-white"
+                  >
+                    Submit top-up request ({fundAmount.trim() ? `amount below: ${fundAmount}` : "set amount ↓"})
+                  </button>
+                  <div className="max-h-24 overflow-y-auto text-[10px] text-muted-foreground">
+                    {retailerTopupRequests.map((t) => (
+                      <div key={t.id}>
+                        {Number(t.amount_requested).toFixed(2)} • {t.status} • {t.crypto_tx_reference.slice(0, 12)}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
+            ) : null}
+
+            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && isDeanAdmin && (
+              <>
+                <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
+                  <p className="text-xs font-semibold text-muted-foreground">User funding appeals / legacy queue</p>
+                  <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+                    {adminFundingQueue.slice(0, 12).map((r) => (
+                      <div key={r.id} className="rounded-md bg-background px-2 py-1 text-[11px]">
+                        <p>
+                          Ref: {r.tx_reference} | {Number(r.amount).toFixed(2)} | {r.status}{" "}
+                          {r.escalated_to_admin ? "· escalated" : ""}{" "}
+                          {r.fund_channel ?? ""}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] text-white"
+                            onClick={() => void handleAdminFundingAction(r.id, "approve")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded bg-rose-600 px-2 py-0.5 text-[10px] text-white"
+                            onClick={() => void handleAdminFundingAction(r.id, "reject")}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded bg-slate-600 px-2 py-0.5 text-[10px] text-white"
+                            onClick={() => void handleAdminFundingAction(r.id, "resolve")}
+                          >
+                            Resolve
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    Retailer crypto top-ups (+5% platform commission)
+                  </p>
+                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
+                    {adminTopupQueue.map((req) =>
+                      req.status === "pending" ? (
+                        <div key={req.id} className="rounded-md bg-background px-2 py-1 text-[11px]">
+                          <p>
+                            Ret {req.retailer_user_id.slice(0, 8)}… — {Number(req.amount_requested).toFixed(2)} —{" "}
+                            {req.crypto_tx_reference}
+                          </p>
+                          <div className="mt-1 flex gap-1">
+                            <button
+                              type="button"
+                              className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] text-white"
+                              onClick={() => void handleAdminLiquidityTopup(req.id, "approve")}
+                            >
+                              Credit +5%
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded bg-rose-600 px-2 py-0.5 text-[10px] text-white"
+                              onClick={() => void handleAdminLiquidityTopup(req.id, "reject")}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
             {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && !isDeanAdmin && (
@@ -1327,73 +2049,90 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Amount */}
-            <div className="mb-4">
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Amount (USD)</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <input
-                  type="number"
-                  value={fundAmount}
-                  onChange={(e) => setFundAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full rounded-lg border border-border bg-background py-3 pl-8 pr-4 font-mono text-lg outline-none transition-colors focus:border-primary"
-                />
-              </div>
-              {showFundModal === "withdraw" && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Available: ${showBalance ? mainBalance.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "••••"}
-                </p>
-              )}
-              <div className="mt-2 flex gap-2">
-                {[50, 100, 250, 500].map((amt) => (
-                  <button
-                    key={amt}
-                    onClick={() => setFundAmount(amt.toString())}
-                    className="flex-1 rounded-lg bg-muted py-2 text-xs font-medium hover:bg-muted/80"
-                  >
-                    ${amt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Phone for mobile money */}
-            {(fundMethod === "mtn" || fundMethod === "airtel") && (
+            {(showFundModal === "withdraw" ||
+              ((currentUser?.level ?? 1) === 1 && l1FundSource === "local") ||
+              (currentUser?.level ?? 1) === 2) && (
               <div className="mb-4">
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Phone Number</label>
-                <input
-                  type="tel"
-                  value={fundPhone}
-                  onChange={(e) => setFundPhone(e.target.value)}
-                  placeholder="+256 7XX XXX XXX"
-                  className="w-full rounded-lg border border-border bg-background py-3 px-4 text-sm outline-none transition-colors focus:border-primary"
-                />
+                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+                  {showFundModal === "withdraw"
+                    ? "Withdraw amount (Nexus units)"
+                    : (currentUser?.level ?? 1) === 2
+                      ? "Requested admin top-up amount (Nexus units)"
+                      : "Funding amount (match what you send)"}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    value={fundAmount}
+                    onChange={(e) => setFundAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-border bg-background py-3 pl-8 pr-4 font-mono text-lg outline-none transition-colors focus:border-primary"
+                  />
+                </div>
+                {showFundModal === "withdraw" && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Available: ${showBalance ? mainBalance.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "••••"}
+                  </p>
+                )}
+                <div className="mt-2 flex gap-2">
+                  {[50, 100, 250, 500].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setFundAmount(amt.toString())}
+                      className="flex-1 rounded-lg bg-muted py-2 text-xs font-medium hover:bg-muted/80"
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Submit */}
-            <button
-              onClick={handleFundSubmit}
-              disabled={!fundAmount || isFundProcessing}
-              className={`flex w-full items-center justify-center gap-2 rounded-lg py-3 font-semibold text-white transition-colors disabled:opacity-50 ${
-                showFundModal === "add" ? "bg-success hover:bg-success/90" : "bg-primary hover:bg-primary/90"
-              }`}
-            >
-              {isFundProcessing ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Processing...
-                </>
-              ) : showFundModal === "add" ? (
-                `Add $${fundAmount || "0"}`
-              ) : (
-                `Withdraw $${fundAmount || "0"}`
-              )}
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleFundSubmit}
+                disabled={
+                  isFundProcessing ||
+                  (showFundModal === "withdraw" && (!fundAmount || parseFloat(fundAmount) <= 0)) ||
+                  (showFundModal === "add" && (currentUser?.level ?? 1) === 1 && l1FundSource !== "local") ||
+                  (showFundModal === "add" && (currentUser?.level ?? 1) === 2) ||
+                  (showFundModal === "add" && (currentUser?.level ?? 1) === 5)
+                }
+                className={`flex w-full items-center justify-center gap-2 rounded-lg py-3 font-semibold text-white transition-colors disabled:opacity-50 ${
+                  showFundModal === "add" ? "bg-success hover:bg-success/90" : "bg-primary hover:bg-primary/90"
+                }`}
+              >
+                {isFundProcessing ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Processing...
+                  </>
+                ) : showFundModal === "withdraw" ? (
+                  `Withdraw $${fundAmount || "0"}`
+                ) : (currentUser?.level ?? 1) === 1 && l1FundSource === "local" ? (
+                  "Confirm payment sent"
+                ) : (currentUser?.level ?? 1) === 1 ? (
+                  "Choose Local path to confirm"
+                ) : (
+                  "Add Funds"
+                )}
+              </button>
+              {showFundModal === "add" && (currentUser?.level ?? 1) === 1 && l1FundSource === "crypto" ? (
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-border py-2 text-sm font-medium"
+                  onClick={() => setShowFundModal(null)}
+                >
+                  Close
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
@@ -1510,6 +2249,7 @@ export default function DashboardPage() {
                 <ContainerMode
                   userLevel={(currentUser?.level ?? 1) as 1 | 2}
                   retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
+                  retailerLiquidityOpsBlocked={retailerOpsBlocked}
                 />
               ) : (
                 <AIPanel

@@ -1,0 +1,107 @@
+import { NextResponse } from "next/server"
+import { getUserFromBearer } from "@/lib/auth-api"
+import { createAdminClient } from "@/lib/supabaseAdmin"
+import { requireAdminUser } from "@/lib/server/security-authz"
+import { recordFinancialEvent } from "@/lib/server/financial-events"
+import { creditRetailerLiquidityPlusCommission } from "@/lib/server/retailer-funding-helpers"
+
+export async function GET(request: Request) {
+  try {
+    const user = await getUserFromBearer(request)
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    await requireAdminUser(user)
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from("retailer_admin_topup_requests")
+      .select(
+        "id,retailer_user_id,amount_requested,crypto_tx_reference,status,commission_rate,amount_credited,created_at,reviewed_at,note"
+      )
+      .order("created_at", { ascending: false })
+      .limit(200)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ requests: data ?? [] })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Forbidden" }, { status: 403 })
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await getUserFromBearer(request)
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    await requireAdminUser(user)
+    const body = (await request.json().catch(() => ({}))) as {
+      requestId?: string
+      action?: "approve" | "reject"
+    }
+    const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
+    if (!requestId || !body.action) {
+      return NextResponse.json({ error: "requestId and action required." }, { status: 400 })
+    }
+    const admin = createAdminClient()
+    const { data: row, error: fe } = await admin
+      .from("retailer_admin_topup_requests")
+      .select("id,retailer_user_id,amount_requested,crypto_tx_reference,status,commission_rate")
+      .eq("id", requestId)
+      .maybeSingle()
+    if (fe) return NextResponse.json({ error: fe.message }, { status: 500 })
+    if (!row) return NextResponse.json({ error: "Not found." }, { status: 404 })
+    if (row.status !== "pending" && row.status !== "under_review") {
+      return NextResponse.json({ error: "Request already processed." }, { status: 400 })
+    }
+    const now = new Date().toISOString()
+    if (body.action === "reject") {
+      const { error: up } = await admin
+        .from("retailer_admin_topup_requests")
+        .update({ status: "rejected", reviewed_by: user.id, reviewed_at: now, updated_at: now })
+        .eq("id", requestId)
+      if (up) return NextResponse.json({ error: up.message }, { status: 400 })
+      await recordFinancialEvent({
+        userId: row.retailer_user_id,
+        eventType: "retailer_admin_topup_rejected",
+        category: "admin",
+        amount: Number(row.amount_requested ?? 0),
+        status: "rejected",
+        actorType: "admin",
+        actorId: user.id,
+        transactionRef: row.crypto_tx_reference,
+        summary: "Admin rejected retailer crypto top-up request.",
+        metadata: { requestId },
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    const base = Number(row.amount_requested ?? 0)
+    const rate = Number(row.commission_rate ?? 0.05)
+    const { credited } = await creditRetailerLiquidityPlusCommission(admin, row.retailer_user_id, base, rate)
+    const { error: up } = await admin
+      .from("retailer_admin_topup_requests")
+      .update({
+        status: "approved",
+        amount_credited: credited,
+        reviewed_by: user.id,
+        reviewed_at: now,
+        updated_at: now,
+      })
+      .eq("id", requestId)
+    if (up) return NextResponse.json({ error: up.message }, { status: 400 })
+
+    await recordFinancialEvent({
+      userId: row.retailer_user_id,
+      eventType: "retailer_admin_topup_approved",
+      category: "admin",
+      amount: credited,
+      balanceDestination: "nexus_main_available",
+      status: "approved",
+      actorType: "admin",
+      actorId: user.id,
+      transactionRef: row.crypto_tx_reference,
+      summary: `Admin approved retailer crypto top-up. Credited base ${base} + commission (${rate * 100}%) = ${credited}.`,
+      metadata: { requestId, baseRequested: base, commissionRate: rate },
+    })
+
+    return NextResponse.json({ ok: true, amountCredited: credited })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Forbidden" }, { status: 403 })
+  }
+}

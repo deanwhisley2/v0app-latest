@@ -20,7 +20,7 @@ export type FinancialEventInput = {
   relatedSessionId?: string | null
   relatedTradeId?: string | null
   relatedContainerId?: string | null
-  actorType?: "user" | "admin" | "system" | "bot"
+  actorType?: "user" | "admin" | "system" | "bot" | "retailer"
   actorId?: string | null
   summary: string
   metadata?: Record<string, unknown>

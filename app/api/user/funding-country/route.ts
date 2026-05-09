@@ -1,0 +1,22 @@
+import { NextResponse } from "next/server"
+import { getUserFromBearer } from "@/lib/auth-api"
+import { createAdminClient } from "@/lib/supabaseAdmin"
+
+/** Level 1: persist preferred country for local retailer matching (ISO 3166-1 alpha-2). */
+export async function POST(request: Request) {
+  try {
+    const user = await getUserFromBearer(request)
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const body = (await request.json().catch(() => ({}))) as { code?: string }
+    const code = typeof body.code === "string" ? body.code.trim().toUpperCase().slice(0, 2) : ""
+    if (!code || code.length !== 2) {
+      return NextResponse.json({ error: "code must be a 2-letter country code." }, { status: 400 })
+    }
+    const admin = createAdminClient()
+    const { error } = await admin.from("profiles").update({ funding_country_code: code }).eq("id", user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ ok: true, fundingCountryCode: code })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+  }
+}

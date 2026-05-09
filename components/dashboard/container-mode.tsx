@@ -325,11 +325,14 @@ interface ContainerModeProps {
   userLevel?: UserLevel
   /** Level 2 only: designated retailer credit seller (profiles.retailer_credit_seller or env allowlist). */
   retailerCreditSeller?: boolean
+  /** Level 2 retailer: Nexus blocks new fixed-trade locks until pending inbound mobile-money clears (see retailer-pending-summary). */
+  retailerLiquidityOpsBlocked?: boolean
 }
 
 export function ContainerMode({
   userLevel = 1,
   retailerCreditSeller = false,
+  retailerLiquidityOpsBlocked = false,
 }: ContainerModeProps) {
   const { formatUserMoney } = useUserPreferences()
   const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
@@ -571,6 +574,7 @@ export function ContainerMode({
   const availableTraders = masterTraders.filter((t) => t.minLevel <= userLevel)
   const lockedTraders = masterTraders.filter((t) => t.minLevel > userLevel)
 
+  const fixLiquidityGate = userLevel === 2 && retailerLiquidityOpsBlocked
   const fixAvailableTraders = masterTraders.filter(
     (t) => t.minLevel <= userLevel && traderEligibleForFixedTrade(userLevel, t.riskLevel)
   )
@@ -809,6 +813,21 @@ export function ContainerMode({
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Policy: up to five retailer credit accounts platform-wide — align basin limits before approving payouts.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {fixLiquidityGate && (
+        <Card className="border-destructive/35 bg-destructive/10 p-4">
+          <div className="flex gap-3 text-sm">
+            <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
+            <div className="min-w-0">
+              <p className="font-semibold text-destructive">Fixed trades paused — pending retailer funding</p>
+              <p className="mt-1 text-muted-foreground">
+                You have inbound local mobile-money approvals waiting. Unlock new fixed-trade locks once the queue clears
+                (Dashboard → Add Funds → incoming requests).
               </p>
             </div>
           </div>
@@ -1644,7 +1663,8 @@ export function ContainerMode({
                 disabled={
                   isProcessing ||
                   (activeTab === "fix" &&
-                    !traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel))
+                    (!traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel) ||
+                      fixLiquidityGate))
                 }
               >
                 {isProcessing ? (

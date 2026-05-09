@@ -5,6 +5,7 @@ import {
   NEXUS_PRODUCT_NAME,
   containerCustomerEarningsStory,
   LEVEL_HINT,
+  NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
 } from "./knowledge"
 
 function norm(s: string) {
@@ -353,9 +354,11 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
 
   if (hasAny(q, ["deposit", "withdraw", "funding", "add funds", "cash out", "balance"])) {
     return [
-      "Settings → Deposit & Withdraw walks through what the app supports.",
+      "Dashboard header → Add Funds: Option A is company crypto treasury; Option B is local mobile money through vetted desks when your country aligns.",
       "",
-      "Double-check networks and addresses, move a test amount first, and keep screenshots until the ledger matches — that’s the professional habit we cheer for.",
+      NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
+      "",
+      "Whatever path you choose, double-check identities/addresses shown in-app before sending cash or crypto externally, keep receipts, and use Appeals if something stalls — I cannot see other traders’ receipts or PINs.",
     ].join("\n")
   }
 

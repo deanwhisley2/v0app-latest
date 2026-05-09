@@ -16,6 +16,8 @@ export interface OperationalBootstrapV1 {
     tradingUserLevel: 1 | 2 | 5
     /** Level-2 retailer desk: sell credits to L1 + fixed trade (up to five accounts). */
     retailerCreditSeller?: boolean
+    /** ISO 3166-1 alpha-2 for local retailer matching (profiles.funding_country_code). */
+    fundingCountryCode?: string | null
     nexus_exchanges: StoredExchangePayload[] | null
   } | null
   userBalance: {
