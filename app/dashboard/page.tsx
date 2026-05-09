@@ -594,12 +594,6 @@ export default function DashboardPage() {
     return { email, username, fullName, level }
   }, [user, op.snapshot?.profile?.tradingUserLevel])
 
-  const isDeanAdmin = useMemo(() => {
-    const email = (currentUser?.email ?? "").toLowerCase().trim()
-    const username = (currentUser?.username ?? "").toLowerCase().trim()
-    return email === "deanwhisley2@gmail.com" || username === "deanwhisley2"
-  }, [currentUser?.email, currentUser?.username])
-
   useEffect(() => {
     if (isGuestSession) return
     if (!authLoading && !user) {
@@ -901,7 +895,7 @@ export default function DashboardPage() {
             }
           }
         }
-        if (lvl === 5 && isDeanAdmin) {
+        if (lvl === 5) {
           const [aq, rf] = await Promise.all([
             fetch("/api/admin/retailer-liquidity-topup", {
               headers: { Authorization: `Bearer ${token}` },
@@ -944,7 +938,6 @@ export default function DashboardPage() {
     isGuestSession,
     showFundModal,
     currentUser?.level,
-    isDeanAdmin,
   ])
 
   const handleLogout = useCallback(async () => {
@@ -1202,8 +1195,8 @@ export default function DashboardPage() {
 
   const handleAdminLiquidityTopup = useCallback(
     async (requestId: string, action: "approve" | "reject") => {
-      if (!isDeanAdmin || (currentUser?.level ?? 1) < 5) {
-        showToast("Admin workflow requires the owner Level-5 desk.", "error")
+      if ((currentUser?.level ?? 1) < 5) {
+        showToast("Admin workflow requires profiles.trading_user_level = 5.", "error")
         return
       }
       try {
@@ -1225,7 +1218,7 @@ export default function DashboardPage() {
         showToast(e instanceof Error ? e.message : "Admin failed.", "error")
       }
     },
-    [showToast, isDeanAdmin, currentUser?.level]
+    [showToast, currentUser?.level]
   )
 
   const handleLoadQualifiedRetailers = useCallback(async () => {
@@ -1415,8 +1408,8 @@ export default function DashboardPage() {
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
-    if (!isDeanAdmin || (currentUser?.level ?? 1) < 5) {
-      showToast("Admin rights restricted to the owner account.", "error")
+    if ((currentUser?.level ?? 1) < 5) {
+      showToast("Admin queues require profiles.trading_user_level = 5.", "error")
       return
     }
     try {
@@ -1441,7 +1434,7 @@ export default function DashboardPage() {
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Admin action failed", "error")
     }
-  }, [showToast, isDeanAdmin, currentUser?.level])
+  }, [showToast, currentUser?.level])
 
   if (authLoading || !user) {
     return (
@@ -1965,7 +1958,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && isDeanAdmin && (
+            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && (
               <>
                 <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
                   <p className="text-xs font-semibold text-muted-foreground">User funding appeals / legacy queue</p>
@@ -2038,15 +2031,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </>
-            )}
-
-            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && !isDeanAdmin && (
-              <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3">
-                <p className="text-xs font-semibold text-warning">Level 5 account detected</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Admin workflow rights are reserved for the owner account only.
-                </p>
-              </div>
             )}
 
             {(showFundModal === "withdraw" ||
