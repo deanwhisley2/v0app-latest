@@ -22,6 +22,7 @@ import { OrderHistoryScreen } from "@/components/dashboard/order-history-screen"
 import { CoinListScreen } from "@/components/dashboard/coin-list-screen"
 import { TradingAnalyticsScreen } from "@/components/dashboard/trading-analytics-screen"
 import { TradeSubnavChips } from "@/components/dashboard/trade-subnav-chips"
+import { ContainerMode } from "@/components/dashboard/container-mode"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
@@ -521,6 +522,12 @@ export default function DashboardPage() {
     return { email, username, fullName, level }
   }, [user, op.snapshot?.profile?.tradingUserLevel])
 
+  const isDeanAdmin = useMemo(() => {
+    const email = (currentUser?.email ?? "").toLowerCase().trim()
+    const username = (currentUser?.username ?? "").toLowerCase().trim()
+    return email === "deanwhisley2@gmail.com" || username === "deanwhisley2"
+  }, [currentUser?.email, currentUser?.username])
+
   useEffect(() => {
     if (isGuestSession) return
     if (!authLoading && !user) {
@@ -803,6 +810,10 @@ export default function DashboardPage() {
   }, [fundAmount, showFundModal, mainBalance, showToast, currentUser?.level, selectedRetailerId, fundTxReference, fundNote, retailerPaymentNumbersInput])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
+    if (!isDeanAdmin || (currentUser?.level ?? 1) < 5) {
+      showToast("Admin rights restricted to the owner account.", "error")
+      return
+    }
     try {
       const {
         data: { session },
@@ -821,7 +832,7 @@ export default function DashboardPage() {
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Admin action failed", "error")
     }
-  }, [showToast])
+  }, [showToast, isDeanAdmin, currentUser?.level])
 
   if (authLoading || !user) {
     return (
@@ -1058,7 +1069,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && (
+            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && isDeanAdmin && (
               <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">Admin review queue (Level 5)</p>
                 <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">
@@ -1079,6 +1090,15 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && !isDeanAdmin && (
+              <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3">
+                <p className="text-xs font-semibold text-warning">Level 5 account detected</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Admin workflow rights are reserved for the owner account only.
+                </p>
               </div>
             )}
 
@@ -1259,13 +1279,8 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 lg:flex-row">
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              {(currentUser?.level ?? 1) === 1 ? (
-                <div className="rounded-2xl border border-warning/40 bg-warning/10 p-6">
-                  <h3 className="text-lg font-semibold text-warning">Level 1 restricted surface</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Wallstreet AI execution is unlocked at level 2+. Use retailer top-up and basic trading views for now.
-                  </p>
-                </div>
+              {(currentUser?.level ?? 1) <= 2 ? (
+                <ContainerMode userLevel={(currentUser?.level ?? 1) as 1 | 2} />
               ) : (
                 <AIPanel
                   coins={tradeCatalog}
