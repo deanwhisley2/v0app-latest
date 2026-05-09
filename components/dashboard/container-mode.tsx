@@ -808,8 +808,8 @@ export function ContainerMode({
               <h3 className="font-semibold text-foreground">Retailer credit desk (designated Level 2)</h3>
               <p className="mt-1 text-muted-foreground">
                 Your account is enabled for retailer credit operations alongside fixed trades. Keep payment collection
-                details current in Dashboard → Add Funds (Level 2 retailer setup). Level 1 users submit funding with a
-                transaction reference for your approval workflow.
+                details current in Dashboard → Add Funds (Level 2 retailer setup). Level 1 and Level 2 (non-designated desk)
+                users submit funding with a transaction reference for your approval workflow.
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Policy: up to five retailer credit accounts platform-wide — align basin limits before approving payouts.

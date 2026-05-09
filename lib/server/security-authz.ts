@@ -69,3 +69,36 @@ export function computeRetailerCreditSeller(
 ): boolean {
   return Boolean(profileFlag) || isRetailerCreditSellerFromEnv(userId, email)
 }
+
+/** Level 1, or Level 2 without designated retailer-credit-desk flag (same mobile-money → retailer flow as L1). */
+export function canUseRetailFundingCustomerFlow(level: 1 | 2 | 5, retailerCreditSeller: boolean): boolean {
+  if (level === 5) return false
+  if (level === 1) return true
+  if (level === 2) return !retailerCreditSeller
+  return false
+}
+
+/** Single profile read for retailer funding authorization. */
+export async function getRetailFundingCustomerGate(
+  userId: string,
+  email: string | null | undefined
+): Promise<{
+  level: 1 | 2 | 5
+  retailerCreditSeller: boolean
+  canUseRetailFundingCustomerFlow: boolean
+}> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from("profiles")
+    .select("trading_user_level, retailer_credit_seller")
+    .eq("id", userId)
+    .maybeSingle()
+  const raw = Number(data?.trading_user_level ?? 1)
+  const level: 1 | 2 | 5 = raw === 2 || raw === 5 ? raw : 1
+  const retailerCreditSeller = computeRetailerCreditSeller(userId, email, data?.retailer_credit_seller ?? null)
+  return {
+    level,
+    retailerCreditSeller,
+    canUseRetailFundingCustomerFlow: canUseRetailFundingCustomerFlow(level, retailerCreditSeller),
+  }
+}

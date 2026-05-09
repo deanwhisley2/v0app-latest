@@ -594,6 +594,21 @@ export default function DashboardPage() {
     return { email, username, fullName, level }
   }, [user, op.snapshot?.profile?.tradingUserLevel])
 
+  /** Designated retailer credit desk (incoming queue, basin, admin top-up). */
+  const retailerCreditDesk = useMemo(() => {
+    const level = op.snapshot?.profile?.tradingUserLevel ?? 1
+    return level === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller)
+  }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
+
+  /** Same mobile-money → qualified retailer path as Level 1 (includes Level 2 non–credit-desk accounts). */
+  const customerRetailFunding = useMemo(() => {
+    const level = op.snapshot?.profile?.tradingUserLevel ?? 1
+    if (level === 5) return false
+    if (level === 1) return true
+    if (level === 2) return !Boolean(op.snapshot?.profile?.retailerCreditSeller)
+    return false
+  }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
+
   useEffect(() => {
     if (isGuestSession) return
     if (!authLoading && !user) {
@@ -787,10 +802,11 @@ export default function DashboardPage() {
         if (!res.ok) return
         const json = (await res.json()) as {
           userLevel?: number
+          customerRetailFunding?: boolean
           retailers?: RetailerRow[]
           requests?: RetailerFundingRequest[]
         }
-        if ((json.userLevel ?? 1) !== 1) {
+        if ((json.userLevel ?? 1) === 2 && json.customerRetailFunding !== true) {
           setRetailerRows(json.retailers ?? [])
         }
         setFundRequests(json.requests ?? [])
@@ -842,10 +858,11 @@ export default function DashboardPage() {
           requests?: RetailerFundingRequest[]
           retailers?: RetailerRow[]
           userLevel?: number
+          customerRetailFunding?: boolean
         }
         setFundRequests(j.requests ?? [])
         const lvl = j.userLevel ?? (currentUser?.level ?? 1)
-        if (lvl === 2) {
+        if (lvl === 2 && j.customerRetailFunding !== true) {
           const [pq, pr, ps] = await Promise.all([
             fetch("/api/user/retailer-incoming-queue", {
               headers: { Authorization: `Bearer ${token}` },
@@ -1291,9 +1308,9 @@ export default function DashboardPage() {
     const amount = parseFloat(fundAmount)
     const level = currentUser?.level ?? 1
     if (!(amount > 0) && !(showFundModal === "withdraw")) {
-      if (showFundModal === "add" && level === 1 && l1FundSource === "crypto") return
-      if (showFundModal === "add" && level === 1 && l1FundSource === "pick") return
-      if (showFundModal === "add" && level === 2) return
+      if (showFundModal === "add" && customerRetailFunding && l1FundSource === "crypto") return
+      if (showFundModal === "add" && customerRetailFunding && l1FundSource === "pick") return
+      if (showFundModal === "add" && retailerCreditDesk) return
       if (showFundModal === "add" && level === 5) return
       return
     }
@@ -1310,7 +1327,7 @@ export default function DashboardPage() {
         if (showFundModal === "withdraw") {
           if (!(amount > 0)) throw new Error("Enter an amount.")
           if (amount > mainBalance) throw new Error("Insufficient balance")
-          if (level === 2 && retailerOpsBlocked) {
+          if (retailerCreditDesk && retailerOpsBlocked) {
             throw new Error(
               "You have pending local funding approvals. Clear or approve those requests before withdrawing Nexus balance.",
             )
@@ -1336,9 +1353,9 @@ export default function DashboardPage() {
         }
 
         if (showFundModal === "add") {
-          if (level !== 1) {
+          if (!customerRetailFunding) {
             throw new Error(
-              level === 2
+              retailerCreditDesk
                 ? "Use “Save retailer desk”, incoming queue actions, or “Submit crypto top-up” in this dialog."
                 : "Use admin queue buttons for approvals — direct balance credit here is disabled.",
             )
@@ -1405,6 +1422,8 @@ export default function DashboardPage() {
     fundMobileNetwork,
     fundingCountryCodeInput,
     retailerOpsBlocked,
+    customerRetailFunding,
+    retailerCreditDesk,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -1649,15 +1668,15 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {showFundModal === "withdraw" ? null : (currentUser?.level ?? 1) === 2 && retailerOpsBlocked ? (
+            {showFundModal === "withdraw" ? null : retailerCreditDesk && retailerOpsBlocked ? (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[11px] text-muted-foreground">
-                You have pending local funding requests from Level 1 members. Withdrawals from Nexus main balance are
-                blocked until pending requests are cleared. You can still update your desk, approve queue items, or
-                request liquidity from Admin.
+                You have pending local funding requests from customers. Withdrawals from Nexus main balance are blocked
+                until pending requests are cleared. You can still update your desk, approve queue items, or request liquidity
+                from Admin.
               </div>
             ) : null}
 
-            {showFundModal === "withdraw" ? null : (currentUser?.level ?? 1) === 1 && showFundModal === "add" ? (
+            {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -1820,7 +1839,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            {showFundModal === "withdraw" ? null : (currentUser?.level ?? 1) === 2 && showFundModal === "add" ? (
+            {showFundModal === "withdraw" ? null : retailerCreditDesk && showFundModal === "add" ? (
               <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">Level 2 — retailer desk & liquidity</p>
                 <label className="flex items-center gap-2 text-[11px]">
@@ -2034,13 +2053,13 @@ export default function DashboardPage() {
             )}
 
             {(showFundModal === "withdraw" ||
-              ((currentUser?.level ?? 1) === 1 && l1FundSource === "local") ||
-              (currentUser?.level ?? 1) === 2) && (
+              (customerRetailFunding && l1FundSource === "local") ||
+              retailerCreditDesk) && (
               <div className="mb-4">
                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
                   {showFundModal === "withdraw"
                     ? "Withdraw amount (Nexus units)"
-                    : (currentUser?.level ?? 1) === 2
+                    : retailerCreditDesk
                       ? "Requested admin top-up amount (Nexus units)"
                       : "Funding amount (match what you send)"}
                 </label>
@@ -2081,8 +2100,8 @@ export default function DashboardPage() {
                 disabled={
                   isFundProcessing ||
                   (showFundModal === "withdraw" && (!fundAmount || parseFloat(fundAmount) <= 0)) ||
-                  (showFundModal === "add" && (currentUser?.level ?? 1) === 1 && l1FundSource !== "local") ||
-                  (showFundModal === "add" && (currentUser?.level ?? 1) === 2) ||
+                  (showFundModal === "add" && customerRetailFunding && l1FundSource !== "local") ||
+                  (showFundModal === "add" && retailerCreditDesk) ||
                   (showFundModal === "add" && (currentUser?.level ?? 1) === 5)
                 }
                 className={`flex w-full items-center justify-center gap-2 rounded-lg py-3 font-semibold text-white transition-colors disabled:opacity-50 ${
@@ -2099,15 +2118,15 @@ export default function DashboardPage() {
                   </>
                 ) : showFundModal === "withdraw" ? (
                   `Withdraw $${fundAmount || "0"}`
-                ) : (currentUser?.level ?? 1) === 1 && l1FundSource === "local" ? (
+                ) : customerRetailFunding && l1FundSource === "local" ? (
                   "Confirm payment sent"
-                ) : (currentUser?.level ?? 1) === 1 ? (
+                ) : customerRetailFunding ? (
                   "Choose Local path to confirm"
                 ) : (
                   "Add Funds"
                 )}
               </button>
-              {showFundModal === "add" && (currentUser?.level ?? 1) === 1 && l1FundSource === "crypto" ? (
+              {showFundModal === "add" && customerRetailFunding && l1FundSource === "crypto" ? (
                 <button
                   type="button"
                   className="w-full rounded-lg border border-border py-2 text-sm font-medium"

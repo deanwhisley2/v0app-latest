@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { retailerSpendableLiquidity } from "@/lib/server/retailer-funding-helpers"
 
@@ -10,7 +10,8 @@ export async function GET(request: Request) {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const admin = createAdminClient()
-    const level = await getTradingUserLevel(user.id)
+    const gate = await getRetailFundingCustomerGate(user.id, user.email)
+    const level = gate.level
     const requestsRes = await admin
       .from("retailer_fund_requests")
       .select(
@@ -21,19 +22,20 @@ export async function GET(request: Request) {
       .limit(50)
     if (requestsRes.error) return NextResponse.json({ error: requestsRes.error.message }, { status: 500 })
 
-    /** Level 1 uses GET /api/user/qualified-retailers for eligible desks; legacy list omitted to avoid confusion. */
+    /** Full desk directory only for designated Level-2 retailer credit sellers; buyers use GET /qualified-retailers. */
     const retailers =
-      level === 1
-        ? []
-        : (
+      level === 2 && gate.retailerCreditSeller
+        ? (
             await admin
               .from("retailer_profiles")
               .select("id,user_id,payment_numbers,credit_basin,under_review,under_review_reason,updated_at")
               .order("updated_at", { ascending: false })
           ).data ?? []
+        : []
 
     return NextResponse.json({
       userLevel: level,
+      customerRetailFunding: gate.canUseRetailFundingCustomerFlow,
       retailers,
       requests: requestsRes.data ?? [],
     })
@@ -46,9 +48,12 @@ export async function POST(request: Request) {
   try {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const level = await getTradingUserLevel(user.id)
-    if (level !== 1) {
-      return NextResponse.json({ error: "Only level 1 users can submit retailer funding requests." }, { status: 403 })
+    const gate = await getRetailFundingCustomerGate(user.id, user.email)
+    if (!gate.canUseRetailFundingCustomerFlow) {
+      return NextResponse.json(
+        { error: "Retailer funding requests are limited to Level 1 and Level 2 accounts that are not designated retailer credit desks." },
+        { status: 403 }
+      )
     }
     const body = (await request.json().catch(() => ({}))) as {
       retailerId?: string

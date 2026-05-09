@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { requireAdminUser } from "@/lib/server/security-authz"
+import { getTradingUserLevel, requireAdminUser } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { transferRetailCreditToCustomer } from "@/lib/server/retailer-funding-helpers"
 
@@ -74,6 +74,20 @@ export async function PATCH(request: Request) {
       .maybeSingle()
     if (reqErr) return NextResponse.json({ error: reqErr.message }, { status: 500 })
     if (!reqRow) return NextResponse.json({ error: "Request not found" }, { status: 404 })
+
+    const customerId = (reqRow as { user_id: string }).user_id
+    if (body.action === "approve" || body.action === "resolve") {
+      const buyerLvl = await getTradingUserLevel(customerId)
+      if (buyerLvl === 5) {
+        return NextResponse.json(
+          {
+            error:
+              "Liquidity admins (level 5) cannot be funded via retailer workflows; deny or escalate outside this ledger.",
+          },
+          { status: 403 }
+        )
+      }
+    }
 
     const fundChannel = String((reqRow as { fund_channel?: string }).fund_channel ?? "legacy_admin")
 

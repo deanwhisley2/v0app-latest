@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
 import { retailerSpendableLiquidity } from "@/lib/server/retailer-funding-helpers"
 
 export async function GET(request: Request) {
   try {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const level = await getTradingUserLevel(user.id)
-    if (level !== 1) {
-      return NextResponse.json({ error: "Only level 1 accounts use qualified retailer funding." }, { status: 403 })
+    const gate = await getRetailFundingCustomerGate(user.id, user.email)
+    if (!gate.canUseRetailFundingCustomerFlow) {
+      return NextResponse.json(
+        { error: "Qualified retailer funding is for Level 1 and Level 2 accounts that are not designated retailer credit desks." },
+        { status: 403 }
+      )
     }
     const { searchParams } = new URL(request.url)
     const amount = Number(searchParams.get("amount") ?? 0)
