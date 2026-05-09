@@ -51,26 +51,22 @@ export async function POST(request: Request) {
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
   }
-  if (!selfie_image) {
+  const hasSelfiePayload = Boolean(selfie_image || selfie_template || selfie_hash)
+  const hasCompleteSelfiePayload = Boolean(selfie_image && selfie_template && selfie_hash)
+  if (hasSelfiePayload && !hasCompleteSelfiePayload) {
     return NextResponse.json(
-      { error: "Security selfie is required at registration." },
+      { error: "Incomplete selfie payload. Provide image, template, and hash together." },
       { status: 400 }
     )
   }
-  if (selfie_image.length > 6_000_000) {
-    return NextResponse.json(
-      { error: "Selfie image payload is too large." },
-      { status: 413 }
-    )
+  if (selfie_image && selfie_image.length > 6_000_000) {
+    return NextResponse.json({ error: "Selfie image payload is too large." }, { status: 413 })
   }
-  if (!selfie_template || !/^[A-Za-z0-9_-]{120,600}$/.test(selfie_template)) {
+  if (selfie_template && !/^[A-Za-z0-9_-]{120,600}$/.test(selfie_template)) {
     return NextResponse.json({ error: "Invalid selfie template." }, { status: 400 })
   }
-  if (!selfie_hash || !/^[0-9a-f]{16,}$/.test(selfie_hash)) {
-    return NextResponse.json(
-      { error: "Invalid selfie identity hash." },
-      { status: 400 }
-    )
+  if (selfie_hash && !/^[0-9a-f]{16,}$/.test(selfie_hash)) {
+    return NextResponse.json({ error: "Invalid selfie identity hash." }, { status: 400 })
   }
 
   const supabase = await createRouteHandlerSupabaseClient()
@@ -86,11 +82,17 @@ export async function POST(request: Request) {
       data: {
         full_name,
         phone,
-        selfie_hash,
-        selfie_template_v1: selfie_template,
-        selfie_template_version: "v1",
-        selfie_enrolled_at: nowIso,
-        security_selfie_enrolled: true,
+        ...(hasCompleteSelfiePayload
+          ? {
+              selfie_hash,
+              selfie_template_v1: selfie_template,
+              selfie_template_version: "v1",
+              selfie_enrolled_at: nowIso,
+              security_selfie_enrolled: true,
+            }
+          : {
+              security_selfie_enrolled: false,
+            }),
         ...(preferred_language ? { preferred_language } : {}),
         ...(preferred_currency ? { preferred_currency } : {}),
       },
@@ -105,21 +107,29 @@ export async function POST(request: Request) {
   if (newUserId) {
     try {
       const admin = createAdminClient()
-      const { error: profileAvatarErr } = await admin
-        .from("profiles")
-        .update({ avatar_url: null, updated_at: nowIso })
-        .eq("id", newUserId)
-      if (profileAvatarErr) {
-        console.warn("[register] profiles.avatar_url update:", profileAvatarErr.message)
+      if (hasCompleteSelfiePayload) {
+        const { error: profileAvatarErr } = await admin
+          .from("profiles")
+          .update({ avatar_url: null, updated_at: nowIso })
+          .eq("id", newUserId)
+        if (profileAvatarErr) {
+          console.warn("[register] profiles.avatar_url update:", profileAvatarErr.message)
+        }
       }
       const meta = (signUpData.user?.user_metadata ?? {}) as Record<string, unknown>
       const { error: metaStripErr } = await admin.auth.admin.updateUserById(newUserId, {
         user_metadata: mergeSafeUserMetadata(meta, {
-          selfie_hash,
-          selfie_template_v1: selfie_template,
-          selfie_template_version: "v1",
-          selfie_enrolled_at: nowIso,
-          security_selfie_enrolled: true,
+          ...(hasCompleteSelfiePayload
+            ? {
+                selfie_hash,
+                selfie_template_v1: selfie_template,
+                selfie_template_version: "v1",
+                selfie_enrolled_at: nowIso,
+                security_selfie_enrolled: true,
+              }
+            : {
+                security_selfie_enrolled: false,
+              }),
         }),
       })
       if (metaStripErr) {
@@ -131,7 +141,7 @@ export async function POST(request: Request) {
   }
 
   // Best-effort enrollment into CompreFace identity store.
-  if (newUserId && isCompreFaceConfigured()) {
+  if (newUserId && hasCompleteSelfiePayload && isCompreFaceConfigured()) {
     try {
       await comprefaceEnrollFace(newUserId, selfie_image)
     } catch (e) {

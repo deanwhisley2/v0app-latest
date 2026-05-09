@@ -79,14 +79,6 @@ export default function RegisterPage() {
       setError("Passwords do not match.")
       return
     }
-    if (!selfieDataUrl) {
-      setError("A selfie picture is required for account security.")
-      return
-    }
-    if (!selfieTemplate) {
-      setError("Could not prepare biometric template. Please retake selfie.")
-      return
-    }
     setIsSubmitting(true)
     setPreferences({ language, currency })
     try {
@@ -106,9 +98,13 @@ export default function RegisterPage() {
           phone: trimmedPhone,
           preferred_language: language,
           preferred_currency: currency,
-          selfie_image: selfieDataUrl,
-          selfie_template: selfieTemplate,
-          selfie_hash: selfieHash,
+          ...(selfieDataUrl && selfieTemplate && selfieHash
+            ? {
+                selfie_image: selfieDataUrl,
+                selfie_template: selfieTemplate,
+                selfie_hash: selfieHash,
+              }
+            : {}),
         }),
       })
 
@@ -262,7 +258,7 @@ export default function RegisterPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="register-selfie">Security Selfie (required)</Label>
+            <Label htmlFor="register-selfie">Security Selfie (optional, recommended)</Label>
             <Input
               id="register-selfie"
               type="file"
@@ -293,7 +289,7 @@ export default function RegisterPage() {
               </div>
             ) : (
               <p className="text-xs text-warning">
-                Required to protect withdrawals and prevent impersonation.
+                Optional at signup. You can add it later in Security Center for stronger recovery protection.
               </p>
             )}
           </div>
