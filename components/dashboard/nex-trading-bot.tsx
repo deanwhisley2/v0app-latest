@@ -38,6 +38,7 @@ interface NexTradingBotProps {
   selectedCoin: Coin
   connectedExchanges: Array<{ id: string; name: string; balance: number; isDefault?: boolean; frozen?: boolean }>
   onExecuteTrade: (params: TradeParams) => void
+  executionLocked?: boolean
 }
 
 export interface TradeParams {
@@ -101,7 +102,12 @@ interface TriModelAnalysis {
   }
 }
 
-export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade }: NexTradingBotProps) {
+export function NexTradingBot({
+  selectedCoin,
+  connectedExchanges,
+  onExecuteTrade,
+  executionLocked = false,
+}: NexTradingBotProps) {
   const [mode, setMode] = useState<"manual" | "nex" | "nex-tfc">("manual")
   const [selectedExchange, setSelectedExchange] = useState(connectedExchanges.find(e => e.isDefault)?.id || connectedExchanges[0]?.id || "")
   const [amount, setAmount] = useState("")
@@ -124,6 +130,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
 
   // Tri-model analysis: Gemini + Grok + ChatGPT
   const runTriModelAnalysis = async () => {
+    if (executionLocked) return
     setIsAnalyzing(true)
     setAnalysisComplete(false)
     
@@ -194,6 +201,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
 
   // Execute trade with NEX
   const executeNexTrade = () => {
+    if (executionLocked) return
     if (!selectedExchange || !amount || parseFloat(amount) <= 0) return
     if (!triModelAnalysis) return
     
@@ -217,6 +225,7 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
 
   // NEX Take Full Control
   const nexTakeFullControl = () => {
+    if (executionLocked) return
     setMode("nex-tfc")
     startNexAnalysis()
     // Auto execute after analysis
@@ -232,7 +241,17 @@ export function NexTradingBot({ selectedCoin, connectedExchanges, onExecuteTrade
   const presetAmounts = [25, 50, 75, 100] // percentages
 
   return (
-    <Card className="border-border bg-card overflow-hidden">
+    <Card className="relative border-border bg-card overflow-hidden">
+      {executionLocked && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 backdrop-blur-[1px]">
+          <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-center">
+            <p className="text-sm font-semibold text-warning">Restricted for Level 1/2</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              NEX bot is visible but locked until higher account level.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border p-4">
         <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { recordFinancialEvent } from "@/lib/server/financial-events"
 
 function parsePnL(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value
@@ -120,6 +121,23 @@ export async function POST(request: Request) {
       console.error("trades/record upsert:", upsertErr)
       return NextResponse.json({ error: "Could not record trade" }, { status: 500 })
     }
+
+    await recordFinancialEvent({
+      userId,
+      eventType: pnl >= 0 ? "trade_completed_profit" : "trade_completed_loss",
+      category: "trade",
+      amount: Math.abs(pnl),
+      feeAmount: 0,
+      balanceSource: pnl >= 0 ? "trade_session" : "available_balance",
+      balanceDestination: pnl >= 0 ? "available_balance" : "trade_loss",
+      status: "completed",
+      actorType: "bot",
+      actorId: "trade-recorder",
+      transactionRef: externalRef,
+      relatedTradeId: externalRef,
+      summary: `Trade ${pnl >= 0 ? "profit" : "loss"} posted for ${symbol ?? "unknown"} (${pnl.toFixed(2)}).`,
+      metadata: { strategy, stakeDelta },
+    })
 
     return NextResponse.json({
       ok: true,

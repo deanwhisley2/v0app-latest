@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireAdminUser } from "@/lib/server/security-authz"
+import { recordFinancialEvent } from "@/lib/server/financial-events"
 
 export async function GET(request: Request) {
   try {
@@ -63,7 +64,7 @@ export async function PATCH(request: Request) {
 
     const { data: reqRow, error: reqErr } = await admin
       .from("retailer_fund_requests")
-      .select("id,retailer_id,amount")
+      .select("id,user_id,retailer_id,amount,tx_reference")
       .eq("id", body.requestId)
       .maybeSingle()
     if (reqErr) return NextResponse.json({ error: reqErr.message }, { status: 500 })
@@ -121,6 +122,26 @@ export async function PATCH(request: Request) {
           .eq("id", reqRow.retailer_id)
       }
     }
+
+    await recordFinancialEvent({
+      userId: reqRow.user_id,
+      eventType: `funding_request_${nextStatus}`,
+      category: "admin",
+      amount: Number(reqRow.amount ?? 0),
+      balanceSource: nextStatus === "approved" ? "retailer_basin" : "nexus_main_pending",
+      balanceDestination: nextStatus === "approved" ? "available_balance" : "nexus_main_pending",
+      status:
+        nextStatus === "rejected"
+          ? "rejected"
+          : nextStatus === "under_review"
+            ? "pending"
+            : "approved",
+      actorType: "admin",
+      actorId: user.id,
+      transactionRef: reqRow.tx_reference,
+      summary: `Admin ${nextStatus} retailer funding request.`,
+      metadata: { requestId: reqRow.id, retailerId: reqRow.retailer_id },
+    })
 
     return NextResponse.json({ ok: true })
   } catch (e) {

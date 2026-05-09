@@ -15,7 +15,9 @@ export async function GET(request: Request) {
     const admin = createAdminClient()
     const { data, error } = await admin
       .from("user_balances")
-      .select("total_earnings, current_stake, available_balance, last_updated, created_at")
+      .select(
+        "total_earnings, current_stake, available_balance, active_container_earnings, container_withdrawable_earnings, lifetime_container_withdrawn, lifetime_container_fees, last_updated, created_at"
+      )
       .eq("user_id", user.id)
       .maybeSingle()
 
@@ -28,6 +30,10 @@ export async function GET(request: Request) {
       total_earnings: Number(data?.total_earnings ?? 0),
       current_stake: Number(data?.current_stake ?? 0),
       available_balance: Number(data?.available_balance ?? 0),
+      active_container_earnings: Number(data?.active_container_earnings ?? 0),
+      container_withdrawable_earnings: Number(data?.container_withdrawable_earnings ?? 0),
+      lifetime_container_withdrawn: Number(data?.lifetime_container_withdrawn ?? 0),
+      lifetime_container_fees: Number(data?.lifetime_container_fees ?? 0),
       last_updated: data?.last_updated ?? null,
       created_at: data?.created_at ?? null,
     }

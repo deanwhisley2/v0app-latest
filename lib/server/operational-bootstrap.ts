@@ -39,7 +39,9 @@ export async function buildOperationalBootstrapV1(params: {
       .maybeSingle(),
     admin
       .from("user_balances")
-      .select("total_earnings, current_stake, available_balance, last_updated, created_at")
+      .select(
+        "total_earnings, current_stake, available_balance, active_container_earnings, container_withdrawable_earnings, lifetime_container_withdrawn, lifetime_container_fees, last_updated, created_at"
+      )
       .eq("user_id", params.userId)
       .maybeSingle(),
     admin
@@ -186,6 +188,10 @@ export async function buildOperationalBootstrapV1(params: {
           total_earnings: Number(bal.total_earnings ?? 0),
           current_stake: Number(bal.current_stake ?? 0),
           available_balance: Number(bal.available_balance ?? 0),
+          active_container_earnings: Number(bal.active_container_earnings ?? 0),
+          container_withdrawable_earnings: Number(bal.container_withdrawable_earnings ?? 0),
+          lifetime_container_withdrawn: Number(bal.lifetime_container_withdrawn ?? 0),
+          lifetime_container_fees: Number(bal.lifetime_container_fees ?? 0),
           last_updated: (bal.last_updated as string) ?? null,
           created_at: (bal.created_at as string) ?? null,
         }

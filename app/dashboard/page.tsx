@@ -79,6 +79,19 @@ type RetailerFundingRequest = {
   created_at: string
 }
 
+type ContainerBalanceEvent = {
+  id: string
+  event_type: string
+  category?: string
+  gross_amount: number
+  fee_amount: number
+  net_amount: number
+  transaction_ref?: string
+  status?: string
+  summary?: string
+  created_at: string
+}
+
 const initialMarketFeed: MarketFeedState = {
   status: "loading",
   gainers: [],
@@ -110,6 +123,11 @@ export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
   const [totalEarnings, setTotalEarnings] = useState(0)
+  const [activeContainerEarnings, setActiveContainerEarnings] = useState(0)
+  const [containerWithdrawableEarnings, setContainerWithdrawableEarnings] = useState(0)
+  const [containerFeesPaid, setContainerFeesPaid] = useState(0)
+  const [isContainerFlowBusy, setIsContainerFlowBusy] = useState(false)
+  const [containerEvents, setContainerEvents] = useState<ContainerBalanceEvent[]>([])
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
   const [fundAmount, setFundAmount] = useState("")
   const [fundMethod, setFundMethod] = useState<"mtn" | "airtel" | "bank" | "wallet">("mtn")
@@ -567,9 +585,15 @@ export default function DashboardPage() {
       const json = (await res.json()) as {
         available_balance?: number
         total_earnings?: number
+        active_container_earnings?: number
+        container_withdrawable_earnings?: number
+        lifetime_container_fees?: number
       }
       setMainBalance(Number(json.available_balance ?? 0))
       setTotalEarnings(Number(json.total_earnings ?? 0))
+      setActiveContainerEarnings(Number(json.active_container_earnings ?? 0))
+      setContainerWithdrawableEarnings(Number(json.container_withdrawable_earnings ?? 0))
+      setContainerFeesPaid(Number(json.lifetime_container_fees ?? 0))
     })()
   }, [authLoading, user, isGuestSession])
 
@@ -579,7 +603,121 @@ export default function DashboardPage() {
     if (!b) return
     setMainBalance(Number(b.available_balance ?? 0))
     setTotalEarnings(Number(b.total_earnings ?? 0))
+    setActiveContainerEarnings(Number(b.active_container_earnings ?? 0))
+    setContainerWithdrawableEarnings(Number(b.container_withdrawable_earnings ?? 0))
+    setContainerFeesPaid(Number(b.lifetime_container_fees ?? 0))
   }, [isGuestSession, user?.id, op.snapshot?.userBalance])
+
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession) return
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/financial-events", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const out = (await res.json().catch(() => ({}))) as { events?: ContainerBalanceEvent[] }
+        setContainerEvents(out.events ?? [])
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [authLoading, user, isGuestSession])
+
+  const runContainerFlowAction = useCallback(
+    async (action: "extract" | "transfer_to_main") => {
+      if (isContainerFlowBusy) return
+      try {
+        setIsContainerFlowBusy(true)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) throw new Error("Session expired.")
+
+        const requestBody =
+          action === "extract"
+            ? {
+                action,
+                // System-enforced fixed extraction slice; users cannot enter arbitrary amount.
+                grossAmount: Math.max(0, Math.round(activeContainerEarnings * 0.25 * 100) / 100),
+              }
+            : { action }
+
+        const res = await fetch("/api/user/container-earnings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(requestBody),
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          error?: string
+          feeAmount?: number
+          creditedAmount?: number
+          transferAmount?: number
+          balances?: {
+            available_balance?: number
+            active_container_earnings?: number
+            container_withdrawable_earnings?: number
+          }
+        }
+        if (!res.ok) throw new Error(out.error || "Container balance action failed")
+        setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
+        setActiveContainerEarnings(
+          Number(out.balances?.active_container_earnings ?? activeContainerEarnings)
+        )
+        setContainerWithdrawableEarnings(
+          Number(
+            out.balances?.container_withdrawable_earnings ?? containerWithdrawableEarnings
+          )
+        )
+        setContainerEvents((prev) => [
+          {
+            id: crypto.randomUUID(),
+            event_type: action,
+            gross_amount:
+              Number(
+                action === "extract"
+                  ? requestBody.grossAmount
+                  : out.transferAmount ?? out.creditedAmount ?? 0
+              ) || 0,
+            fee_amount: Number(out.feeAmount ?? 0),
+            net_amount: Number(out.creditedAmount ?? out.transferAmount ?? 0),
+            created_at: new Date().toISOString(),
+          },
+          ...prev,
+        ])
+        if (action === "extract") {
+          setContainerFeesPaid((prev) => prev + Number(out.feeAmount ?? 0))
+          showToast(
+            `Earnings extracted: ${formatUserMoney(Number(out.creditedAmount ?? 0))} credited (1% fee applied).`,
+            "success"
+          )
+        } else {
+          showToast(
+            `Transferred ${formatUserMoney(Number(out.transferAmount ?? 0))} to main balance.`,
+            "success"
+          )
+        }
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Container balance action failed", "error")
+      } finally {
+        setIsContainerFlowBusy(false)
+      }
+    },
+    [
+      activeContainerEarnings,
+      containerWithdrawableEarnings,
+      formatUserMoney,
+      isContainerFlowBusy,
+      mainBalance,
+      showToast,
+    ]
+  )
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession) return
@@ -791,10 +929,33 @@ export default function DashboardPage() {
           showToast("Retailer payment numbers saved.", "success")
         } else if (showFundModal === "withdraw") {
           if (amount > mainBalance) throw new Error("Insufficient balance")
-          setMainBalance((prev) => prev - amount)
+          const res = await fetch("/api/user/main-balance/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              action: "debit",
+              amount,
+              reason: "Withdrawal request initiated from dashboard.",
+            }),
+          })
+          const out = (await res.json().catch(() => ({}))) as { error?: string; available_balance?: number }
+          if (!res.ok) throw new Error(out.error || "Withdrawal failed")
+          setMainBalance(Number(out.available_balance ?? mainBalance))
           showToast(`$${amount.toFixed(2)} withdrawal initiated`, "success")
         } else {
-          showToast("Use level-based funding flow.", "error")
+          const res = await fetch("/api/user/main-balance/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              action: "credit",
+              amount,
+              reason: "Main account top-up from dashboard.",
+            }),
+          })
+          const out = (await res.json().catch(() => ({}))) as { error?: string; available_balance?: number }
+          if (!res.ok) throw new Error(out.error || "Funding failed")
+          setMainBalance(Number(out.available_balance ?? mainBalance))
+          showToast(`$${amount.toFixed(2)} added to Nexus main balance.`, "success")
         }
         setShowFundModal(null)
         setFundAmount("")
@@ -916,16 +1077,22 @@ export default function DashboardPage() {
             {/* Action Buttons */}
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => router.push("/joelin")}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                onClick={() => (currentUser?.level ?? 1) <= 2 ? showToast("Joelin is locked for Level 1/2 accounts.", "error") : router.push("/joelin")}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={(currentUser?.level ?? 1) <= 2}
               >
-                Joelin
+                Joelin {(currentUser?.level ?? 1) <= 2 ? "🔒" : ""}
               </button>
               <button
-                onClick={() => router.push(`/expert-mode?symbol=${encodeURIComponent(selectedCoinSymbol)}`)}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                onClick={() =>
+                  (currentUser?.level ?? 1) <= 2
+                    ? showToast("Expert Mode is locked for Level 1/2 accounts.", "error")
+                    : router.push(`/expert-mode?symbol=${encodeURIComponent(selectedCoinSymbol)}`)
+                }
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={(currentUser?.level ?? 1) <= 2}
               >
-                Expert Mode
+                Expert Mode {(currentUser?.level ?? 1) <= 2 ? "🔒" : ""}
               </button>
               <button
                 onClick={() => { setShowFundModal("add"); setFundAmount(""); setFundPhone(""); }}
@@ -947,6 +1114,64 @@ export default function DashboardPage() {
                 Withdraw
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-border bg-background/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Nexus Main Balance</p>
+            <p className="mt-1 font-mono text-lg font-bold">
+              {showBalance ? formatUserMoney(mainBalance) : "••••"}
+            </p>
+            <p className="text-[11px] text-muted-foreground">Cashout and new container funding source.</p>
+          </div>
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Container Earnings</p>
+            <p className="mt-1 font-mono text-lg font-bold">
+              {showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
+            </p>
+            <button
+              type="button"
+              onClick={() => void runContainerFlowAction("extract")}
+              disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
+              className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {isContainerFlowBusy ? "Processing..." : "Extract Earnings (auto 25%)"}
+            </button>
+          </div>
+          <div className="rounded-xl border border-success/30 bg-success/10 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Container Withdrawable Earnings</p>
+            <p className="mt-1 font-mono text-lg font-bold">
+              {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
+            </p>
+            <button
+              type="button"
+              onClick={() => void runContainerFlowAction("transfer_to_main")}
+              disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
+              className="mt-2 w-full rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              {isContainerFlowBusy ? "Processing..." : "Transfer To Main Account"}
+            </button>
+            <div className="mt-2 max-h-16 space-y-1 overflow-y-auto rounded bg-background/50 p-1.5">
+              {(containerEvents.length ? containerEvents : []).slice(0, 2).map((event) => (
+                <p key={event.id} className="text-[10px] text-muted-foreground">
+                  {event.summary || event.event_type} • {formatUserMoney(Number(event.net_amount ?? 0))}
+                </p>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-background/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Exchange Balances</p>
+            <p className="mt-1 font-mono text-lg font-bold">
+              {showBalance
+                ? formatUserMoney(
+                    connectedExchanges.reduce((sum, ex) => sum + Number(ex.balance ?? 0), 0)
+                  )
+                : "••••"}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Separate from Nexus wallet. Fees paid: {showBalance ? formatUserMoney(containerFeesPaid) : "••••"}
+            </p>
           </div>
         </div>
       </div>
@@ -1206,6 +1431,7 @@ export default function DashboardPage() {
                       )
                     }}
                     advancedTradingLocked={(currentUser?.level ?? 1) <= 2}
+                    executionLocked={(currentUser?.level ?? 1) <= 2}
                     chartOverlay={
                       liveAnalysis.active && liveAnalysis.coin ? (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-2 sm:p-4">

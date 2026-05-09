@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { recordFinancialEvent } from "@/lib/server/financial-events"
 
 export async function GET(request: Request) {
   try {
@@ -67,6 +68,20 @@ export async function POST(request: Request) {
       .select("id,retailer_id,amount,tx_reference,status,note,created_at")
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await recordFinancialEvent({
+      userId: user.id,
+      eventType: "funding_request_created",
+      category: "funding",
+      amount,
+      balanceSource: "external_funding",
+      balanceDestination: "nexus_main_pending",
+      status: "pending",
+      actorType: "user",
+      actorId: user.id,
+      transactionRef: txReference,
+      summary: "Retailer funding request submitted and awaiting approval.",
+      metadata: { retailerId, requestId: data.id },
+    })
     return NextResponse.json({ ok: true, request: data })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
@@ -91,6 +106,18 @@ export async function PATCH(request: Request) {
       .eq("user_id", user.id)
       .in("status", ["rejected", "under_review"])
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await recordFinancialEvent({
+      userId: user.id,
+      eventType: "funding_request_appealed",
+      category: "funding",
+      amount: 0,
+      status: "pending",
+      actorType: "user",
+      actorId: user.id,
+      relatedTradeId: requestId,
+      summary: "Funding request appeal submitted by user.",
+      metadata: { appealNote, requestId },
+    })
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })

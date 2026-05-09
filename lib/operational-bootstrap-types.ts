@@ -20,6 +20,10 @@ export interface OperationalBootstrapV1 {
     total_earnings: number
     current_stake: number
     available_balance: number
+    active_container_earnings?: number
+    container_withdrawable_earnings?: number
+    lifetime_container_withdrawn?: number
+    lifetime_container_fees?: number
     last_updated: string | null
     created_at: string | null
   } | null

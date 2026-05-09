@@ -22,6 +22,7 @@ import {
   History,
   ChevronRight,
   Compass,
+  Landmark,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
@@ -47,6 +48,8 @@ const getTypeIcon = (type: NexusNotificationType) => {
       return <Info className="h-4 w-4 text-muted-foreground" />
     case "analysis":
       return <Compass className="h-4 w-4 text-cyan-400" />
+    case "financial":
+      return <Landmark className="h-4 w-4 text-emerald-400" />
   }
 }
 
@@ -64,6 +67,8 @@ const getTypeColor = (type: NexusNotificationType) => {
       return "border-l-muted-foreground"
     case "analysis":
       return "border-l-cyan-400"
+    case "financial":
+      return "border-l-emerald-400"
   }
 }
 

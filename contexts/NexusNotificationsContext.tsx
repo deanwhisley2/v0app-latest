@@ -170,6 +170,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
   const serverNotifSerializedRef = useRef("")
   const lastPostedJsonRef = useRef("")
   const persistPrefsTimerRef = useRef<number | null>(null)
+  const seenFinancialEventIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     const persisted = loadPersisted()
@@ -250,6 +251,71 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       if (persistPrefsTimerRef.current) window.clearTimeout(persistPrefsTimerRef.current)
     }
   }, [hydrated, inbox, history, user?.id, isGuestSession])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (!user?.id || isGuestSession || isDevLocalOnly()) return
+    let cancelled = false
+
+    const pullFinancialEvents = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const res = await fetch("/api/user/financial-events", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (!res.ok || cancelled) return
+        const out = (await res.json().catch(() => ({}))) as {
+          events?: Array<{
+            id: string
+            event_type: string
+            gross_amount?: number
+            fee_amount?: number
+            summary?: string
+            created_at: string
+            transaction_ref?: string
+            status?: string
+          }>
+        }
+        const events = out.events ?? []
+        if (!events.length) return
+        setInbox((prev) => {
+          const knownIds = new Set(prev.map((n) => n.id))
+          const injected = events
+            .filter((e) => !knownIds.has(`fin-${e.id}`) && !seenFinancialEventIdsRef.current.has(e.id))
+            .slice(0, 25)
+            .map((e) => ({
+              id: `fin-${e.id}`,
+              type: "financial" as const,
+              title: "Financial event",
+              message:
+                e.summary ||
+                `${e.event_type}: ${Number(e.gross_amount ?? 0).toFixed(2)} (fee ${Number(
+                  e.fee_amount ?? 0
+                ).toFixed(2)}), status ${e.status ?? "completed"}`,
+              timestamp: e.created_at,
+              read: false,
+              nav: { kind: "wallet" as const },
+            }))
+          for (const e of events) seenFinancialEventIdsRef.current.add(e.id)
+          return injected.length ? [...injected, ...prev] : prev
+        })
+      } catch {
+        /* ignore */
+      }
+    }
+
+    void pullFinancialEvents()
+    const id = window.setInterval(pullFinancialEvents, 20_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [hydrated, user?.id, isGuestSession])
 
   const registerAppNavigator = useCallback((fn: NavigatorFn | null) => {
     navRef.current = fn

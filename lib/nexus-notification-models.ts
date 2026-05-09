@@ -7,6 +7,7 @@ export type NexusNotificationType =
   | "promo"
   | "system"
   | "analysis"
+  | "financial"
 
 export type AnalysisNotificationPayload = {
   analysisId: string

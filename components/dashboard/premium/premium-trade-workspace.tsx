@@ -42,6 +42,7 @@ export type PremiumTradeWorkspaceProps = {
   onNexExecute: (params: TradeParams) => void
   chartOverlay?: React.ReactNode
   advancedTradingLocked?: boolean
+  executionLocked?: boolean
 }
 
 export function PremiumTradeWorkspace({
@@ -53,6 +54,7 @@ export function PremiumTradeWorkspace({
   onNexExecute,
   chartOverlay,
   advancedTradingLocked = false,
+  executionLocked = false,
 }: PremiumTradeWorkspaceProps) {
   const [interval, setInterval] = useState<(typeof TIMEFRAMES)[number]>("1H")
   const [chartTypeId, setChartTypeId] = useState<ChartTypeId>(DEFAULT_CHART_TYPE)
@@ -322,6 +324,7 @@ export function PremiumTradeWorkspace({
                 selectedCoin={selectedCoin}
                 connectedExchanges={connectedExchanges}
                 onExecuteTrade={onNexExecute}
+                executionLocked={executionLocked}
               />
             </div>
           ) : (

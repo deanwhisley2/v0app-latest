@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Bell, Compass, Gift, Info, Shield, TrendingUp, Zap, Trash2 } from "lucide-react"
+import { ArrowLeft, Bell, Compass, Gift, Info, Landmark, Shield, TrendingUp, Zap, Trash2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
 import { Card } from "@/components/ui/card"
@@ -26,6 +26,8 @@ const icon = (type: NexusNotificationType) => {
       return <Info className="h-4 w-4 text-muted-foreground" />
     case "analysis":
       return <Compass className="h-4 w-4 text-cyan-400" />
+    case "financial":
+      return <Landmark className="h-4 w-4 text-emerald-400" />
   }
 }
 
@@ -43,6 +45,8 @@ const border = (type: NexusNotificationType) => {
       return "border-l-muted-foreground"
     case "analysis":
       return "border-l-cyan-400"
+    case "financial":
+      return "border-l-emerald-400"
   }
 }
 
