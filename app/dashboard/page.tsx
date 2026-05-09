@@ -1205,6 +1205,7 @@ export default function DashboardPage() {
                         "success"
                       )
                     }}
+                    advancedTradingLocked={(currentUser?.level ?? 1) <= 2}
                     chartOverlay={
                       liveAnalysis.active && liveAnalysis.coin ? (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-2 sm:p-4">

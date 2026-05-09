@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  Lock,
   BookOpen,
   GraduationCap,
   LayoutGrid,
@@ -40,6 +41,7 @@ export type PremiumTradeWorkspaceProps = {
   connectedExchanges: ConnectedEx[]
   onNexExecute: (params: TradeParams) => void
   chartOverlay?: React.ReactNode
+  advancedTradingLocked?: boolean
 }
 
 export function PremiumTradeWorkspace({
@@ -50,6 +52,7 @@ export function PremiumTradeWorkspace({
   connectedExchanges,
   onNexExecute,
   chartOverlay,
+  advancedTradingLocked = false,
 }: PremiumTradeWorkspaceProps) {
   const [interval, setInterval] = useState<(typeof TIMEFRAMES)[number]>("1H")
   const [chartTypeId, setChartTypeId] = useState<ChartTypeId>(DEFAULT_CHART_TYPE)
@@ -124,17 +127,35 @@ export function PremiumTradeWorkspace({
         quickSymbols={symbols}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,300px)] xl:items-stretch">
-        {/* Chart column */}
-        <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-row">
-          <div className="hidden shrink-0 lg:block">
-            <ChartDrawingToolbar activeTool={drawingTool} onToolChange={setDrawingTool} vertical />
+      {advancedTradingLocked ? (
+        <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-warning/20 p-2">
+              <Lock className="h-4 w-4 text-warning" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-warning">Advanced Trade Deck is locked</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Pairs, timeframes, candles and order book unlock at higher user levels.
+              </p>
+              <p className="mt-2 rounded-md border border-border bg-background/70 px-2 py-1 text-[11px] text-muted-foreground">
+                Locked preview: Pairs | 1m 5m 15m 30m 1H 4H 1D 5D 1W 1M | Candles | Order book
+              </p>
+            </div>
           </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,300px)] xl:items-stretch">
+          {/* Chart column */}
+          <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-row">
+            <div className="hidden shrink-0 lg:block">
+              <ChartDrawingToolbar activeTool={drawingTool} onToolChange={setDrawingTool} vertical />
+            </div>
 
-          <div
-            ref={chartCardRef}
-            className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#050608] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-          >
+            <div
+              ref={chartCardRef}
+              className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#050608] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+            >
             <div className="flex flex-col gap-2 border-b border-white/[0.06] p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <button
@@ -284,13 +305,14 @@ export function PremiumTradeWorkspace({
               )}
               {chartOverlay}
             </div>
+            </div>
+          </div>
+
+          <div className="min-h-[320px] xl:min-h-0">
+            <PremiumOrderBook coin={selectedCoin} />
           </div>
         </div>
-
-        <div className="min-h-[320px] xl:min-h-0">
-          <PremiumOrderBook coin={selectedCoin} />
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
