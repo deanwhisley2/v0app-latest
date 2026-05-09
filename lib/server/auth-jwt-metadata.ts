@@ -13,6 +13,11 @@ export function mergeSafeUserMetadata(
   for (const key of BULKY_METADATA_KEYS) {
     delete base[key]
   }
+  // GoTrue user_metadata updates are merge-based; explicitly null bulky keys
+  // so legacy values are overwritten instead of silently retained.
+  for (const key of BULKY_METADATA_KEYS) {
+    base[key] = null
+  }
   for (const [k, v] of Object.entries(patch)) {
     if (BULKY_METADATA_KEYS.has(k)) continue
     base[k] = v
