@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
-import { adminRetailPoolUserId } from "@/lib/server/admin-retail-pool"
+import { adminRetailPoolUserId, getTreasurySettlementModeInfo } from "@/lib/server/admin-retail-pool"
 import { roundFundingAmount } from "@/lib/server/funding-duplicate-guard"
 
 type ProfileLite = {
@@ -375,16 +375,42 @@ export async function GET(request: Request) {
     pending.sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
 
     const poolUid = adminRetailPoolUserId()
+    const settlement = getTreasurySettlementModeInfo()
     let poolAvailableUsd: number | null = null
     if (poolUid) {
       const { data: prow } = await admin.from("user_balances").select("available_balance").eq("user_id", poolUid).maybeSingle()
       poolAvailableUsd = prow ? Number(prow.available_balance ?? 0) : 0
     }
 
+    let approvedFloatTopupsTotalUsd = 0
+    let pendingFloatTopupCount = 0
+    let pendingFloatTopupAmountUsd = 0
+    let retailerDeskRetailBalanceTotalUsd = 0
+    const { data: statRows, error: statsRpcError } = await admin.rpc("admin_treasury_float_stats")
+    if (!statsRpcError && Array.isArray(statRows) && statRows[0]) {
+      const row = statRows[0] as Record<string, unknown>
+      approvedFloatTopupsTotalUsd = Number(row.approved_float_topups_total_usd ?? 0)
+      pendingFloatTopupCount = Number(row.pending_float_topup_count ?? 0)
+      pendingFloatTopupAmountUsd = Number(row.pending_float_topup_amount_requested_usd ?? 0)
+      retailerDeskRetailBalanceTotalUsd = Number(row.retailer_desk_retail_balance_total_usd ?? 0)
+    }
+
     return NextResponse.json({
       treasury: {
         operational_pool_env_configured: Boolean(poolUid),
         pool_available_usd: poolAvailableUsd,
+        settlement_mode: settlement.settlementMode,
+        debit_source: settlement.debitSource,
+        pool_user_id_masked: settlement.poolUserIdMasked,
+        master_liquidity_strict: settlement.masterLiquidityStrict,
+        settlement_summary: settlement.summaryLine,
+        settlement_remediation: settlement.remediationLine,
+        approved_float_topups_total_usd: approvedFloatTopupsTotalUsd,
+        pending_float_topup_count: pendingFloatTopupCount,
+        pending_float_topup_amount_requested_usd: pendingFloatTopupAmountUsd,
+        retailer_desk_retail_balance_total_usd: retailerDeskRetailBalanceTotalUsd,
+        stats_available: !statsRpcError,
+        stats_error: statsRpcError ? statsRpcError.message : null,
       },
       pending,
       history: history.slice(0, 150),

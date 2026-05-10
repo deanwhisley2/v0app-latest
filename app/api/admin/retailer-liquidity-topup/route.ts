@@ -4,9 +4,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { creditRetailerLiquidityPlusCommission } from "@/lib/server/retailer-funding-helpers"
+import type { FloatLiquidityDebitSource } from "@/lib/server/admin-retail-pool"
 import {
   adminRetailPoolUserId,
   debitFloatLiquidityOnApproval,
+  getTreasurySettlementModeInfo,
   refundFloatLiquidityDebit,
 } from "@/lib/server/admin-retail-pool"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
@@ -134,7 +136,26 @@ export async function PATCH(request: Request) {
     const rate = Number(row.commission_rate ?? 0.05)
     const credited = Math.round(base * (1 + Math.max(0, Number.isFinite(rate) ? rate : 0)) * 100) / 100
 
-    const liquiditySource = await debitFloatLiquidityOnApproval(admin, credited, user.id)
+    let liquiditySource: FloatLiquidityDebitSource
+    try {
+      liquiditySource = await debitFloatLiquidityOnApproval(admin, credited, user.id)
+    } catch (debitErr) {
+      const settlement = getTreasurySettlementModeInfo()
+      const msg = debitErr instanceof Error ? debitErr.message : "Treasury debit failed."
+      return NextResponse.json(
+        {
+          error: msg,
+          treasury: {
+            settlement_mode: settlement.settlementMode,
+            debit_source: settlement.debitSource,
+            remediation: settlement.remediationLine,
+            hint:
+              "Credit amount would have been base × (1 + commission), debited from treasury Nexus Main in configured modes.",
+          },
+        },
+        { status: 400 },
+      )
+    }
     try {
       await creditRetailerLiquidityPlusCommission(admin, row.retailer_user_id, base, rate)
     } catch (err) {

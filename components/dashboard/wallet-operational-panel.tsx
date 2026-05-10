@@ -516,6 +516,18 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const [treasuryMeta, setTreasuryMeta] = useState<{
     operational_pool_env_configured: boolean
     pool_available_usd: number | null
+    settlement_mode?: string
+    debit_source?: string
+    pool_user_id_masked?: string | null
+    master_liquidity_strict?: boolean
+    settlement_summary?: string
+    settlement_remediation?: string | null
+    approved_float_topups_total_usd?: number
+    pending_float_topup_count?: number
+    pending_float_topup_amount_requested_usd?: number
+    retailer_desk_retail_balance_total_usd?: number
+    stats_available?: boolean
+    stats_error?: string | null
   } | null>(null)
   const [deskError, setDeskError] = useState<string | null>(null)
   const [reviewRow, setReviewRow] = useState<OperationsDeskApiRow | null>(null)
@@ -561,7 +573,22 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
       const dj = (await deskRes.json().catch(() => ({}))) as {
         pending?: OperationsDeskApiRow[]
         history?: OperationsDeskApiRow[]
-        treasury?: { operational_pool_env_configured: boolean; pool_available_usd: number | null }
+        treasury?: {
+          operational_pool_env_configured: boolean
+          pool_available_usd: number | null
+          settlement_mode?: string
+          debit_source?: string
+          pool_user_id_masked?: string | null
+          master_liquidity_strict?: boolean
+          settlement_summary?: string
+          settlement_remediation?: string | null
+          approved_float_topups_total_usd?: number
+          pending_float_topup_count?: number
+          pending_float_topup_amount_requested_usd?: number
+          retailer_desk_retail_balance_total_usd?: number
+          stats_available?: boolean
+          stats_error?: string | null
+        }
         error?: string
       }
       if (!deskRes.ok) {
@@ -937,21 +964,94 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
               </button>
             </div>
 
-            {treasuryMeta?.operational_pool_env_configured ? (
-              <p className="mb-4 rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs">
-                Operational pool (treasury UUID) available:{" "}
-                <span className="font-mono font-bold">${Number(treasuryMeta.pool_available_usd ?? 0).toLocaleString()}</span>{" "}
-                — approving float top-ups debits here when{" "}
-                <code className="rounded bg-muted px-1">NEXUS_ADMIN_RETAIL_POOL_USER_ID</code> is set server-side.
-              </p>
-            ) : (
-              <p className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-                No <code className="rounded bg-muted px-1">NEXUS_ADMIN_RETAIL_POOL_USER_ID</code> — set that for a dedicated treasury user, or set{" "}
-                <code className="rounded bg-muted px-1">NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1</code> to debit the
-                approving Level-5 Nexus Main on each float approval. Otherwise approvals credit retailers with no company-side
-                deduction.
-              </p>
-            )}
+            <div className="mb-4 space-y-3">
+              <div
+                className={`rounded-md border px-3 py-2 text-xs ${
+                  treasuryMeta?.settlement_mode === "dedicated_pool"
+                    ? "border-primary/30 bg-primary/5"
+                    : treasuryMeta?.settlement_mode === "approver_nexus_main"
+                      ? "border-blue-500/30 bg-blue-500/10 dark:text-blue-50"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-50"
+                }`}
+              >
+                <p className="font-semibold">
+                  Treasury settlement mode:{" "}
+                  <span className="font-mono">
+                    {treasuryMeta?.settlement_mode === "dedicated_pool"
+                      ? "Dedicated pool (recommended)"
+                      : treasuryMeta?.settlement_mode === "approver_nexus_main"
+                        ? "Approver Nexus Main debit"
+                        : "Not configured"}
+                  </span>
+                  {treasuryMeta?.master_liquidity_strict ? (
+                    <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
+                      STRICT
+                    </span>
+                  ) : null}
+                </p>
+                {treasuryMeta?.pool_user_id_masked ? (
+                  <p className="mt-1 text-muted-foreground">
+                    Pool user id (masked): <span className="font-mono">{treasuryMeta.pool_user_id_masked}</span>
+                  </p>
+                ) : null}
+                <p className="mt-2 text-muted-foreground">{treasuryMeta?.settlement_summary}</p>
+                {treasuryMeta?.settlement_remediation ? (
+                  <p className="mt-2 font-medium text-amber-900 dark:text-amber-100">{treasuryMeta.settlement_remediation}</p>
+                ) : null}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Treasury pool (Nexus Main)</p>
+                  <p className="text-lg font-bold tabular-nums">
+                    ${Number(treasuryMeta?.pool_available_usd ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {treasuryMeta?.operational_pool_env_configured ? "Available to fund approvals" : "— set pool UUID env"}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Approved float credits (historical)</p>
+                  <p className="text-lg font-bold tabular-nums">
+                    $
+                    {Number(treasuryMeta?.approved_float_topups_total_usd ?? 0).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Sum of amount_credited (incl. commission)</p>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Pending retailer float requests</p>
+                  <p className="text-lg font-bold tabular-nums">
+                    {Number(treasuryMeta?.pending_float_topup_count ?? 0)}{" "}
+                    <span className="text-sm font-normal text-muted-foreground">req</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Requested base total ~ $
+                    {Number(treasuryMeta?.pending_float_topup_amount_requested_usd ?? 0).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    (approval debits base + commission)
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Retail float on desks</p>
+                  <p className="text-lg font-bold tabular-nums">
+                    $
+                    {Number(treasuryMeta?.retailer_desk_retail_balance_total_usd ?? 0).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Σ retail_balance (retailer_profiles)</p>
+                </div>
+              </div>
+              {treasuryMeta?.stats_available === false && treasuryMeta?.stats_error ? (
+                <p className="text-[11px] text-destructive">
+                  Aggregate stats unavailable ({treasuryMeta.stats_error}). Apply migration{" "}
+                  <code className="rounded bg-muted px-1">admin_treasury_float_stats</code> or refresh after deploy.
+                </p>
+              ) : null}
+            </div>
 
             {deskError ? (
               <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

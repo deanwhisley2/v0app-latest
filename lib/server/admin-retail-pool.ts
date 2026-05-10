@@ -8,8 +8,74 @@ export function adminRetailPoolUserId(): string | null {
   return id && id.length >= 30 ? id : null
 }
 
-function useApproverWhenPoolUnset(): boolean {
+export function approverDebitWithoutPoolEnabled(): boolean {
   return process.env.NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL?.trim() === "1"
+}
+
+function useApproverWhenPoolUnset(): boolean {
+  return approverDebitWithoutPoolEnabled()
+}
+
+/** Short display id for ops (full UUID remains server-only except masked). */
+export function maskUserIdForOps(id: string | null | undefined): string | null {
+  const s = typeof id === "string" ? id.trim() : ""
+  if (s.length < 24) return null
+  return `${s.slice(0, 8)}…${s.slice(-6)}`
+}
+
+export type TreasurySettlementModeInfo = {
+  settlementMode: "dedicated_pool" | "approver_nexus_main" | "none_unconfigured"
+  debitSource: FloatLiquidityDebitSource
+  poolUserId: string | null
+  poolUserIdMasked: string | null
+  masterLiquidityStrict: boolean
+  summaryLine: string
+  remediationLine: string | null
+}
+
+/**
+ * Explains which liquidity source will be debited on retailer float approval (env-driven).
+ * Prefer dedicated pool (NEXUS_ADMIN_RETAIL_POOL_USER_ID); fallback approver debit is explicit opt-in.
+ */
+export function getTreasurySettlementModeInfo(): TreasurySettlementModeInfo {
+  const poolUid = adminRetailPoolUserId()
+  const strict = masterLiquidityStrictEnabled()
+  if (poolUid) {
+    return {
+      settlementMode: "dedicated_pool",
+      debitSource: "pool",
+      poolUserId: poolUid,
+      poolUserIdMasked: maskUserIdForOps(poolUid),
+      masterLiquidityStrict: strict,
+      summaryLine:
+        "Dedicated treasury pool: each approval debits this account’s Nexus Main by the credited amount (base + commission). Retailer Retail Balance increases by the same credited amount.",
+      remediationLine: null,
+    }
+  }
+  if (approverDebitWithoutPoolEnabled()) {
+    return {
+      settlementMode: "approver_nexus_main",
+      debitSource: "approver",
+      poolUserId: null,
+      poolUserIdMasked: null,
+      masterLiquidityStrict: strict,
+      summaryLine:
+        "Approver debit mode: each approval debits the approving Level-5 operator’s Nexus Main by the credited amount (base + commission). No shared treasury pool UUID is configured.",
+      remediationLine: null,
+    }
+  }
+  return {
+    settlementMode: "none_unconfigured",
+    debitSource: "none",
+    poolUserId: null,
+    poolUserIdMasked: null,
+    masterLiquidityStrict: strict,
+    summaryLine:
+      "Treasury settlement is not configured. Retailers can still be credited Retail Balance with no automatic company-side debit — not recommended for production accounting.",
+    remediationLine: strict
+      ? "NEXUS_MASTER_LIQUIDITY_STRICT is on: configure NEXUS_ADMIN_RETAIL_POOL_USER_ID or NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1."
+      : "Set NEXUS_ADMIN_RETAIL_POOL_USER_ID to your operational treasury user UUID (recommended), or set NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1 to debit the approving admin.",
+  }
 }
 
 /** When set, platform credits (float approvals) must debit pool or approver — never silent "none". */
