@@ -45,12 +45,19 @@ export async function GET() {
 
   const coreReady = url && srk && anon && databasePing
 
+  /** Optional: registration / password flows need Brevo; core app shell works without. */
+  const optionalServices = {
+    brevo_api_configured: Boolean(process.env.BREVO_API_KEY?.trim()),
+    next_public_site_url: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
+  }
+
   return NextResponse.json({
     ok: coreReady,
     service: "nexus-launch",
     time: new Date().toISOString(),
     version: readPackageVersion(),
     checks,
+    optional_services: optionalServices,
     deployment: {
       vercel: Boolean(process.env.VERCEL),
       environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
@@ -69,6 +76,10 @@ export async function GET() {
         "Canonical tier is profiles.trading_user_level (1, 2, or 5) and profiles.retailer_credit_seller for Level-2 desks.",
       health_supabase: "/api/health/supabase",
       health_basic: "/api/health",
+      vercel_preview:
+        "For PR preview deploys, duplicate NEXT_PUBLIC_SUPABASE_* and SUPABASE_SERVICE_ROLE_KEY from Production to Preview in the Vercel project settings.",
+      transactional_email:
+        "Set BREVO_API_KEY (and optional BREVO_SENDER_*) on Vercel if sign-up verification emails must work in production.",
     },
   })
 }
