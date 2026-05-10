@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { supabase } from "@/lib/supabaseClient"
 import {
   buildContainerDailySchedule,
   completedFixDaysSince,
@@ -96,6 +97,8 @@ interface ActiveFixTrade {
   fixedPrice: number // Price at which it was fixed
   /** Platform-deposit container: random positive daily buckets that sum to an internal schedule target (server-side). */
   dailySchedule?: number[]
+  /** When set, early pullout is processed via POST /api/user/fixed-trade/early-exit (funded server session). */
+  serverSessionId?: string
 }
 
 function FixEarnedDisplay({
@@ -676,6 +679,48 @@ export function ContainerMode({
     }, 1500)
   }
 
+  const handleEarlyExitFixTrade = async (traderId: string) => {
+    const trade = activeFixTrades.find((t) => t.traderId === traderId)
+    if (!trade?.serverSessionId) return
+
+    setIsProcessing(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Sign in to complete early exit.")
+
+      const res = await fetch("/api/user/fixed-trade/early-exit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId: trade.serverSessionId }),
+      })
+      const out = (await res.json().catch(() => ({}))) as {
+        error?: string
+        settlement?: {
+          agreementPenaltyUsd?: number
+          insuranceExitFromPrincipalUsd?: number
+          sessionEarnedUsd?: number
+          netPrincipalReturnedUsd?: number
+          totalCreditedToMainUsd?: number
+        }
+      }
+      if (!res.ok) throw new Error(out.error || "Early exit failed")
+
+      setActiveFixTrades((prev) => prev.filter((t) => t.traderId !== traderId))
+      const s = out.settlement
+      alert(
+        `Early pullout settled. Credited to Nexus Main: ${formatUserMoney(s?.totalCreditedToMainUsd ?? 0)} ` +
+          `(full earned ${formatUserMoney(s?.sessionEarnedUsd ?? 0)} + net principal after penalties).`
+      )
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Early exit failed")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   const handleWithdrawEarnings = (traderId: string, withdrawAmount?: number) => {
     const trade = activeFixTrades.find(t => t.traderId === traderId)
     if (!trade || !trade.canWithdrawEarnings || trade.earned <= 0) return
@@ -1172,10 +1217,35 @@ export function ContainerMode({
                             No earnings yet - generating based on {trade.coinSymbol} movement
                           </p>
                         )}
-                        <Button variant="outline" size="sm" disabled className="text-muted-foreground">
-                          <Lock className="h-3 w-3 mr-1" />
-                          Stake Frozen
-                        </Button>
+                        {trade.serverSessionId ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-warning text-warning hover:bg-warning/10"
+                            disabled={isProcessing}
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "Early pullout before lease end? You pay 10% agreement default + insurance (from stake only). Session earnings are credited in full to Nexus Main.",
+                                )
+                              ) {
+                                void handleEarlyExitFixTrade(trade.traderId)
+                              }
+                            }}
+                          >
+                            {isProcessing ? (
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            ) : (
+                              <Unlock className="h-3 w-3 mr-1" />
+                            )}
+                            Early pullout
+                          </Button>
+                        ) : (
+                          <Button variant="outline" size="sm" disabled className="text-muted-foreground">
+                            <Lock className="h-3 w-3 mr-1" />
+                            Stake Frozen
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )
@@ -1630,7 +1700,11 @@ export function ContainerMode({
                   <div className="rounded-lg bg-warning/10 p-3 text-sm space-y-2">
                     <p className="font-medium text-warning">Fixed Trade Terms:</p>
                     <ul className="text-muted-foreground space-y-1">
-                      <li>- Stake <strong>FROZEN</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""} - no cancellation</li>
+                      <li>
+                        - Stake <strong>FROZEN</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""}. Early pullout (funded
+                        sessions): 10% agreement default + insurance from stake only;{" "}
+                        <strong>full session earnings</strong> credited to Nexus Main with net principal.
+                      </li>
                       <li>- Earnings Withdrawal: <strong className="text-success">
                         {fixPeriod === 1 ? "30%" : fixPeriod === 3 ? "50%" : "70%"}
                       </strong> every 5 days

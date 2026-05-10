@@ -33,10 +33,12 @@ interface HeaderProps {
   onTabChange: (tab: string) => void
   coins?: Array<{ symbol: string; name: string; price: number; change24h: number }>
   currentUser?: { email: string; username: string; fullName: string; level: number }
+  /** Populated from GET /api/user/referral — share link + counts */
+  referral?: { referralCode: string; referralLink: string; refereeCount: number } | null
   onLogout?: () => void | Promise<void>
 }
 
-export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogout }: HeaderProps) {
+export function Header({ activeTab, onTabChange, coins = [], currentUser, referral = null, onLogout }: HeaderProps) {
   const { t } = useUserPreferences()
   const { unreadCount } = useNexusNotifications()
   const [showNotifications, setShowNotifications] = useState(false)
@@ -80,8 +82,10 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
     }, 1500)
   }
 
-  const handleCopyUserId = () => {
-    navigator.clipboard.writeText("NEX-2024-XK7M9P")
+  const handleCopyReferralLink = () => {
+    const text = referral?.referralLink?.trim() || ""
+    if (!text) return
+    void navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -252,11 +256,24 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
                             <span className="flex-1 truncate text-muted-foreground">{currentUser?.email || "user@example.com"}</span>
                             <Check className="h-4 w-4 text-success" />
                           </div>
-                          <div className="flex items-center gap-2 rounded-lg bg-muted/30 px-3 py-2 text-sm">
-                            <span className="flex-1 truncate font-mono text-xs text-muted-foreground">NEX-2024-XK7M9P</span>
-                            <button onClick={handleCopyUserId} className="text-muted-foreground hover:text-foreground">
-                              {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-                            </button>
+                          <div className="flex flex-col gap-1 rounded-lg bg-muted/30 px-3 py-2 text-sm">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Referral link</span>
+                            <div className="flex items-center gap-2">
+                              <span className="flex-1 truncate font-mono text-[11px] text-muted-foreground" title={referral?.referralLink}>
+                                {referral?.referralLink ? referral.referralLink : "Loading…"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCopyReferralLink}
+                                disabled={!referral?.referralLink}
+                                className="shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                              >
+                                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                              </button>
+                            </div>
+                            {referral?.referralCode ? (
+                              <p className="text-[10px] text-muted-foreground">Code: {referral.referralCode}</p>
+                            ) : null}
                           </div>
                         </div>
 
@@ -397,29 +414,40 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, onLogo
                         </div>
                         
                         <div className="rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 p-4 text-center mb-4">
-                          <p className="text-3xl font-bold text-primary">$125.00</p>
-                          <p className="text-xs text-muted-foreground">Total Earnings</p>
+                          <p className="text-lg font-semibold text-primary">Referral rewards</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Bonus pays after each referee&apos;s first successful deposit (once per user).
+                          </p>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-3 mb-4">
                           <div className="rounded-lg bg-muted/30 p-3 text-center">
-                            <p className="text-xl font-bold">12</p>
-                            <p className="text-xs text-muted-foreground">Referrals</p>
+                            <p className="text-xl font-bold">{referral?.refereeCount ?? "—"}</p>
+                            <p className="text-xs text-muted-foreground">Signups attributed</p>
                           </div>
                           <div className="rounded-lg bg-muted/30 p-3 text-center">
-                            <p className="text-xl font-bold">5</p>
-                            <p className="text-xs text-muted-foreground">Active</p>
+                            <p className="text-xl font-bold text-muted-foreground">—</p>
+                            <p className="text-xs text-muted-foreground">Rewards (pending payout)</p>
                           </div>
                         </div>
 
-                        <div className="rounded-lg bg-muted/30 p-3">
-                          <p className="text-xs text-muted-foreground mb-1">Your Referral Code</p>
+                        <div className="rounded-lg bg-muted/30 p-3 space-y-2">
+                          <p className="text-xs text-muted-foreground">Your referral link</p>
                           <div className="flex items-center gap-2">
-                            <code className="flex-1 font-mono text-sm font-bold">NEXUS-{currentUser?.username?.toUpperCase() || "USER"}</code>
-                            <button className="text-primary hover:text-primary/80">
+                            <code className="flex-1 break-all font-mono text-[11px] font-medium">{referral?.referralLink ?? "…"}</code>
+                            <button
+                              type="button"
+                              className="shrink-0 text-primary hover:text-primary/80"
+                              onClick={() => {
+                                if (referral?.referralLink) {
+                                  void navigator.clipboard.writeText(referral.referralLink)
+                                }
+                              }}
+                            >
                               <Copy className="h-4 w-4" />
                             </button>
                           </div>
+                          <p className="text-[10px] text-muted-foreground font-mono">Code: {referral?.referralCode ?? "—"}</p>
                         </div>
                       </div>
                     )}

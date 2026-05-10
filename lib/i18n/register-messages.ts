@@ -10,6 +10,8 @@ type Reg = {
   passwordHint: string
   language: string
   currency: string
+  /** Optional referrer code from link or pasted id */
+  referralCodeOptional?: string
   submit: string
   submitting: string
   signInLink: string
@@ -27,6 +29,7 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "At least 6 characters (use a strong password).",
     language: "Language",
     currency: "Display currency",
+    referralCodeOptional: "Referral ID (optional)",
     submit: "Register",
     submitting: "Creating account…",
     signInLink: "Sign in",
@@ -155,5 +158,10 @@ const register: Record<AppLanguage, Reg> = {
 }
 
 export function getRegisterMessages(lang: AppLanguage): Reg {
-  return register[lang] ?? register.en
+  const loc = register[lang] ?? register.en
+  return {
+    ...register.en,
+    ...loc,
+    referralCodeOptional: loc.referralCodeOptional ?? register.en.referralCodeOptional,
+  }
 }

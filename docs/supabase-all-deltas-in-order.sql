@@ -420,6 +420,63 @@ CREATE INDEX IF NOT EXISTS profiles_exchange_bal_snap_not_null
 
 
 -- ---------------------------------------------------------------------------
+-- Nexus financial Batch 1 — withdrawals pending + fixed sessions + ledger constraint (see standalone file)
+-- ---------------------------------------------------------------------------
+
+-- Full DDL: docs/supabase-delta-nexus-financial-batch1.sql (paste below if bundling monolith)
+
+ALTER TABLE public.user_balances
+  ADD COLUMN IF NOT EXISTS withdrawal_pending_balance NUMERIC(15,2) NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS public.withdrawal_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  amount NUMERIC(15,2) NOT NULL CHECK (amount > 0),
+  currency_context TEXT NOT NULL DEFAULT 'USD',
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'rejected')),
+  transaction_ref TEXT NOT NULL DEFAULT (gen_random_uuid()::text),
+  reviewed_at TIMESTAMPTZ NULL,
+  reviewed_by UUID NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS withdrawal_requests_user_created_idx
+  ON public.withdrawal_requests (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.fixed_trade_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  principal_amount NUMERIC(15,2) NOT NULL CHECK (principal_amount > 0),
+  insurance_fee_amount NUMERIC(15,2) NOT NULL CHECK (insurance_fee_amount >= 0),
+  risk_class TEXT NOT NULL CHECK (risk_class IN ('Low', 'Medium', 'High')),
+  fix_period_months INT NOT NULL CHECK (fix_period_months IN (1, 3, 6)),
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'completed', 'cancelled_early', 'emergency_closed')),
+  trader_persona_id TEXT NULL,
+  seed_key TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS fixed_trade_sessions_user_created_idx
+  ON public.fixed_trade_sessions (user_id, created_at DESC);
+
+ALTER TABLE public.container_balance_events
+  DROP CONSTRAINT IF EXISTS container_balance_events_event_type_check;
+
+ALTER TABLE public.fixed_trade_sessions
+  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ NULL;
+
+-- Referrals (codes + attribution + first-deposit bonus flag) — full DDL: docs/supabase-delta-referrals.sql
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referral_code TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_referral_code_key ON public.profiles (referral_code) WHERE referral_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS profiles_referred_by_idx ON public.profiles (referred_by);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referrer_first_deposit_bonus_at TIMESTAMPTZ NULL;
+
+
+-- ---------------------------------------------------------------------------
 -- VERIFICATION — expect 17 rows with present = true (full governance extension stack incl. causal)
 -- ---------------------------------------------------------------------------
 

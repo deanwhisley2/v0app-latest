@@ -5,6 +5,7 @@ import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
+import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
 
 type RegisterBody = {
   email?: string
@@ -13,6 +14,7 @@ type RegisterBody = {
   phone?: string
   preferred_language?: string
   preferred_currency?: string
+  referral_code?: string
   selfie_image?: string
   selfie_template?: string
   selfie_hash?: string
@@ -41,6 +43,9 @@ export async function POST(request: Request) {
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
   const preferred_currency =
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
+  const referralInvite = normalizeReferralCodeInput(
+    typeof body.referral_code === "string" ? body.referral_code : ""
+  )
   const selfie_image =
     typeof body.selfie_image === "string" ? body.selfie_image.trim() : ""
   const selfie_template =
@@ -107,6 +112,36 @@ export async function POST(request: Request) {
   if (newUserId) {
     try {
       const admin = createAdminClient()
+
+      let referredByUserId: string | null = null
+      if (referralInvite.length >= 4) {
+        const { data: refProfile } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("referral_code", referralInvite)
+          .maybeSingle()
+        const rid = refProfile?.id as string | undefined
+        if (rid && rid !== newUserId) referredByUserId = rid
+      }
+
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const seed = attempt === 0 ? newUserId : `${newUserId}:${attempt}`
+        const myReferralCode = referralCodeForUserId(seed)
+        const patch: Record<string, unknown> = {
+          referral_code: myReferralCode,
+          updated_at: nowIso,
+        }
+        if (referredByUserId) patch.referred_by = referredByUserId
+
+        const { error: refErr } = await admin.from("profiles").update(patch).eq("id", newUserId)
+        if (!refErr) break
+        const msg = (refErr.message ?? "").toLowerCase()
+        if (!msg.includes("unique") && !msg.includes("duplicate")) {
+          console.warn("[register] referral profile update:", refErr.message)
+          break
+        }
+      }
+
       if (hasCompleteSelfiePayload) {
         const { error: profileAvatarErr } = await admin
           .from("profiles")

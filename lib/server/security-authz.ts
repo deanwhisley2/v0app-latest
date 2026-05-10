@@ -38,6 +38,13 @@ export async function requireAdminUser(user: User): Promise<void> {
   throw new Error("Admin access required")
 }
 
+/** Liquidity operations that must be restricted to profile Level 5 (not env-only admins). */
+export async function requireLiquidityAdminLevel5(user: User): Promise<void> {
+  const level = await getTradingUserLevel(user.id)
+  if (level === 5) return
+  throw new Error("Level 5 liquidity admin required")
+}
+
 function readCsvSet(raw: string): Set<string> {
   return new Set(
     raw

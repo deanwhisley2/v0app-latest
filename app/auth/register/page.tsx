@@ -40,6 +40,7 @@ export default function RegisterPage() {
   const [selfieTemplate, setSelfieTemplate] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
+  const [referralCode, setReferralCode] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -50,6 +51,16 @@ export default function RegisterPage() {
   useEffect(() => {
     setCurrency((ctxCur as FiatCurrencyCode) || "USD")
   }, [ctxCur])
+
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      const r = sp.get("ref")
+      if (r) setReferralCode(r.trim())
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const reg = getRegisterMessages(language)
 
@@ -98,6 +109,7 @@ export default function RegisterPage() {
           phone: trimmedPhone,
           preferred_language: language,
           preferred_currency: currency,
+          ...(referralCode.trim() ? { referral_code: referralCode.trim() } : {}),
           ...(selfieDataUrl && selfieTemplate && selfieHash
             ? {
                 selfie_image: selfieDataUrl,
@@ -243,6 +255,21 @@ export default function RegisterPage() {
               disabled={isSubmitting}
               placeholder="+1 555 0100"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="register-referral">{reg.referralCodeOptional ?? "Referral ID (optional)"}</Label>
+            <Input
+              id="register-referral"
+              type="text"
+              autoComplete="off"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="NX…"
+            />
+            <p className="text-xs text-muted-foreground">
+              If someone invited you, paste their referral id or use their signup link.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="register-email">{reg.email}</Label>

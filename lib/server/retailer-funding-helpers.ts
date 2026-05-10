@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { tryCreditReferrerFirstDepositBonus } from "@/lib/server/referral-first-deposit"
 
 const TABLE_REQUESTS = "retailer_fund_requests"
 const TABLE_BALANCES = "user_balances"
@@ -87,6 +88,8 @@ export async function transferRetailCreditToCustomer(
     })
 
   console.info("[transferRetailCreditToCustomer]", { ...opts, prevFrom: fromAvail, prevTo: toAvail })
+
+  await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
 }
 
 /** Credit retailer after admin verifies crypto (+ commission). */

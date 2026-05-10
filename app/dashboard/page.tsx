@@ -42,6 +42,7 @@ import {
 } from "@/lib/dashboard-activity-session"
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
+import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 
 interface CurrentUser {
   email: string
@@ -144,6 +145,12 @@ export default function DashboardPage() {
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
+  const [withdrawalPendingBalance, setWithdrawalPendingBalance] = useState(0)
+  const [referralInfo, setReferralInfo] = useState<{
+    referralCode: string
+    referralLink: string
+    refereeCount: number
+  } | null>(null)
   const [totalEarnings, setTotalEarnings] = useState(0)
   const [activeContainerEarnings, setActiveContainerEarnings] = useState(0)
   const [containerWithdrawableEarnings, setContainerWithdrawableEarnings] = useState(0)
@@ -647,12 +654,14 @@ export default function DashboardPage() {
 
       const json = (await res.json()) as {
         available_balance?: number
+        withdrawal_pending_balance?: number
         total_earnings?: number
         active_container_earnings?: number
         container_withdrawable_earnings?: number
         lifetime_container_fees?: number
       }
       setMainBalance(Number(json.available_balance ?? 0))
+      setWithdrawalPendingBalance(Number(json.withdrawal_pending_balance ?? 0))
       setTotalEarnings(Number(json.total_earnings ?? 0))
       setActiveContainerEarnings(Number(json.active_container_earnings ?? 0))
       setContainerWithdrawableEarnings(Number(json.container_withdrawable_earnings ?? 0))
@@ -661,10 +670,40 @@ export default function DashboardPage() {
   }, [authLoading, user, isGuestSession])
 
   useEffect(() => {
+    if (authLoading || !user || isGuestSession) return
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/referral", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const j = (await res.json()) as {
+          referralCode?: string
+          referralLink?: string
+          refereeCount?: number
+        }
+        setReferralInfo({
+          referralCode: String(j.referralCode ?? ""),
+          referralLink: String(j.referralLink ?? ""),
+          refereeCount: Number(j.refereeCount ?? 0),
+        })
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [authLoading, user, isGuestSession])
+
+  useEffect(() => {
     if (isGuestSession || !user) return
     const b = op.snapshot?.userBalance
     if (!b) return
     setMainBalance(Number(b.available_balance ?? 0))
+    setWithdrawalPendingBalance(Number(b.withdrawal_pending_balance ?? 0))
     setTotalEarnings(Number(b.total_earnings ?? 0))
     setActiveContainerEarnings(Number(b.active_container_earnings ?? 0))
     setContainerWithdrawableEarnings(Number(b.container_withdrawable_earnings ?? 0))
@@ -1111,8 +1150,12 @@ export default function DashboardPage() {
         }
         const rf = await fetch("/api/user/balance", { headers: { Authorization: `Bearer ${token}` } })
         if (rf.ok) {
-          const j = await rf.json()
+          const j = (await rf.json()) as {
+            available_balance?: number
+            withdrawal_pending_balance?: number
+          }
           setMainBalance(Number(j.available_balance ?? 0))
+          setWithdrawalPendingBalance(Number(j.withdrawal_pending_balance ?? 0))
         }
       } catch (e) {
         showToast(e instanceof Error ? e.message : "Action failed.", "error")
@@ -1332,19 +1375,25 @@ export default function DashboardPage() {
               "You have pending local funding approvals. Clear or approve those requests before withdrawing Nexus balance.",
             )
           }
-          const res = await fetch("/api/user/main-balance/adjust", {
+          const res = await fetch("/api/user/withdrawal/request", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
-              action: "debit",
               amount,
-              reason: "Withdrawal request initiated from dashboard.",
+              currencyContext: "USD",
             }),
           })
-          const out = (await res.json().catch(() => ({}))) as { error?: string; available_balance?: number }
+          const out = (await res.json().catch(() => ({}))) as {
+            error?: string
+            balances?: { available_balance?: number; withdrawal_pending_balance?: number }
+          }
           if (!res.ok) throw new Error(out.error || "Withdrawal failed")
-          setMainBalance(Number(out.available_balance ?? mainBalance))
-          showToast(`$${amount.toFixed(2)} withdrawal initiated`, "success")
+          setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
+          setWithdrawalPendingBalance(Number(out.balances?.withdrawal_pending_balance ?? withdrawalPendingBalance))
+          showToast(
+            `${formatUserMoney(amount)} submitted — deducted from Nexus Main; pending Level 5 approval.`,
+            "success",
+          )
           setShowFundModal(null)
           setFundAmount("")
           setFundTxReference("")
@@ -1424,6 +1473,8 @@ export default function DashboardPage() {
     retailerOpsBlocked,
     customerRetailFunding,
     retailerCreditDesk,
+    formatUserMoney,
+    withdrawalPendingBalance,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -1481,6 +1532,7 @@ export default function DashboardPage() {
         onTabChange={handleHeaderTabChange}
         coins={headerSearchCoins}
         currentUser={currentUser ?? undefined}
+        referral={referralInfo}
         onLogout={handleLogout}
       />
 
@@ -1590,13 +1642,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl border border-border bg-background/60 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Nexus Main Balance</p>
             <p className="mt-1 font-mono text-lg font-bold">
               {showBalance ? formatUserMoney(mainBalance) : "••••"}
             </p>
             <p className="text-[11px] text-muted-foreground">Cashout and new container funding source.</p>
+          </div>
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending withdrawal (frozen)</p>
+            <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
+              {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Deducted from Nexus Main at request; released or refunded by Level 5 liquidity admin only.
+            </p>
           </div>
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Container Earnings</p>
@@ -1646,6 +1707,14 @@ export default function DashboardPage() {
               Separate from Nexus wallet. Fees paid: {showBalance ? formatUserMoney(containerFeesPaid) : "••••"}
             </p>
           </div>
+        </div>
+        <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">Deposit timing:</span> {PROCESSING_COPY.deposits}
+          </p>
+          <p className="mt-1">
+            <span className="font-medium text-foreground">Withdrawal timing:</span> {PROCESSING_COPY.withdrawals}
+          </p>
         </div>
       </div>
 

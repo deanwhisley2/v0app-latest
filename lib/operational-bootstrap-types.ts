@@ -24,6 +24,7 @@ export interface OperationalBootstrapV1 {
     total_earnings: number
     current_stake: number
     available_balance: number
+    withdrawal_pending_balance?: number
     active_container_earnings?: number
     container_withdrawable_earnings?: number
     lifetime_container_withdrawn?: number
