@@ -50,9 +50,9 @@ function msSince(iso: string): number | null {
   return Math.max(0, Date.now() - t)
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const actor = await getUserFromBearer()
+    const actor = await getUserFromBearer(request)
     if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     await requireLiquidityAdminLevel5(actor)
     const admin = createAdminClient()
