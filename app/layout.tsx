@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { OperationalBootstrapProvider } from '@/contexts/OperationalBootstrapContext'
 import { NexusNotificationsProvider } from '@/contexts/NexusNotificationsContext'
@@ -87,7 +86,6 @@ export default function RootLayout({
           </AuthProvider>
         </div>
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

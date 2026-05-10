@@ -59,9 +59,13 @@ export async function GET() {
     checks,
     optional_services: optionalServices,
     deployment: {
-      vercel: Boolean(process.env.VERCEL),
-      environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
-      commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+      node_env: process.env.NODE_ENV ?? "development",
+      /** Set by some CI hosts; null on a plain VPS. */
+      git_commit:
+        process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
+        process.env.RAILWAY_GIT_COMMIT_SHA?.trim() ||
+        process.env.GITHUB_SHA?.trim() ||
+        null,
     },
     /** What each trading tier is supposed to include (aligned with app gating). */
     tiers: NEXUS_TIER_MATRIX_PUBLIC.map((t) => ({
@@ -76,10 +80,9 @@ export async function GET() {
         "Canonical tier is profiles.trading_user_level (1, 2, or 5) and profiles.retailer_credit_seller for Level-2 desks.",
       health_supabase: "/api/health/supabase",
       health_basic: "/api/health",
-      vercel_preview:
-        "For PR preview deploys, duplicate NEXT_PUBLIC_SUPABASE_* and SUPABASE_SERVICE_ROLE_KEY from Production to Preview in the Vercel project settings.",
+      site_url: "Set NEXT_PUBLIC_SITE_URL (e.g. https://nexuspro.it.com) for auth links and metadata.",
       transactional_email:
-        "Set BREVO_API_KEY (and optional BREVO_SENDER_*) on Vercel if sign-up verification emails must work in production.",
+        "Set BREVO_API_KEY (and optional BREVO_SENDER_*) in production env if sign-up verification emails must be delivered.",
     },
   })
 }

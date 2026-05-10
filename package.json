@@ -91,7 +91,6 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.1",
     "@types/uuid": "^11.0.0",
-    "@vercel/analytics": "1.6.1",
     "autoprefixer": "^10.4.20",
     "ccxt": "^4.5.51",
     "class-variance-authority": "^0.7.1",
