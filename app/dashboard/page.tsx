@@ -70,6 +70,7 @@ type RetailerRow = {
   id: string
   user_id: string
   payment_numbers: Array<{ label?: string; value?: string }>
+  payment_numbers_updated_at?: string | null
   credit_basin: number
   under_review: boolean
   under_review_reason?: string | null
@@ -215,6 +216,14 @@ export default function DashboardPage() {
   const [deskWhatsapp, setDeskWhatsapp] = useState("")
   const [deskContactPhone, setDeskContactPhone] = useState("")
   const [deskPayeeNames, setDeskPayeeNames] = useState("")
+  /** Retailer desk: loaded on dashboard mount so refresh does not flash an empty registration form. */
+  const [retailerDeskLoading, setRetailerDeskLoading] = useState(false)
+  const [deskRegistrationComplete, setDeskRegistrationComplete] = useState(false)
+  const [deskEditPaymentLines, setDeskEditPaymentLines] = useState(false)
+  const [paymentNumbersCooldown, setPaymentNumbersCooldown] = useState<{
+    canEditPaymentNumbers: boolean
+    nextEligibleAt: string | null
+  } | null>(null)
   const { toast, showToast, hideToast } = useToast()
 
   const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
@@ -622,6 +631,79 @@ export default function DashboardPage() {
     return level === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller)
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
 
+  const applyRetailerProfileFromApi = useCallback(
+    (payload: {
+      profile?: RetailerRow | null
+      deskRegistrationComplete?: boolean
+      paymentNumbersCooldown?: { canEditPaymentNumbers: boolean; nextEligibleAt: string | null }
+    }) => {
+      if (typeof payload.deskRegistrationComplete === "boolean") {
+        setDeskRegistrationComplete(payload.deskRegistrationComplete)
+      }
+      if (payload.paymentNumbersCooldown) {
+        setPaymentNumbersCooldown(payload.paymentNumbersCooldown)
+      }
+      const p = payload.profile
+      if (p) {
+        const nums = p.payment_numbers ?? []
+        setRetailerPaymentNumbersInput(nums.map((n) => n.value).join(", "))
+        setDeskCountryCode((p.country_code ?? "").slice(0, 2))
+        setDeskIsCountryRetailer(Boolean(p.is_country_retailer))
+        if (
+          p.liquidity_status === "active" ||
+          p.liquidity_status === "busy" ||
+          p.liquidity_status === "offline" ||
+          p.liquidity_status === "low_liquidity"
+        ) {
+          setDeskLiquidityStatus(p.liquidity_status)
+        }
+        setDeskWhatsapp(p.whatsapp_number ?? "")
+        setDeskContactPhone(p.contact_phone ?? "")
+        setDeskPayeeNames(p.registered_payee_names ?? "")
+      } else {
+        setDeskIsCountryRetailer(true)
+        const snapCc = String(op.snapshot?.profile?.fundingCountryCode ?? "")
+          .trim()
+          .toUpperCase()
+          .slice(0, 2)
+        setDeskCountryCode(snapCc.length === 2 ? snapCc : "UG")
+        setDeskLiquidityStatus("active")
+      }
+    },
+    [op.snapshot?.profile?.fundingCountryCode],
+  )
+
+  useEffect(() => {
+    if (!retailerCreditDesk || authLoading || !user || isGuestSession) return
+    let cancelled = false
+    ;(async () => {
+      setRetailerDeskLoading(true)
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const profRes = await fetch("/api/user/retailer-profile", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (cancelled || !profRes.ok) return
+        const profJson = (await profRes.json()) as {
+          profile?: RetailerRow | null
+          deskRegistrationComplete?: boolean
+          paymentNumbersCooldown?: { canEditPaymentNumbers: boolean; nextEligibleAt: string | null }
+        }
+        applyRetailerProfileFromApi(profJson)
+      } finally {
+        if (!cancelled) setRetailerDeskLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [retailerCreditDesk, authLoading, user, isGuestSession, applyRetailerProfileFromApi])
+
   /** Same mobile-money → qualified retailer path as Level 1 (includes Level 2 non–credit-desk accounts). */
   const customerRetailFunding = useMemo(() => {
     const level = op.snapshot?.profile?.tradingUserLevel ?? 1
@@ -1015,29 +1097,12 @@ export default function DashboardPage() {
             cache: "no-store",
           })
           if (profRes.ok) {
-            const profJson = (await profRes.json()) as { profile?: RetailerRow | null }
-            const p = profJson.profile
-            if (p) {
-              const nums = p.payment_numbers ?? []
-              setRetailerPaymentNumbersInput(nums.map((n) => n.value).join(", "))
-              setDeskCountryCode((p.country_code ?? "").slice(0, 2))
-              setDeskIsCountryRetailer(Boolean(p.is_country_retailer))
-              if (p.liquidity_status === "active" || p.liquidity_status === "busy" || p.liquidity_status === "offline" || p.liquidity_status === "low_liquidity") {
-                setDeskLiquidityStatus(p.liquidity_status)
-              }
-              setDeskWhatsapp(p.whatsapp_number ?? "")
-              setDeskContactPhone(p.contact_phone ?? "")
-              setDeskPayeeNames(p.registered_payee_names ?? "")
-            } else {
-              /** Empty shell row is rare; defaults keep SQL-promoted desks customer-visible if retailer saves later. */
-              setDeskIsCountryRetailer(true)
-              const snapCc = String(op.snapshot?.profile?.fundingCountryCode ?? "")
-                .trim()
-                .toUpperCase()
-                .slice(0, 2)
-              setDeskCountryCode(snapCc.length === 2 ? snapCc : "UG")
-              setDeskLiquidityStatus("active")
+            const profJson = (await profRes.json()) as {
+              profile?: RetailerRow | null
+              deskRegistrationComplete?: boolean
+              paymentNumbersCooldown?: { canEditPaymentNumbers: boolean; nextEligibleAt: string | null }
             }
+            applyRetailerProfileFromApi(profJson)
           }
         }
         if (lvl === 5) {
@@ -1086,6 +1151,7 @@ export default function DashboardPage() {
     showFundModal,
     currentUser?.level,
     op.snapshot?.profile?.fundingCountryCode,
+    applyRetailerProfileFromApi,
   ])
 
   const handleLogout = useCallback(async () => {
@@ -1285,12 +1351,40 @@ export default function DashboardPage() {
           registeredPayeeNames: deskPayeeNames,
         }),
       })
-      const out = (await res.json().catch(() => ({}))) as { error?: string; profile?: RetailerRow }
+      const out = (await res.json().catch(() => ({}))) as {
+        error?: string
+        code?: string
+        nextEligibleAt?: string
+        profile?: RetailerRow
+      }
+      if (res.status === 429 && out.code === "PAYMENT_NUMBERS_COOLDOWN") {
+        const when = out.nextEligibleAt
+          ? new Date(out.nextEligibleAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+          : ""
+        showToast(
+          when ? `${out.error ?? "Payment lines are on cooldown."} Eligible after ${when}.` : (out.error ?? "Cooldown active."),
+          "error",
+        )
+        return
+      }
       if (!res.ok) throw new Error(out.error || "Could not save retailer profile.")
       setRetailerRows((prev) => {
         const filtered = prev.filter((r) => r.id !== out.profile?.id)
         return out.profile ? [out.profile, ...filtered] : prev
       })
+      const refresh = await fetch("/api/user/retailer-profile", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      if (refresh.ok) {
+        const j = (await refresh.json()) as {
+          profile?: RetailerRow | null
+          deskRegistrationComplete?: boolean
+          paymentNumbersCooldown?: { canEditPaymentNumbers: boolean; nextEligibleAt: string | null }
+        }
+        applyRetailerProfileFromApi(j)
+      }
+      setDeskEditPaymentLines(false)
       showToast("Retailer desk saved.", "success")
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Save failed.", "error")
@@ -1304,6 +1398,7 @@ export default function DashboardPage() {
     deskContactPhone,
     deskPayeeNames,
     showToast,
+    applyRetailerProfileFromApi,
   ])
 
   const handleRetailerCryptoTopupSubmit = useCallback(async () => {
@@ -2249,76 +2344,132 @@ export default function DashboardPage() {
             {showFundModal === "withdraw" ? null : retailerCreditDesk && showFundModal === "add" ? (
               <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">Level 2 — retailer desk & liquidity</p>
-                <label className="flex items-center gap-2 text-[11px]">
-                  <input
-                    type="checkbox"
-                    checked={deskIsCountryRetailer}
-                    onChange={(e) => setDeskIsCountryRetailer(e.target.checked)}
-                  />
-                  <span>
-                    Offer in-country liquidity (required for Add Funds — customers only see desks with this on + country +
-                    active liquidity)
-                  </span>
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    maxLength={2}
-                    value={deskCountryCode}
-                    onChange={(e) => setDeskCountryCode(e.target.value.toUpperCase())}
-                    placeholder="Country"
-                    className="rounded-md border border-border bg-background px-2 py-1 text-xs uppercase"
-                  />
-                  <select
-                    value={deskLiquidityStatus}
-                    onChange={(e) =>
-                      setDeskLiquidityStatus(e.target.value as "active" | "busy" | "offline" | "low_liquidity")
-                    }
-                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                  >
-                    <option value="offline">offline</option>
-                    <option value="active">active</option>
-                    <option value="busy">busy</option>
-                    <option value="low_liquidity">low_liquidity</option>
-                  </select>
-                </div>
-                <input
-                  type="text"
-                  value={retailerPaymentNumbersInput}
-                  onChange={(e) => setRetailerPaymentNumbersInput(e.target.value)}
-                  placeholder="Wallet / MM numbers comma-separated"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <input
-                  type="text"
-                  value={deskPayeeNames}
-                  onChange={(e) => setDeskPayeeNames(e.target.value)}
-                  placeholder="Registered pay-to names shown to users"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={deskWhatsapp}
-                    onChange={(e) => setDeskWhatsapp(e.target.value)}
-                    placeholder="WhatsApp"
-                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                  />
-                  <input
-                    type="text"
-                    value={deskContactPhone}
-                    onChange={(e) => setDeskContactPhone(e.target.value)}
-                    placeholder="Voice line"
-                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveRetailerDesk()}
-                  className="w-full rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground"
-                >
-                  Save retailer desk
-                </button>
+                {retailerDeskLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading desk settings…</p>
+                ) : null}
+                {!retailerDeskLoading && deskRegistrationComplete && !deskEditPaymentLines ? (
+                  <div className="space-y-2 rounded-md border border-border bg-background p-3 text-[12px]">
+                    <p className="font-semibold text-foreground">Desk registered</p>
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">MoMo / payment lines: </span>
+                      <span className="font-mono">{retailerPaymentNumbersInput || "—"}</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      {deskCountryCode || "—"} · {deskIsCountryRetailer ? "in-country desk" : "not in-country"} · liquidity:{" "}
+                      {deskLiquidityStatus}
+                    </p>
+                    {deskPayeeNames.trim() ? (
+                      <p className="text-muted-foreground">
+                        <span className="font-medium text-foreground">Pay-to names: </span>
+                        {deskPayeeNames}
+                      </p>
+                    ) : null}
+                    <p className="text-[11px] text-muted-foreground">
+                      WhatsApp {deskWhatsapp || "—"} · Voice {deskContactPhone || "—"}
+                    </p>
+                    {paymentNumbersCooldown && !paymentNumbersCooldown.canEditPaymentNumbers && paymentNumbersCooldown.nextEligibleAt ? (
+                      <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                        Payment lines can be edited after{" "}
+                        {new Date(paymentNumbersCooldown.nextEligibleAt).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                        . Contact support for an urgent reset.
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={!paymentNumbersCooldown?.canEditPaymentNumbers}
+                      onClick={() => setDeskEditPaymentLines(true)}
+                      className="text-xs font-semibold text-primary underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Edit desk details (MoMo lines limited to once per 7 days)
+                    </button>
+                  </div>
+                ) : null}
+                {!retailerDeskLoading && (!deskRegistrationComplete || deskEditPaymentLines) ? (
+                  <>
+                    {deskRegistrationComplete ? (
+                      <button
+                        type="button"
+                        onClick={() => setDeskEditPaymentLines(false)}
+                        className="text-[11px] text-muted-foreground underline"
+                      >
+                        Back to summary
+                      </button>
+                    ) : null}
+                    <label className="flex items-center gap-2 text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={deskIsCountryRetailer}
+                        onChange={(e) => setDeskIsCountryRetailer(e.target.checked)}
+                      />
+                      <span>
+                        Offer in-country liquidity (required for Add Funds — customers only see desks with this on + country +
+                        active liquidity)
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        maxLength={2}
+                        value={deskCountryCode}
+                        onChange={(e) => setDeskCountryCode(e.target.value.toUpperCase())}
+                        placeholder="Country"
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs uppercase"
+                      />
+                      <select
+                        value={deskLiquidityStatus}
+                        onChange={(e) =>
+                          setDeskLiquidityStatus(e.target.value as "active" | "busy" | "offline" | "low_liquidity")
+                        }
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                      >
+                        <option value="offline">offline</option>
+                        <option value="active">active</option>
+                        <option value="busy">busy</option>
+                        <option value="low_liquidity">low_liquidity</option>
+                      </select>
+                    </div>
+                    <input
+                      type="text"
+                      value={retailerPaymentNumbersInput}
+                      onChange={(e) => setRetailerPaymentNumbersInput(e.target.value)}
+                      placeholder="Wallet / MM numbers comma-separated"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={deskPayeeNames}
+                      onChange={(e) => setDeskPayeeNames(e.target.value)}
+                      placeholder="Registered pay-to names shown to users"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={deskWhatsapp}
+                        onChange={(e) => setDeskWhatsapp(e.target.value)}
+                        placeholder="WhatsApp"
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={deskContactPhone}
+                        onChange={(e) => setDeskContactPhone(e.target.value)}
+                        placeholder="Voice line"
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveRetailerDesk()}
+                      className="w-full rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground"
+                    >
+                      Save retailer desk
+                    </button>
+                  </>
+                ) : null}
                 <div className="rounded border border-border bg-background p-2">
                   <p className="text-[10px] font-semibold uppercase text-muted-foreground">Registered retail desks (network)</p>
                   <p className="mb-2 text-[10px] text-muted-foreground">
