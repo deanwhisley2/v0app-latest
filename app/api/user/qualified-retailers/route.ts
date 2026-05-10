@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { localFiatUnitsToUsd } from "@/lib/currency-display"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
@@ -17,9 +18,12 @@ export async function GET(request: Request) {
       )
     }
     const { searchParams } = new URL(request.url)
-    const amount = Number(searchParams.get("amount") ?? 0)
+    const amountRaw = Number(searchParams.get("amount") ?? 0)
+    const currency = (searchParams.get("currency") ?? "USD").trim().toUpperCase()
+    /** Match wallet submit: user's typed fiat → USD ledger units before comparing to retail_balance. */
+    const amount = localFiatUnitsToUsd(amountRaw, currency)
     let country = (searchParams.get("country") ?? "").trim().toUpperCase()
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amountRaw) || amountRaw <= 0 || !Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: "amount query required and must be > 0." }, { status: 400 })
     }
     const admin = createAdminClient()
@@ -68,6 +72,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       country,
       amount,
+      amount_input: amountRaw,
+      currency,
       retailers: qualified,
     })
   } catch (e) {

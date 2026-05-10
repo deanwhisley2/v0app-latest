@@ -1368,7 +1368,7 @@ export default function DashboardPage() {
         body: JSON.stringify({ code: cc }),
       })
       const res = await fetch(
-        `/api/user/qualified-retailers?amount=${encodeURIComponent(String(amt))}&country=${encodeURIComponent(cc)}`,
+        `/api/user/qualified-retailers?amount=${encodeURIComponent(String(amt))}&country=${encodeURIComponent(cc)}&currency=${encodeURIComponent(currency)}`,
         { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
       )
       const out = (await res.json().catch(() => ({}))) as { error?: string; retailers?: QualifiedRetailer[] }
@@ -1383,7 +1383,7 @@ export default function DashboardPage() {
     } finally {
       setLoadingQualifiedRetailers(false)
     }
-  }, [fundAmount, fundingCountryCodeInput, showToast])
+  }, [fundAmount, fundingCountryCodeInput, currency, showToast])
 
   useEffect(() => {
     if (showFundModal !== "add" || l1FundSource !== "crypto") return
@@ -1805,11 +1805,11 @@ export default function DashboardPage() {
 
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="flex h-[min(92dvh,700px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl sm:p-5">
             {/* Modal Header */}
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 pb-3 pt-4 sm:px-0 sm:pt-0 sm:pb-3">
+              <h2 className="text-lg font-bold sm:text-xl">
                 {showFundModal === "add" ? "Add Funds" : "Withdraw Funds"}
               </h2>
               <button
@@ -1830,26 +1830,27 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-0 [-webkit-overflow-scrolling:touch]">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
-              <div className="mb-4 space-y-3">
+              <div className="mb-3 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setL1FundSource("crypto")}
-                    className={`rounded-xl border-2 px-3 py-3 text-left text-xs font-semibold transition-all ${
+                    className={`rounded-lg border-2 px-2 py-2 text-left text-[11px] font-semibold leading-tight transition-all sm:px-3 sm:py-2.5 sm:text-xs ${
                       l1FundSource === "crypto" ? "border-primary" : "border-border"
                     }`}
                   >
-                    A — Crypto (Intl)
+                    A — Crypto
                   </button>
                   <button
                     type="button"
                     onClick={() => setL1FundSource("local")}
-                    className={`rounded-xl border-2 px-3 py-3 text-left text-xs font-semibold transition-all ${
+                    className={`rounded-lg border-2 px-2 py-2 text-left text-[11px] font-semibold leading-tight transition-all sm:px-3 sm:py-2.5 sm:text-xs ${
                       l1FundSource === "local" ? "border-primary" : "border-border"
                     }`}
                   >
-                    B — Local mobile money
+                    B — Local MM
                   </button>
                 </div>
 
@@ -1874,35 +1875,37 @@ export default function DashboardPage() {
                 )}
 
                 {l1FundSource === "local" && (
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
-                    <p className="text-[11px] font-semibold text-muted-foreground">Country + amount + network name</p>
-                    <input
-                      type="text"
-                      maxLength={2}
-                      value={fundingCountryCodeInput}
-                      onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
-                      placeholder="Country ISO (UG, KE, …)"
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm uppercase"
-                    />
-                    <select
-                      value={fundMobileNetwork}
-                      onChange={(e) => setFundMobileNetwork(e.target.value)}
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Mobile network…</option>
-                      <option value="MTN">MTN Mobile Money</option>
-                      <option value="Airtel">Airtel Money</option>
-                      <option value="MPesa">M-Pesa</option>
-                      <option value="Orange">Orange Money</option>
-                      <option value="Other">Other (note in memo)</option>
-                    </select>
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-2 sm:p-3">
+                    <p className="text-[10px] font-semibold text-muted-foreground">Country & network (amount below)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        maxLength={2}
+                        value={fundingCountryCodeInput}
+                        onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
+                        placeholder="UG"
+                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs uppercase sm:text-sm"
+                      />
+                      <select
+                        value={fundMobileNetwork}
+                        onChange={(e) => setFundMobileNetwork(e.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs sm:text-sm"
+                      >
+                        <option value="">Network…</option>
+                        <option value="MTN">MTN</option>
+                        <option value="Airtel">Airtel</option>
+                        <option value="MPesa">M-Pesa</option>
+                        <option value="Orange">Orange</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                     <button
                       type="button"
                       disabled={loadingQualifiedRetailers}
                       onClick={() => void handleLoadQualifiedRetailers()}
-                      className="w-full rounded-lg bg-muted py-2 text-xs font-semibold hover:bg-muted/80 disabled:opacity-50"
+                      className="w-full rounded-lg bg-muted py-1.5 text-[11px] font-semibold hover:bg-muted/80 disabled:opacity-50 sm:py-2 sm:text-xs"
                     >
-                      {loadingQualifiedRetailers ? "Searching…" : "Find desks with liquidity"}
+                      {loadingQualifiedRetailers ? "Searching…" : "Find desks"}
                     </button>
                     <select
                       value={selectedRetailerId}
@@ -1918,8 +1921,8 @@ export default function DashboardPage() {
                       ))}
                     </select>
                     {qualifiedRetailers.find((r) => r.id === selectedRetailerId) ? (
-                      <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] space-y-1">
-                        <p className="font-semibold text-warning">Payment details — verify before paying</p>
+                      <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border border-warning/40 bg-warning/10 p-2 text-[10px] sm:max-h-40 sm:text-[11px]">
+                        <p className="font-semibold text-warning">Pay to (verify)</p>
                         <p>Numbers: {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
                           .map((p) => `${p.label || ""}:${p.value}`.trim())
                           .join(" · ") || "(none)"}
@@ -1970,8 +1973,8 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <div className="max-h-32 space-y-1 overflow-y-auto rounded bg-muted/40 p-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Your funding timeline</p>
+                <div className="max-h-24 space-y-1 overflow-y-auto rounded bg-muted/40 p-2 sm:max-h-28">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Recent requests</p>
                   {fundRequests.slice(0, 6).map((r) => (
                     <div key={r.id} className="text-[11px]">
                       {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} • {r.status}
@@ -2276,11 +2279,14 @@ export default function DashboardPage() {
               </>
             )}
 
+            </div>
+
+            <div className="shrink-0 space-y-2 border-t border-border/70 bg-card px-4 pb-3 pt-3 sm:px-0">
             {(showFundModal === "withdraw" ||
               (customerRetailFunding && l1FundSource === "local") ||
               retailerCreditDesk) && (
-              <div className="mb-4">
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <div className="mb-0">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground sm:text-sm">
                   {showFundModal === "withdraw"
                     ? `Withdraw amount (${currency})`
                     : retailerCreditDesk
@@ -2292,11 +2298,10 @@ export default function DashboardPage() {
                   value={fundAmount}
                   onChange={(e) => setFundAmount(e.target.value)}
                   placeholder={`0 (${currency})`}
-                  className="w-full rounded-lg border border-border bg-background py-3 px-4 font-mono text-lg outline-none transition-colors focus:border-primary"
+                  className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"
                 />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Ledger uses USD-normalized accounting internally; amounts here are always your selected fiat (
-                  {currency}) and convert automatically — not raw “points”.
+                <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground sm:text-[11px]">
+                  Amounts convert to ledger USD internally ({currency}).
                 </p>
                 {showFundModal === "withdraw" && (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -2304,7 +2309,7 @@ export default function DashboardPage() {
                     {showBalance ? formatUserMoney(mainBalance) : "••••"}
                   </p>
                 )}
-                <div className="mt-2 flex gap-2">
+                <div className="mt-1.5 flex flex-wrap gap-1.5 sm:gap-2">
                   {[50, 100, 250, 500].map((usdPreset) => (
                     <button
                       key={usdPreset}
@@ -2312,7 +2317,7 @@ export default function DashboardPage() {
                       onClick={() =>
                         setFundAmount(String(Math.round(convertFromUsd(usdPreset, currency) * 100) / 100))
                       }
-                      className="flex-1 rounded-lg bg-muted py-2 text-xs font-medium hover:bg-muted/80"
+                      className="min-w-[4rem] flex-1 rounded-lg bg-muted py-1.5 text-[10px] font-medium hover:bg-muted/80 sm:py-2 sm:text-xs"
                     >
                       ≈{formatUserMoney(usdPreset)}
                     </button>
@@ -2365,6 +2370,7 @@ export default function DashboardPage() {
                   Close
                 </button>
               ) : null}
+            </div>
             </div>
           </div>
         </div>
