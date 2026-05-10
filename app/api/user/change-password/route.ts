@@ -1,12 +1,13 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const body = (await request.json().catch(() => ({}))) as {
       currentPassword?: string
       newPassword?: string

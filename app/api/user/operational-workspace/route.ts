@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { hydrateWorkspaceFromRemote } from "@/lib/dashboard-activity-session"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 /** Persist structured dashboard/command-center workspace (validated). */
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
+
 
     const body = await request.json().catch(() => ({}))
     const workspace = body.workspace

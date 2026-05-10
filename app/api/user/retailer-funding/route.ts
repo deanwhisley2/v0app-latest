@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
@@ -7,15 +7,16 @@ import { retailerSpendableLiquidity } from "@/lib/server/retailer-funding-helper
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const admin = createAdminClient()
     const gate = await getRetailFundingCustomerGate(user.id, user.email)
     const level = gate.level
     const requestsRes = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,retailer_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin"
+        "id,retailer_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -46,8 +47,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const gate = await getRetailFundingCustomerGate(user.id, user.email)
     if (!gate.canUseRetailFundingCustomerFlow) {
       return NextResponse.json(
@@ -63,18 +65,29 @@ export async function POST(request: Request) {
       mobileNetwork?: string
       fundChannel?: "local_mobile" | "legacy_admin"
       fundingCountryCode?: string
+      payerDisplayName?: string
+      payerPhone?: string
     }
     const retailerId = typeof body.retailerId === "string" ? body.retailerId.trim() : ""
     const txReference = typeof body.txReference === "string" ? body.txReference.trim() : ""
     const amount = Number(body.amount ?? 0)
     const note = typeof body.note === "string" ? body.note.trim() : null
     const mobileNetwork = typeof body.mobileNetwork === "string" ? body.mobileNetwork.trim().slice(0, 48) : null
+    const payerDisplayName =
+      typeof body.payerDisplayName === "string" ? body.payerDisplayName.trim().slice(0, 120) || null : null
+    const payerPhone = typeof body.payerPhone === "string" ? body.payerPhone.trim().slice(0, 32) || null : null
     const fundChannel = body.fundChannel === "legacy_admin" ? "legacy_admin" : "local_mobile"
     const countryUpdate =
       typeof body.fundingCountryCode === "string" ? body.fundingCountryCode.trim().toUpperCase().slice(0, 2) : ""
 
     if (!retailerId || !txReference || !Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: "retailerId, amount, and txReference are required." }, { status: 400 })
+    }
+    if (fundChannel === "local_mobile" && (!payerDisplayName || !payerPhone)) {
+      return NextResponse.json(
+        { error: "payerDisplayName and payerPhone are required for local mobile funding." },
+        { status: 400 }
+      )
     }
 
     const admin = createAdminClient()
@@ -83,10 +96,12 @@ export async function POST(request: Request) {
       await admin.from("profiles").update({ funding_country_code: countryUpdate }).eq("id", user.id)
     }
 
+    let retailerResponseDeadlineAt: string | null = null
+
     if (fundChannel === "local_mobile") {
       const { data: desk, error: de } = await admin
         .from("retailer_profiles")
-        .select("id,user_id,is_country_retailer,country_code,under_review,liquidity_status")
+        .select("id,user_id,is_country_retailer,country_code,under_review,liquidity_status,estimated_response_minutes")
         .eq("id", retailerId)
         .maybeSingle()
 
@@ -96,6 +111,7 @@ export async function POST(request: Request) {
         under_review?: boolean
         liquidity_status?: string | null
         country_code?: string | null
+        estimated_response_minutes?: number | null
       }
       const d = desk as DeskRow | null
       if (de || !d?.user_id) {
@@ -133,6 +149,10 @@ export async function POST(request: Request) {
           { status: 409 },
         )
       }
+
+      const minsRaw = Number(d.estimated_response_minutes ?? 60)
+      const mins = Math.min(180, Math.max(1, Number.isFinite(minsRaw) ? minsRaw : 60))
+      retailerResponseDeadlineAt = new Date(Date.now() + mins * 60_000).toISOString()
     }
 
     const { data, error } = await admin
@@ -146,9 +166,12 @@ export async function POST(request: Request) {
         status: "pending",
         fund_channel: fundChannel,
         mobile_network: mobileNetwork,
+        payer_display_name: payerDisplayName,
+        payer_phone: payerPhone,
+        retailer_response_deadline_at: retailerResponseDeadlineAt,
       })
       .select(
-        "id,retailer_id,amount,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin"
+        "id,retailer_id,amount,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at"
       )
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
@@ -177,8 +200,9 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const body = (await request.json().catch(() => ({}))) as { requestId?: string; appealNote?: string }
     const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
     const appealNote = typeof body.appealNote === "string" ? body.appealNote.trim() : ""

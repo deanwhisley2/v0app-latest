@@ -4,6 +4,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireAdminUser } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { creditRetailerLiquidityPlusCommission } from "@/lib/server/retailer-funding-helpers"
+import {
+  adminRetailPoolUserId,
+  debitAdminRetailPoolIfConfigured,
+  refundAdminRetailPoolIfConfigured,
+} from "@/lib/server/admin-retail-pool"
 
 export async function GET(request: Request) {
   try {
@@ -73,7 +78,18 @@ export async function PATCH(request: Request) {
 
     const base = Number(row.amount_requested ?? 0)
     const rate = Number(row.commission_rate ?? 0.05)
-    const { credited } = await creditRetailerLiquidityPlusCommission(admin, row.retailer_user_id, base, rate)
+    const credited = Math.round(base * (1 + Math.max(0, Number.isFinite(rate) ? rate : 0)) * 100) / 100
+
+    await debitAdminRetailPoolIfConfigured(admin, credited)
+    try {
+      await creditRetailerLiquidityPlusCommission(admin, row.retailer_user_id, base, rate)
+    } catch (err) {
+      await refundAdminRetailPoolIfConfigured(admin, credited)
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Could not credit retailer; treasury restored." },
+        { status: 400 },
+      )
+    }
     const { error: up } = await admin
       .from("retailer_admin_topup_requests")
       .update({
@@ -91,7 +107,7 @@ export async function PATCH(request: Request) {
       eventType: "retailer_admin_topup_approved",
       category: "admin",
       amount: credited,
-      balanceDestination: "nexus_main_available",
+      balanceDestination: "retail_balance",
       status: "approved",
       actorType: "admin",
       actorId: user.id,
@@ -99,6 +115,24 @@ export async function PATCH(request: Request) {
       summary: `Admin approved retailer crypto top-up. Credited base ${base} + commission (${rate * 100}%) = ${credited}.`,
       metadata: { requestId, baseRequested: base, commissionRate: rate },
     })
+
+    const poolUid = adminRetailPoolUserId()
+    if (poolUid) {
+      await recordFinancialEvent({
+        userId: poolUid,
+        eventType: "admin_retail_pool_debited",
+        category: "admin",
+        amount: credited,
+        balanceSource: "nexus_main_available",
+        balanceDestination: "retailer_retail_balance_credit",
+        status: "completed",
+        actorType: "admin",
+        actorId: user.id,
+        transactionRef: row.crypto_tx_reference,
+        summary: `Treasury retail pool debited ${credited} USD for approved retailer float (NEXUS_ADMIN_RETAIL_POOL_USER_ID).`,
+        metadata: { requestId, retailerUserId: row.retailer_user_id },
+      })
+    }
 
     return NextResponse.json({ ok: true, amountCredited: credited })
   } catch (e) {

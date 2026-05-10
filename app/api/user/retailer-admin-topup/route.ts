@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const level = await getTradingUserLevel(user.id)
     if (level !== 2) return NextResponse.json({ requests: [] })
     const admin = createAdminClient()
@@ -25,8 +26,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const level = await getTradingUserLevel(user.id)
     if (level !== 2) {
       return NextResponse.json({ error: "Retailer top-up requests are for level 2 desks." }, { status: 403 })

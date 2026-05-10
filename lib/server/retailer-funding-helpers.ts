@@ -27,14 +27,24 @@ export async function getUserAvailableBalance(sb: SupabaseClient, userId: string
   return Number(data?.available_balance ?? 0)
 }
 
-/** Nexus main balance minus reserved pending inbound mobile-money totals. */
+export async function getUserRetailBalance(sb: SupabaseClient, userId: string): Promise<number> {
+  const { data } = await sb
+    .from(TABLE_BALANCES)
+    .select("retail_balance")
+    .eq("user_id", userId)
+    .maybeSingle()
+  const v = (data as { retail_balance?: string | number | null } | null)?.retail_balance
+  return Number(v ?? 0)
+}
+
+/** Retail operational float minus reserved pending inbound mobile-money totals. */
 export async function retailerSpendableLiquidity(
   sb: SupabaseClient,
   retailerUserId: string,
   retailerProfileId: string,
 ): Promise<{ balance: number; pendingInbound: number; spendable: number }> {
   const [balance, pendingInbound] = await Promise.all([
-    getUserAvailableBalance(sb, retailerUserId),
+    getUserRetailBalance(sb, retailerUserId),
     sumPendingIncomingForRetailer(sb, retailerProfileId),
   ])
   return {
@@ -59,7 +69,7 @@ export async function transferRetailCreditToCustomer(
 
   const { data: fromRow } = await sb
     .from(TABLE_BALANCES)
-    .select("available_balance")
+    .select("available_balance, retail_balance")
     .eq("user_id", opts.retailerUserId)
     .maybeSingle()
   const { data: toRow } = await sb
@@ -68,17 +78,23 @@ export async function transferRetailCreditToCustomer(
     .eq("user_id", opts.customerUserId)
     .maybeSingle()
 
-  const fromAvail = Number(fromRow?.available_balance ?? 0)
-  const toAvail = Number(toRow?.available_balance ?? 0)
-  if (fromAvail < amt) throw new Error("Retailer Nexus balance insufficient for this approval.")
+  const row = fromRow as { available_balance?: unknown; retail_balance?: unknown } | null
+  const fromRetail = Number(row?.retail_balance ?? 0)
+  const retailerMain = Number(row?.available_balance ?? 0)
+  if (fromRetail < amt) throw new Error("Retail Balance insufficient for this approval.")
 
+  const toAvail = Number(toRow?.available_balance ?? 0)
   const now = new Date().toISOString()
-  const note = opts.requestId ? `retailer_fund_request:${opts.requestId}` : "retailer_fund"
 
   await sb
     .from(TABLE_BALANCES)
     .upsert(
-      { user_id: opts.retailerUserId, available_balance: fromAvail - amt, last_updated: now },
+      {
+        user_id: opts.retailerUserId,
+        available_balance: retailerMain,
+        retail_balance: fromRetail - amt,
+        last_updated: now,
+      },
       { onConflict: "user_id" },
     )
   await sb
@@ -87,12 +103,16 @@ export async function transferRetailCreditToCustomer(
       onConflict: "user_id",
     })
 
-  console.info("[transferRetailCreditToCustomer]", { ...opts, prevFrom: fromAvail, prevTo: toAvail })
+  console.info("[transferRetailCreditToCustomer]", {
+    ...opts,
+    prevRetailBalance: fromRetail,
+    prevCustomerAvailable: toAvail,
+  })
 
   await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
 }
 
-/** Credit retailer after admin verifies crypto (+ commission). */
+/** Credit Retail Balance after admin verifies crypto (+ commission). */
 export async function creditRetailerLiquidityPlusCommission(
   sb: SupabaseClient,
   retailerUserId: string,
@@ -106,20 +126,61 @@ export async function creditRetailerLiquidityPlusCommission(
 
   const { data } = await sb
     .from(TABLE_BALANCES)
-    .select("available_balance")
+    .select("available_balance, retail_balance")
     .eq("user_id", retailerUserId)
     .maybeSingle()
-  const cur = Number(data?.available_balance ?? 0)
+  const row = data as { available_balance?: unknown; retail_balance?: unknown } | null
+  const curMain = Number(row?.available_balance ?? 0)
+  const curRetail = Number(row?.retail_balance ?? 0)
   const now = new Date().toISOString()
   await sb
     .from(TABLE_BALANCES)
     .upsert(
       {
         user_id: retailerUserId,
-        available_balance: cur + credited,
+        available_balance: curMain,
+        retail_balance: curRetail + credited,
         last_updated: now,
       },
       { onConflict: "user_id" },
     )
   return { credited }
+}
+
+/** Move USD between Nexus Main (available) and Retail Balance for a retailer user. */
+export async function transferRetailPoolInternal(
+  sb: SupabaseClient,
+  userId: string,
+  direction: "to_retail" | "to_nexus",
+  amount: number,
+): Promise<{ retail_balance: number; available_balance: number }> {
+  const amt = amount
+  if (!(amt > 0) || Number.isNaN(amt)) throw new Error("Invalid amount.")
+
+  const { data } = await sb
+    .from(TABLE_BALANCES)
+    .select("available_balance, retail_balance")
+    .eq("user_id", userId)
+    .maybeSingle()
+  const row = data as { available_balance?: unknown; retail_balance?: unknown } | null
+  let main = Number(row?.available_balance ?? 0)
+  let retail = Number(row?.retail_balance ?? 0)
+
+  if (direction === "to_retail") {
+    if (main < amt) throw new Error("Nexus Main available balance insufficient.")
+    main -= amt
+    retail += amt
+  } else {
+    if (retail < amt) throw new Error("Retail Balance insufficient.")
+    retail -= amt
+    main += amt
+  }
+
+  const now = new Date().toISOString()
+  await sb
+    .from(TABLE_BALANCES)
+    .upsert({ user_id: userId, available_balance: main, retail_balance: retail, last_updated: now }, {
+      onConflict: "user_id",
+    })
+  return { retail_balance: retail, available_balance: main }
 }

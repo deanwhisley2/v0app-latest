@@ -30,6 +30,7 @@ import {
   Minus,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { AdminOperationalAssets, RetailerOperationalAssets } from "@/components/dashboard/wallet-operational-panel"
 
 interface WalletScreenProps {
   coins: Array<{
@@ -39,13 +40,21 @@ interface WalletScreenProps {
     change24h: number
     color: string
   }>
+  tradingUserLevel?: number
+  retailerCreditDesk?: boolean
+  isGuestSession?: boolean
 }
 
 type WalletTab = "portfolio" | "assets" | "earn"
 type AssetSubTab = "send" | "receive" | "history" | "approval" | "deposit" | "withdraw"
 type PaymentMethod = "mtn" | "airtel" | "bank" | "wallet"
 
-export function WalletScreen({ coins }: WalletScreenProps) {
+export function WalletScreen({
+  coins,
+  tradingUserLevel = 1,
+  retailerCreditDesk = false,
+  isGuestSession = false,
+}: WalletScreenProps) {
   const [activeTab, setActiveTab] = useState<WalletTab>("portfolio")
   const [assetSubTab, setAssetSubTab] = useState<AssetSubTab>("send")
   const [selectedCoin, setSelectedCoin] = useState(coins[0])
@@ -265,28 +274,34 @@ export function WalletScreen({ coins }: WalletScreenProps) {
       {/* Assets Tab */}
       {activeTab === "assets" && (
         <div className="space-y-4">
-          {/* Sub-tabs */}
-          <div className="flex flex-wrap gap-2">
-            {[
-              { id: "send" as const, label: "Send", icon: Send },
-              { id: "receive" as const, label: "Receive", icon: Download },
-              { id: "history" as const, label: "History", icon: History },
-              { id: "approval" as const, label: "Approval", icon: ShieldCheck },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setAssetSubTab(tab.id)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                  assetSubTab === tab.id
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {tradingUserLevel === 5 && !isGuestSession ? (
+            <AdminOperationalAssets isGuest={isGuestSession} />
+          ) : retailerCreditDesk && !isGuestSession ? (
+            <RetailerOperationalAssets isGuest={isGuestSession} />
+          ) : (
+            <>
+              {/* Sub-tabs — standard wallet */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "send" as const, label: "Send", icon: Send },
+                  { id: "receive" as const, label: "Receive", icon: Download },
+                  { id: "history" as const, label: "History", icon: History },
+                  { id: "approval" as const, label: "Approval", icon: ShieldCheck },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setAssetSubTab(tab.id)}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                      assetSubTab === tab.id
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
           {/* Deposit */}
           {assetSubTab === "deposit" && (
@@ -781,6 +796,8 @@ export function WalletScreen({ coins }: WalletScreenProps) {
                 ))}
               </div>
             </Card>
+          )}
+            </>
           )}
         </div>
       )}

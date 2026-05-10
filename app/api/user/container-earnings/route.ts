@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 
 type ActionBody = {
@@ -28,8 +28,9 @@ async function readBalanceRow(admin: ReturnType<typeof createAdminClient>, userI
 
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
 
     const body = (await request.json().catch(() => ({}))) as ActionBody
     const action = body.action
@@ -159,8 +160,9 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const admin = createAdminClient()
     const { data, error } = await admin
       .from("container_balance_events")

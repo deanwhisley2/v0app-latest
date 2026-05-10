@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
 import { retailerSpendableLiquidity } from "@/lib/server/retailer-funding-helpers"
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const gate = await getRetailFundingCustomerGate(user.id, user.email)
     if (!gate.canUseRetailFundingCustomerFlow) {
       return NextResponse.json(

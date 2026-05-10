@@ -1,31 +1,36 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { getUserAvailableBalance, transferRetailCreditToCustomer } from "@/lib/server/retailer-funding-helpers"
+import { getUserRetailBalance, transferRetailCreditToCustomer } from "@/lib/server/retailer-funding-helpers"
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const level = await getTradingUserLevel(user.id)
     if (level !== 2) return NextResponse.json({ error: "Retailer queue is for level 2 desks." }, { status: 403 })
     const admin = createAdminClient()
-    const { data: desk } = await admin.from("retailer_profiles").select("id").eq("user_id", user.id).maybeSingle()
-    if (!desk?.id) return NextResponse.json({ requests: [] })
+    const { data: desk } = await admin
+      .from("retailer_profiles")
+      .select("id,payment_numbers,registered_payee_names,country_code,whatsapp_number,contact_phone")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (!desk?.id) return NextResponse.json({ requests: [], desk: null })
 
     const { data, error } = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,user_id,amount,tx_reference,status,note,mobile_network,fund_channel,created_at,appeal_note,escalated_to_admin"
+        "id,user_id,amount,tx_reference,status,note,mobile_network,fund_channel,created_at,appeal_note,escalated_to_admin,payer_display_name,payer_phone,updated_at,retailer_response_deadline_at"
       )
       .eq("retailer_id", desk.id)
       .in("status", ["pending", "under_review", "appealed", "escalated"])
       .order("created_at", { ascending: false })
       .limit(100)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ requests: data ?? [] })
+    return NextResponse.json({ requests: data ?? [], desk })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
   }
@@ -33,11 +38,15 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const level = await getTradingUserLevel(user.id)
     if (level !== 2) return NextResponse.json({ error: "Retailer actions require level 2." }, { status: 403 })
-    const body = (await request.json().catch(() => ({}))) as { requestId?: string; action?: "approve" | "reject" }
+    const body = (await request.json().catch(() => ({}))) as {
+      requestId?: string
+      action?: "approve" | "reject" | "review"
+    }
     const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
     if (!requestId || !body.action) {
       return NextResponse.json({ error: "requestId and action are required." }, { status: 400 })
@@ -54,7 +63,12 @@ export async function PATCH(request: Request) {
       .maybeSingle()
     if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
     if (!row) return NextResponse.json({ error: "Request not found." }, { status: 404 })
-    if (row.status !== "pending" && row.status !== "under_review") {
+    if (
+      row.status !== "pending" &&
+      row.status !== "under_review" &&
+      row.status !== "appealed" &&
+      row.status !== "escalated"
+    ) {
       return NextResponse.json({ error: "Request is not awaiting retailer action." }, { status: 400 })
     }
     const fundChannel = String(row.fund_channel ?? "legacy_admin")
@@ -64,6 +78,18 @@ export async function PATCH(request: Request) {
 
     const now = new Date().toISOString()
     const amt = Number(row.amount ?? 0)
+
+    if (body.action === "review") {
+      if (row.status === "under_review") {
+        return NextResponse.json({ ok: true })
+      }
+      const { error: up } = await admin
+        .from("retailer_fund_requests")
+        .update({ status: "under_review", updated_at: now })
+        .eq("id", requestId)
+      if (up) return NextResponse.json({ error: up.message }, { status: 400 })
+      return NextResponse.json({ ok: true })
+    }
 
     if (body.action === "reject") {
       const { error: up } = await admin
@@ -92,9 +118,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const bal = await getUserAvailableBalance(admin, user.id)
+    const bal = await getUserRetailBalance(admin, user.id)
     if (bal < amt) {
-      return NextResponse.json({ error: "Your Nexus balance is below this request; cannot approve." }, {
+      return NextResponse.json({ error: "Retail Balance is below this request; cannot approve." }, {
         status: 400,
       })
     }
@@ -128,7 +154,7 @@ export async function PATCH(request: Request) {
       eventType: "funding_request_approved_retailer_credit",
       category: "funding",
       amount: amt,
-      balanceSource: "retailer_nexus_liquidity",
+      balanceSource: "retail_balance",
       balanceDestination: "nexus_main_available",
       status: "approved",
       actorType: "retailer",
@@ -143,14 +169,14 @@ export async function PATCH(request: Request) {
       eventType: "retailer_liquidity_debited",
       category: "funding",
       amount: amt,
-      balanceSource: "nexus_main_available",
+      balanceSource: "retail_balance",
       balanceDestination: "customer_funding_payout",
       status: "completed",
       actorType: "retailer",
       actorId: user.id,
       transactionRef: row.tx_reference,
       relatedTradeId: requestId,
-      summary: "Retailer Nexus balance reduced after crediting customer (local mobile-money).",
+      summary: "Retailer Retail Balance debited after customer funding approval (local mobile-money).",
       metadata: { customerId: row.user_id, requestId },
     })
 

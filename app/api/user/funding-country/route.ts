@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 /** Level 1: persist preferred country for local retailer matching (ISO 3166-1 alpha-2). */
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const body = (await request.json().catch(() => ({}))) as { code?: string }
     const code = typeof body.code === "string" ? body.code.trim().toUpperCase().slice(0, 2) : ""
     if (!code || code.length !== 2) {

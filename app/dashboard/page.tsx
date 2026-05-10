@@ -167,6 +167,8 @@ export default function DashboardPage() {
   const [isFundProcessing, setIsFundProcessing] = useState(false)
   const [fundTxReference, setFundTxReference] = useState("")
   const [fundNote, setFundNote] = useState("")
+  const [fundPayerName, setFundPayerName] = useState("")
+  const [fundPayerPhone, setFundPayerPhone] = useState("")
   const [selectedRetailerId, setSelectedRetailerId] = useState("")
   const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
@@ -1429,6 +1431,9 @@ export default function DashboardPage() {
           if (!selectedRetailerId || !fundTxReference.trim()) {
             throw new Error("Pick a qualified retailer and enter your mobile-money reference.")
           }
+          if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
+            throw new Error("Enter your sender name and sending mobile number exactly as shown to the retailer.")
+          }
           const ccSave = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
           if (ccSave.length === 2) {
             await fetch("/api/user/funding-country", {
@@ -1448,6 +1453,8 @@ export default function DashboardPage() {
               mobileNetwork: fundMobileNetwork || null,
               fundChannel: "local_mobile",
               fundingCountryCode: ccSave.length === 2 ? ccSave : undefined,
+              payerDisplayName: fundPayerName.trim(),
+              payerPhone: fundPayerPhone.trim(),
             }),
           })
           const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
@@ -1461,6 +1468,8 @@ export default function DashboardPage() {
           setShowFundModal(null)
           setFundAmount("")
           setFundNote("")
+          setFundPayerName("")
+          setFundPayerPhone("")
           return
         }
 
@@ -1482,6 +1491,8 @@ export default function DashboardPage() {
     fundNote,
     l1FundSource,
     fundMobileNetwork,
+    fundPayerName,
+    fundPayerPhone,
     fundingCountryCodeInput,
     retailerOpsBlocked,
     customerRetailFunding,
@@ -1871,6 +1882,20 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     ) : null}
+                    <input
+                      type="text"
+                      value={fundPayerName}
+                      onChange={(e) => setFundPayerName(e.target.value)}
+                      placeholder="Your name (as sent from mobile money)"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="tel"
+                      value={fundPayerPhone}
+                      onChange={(e) => setFundPayerPhone(e.target.value)}
+                      placeholder="Sending mobile number"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
                     <input
                       type="text"
                       value={fundTxReference}
@@ -2382,7 +2407,12 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 lg:flex-row">
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              <WalletScreen coins={tradeCatalog.slice(0, 24)} />
+              <WalletScreen
+                coins={tradeCatalog.slice(0, 24)}
+                tradingUserLevel={currentUser?.level ?? 1}
+                retailerCreditDesk={retailerCreditDesk}
+                isGuestSession={isGuestSession}
+              />
             </main>
           </div>
         )}

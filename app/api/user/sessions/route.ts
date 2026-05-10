@@ -1,12 +1,14 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
-import { getBearerTokenFromRequest, getUserFromBearer } from "@/lib/auth-api"
+import { getBearerTokenFromRequest } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const token = getBearerTokenFromRequest(request)
     const currentHash = token ? createHash("sha256").update(token).digest("hex") : ""
     const admin = createAdminClient()
@@ -36,8 +38,9 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
     const body = (await request.json().catch(() => ({}))) as { sessionId?: string }
     if (!body.sessionId) return NextResponse.json({ error: "sessionId is required" }, { status: 400 })
     const admin = createAdminClient()

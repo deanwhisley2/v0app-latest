@@ -75,7 +75,58 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  /** Account governance (profiles columns optional until migration). */
+  if (user?.id && !request.nextUrl.pathname.startsWith("/auth/account-disabled")) {
+    try {
+      const path = request.nextUrl.pathname
+      const isAuthPublic =
+        path.startsWith("/auth/login") ||
+        path.startsWith("/auth/register") ||
+        path.startsWith("/auth/recovery") ||
+        path.startsWith("/auth/verify") ||
+        path.startsWith("/auth/reset-password") ||
+        path.startsWith("/api/auth/")
+
+      if (!isAuthPublic) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("account_disabled_at, operational_freeze_at")
+          .eq("id", user.id)
+          .maybeSingle()
+        type ProfG = { account_disabled_at?: string | null; operational_freeze_at?: string | null }
+        const p = prof as ProfG | null
+        if (p?.account_disabled_at) {
+          if (path.startsWith("/api/")) {
+            return NextResponse.json(
+              { error: "This account has been disabled. Contact support.", code: "ACCOUNT_DISABLED" },
+              { status: 403, headers: { "Cache-Control": "no-store" } },
+            )
+          }
+          const res = NextResponse.redirect(new URL("/auth/account-disabled", request.url))
+          res.headers.set("Cache-Control", "no-store")
+          return res
+        }
+        if (p?.operational_freeze_at) {
+          const frozenBlock =
+            path.startsWith("/expert-mode") ||
+            path.startsWith("/joelin") ||
+            path.startsWith("/bot-commander") ||
+            path.startsWith("/api/expert/")
+          if (frozenBlock) {
+            const dash = NextResponse.redirect(new URL("/dashboard?ops=frozen_advanced", request.url))
+            dash.headers.set("Cache-Control", "no-store")
+            return dash
+          }
+        }
+      }
+    } catch {
+      /* keep request flowing if governance columns/policy unavailable */
+    }
+  }
 
   return supabaseResponse
 }

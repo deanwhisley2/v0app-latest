@@ -34,7 +34,7 @@ export async function buildOperationalBootstrapV1(params: {
     admin
       .from("profiles")
       .select(
-        "email, full_name, is_verified, trading_user_level, retailer_credit_seller, funding_country_code, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot"
+        "email, full_name, is_verified, trading_user_level, retailer_credit_seller, funding_country_code, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot, operational_freeze_at, account_disabled_at"
       )
       .eq("id", params.userId)
       .maybeSingle(),
@@ -153,6 +153,8 @@ export async function buildOperationalBootstrapV1(params: {
     operational_workspace?: unknown | null
     operational_preferences?: unknown | null
     nexus_exchange_balances_snapshot?: unknown | null
+    operational_freeze_at?: string | null
+    account_disabled_at?: string | null
   } | null
 
   const metaExchanges = Array.isArray(params.jwtMetadataExchanges)
@@ -174,6 +176,10 @@ export async function buildOperationalBootstrapV1(params: {
     version: 1,
     userId: params.userId,
     restoredAt: now,
+    accountGovernance: {
+      operationalFreezeAt: rawProfile?.operational_freeze_at ?? null,
+      accountDisabledAt: rawProfile?.account_disabled_at ?? null,
+    },
     profile: rawProfile
       ? {
           email: rawProfile.email ?? null,

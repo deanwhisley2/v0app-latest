@@ -154,7 +154,7 @@ export async function PATCH(request: Request) {
         eventType: `funding_request_admin_${nextStatus}`,
         category: "admin",
         amount: Number((reqRow as { amount?: number }).amount ?? 0),
-        balanceSource: nextStatus === "approved" ? "retailer_nexus_liquidity" : "nexus_main_pending",
+        balanceSource: nextStatus === "approved" ? "retail_balance" : "nexus_main_pending",
         balanceDestination: nextStatus === "approved" ? "nexus_main_available" : "nexus_main_pending",
         status:
           nextStatus === "rejected"

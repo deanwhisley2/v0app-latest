@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { compareFaceTemplateV1 } from "@/lib/server/face-template"
@@ -7,8 +7,9 @@ import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compr
 
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
 
     const admin = createAdminClient()
     const hasTemplate = typeof user.user_metadata?.selfie_template_v1 === "string"
@@ -29,8 +30,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
 
     const body = await request.json().catch(() => ({}))
     const selfieImage = typeof body.selfie_image === "string" ? body.selfie_image.trim() : ""
@@ -98,8 +100,9 @@ function hammingDistanceHex(a: string, b: string): number {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
 
     const body = await request.json().catch(() => ({}))
     const selfieTemplate =

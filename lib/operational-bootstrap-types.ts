@@ -9,6 +9,11 @@ export interface OperationalBootstrapV1 {
   version: 1
   userId: string
   restoredAt: string
+  /** Server-side account governance flags (UI surfaces frozen/disabled states). */
+  accountGovernance: {
+    operationalFreezeAt: string | null
+    accountDisabledAt: string | null
+  }
   profile: {
     email: string | null
     fullName: string | null

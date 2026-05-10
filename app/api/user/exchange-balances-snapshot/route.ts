@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { coerceExchangeBalancesSnapshot } from "@/lib/exchange-balances-snapshot-types"
 
 /** POST — persist USD-only exchange rollup to profiles (no API secrets). */
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
 
     const body = await request.json().catch(() => ({}))
     const raw = body.snapshot ?? body.balancesSnapshot

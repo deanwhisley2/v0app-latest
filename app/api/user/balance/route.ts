@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getUserFromBearer } from "@/lib/auth-api"
+import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 
 export async function GET(request: Request) {
   const blocked = externalApisBlockedResponse()
   if (blocked) return blocked
   try {
-    const user = await getUserFromBearer(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await bearerUserWithGovernance(request, "read")
+    if ("response" in auth) return auth.response
+    const { user } = auth
 
     const admin = createAdminClient()
     const { data, error } = await admin
       .from("user_balances")
       .select(
-        "total_earnings, current_stake, available_balance, withdrawal_pending_balance, active_container_earnings, container_withdrawable_earnings, lifetime_container_withdrawn, lifetime_container_fees, last_updated, created_at"
+        "total_earnings, current_stake, available_balance, retail_balance, withdrawal_pending_balance, active_container_earnings, container_withdrawable_earnings, lifetime_container_withdrawn, lifetime_container_fees, last_updated, created_at"
       )
       .eq("user_id", user.id)
       .maybeSingle()
@@ -30,6 +29,7 @@ export async function GET(request: Request) {
       total_earnings: Number(data?.total_earnings ?? 0),
       current_stake: Number(data?.current_stake ?? 0),
       available_balance: Number(data?.available_balance ?? 0),
+      retail_balance: Number((data as Record<string, unknown> | null)?.retail_balance ?? 0),
       withdrawal_pending_balance: Number(
         (data as Record<string, unknown> | null)?.withdrawal_pending_balance ?? 0
       ),
