@@ -985,7 +985,7 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                         <div className="text-[10px] text-muted-foreground">{row.country_code ?? "Country —"}</div>
                       </td>
                       <td className="p-2 align-top font-mono text-[10px]">
-                        {row.kind === "user_add_funds" ? row.fund_channel ?? "—" : "_crypto_ref"}
+                        {row.kind === "user_add_funds" ? row.fund_channel ?? "—" : "crypto_ref"}
                         {row.mobile_network ? (
                           <>
                             <br />
