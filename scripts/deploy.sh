@@ -2,6 +2,7 @@
 # Deploy: optional copy .env.local from laptop → server, then on server: pull, build, PM2 (ecosystem.config.js).
 set -euo pipefail
 
+# Default paths differ per host; production vpsuser box uses /opt/nexus-pro (see scripts/ops-circle.sh).
 APP_DIR="${APP_DIR:-/var/www/nexus}"
 APP_NAME="${APP_NAME:-nexus}"
 ECOSYSTEM="${ECOSYSTEM:-ecosystem.config.js}"
