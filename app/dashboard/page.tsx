@@ -630,6 +630,11 @@ export default function DashboardPage() {
     return false
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
 
+  /** Step 2 desk matching — normalize ids so Tx fields + warning always align with selection. */
+  const localMmSelectedDesk = useMemo(() => {
+    return qualifiedRetailers.find((x) => String(x.id) === String(selectedRetailerId))
+  }, [qualifiedRetailers, selectedRetailerId])
+
   useEffect(() => {
     if (isGuestSession) return
     if (!authLoading && !user) {
@@ -1402,8 +1407,11 @@ export default function DashboardPage() {
       })
       const out = (await res.json().catch(() => ({}))) as { error?: string; retailers?: QualifiedRetailer[] }
       if (!res.ok) throw new Error(out.error || "Could not load retailers.")
-      setQualifiedRetailers(out.retailers ?? [])
-      setSelectedRetailerId("")
+      const retailers = out.retailers ?? []
+      setQualifiedRetailers(retailers)
+      const only = retailers.length === 1 && retailers[0]?.id != null ? String(retailers[0].id) : ""
+      /* Single desk: select immediately so payer sees Tx ID + confirm (no extra tap). */
+      setSelectedRetailerId(only)
       setLocalMmRetailersSearched(true)
       setFundTxReference("")
       setFundNote("")
@@ -1435,9 +1443,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (l1FundSource !== "local" || localMmWizardStep !== 2) return
-    if (qualifiedRetailers.length === 1 && !selectedRetailerId) {
-      setSelectedRetailerId(qualifiedRetailers[0].id)
-    }
+    if (qualifiedRetailers.length !== 1 || selectedRetailerId) return
+    const rid = qualifiedRetailers[0]?.id
+    if (rid != null) setSelectedRetailerId(String(rid))
   }, [l1FundSource, localMmWizardStep, qualifiedRetailers, selectedRetailerId])
 
   useEffect(() => {
@@ -1550,8 +1558,8 @@ export default function DashboardPage() {
             throw new Error("Finish retailer matching on step 2 before confirming.")
           }
           if (!(amount > 0)) throw new Error("Enter the amount you funded.")
-          if (!selectedRetailerId || !fundTxReference.trim()) {
-            throw new Error("Pick a qualified retailer and enter your mobile-money reference.")
+          if (!localMmSelectedDesk || !fundTxReference.trim()) {
+            throw new Error("Pick a desk and enter your transaction ID / reference from your receipt.")
           }
           if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
             throw new Error("Enter your sender name and sending mobile number exactly as shown to the retailer.")
@@ -1568,7 +1576,7 @@ export default function DashboardPage() {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
-              retailerId: selectedRetailerId,
+              retailerId: localMmSelectedDesk.id,
               amount,
               txReference: fundTxReference,
               note: fundNote,
@@ -1610,7 +1618,7 @@ export default function DashboardPage() {
     mainBalance,
     showToast,
     currentUser?.level,
-    selectedRetailerId,
+    localMmSelectedDesk,
     fundTxReference,
     fundNote,
     l1FundSource,
@@ -2123,45 +2131,50 @@ export default function DashboardPage() {
                       </div>
                     ) : null}
 
-                    {qualifiedRetailers.find((x) => x.id === selectedRetailerId) ? (
+                    {qualifiedRetailers.length > 0 ? (
                       <div className="space-y-3 border-t border-border/60 pt-3">
-                        <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
-                          <p className="font-semibold text-warning">Pay this desk only</p>
-                          <p>
-                            Numbers:{" "}
-                            {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
-                              .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                              .join(" · ") || "(none)"}
-                          </p>
-                          <p>
-                            Registered payee name(s):{" "}
-                            {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.registered_payee_names ||
-                              "Confirm with desk"}
-                          </p>
-                          <p>
-                            WhatsApp / call: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.whatsapp_number || "—"}{" "}
-                            · {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.contact_phone || "—"}
-                          </p>
-                          <p className="font-medium text-destructive">
-                            Match names and numbers exactly before sending. Wrong destination voids the request.
-                          </p>
-                        </div>
+                        {localMmSelectedDesk ? (
+                          <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
+                            <p className="font-semibold text-warning">Pay this desk only</p>
+                            <p>
+                              Numbers:{" "}
+                              {(localMmSelectedDesk.payment_numbers ?? [])
+                                .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                                .join(" · ") || "(none)"}
+                            </p>
+                            <p>
+                              Registered payee name(s): {localMmSelectedDesk.registered_payee_names || "Confirm with desk"}
+                            </p>
+                            <p>
+                              WhatsApp / call: {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
+                              {localMmSelectedDesk.contact_phone || "—"}
+                            </p>
+                            <p className="font-medium text-destructive">
+                              Match names and numbers exactly before sending. Wrong destination voids the request.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-50">
+                            Tap one desk card above, then enter your transaction ID.
+                          </div>
+                        )}
                         <div>
-                          <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                            Transaction ID / reference (after you pay)
+                          <label className="mb-1 block text-[10px] font-medium text-foreground">
+                            Transaction ID / reference (required)
                           </label>
                           <p className="mb-1.5 text-[10px] text-muted-foreground">
-                            Send payment off-app first, then paste the operator receipt ID here so the retailer can match your
-                            payment before they approve.
+                            Pay in your MoMo app first, then paste the receipt or SMS transaction ID here so the retailer can
+                            verify before approving.
                           </p>
                           <input
                             type="text"
                             inputMode="text"
                             autoComplete="off"
+                            name="momo-tx-id"
                             value={fundTxReference}
                             onChange={(e) => setFundTxReference(e.target.value)}
-                            placeholder="e.g. MoMo transaction ID from SMS or receipt"
-                            className="w-full rounded-md border border-border bg-background px-3 py-2.5 font-mono text-sm"
+                            placeholder="Paste transaction ID from receipt or SMS"
+                            className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2.5 font-mono text-base outline-none focus:border-primary"
                           />
                         </div>
                         <div>
@@ -2556,7 +2569,7 @@ export default function DashboardPage() {
               l1FundSource === "local" &&
               localMmWizardStep === 2 ? (
                 <p className="text-[10px] text-muted-foreground">
-                  {!selectedRetailerId
+                  {!localMmSelectedDesk
                     ? "Select a desk above."
                     : !fundTxReference.trim()
                       ? "Enter your transaction ID / reference from the receipt."
@@ -2582,7 +2595,7 @@ export default function DashboardPage() {
                     customerRetailFunding &&
                     l1FundSource === "local" &&
                     (localMmWizardStep !== 2 ||
-                      !selectedRetailerId ||
+                      !localMmSelectedDesk ||
                       !fundTxReference.trim() ||
                       !fundPayerName.trim() ||
                       !fundPayerPhone.trim() ||
