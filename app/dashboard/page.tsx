@@ -45,6 +45,7 @@ import { OperationalContinuityHud } from "@/components/dashboard/operational-con
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
   convertFromUsd,
+  corridorFiatForCountryIso2,
   formatLocalFiatAmount,
   localFiatUnitsToUsd,
 } from "@/lib/currency-display"
@@ -629,6 +630,15 @@ export default function DashboardPage() {
     if (level === 2) return !Boolean(op.snapshot?.profile?.retailerCreditSeller)
     return false
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
+
+  /** Local MM: amount input is in corridor fiat (UG→UGX), not necessarily wallet display currency (often USD). */
+  const localMmCorridorFiat = useMemo(() => {
+    const cc = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+    return cc.length === 2 ? corridorFiatForCountryIso2(cc) : null
+  }, [fundingCountryCodeInput])
+
+  const fundingAmountLabelCurrency =
+    l1FundSource === "local" && localMmCorridorFiat ? localMmCorridorFiat : currency
 
   /** Step 2 desk matching — normalize ids so Tx fields + warning always align with selection. */
   const localMmSelectedDesk = useMemo(() => {
@@ -1395,10 +1405,11 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: cc }),
       })
+      const fundingFiat = corridorFiatForCountryIso2(cc) ?? currency
       const qs = new URLSearchParams({
         amount: String(amt),
         country: cc,
-        currency,
+        currency: fundingFiat,
         network: net,
       })
       const res = await fetch(`/api/user/qualified-retailers?${qs.toString()}`, {
@@ -1480,11 +1491,13 @@ export default function DashboardPage() {
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseFloat(fundAmount)
     /** Withdraw & local mobile-money funding: user types preferred fiat → ledger uses USD-normalized units. */
+    const ccFund = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+    const localFundingFiat = corridorFiatForCountryIso2(ccFund) ?? currency
     let ledgerUsd = amountRaw
     if (showFundModal === "withdraw") {
       ledgerUsd = localFiatUnitsToUsd(amountRaw, currency)
     } else if (showFundModal === "add" && l1FundSource === "local") {
-      ledgerUsd = localFiatUnitsToUsd(amountRaw, currency)
+      ledgerUsd = localFiatUnitsToUsd(amountRaw, localFundingFiat)
     }
     const amount = ledgerUsd
     const level = currentUser?.level ?? 1
@@ -2002,7 +2015,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                          Funding amount ({currency})
+                          Funding amount ({fundingAmountLabelCurrency})
                         </label>
                         <input
                           type="number"
@@ -2070,7 +2083,7 @@ export default function DashboardPage() {
                       </span>
                       <span className="rounded-md bg-background px-2 py-1">{fundMobileNetwork || "—"}</span>
                       <span className="rounded-md bg-background px-2 py-1 font-mono">
-                        {formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale)}
+                        {formatLocalFiatAmount(parseFloat(fundAmount) || 0, fundingAmountLabelCurrency, locale)}
                       </span>
                     </div>
 

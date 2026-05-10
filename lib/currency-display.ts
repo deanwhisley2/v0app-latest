@@ -30,6 +30,29 @@ export const USD_TO_FX: Record<string, number> = {
 
 export type FiatCurrencyCode = keyof typeof USD_TO_FX
 
+/** ISO 3166-1 alpha-2 → typical mobile-money / wallet fiat for corridor pricing (Add Funds Local MM). */
+const ISO2_TO_CORRIDOR_FIAT: Partial<Record<string, FiatCurrencyCode>> = {
+  UG: "UGX",
+  KE: "KES",
+  TZ: "TZS",
+  RW: "RWF",
+  NG: "NGN",
+  GH: "GHS",
+  ZA: "ZAR",
+  MW: "MWK",
+  ET: "ETB",
+  ZM: "ZMW",
+  MA: "MAD",
+  EG: "EGP",
+  US: "USD",
+}
+
+/** Resolve fiat for amount conversion when user picked a funding country on Local MM (overrides display prefs). */
+export function corridorFiatForCountryIso2(iso2: string): FiatCurrencyCode | null {
+  const cc = iso2.trim().toUpperCase().slice(0, 2)
+  return ISO2_TO_CORRIDOR_FIAT[cc] ?? null
+}
+
 export function isSupportedFiat(code: string): code is FiatCurrencyCode {
   return code in USD_TO_FX
 }

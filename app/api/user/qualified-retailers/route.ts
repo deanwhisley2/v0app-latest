@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { localFiatUnitsToUsd } from "@/lib/currency-display"
+import { corridorFiatForCountryIso2, localFiatUnitsToUsd } from "@/lib/currency-display"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
@@ -23,18 +23,12 @@ export async function GET(request: Request) {
     }
     const { searchParams } = new URL(request.url)
     const amountRaw = Number(searchParams.get("amount") ?? 0)
-    const currency = (searchParams.get("currency") ?? "USD").trim().toUpperCase()
-    /** Match wallet submit: user's typed fiat → USD ledger units before comparing to retail_balance. */
-    const amount = localFiatUnitsToUsd(amountRaw, currency)
     let country = (searchParams.get("country") ?? "").trim().toUpperCase()
     const mobileNetwork = (searchParams.get("network") ?? "").trim()
     if (!mobileNetwork) {
       return NextResponse.json({ error: "network query required (e.g. MTN, Airtel, MPesa, or Other)." }, {
         status: 400,
       })
-    }
-    if (!Number.isFinite(amountRaw) || amountRaw <= 0 || !Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: "amount query required and must be > 0." }, { status: 400 })
     }
     const admin = createAdminClient()
     if (!country) {
@@ -49,6 +43,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Set your country in Add Funds (local) or save profile country first." }, {
         status: 400,
       })
+    }
+
+    let currency = (searchParams.get("currency") ?? "USD").trim().toUpperCase()
+    /** Corridor fiat from ISO2 so typed amounts match MoMo denominations (UG→UGX), not wallet display USD. */
+    const corridor = corridorFiatForCountryIso2(country)
+    if (corridor) currency = corridor
+    /** User's typed fiat → USD ledger units before comparing to retail_balance. */
+    const amount = localFiatUnitsToUsd(amountRaw, currency)
+    if (!Number.isFinite(amountRaw) || amountRaw <= 0 || !Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "amount query required and must be > 0." }, { status: 400 })
     }
 
     const customerCountry = country.trim().toUpperCase().slice(0, 2)
