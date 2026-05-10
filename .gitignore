@@ -24,3 +24,6 @@ logs/
 
 # Supabase CLI cache (do not commit)
 supabase/.temp/
+
+# `npx skills add` cache; project skills live in .cursor/skills/
+.agents/
