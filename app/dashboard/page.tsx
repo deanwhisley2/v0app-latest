@@ -182,6 +182,8 @@ export default function DashboardPage() {
   const [loadingQualifiedRetailers, setLoadingQualifiedRetailers] = useState(false)
   /** True after user ran “See eligible retailers” at least once (enables empty-state message). */
   const [localMmRetailersSearched, setLocalMmRetailersSearched] = useState(false)
+  /** Two-stage Local MM wizard: 1 = qualification only, 2 = desks + payment confirmation. */
+  const [localMmWizardStep, setLocalMmWizardStep] = useState<1 | 2>(1)
   const [cryptoFundingMeta, setCryptoFundingMeta] = useState<{
     companyCryptoWallet: string | null
     companyCryptoNetwork: string
@@ -1373,11 +1375,7 @@ export default function DashboardPage() {
       return
     }
     if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
-      showToast("Enter sender name and sending mobile number so we can match your payment.", "error")
-      return
-    }
-    if (!fundTxReference.trim()) {
-      showToast("Enter your mobile-money transaction reference before choosing a desk.", "error")
+      showToast("Enter sender name and sending mobile number.", "error")
       return
     }
     setLoadingQualifiedRetailers(true)
@@ -1407,19 +1405,36 @@ export default function DashboardPage() {
       setQualifiedRetailers(out.retailers ?? [])
       setSelectedRetailerId("")
       setLocalMmRetailersSearched(true)
+      setFundTxReference("")
+      setFundNote("")
+      setLocalMmWizardStep(2)
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Load failed.", "error")
     } finally {
       setLoadingQualifiedRetailers(false)
     }
-  }, [fundAmount, fundingCountryCodeInput, currency, fundMobileNetwork, fundPayerName, fundPayerPhone, fundTxReference, showToast])
+  }, [fundAmount, fundingCountryCodeInput, currency, fundMobileNetwork, fundPayerName, fundPayerPhone, showToast])
+
+  const handleBackLocalMmWizard = useCallback(() => {
+    setLocalMmWizardStep(1)
+    setQualifiedRetailers([])
+    setSelectedRetailerId("")
+    setLocalMmRetailersSearched(false)
+    setFundTxReference("")
+    setFundNote("")
+  }, [])
 
   useEffect(() => {
     if (l1FundSource !== "local") return
     setQualifiedRetailers([])
     setSelectedRetailerId("")
     setLocalMmRetailersSearched(false)
+    setLocalMmWizardStep(1)
   }, [fundAmount, fundingCountryCodeInput, fundMobileNetwork, l1FundSource])
+
+  useEffect(() => {
+    if (showFundModal !== "add") setLocalMmWizardStep(1)
+  }, [showFundModal])
 
   useEffect(() => {
     if (showFundModal !== "add" || l1FundSource !== "crypto") return
@@ -1519,6 +1534,9 @@ export default function DashboardPage() {
           if (l1FundSource !== "local") {
             throw new Error("Open “Local mobile money”, complete payment off-app, then use Confirm.")
           }
+          if (localMmWizardStep !== 2) {
+            throw new Error("Finish retailer matching on step 2 before confirming.")
+          }
           if (!(amount > 0)) throw new Error("Enter the amount you funded.")
           if (!selectedRetailerId || !fundTxReference.trim()) {
             throw new Error("Pick a qualified retailer and enter your mobile-money reference.")
@@ -1558,6 +1576,7 @@ export default function DashboardPage() {
           setFundTxReference("")
           setL1FundSource("pick")
           setLocalMmRetailersSearched(false)
+          setLocalMmWizardStep(1)
           setShowFundModal(null)
           setFundAmount("")
           setFundNote("")
@@ -1594,6 +1613,7 @@ export default function DashboardPage() {
     withdrawalPendingBalance,
     currency,
     l1FundSource,
+    localMmWizardStep,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -1873,7 +1893,10 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setL1FundSource("crypto")}
+                    onClick={() => {
+                      setL1FundSource("crypto")
+                      setLocalMmWizardStep(1)
+                    }}
                     className={`rounded-lg border-2 px-2 py-2 text-left text-[11px] font-semibold leading-tight transition-all sm:px-3 sm:py-2.5 sm:text-xs ${
                       l1FundSource === "crypto" ? "border-primary" : "border-border"
                     }`}
@@ -1882,7 +1905,15 @@ export default function DashboardPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setL1FundSource("local")}
+                    onClick={() => {
+                      setL1FundSource("local")
+                      setLocalMmWizardStep(1)
+                      setQualifiedRetailers([])
+                      setSelectedRetailerId("")
+                      setLocalMmRetailersSearched(false)
+                      setFundTxReference("")
+                      setFundNote("")
+                    }}
                     className={`rounded-lg border-2 px-2 py-2 text-left text-[11px] font-semibold leading-tight transition-all sm:px-3 sm:py-2.5 sm:text-xs ${
                       l1FundSource === "local" ? "border-primary" : "border-border"
                     }`}
@@ -1911,105 +1942,117 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {l1FundSource === "local" && (
-                  <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-2 sm:p-3">
+                {l1FundSource === "local" && localMmWizardStep === 1 ? (
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3 sm:p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">Local MM · Step 1 of 2</p>
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        Qualify
+                      </span>
+                    </div>
                     <p className="text-[11px] leading-snug text-muted-foreground">
-                      Guided flow: choose network → enter amount and your transaction details → see eligible desks only after
-                      qualification → pick a desk → send MoMo → confirm below.
+                      Enter your country, network, amount, and sender details. Retailers are matched on the next screen.
                     </p>
-
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        1 · Payment network
-                      </p>
-                      <select
-                        value={fundMobileNetwork}
-                        onChange={(e) => setFundMobileNetwork(e.target.value)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
-                      >
-                        <option value="">Select network…</option>
-                        <option value="MTN">MTN</option>
-                        <option value="Airtel">Airtel</option>
-                        <option value="MPesa">M-Pesa</option>
-                        <option value="Orange">Orange</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2 border-t border-border/60 pt-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        2 · Your funding transaction
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="mb-0.5 block text-[10px] text-muted-foreground">Country (ISO2)</label>
-                          <input
-                            type="text"
-                            maxLength={2}
-                            value={fundingCountryCodeInput}
-                            onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
-                            placeholder="UG"
-                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs uppercase sm:text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-0.5 block text-[10px] text-muted-foreground">
-                            Amount ({currency})
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={fundAmount}
-                            onChange={(e) => setFundAmount(e.target.value)}
-                            placeholder="0"
-                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs sm:text-sm"
-                          />
-                        </div>
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">Country</label>
+                        <input
+                          type="text"
+                          maxLength={2}
+                          value={fundingCountryCodeInput}
+                          onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
+                          placeholder="UG"
+                          autoComplete="country"
+                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm uppercase"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        value={fundPayerName}
-                        onChange={(e) => setFundPayerName(e.target.value)}
-                        placeholder="Sender name (as on mobile money)"
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="tel"
-                        value={fundPayerPhone}
-                        onChange={(e) => setFundPayerPhone(e.target.value)}
-                        placeholder="Sending mobile number"
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="text"
-                        value={fundTxReference}
-                        onChange={(e) => setFundTxReference(e.target.value)}
-                        placeholder="Mobile money transaction reference"
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="text"
-                        value={fundNote}
-                        onChange={(e) => setFundNote(e.target.value)}
-                        placeholder="Optional memo"
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      />
+                      <div>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">Network</label>
+                        <select
+                          value={fundMobileNetwork}
+                          onChange={(e) => setFundMobileNetwork(e.target.value)}
+                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                        >
+                          <option value="">Select network…</option>
+                          <option value="MTN">MTN</option>
+                          <option value="Airtel">Airtel</option>
+                          <option value="MPesa">M-Pesa</option>
+                          <option value="Orange">Orange</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                          Funding amount ({currency})
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={fundAmount}
+                          onChange={(e) => setFundAmount(e.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 font-mono text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                          Sender mobile number
+                        </label>
+                        <input
+                          type="tel"
+                          value={fundPayerPhone}
+                          onChange={(e) => setFundPayerPhone(e.target.value)}
+                          placeholder="+256…"
+                          autoComplete="tel"
+                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                          Sender name (as on MoMo)
+                        </label>
+                        <input
+                          type="text"
+                          value={fundPayerName}
+                          onChange={(e) => setFundPayerName(e.target.value)}
+                          placeholder="Full name"
+                          autoComplete="name"
+                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                        />
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      disabled={loadingQualifiedRetailers}
+                      onClick={() => void handleLoadQualifiedRetailers()}
+                      className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {loadingQualifiedRetailers ? "Finding retailers…" : "Continue · find retailers"}
+                    </button>
+                  </div>
+                ) : null}
 
-                    <div className="border-t border-border/60 pt-2">
+                {l1FundSource === "local" && localMmWizardStep === 2 ? (
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-2 sm:p-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        disabled={loadingQualifiedRetailers}
-                        onClick={() => void handleLoadQualifiedRetailers()}
-                        className="w-full rounded-lg bg-primary py-2 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 sm:text-xs"
+                        onClick={() => handleBackLocalMmWizard()}
+                        className="rounded-md border border-border bg-background px-3 py-1.5 text-[11px] font-semibold hover:bg-muted"
                       >
-                        {loadingQualifiedRetailers ? "Searching eligible desks…" : "See eligible retailers"}
+                        ← Edit details
                       </button>
-                      <p className="mt-1.5 text-[10px] text-muted-foreground">
-                        Retailers are filtered by country, network, liquidity, and desk capacity — only after your details are
-                        entered.
-                      </p>
+                      <span className="text-[11px] font-semibold text-foreground">Step 2 of 2 · Choose desk</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                      <span className="rounded-md bg-background px-2 py-1 font-mono">
+                        {fundingCountryCodeInput.trim().toUpperCase() || "—"}
+                      </span>
+                      <span className="rounded-md bg-background px-2 py-1">{fundMobileNetwork || "—"}</span>
+                      <span className="rounded-md bg-background px-2 py-1 font-mono">
+                        {formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale)}
+                      </span>
                     </div>
 
                     {!loadingQualifiedRetailers && localMmRetailersSearched && qualifiedRetailers.length === 0 ? (
@@ -2020,11 +2063,11 @@ export default function DashboardPage() {
                     ) : null}
 
                     {qualifiedRetailers.length > 0 ? (
-                      <div className="space-y-2 border-t border-border/60 pt-3">
+                      <div className="space-y-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          3 · Choose a desk
+                          Available desks
                         </p>
-                        <div className="grid max-h-[280px] gap-2 overflow-y-auto sm:grid-cols-2">
+                        <div className="grid max-h-[min(50vh,320px)] gap-2 overflow-y-auto sm:grid-cols-2">
                           {qualifiedRetailers.map((r) => {
                             const active = selectedRetailerId === r.id
                             const nums = (r.payment_numbers ?? [])
@@ -2032,6 +2075,7 @@ export default function DashboardPage() {
                               .filter(Boolean)
                             const statusLabel = String(r.liquidity_status ?? "—")
                             const spend = typeof r.spendable_liquidity === "number" ? r.spendable_liquidity.toFixed(0) : "—"
+                            const payee = String(r.registered_payee_names ?? "").trim()
                             return (
                               <button
                                 key={r.id}
@@ -2044,9 +2088,12 @@ export default function DashboardPage() {
                                 <p className="font-semibold text-foreground">
                                   Desk · {String(r.country_code ?? "").toUpperCase() || "—"}
                                 </p>
-                                <p className="mt-1 font-mono text-[10px] text-muted-foreground line-clamp-2">
+                                <p className="mt-1 font-mono text-[10px] text-muted-foreground line-clamp-3">
                                   {nums.length ? nums.join(" · ") : "Payment numbers on file"}
                                 </p>
+                                {payee ? (
+                                  <p className="mt-1 line-clamp-2 text-[10px] text-foreground/90">Payee: {payee}</p>
+                                ) : null}
                                 <p className="mt-1 text-[10px]">
                                   <span className="rounded bg-muted px-1 py-0.5 uppercase">{statusLabel}</span>
                                   {" · "}
@@ -2066,35 +2113,58 @@ export default function DashboardPage() {
                     ) : null}
 
                     {qualifiedRetailers.find((x) => x.id === selectedRetailerId) ? (
-                      <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
-                        <p className="font-semibold text-warning">4 · Pay this desk only (verify names)</p>
-                        <p>
-                          Numbers:{" "}
-                          {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
-                            .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                            .join(" · ") || "(none)"}
-                        </p>
-                        <p>
-                          Registered payee name(s):{" "}
-                          {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.registered_payee_names ||
-                            "Confirm with desk"}
-                        </p>
-                        <p>
-                          WhatsApp / call: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.whatsapp_number || "—"}{" "}
-                          · {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.contact_phone || "—"}
-                        </p>
-                        <p className="text-muted-foreground">
-                          Network filter: {fundMobileNetwork || "—"} · Desk status:{" "}
-                          {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.liquidity_status ?? "—"}
-                        </p>
-                        <p className="font-medium text-destructive">
-                          Send only after you confirm payee names and numbers match. Wrong destination voids the request.
-                        </p>
+                      <div className="space-y-3 border-t border-border/60 pt-3">
+                        <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
+                          <p className="font-semibold text-warning">Pay this desk only</p>
+                          <p>
+                            Numbers:{" "}
+                            {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
+                              .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                              .join(" · ") || "(none)"}
+                          </p>
+                          <p>
+                            Registered payee name(s):{" "}
+                            {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.registered_payee_names ||
+                              "Confirm with desk"}
+                          </p>
+                          <p>
+                            WhatsApp / call: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.whatsapp_number || "—"}{" "}
+                            · {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.contact_phone || "—"}
+                          </p>
+                          <p className="font-medium text-destructive">
+                            Match names and numbers exactly before sending. Wrong destination voids the request.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                            Transaction reference (after you pay)
+                          </label>
+                          <input
+                            type="text"
+                            value={fundTxReference}
+                            onChange={(e) => setFundTxReference(e.target.value)}
+                            placeholder="MoMo reference from your receipt"
+                            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-medium text-muted-foreground">Optional memo</label>
+                          <input
+                            type="text"
+                            value={fundNote}
+                            onChange={(e) => setFundNote(e.target.value)}
+                            placeholder="Note to retailer"
+                            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                          />
+                        </div>
                       </div>
                     ) : null}
                   </div>
-                )}
+                ) : null}
 
+                {customerRetailFunding &&
+                showFundModal === "add" &&
+                !(l1FundSource === "local" && localMmWizardStep === 1) ? (
                 <div className="max-h-24 space-y-1 overflow-y-auto rounded bg-muted/40 p-2 sm:max-h-28">
                   <p className="text-[10px] font-semibold uppercase text-muted-foreground">Recent requests</p>
                   {fundRequests.slice(0, 6).map((r) => (
@@ -2129,6 +2199,7 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -2406,6 +2477,17 @@ export default function DashboardPage() {
 
             </div>
 
+            {showFundModal === "add" &&
+            customerRetailFunding &&
+            l1FundSource === "local" &&
+            localMmWizardStep === 1 ? (
+              <div className="shrink-0 border-t border-border/70 bg-card px-4 py-2.5 text-center sm:px-0">
+                <p className="text-[10px] text-muted-foreground">
+                  Next: tap <span className="font-semibold text-foreground">Continue · find retailers</span> above — nothing to
+                  confirm here yet.
+                </p>
+              </div>
+            ) : (
             <div className="shrink-0 space-y-2 border-t border-border/70 bg-card px-4 pb-3 pt-3 sm:px-0">
             {(showFundModal === "withdraw" ||
               retailerCreditDesk ||
@@ -2464,7 +2546,8 @@ export default function DashboardPage() {
                   (showFundModal === "add" &&
                     customerRetailFunding &&
                     l1FundSource === "local" &&
-                    (!selectedRetailerId ||
+                    (localMmWizardStep !== 2 ||
+                      !selectedRetailerId ||
                       !fundTxReference.trim() ||
                       !fundPayerName.trim() ||
                       !fundPayerPhone.trim() ||
@@ -2507,6 +2590,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
             </div>
+            )}
           </div>
         </div>
       )}
