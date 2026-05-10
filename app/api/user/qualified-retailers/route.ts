@@ -41,21 +41,31 @@ export async function GET(request: Request) {
       })
     }
 
+    const customerCountry = country.trim().toUpperCase().slice(0, 2)
+
     const { data: rows, error } = await admin
       .from("retailer_profiles")
       .select(
         "id,user_id,payment_numbers,credit_basin,under_review,country_code,is_country_retailer,liquidity_status,whatsapp_number,contact_phone,registered_payee_names,estimated_response_minutes,last_activity_at,updated_at"
       )
       .eq("is_country_retailer", true)
-      .eq("country_code", country)
       .eq("under_review", false)
-      .neq("liquidity_status", "offline")
+      /** Explicit states only — avoids PostgREST `neq` dropping NULL legacy rows. */
+      .in("liquidity_status", ["active", "busy", "low_liquidity"])
       .order("updated_at", { ascending: false })
+      .limit(200)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const qualified: Array<Record<string, unknown>> = []
     for (const row of rows ?? []) {
+      const deskCc = String(row.country_code ?? "")
+        .trim()
+        .toUpperCase()
+        .slice(0, 2)
+      /** Match same ISO2, or desks with no country set (legacy / ops); do not cross-match different ISO2s. */
+      if (deskCc && deskCc !== customerCountry) continue
+
       const uid = row.user_id as string
       const rid = row.id as string
       const { spendable } = await retailerSpendableLiquidity(admin, uid, rid)

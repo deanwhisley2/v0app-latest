@@ -51,6 +51,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "At least one payment number is required." }, { status: 400 })
     }
     const cc = typeof body.countryCode === "string" ? body.countryCode.trim().toUpperCase().slice(0, 2) : ""
+    if (Boolean(body.isCountryRetailer) && cc.length !== 2) {
+      return NextResponse.json(
+        { error: "Set a 2-letter country (e.g. UG) when offering in-country mobile-money desks, or turn off that option." },
+        { status: 400 },
+      )
+    }
     const liquidityAllowed = ["active", "busy", "offline", "low_liquidity"]
     const liqRaw = typeof body.liquidityStatus === "string" ? body.liquidityStatus.trim() : ""
     const liquidity_status = liquidityAllowed.includes(liqRaw) ? liqRaw : "offline"

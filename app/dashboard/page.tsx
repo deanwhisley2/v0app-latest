@@ -1009,6 +1009,15 @@ export default function DashboardPage() {
               setDeskWhatsapp(p.whatsapp_number ?? "")
               setDeskContactPhone(p.contact_phone ?? "")
               setDeskPayeeNames(p.registered_payee_names ?? "")
+            } else {
+              /** Empty shell row is rare; defaults keep SQL-promoted desks customer-visible if retailer saves later. */
+              setDeskIsCountryRetailer(true)
+              const snapCc = String(op.snapshot?.profile?.fundingCountryCode ?? "")
+                .trim()
+                .toUpperCase()
+                .slice(0, 2)
+              setDeskCountryCode(snapCc.length === 2 ? snapCc : "UG")
+              setDeskLiquidityStatus("active")
             }
           }
         }
@@ -1057,6 +1066,7 @@ export default function DashboardPage() {
     isGuestSession,
     showFundModal,
     currentUser?.level,
+    op.snapshot?.profile?.fundingCountryCode,
   ])
 
   const handleLogout = useCallback(async () => {
@@ -2019,7 +2029,10 @@ export default function DashboardPage() {
                     checked={deskIsCountryRetailer}
                     onChange={(e) => setDeskIsCountryRetailer(e.target.checked)}
                   />
-                  Offer in-country liquidity (mobile money desks)
+                  <span>
+                    Offer in-country liquidity (required for Add Funds — customers only see desks with this on + country +
+                    active liquidity)
+                  </span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <input
