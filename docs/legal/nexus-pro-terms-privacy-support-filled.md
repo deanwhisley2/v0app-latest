@@ -132,7 +132,7 @@ We use service providers (“processors”) to run the Platform, including:
 
 - **Supabase** — authentication, database, and related infrastructure *(region: per your Supabase project settings; link: [https://supabase.com/privacy](https://supabase.com/privacy))*.
 - **Brevo** (formerly Sendinblue) — transactional email *(link: [https://www.brevo.com/legal/privacypolicy/](https://www.brevo.com/legal/privacypolicy/))*.
-- **Hosting / deployment** — e.g. Vercel, Netlify, VPS, or PM2-managed servers **as actually used**; list the provider and subprocessors.
+- **Hosting / deployment** — e.g. VPS with nginx + PM2, or other servers **as actually used**; list the provider and subprocessors.
 - **Optional AI** — **DeepSeek** (Joelin) when `DEEPSEEK_API_KEY` is configured; otherwise assistant replies may be local-only.
 
 **Exchanges**: When you connect keys, requests go to **Binance, Bitget, KuCoin**, or other exchanges you enable; their privacy policies govern their processing.
@@ -221,5 +221,5 @@ Los Angeles, California, United States *(complete registered address)*
 1. Insert **full registered street address** and confirm **exact legal entity name** on formation documents.  
 2. Have counsel finalize **restricted jurisdictions**, **governing law**, **arbitration vs courts**, and **liability cap**.  
 3. Confirm whether **DeepSeek / xAI / other APIs** are on in production; update Section 1–3 of Privacy accordingly.  
-4. List **actual hosting provider** (Vercel, VPS IP, etc.) and **analytics** (if any).  
+4. List **actual hosting provider** (domain, VPS, analytics vendor if any).  
 5. Wire in-app **Terms**, **Privacy**, and **Contact** buttons to these URLs or pages.
