@@ -1560,6 +1560,7 @@ export default function DashboardPage() {
         currentUser={currentUser ?? undefined}
         referral={referralInfo}
         onLogout={handleLogout}
+        retailerCreditDesk={retailerCreditDesk}
       />
 
       <LiveMarketFeedBar
@@ -2427,6 +2428,7 @@ export default function DashboardPage() {
                 onRequestViewConsumed={handleSettingsRequestConsumed}
                 isGuestSession={isGuestSession}
                 tradingUserLevel={currentUser?.level ?? 1}
+                retailerCreditDesk={retailerCreditDesk}
               />
             </main>
           </div>

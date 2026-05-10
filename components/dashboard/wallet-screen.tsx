@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Wallet,
   Send,
@@ -70,6 +70,13 @@ export function WalletScreen({
   const [bankAccount, setBankAccount] = useState("")
   const [walletAddress, setWalletAddress] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+
+  /** Liquidity admins and retail desks: land on Assets (operational panels), not demo portfolio. */
+  useEffect(() => {
+    if (tradingUserLevel === 5 || retailerCreditDesk) {
+      setActiveTab("assets")
+    }
+  }, [tradingUserLevel, retailerCreditDesk])
 
   // Generate holdings with random balances
   const holdings = useMemo(() => 

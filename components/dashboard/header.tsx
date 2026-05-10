@@ -26,19 +26,29 @@ import { NotificationPanel } from "./notification-panel"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { GlobalSearch } from "./global-search"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
-import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
+import { getTierBadgeLabel } from "@/lib/nexus-tier-matrix"
 
 interface HeaderProps {
   activeTab: string
   onTabChange: (tab: string) => void
   coins?: Array<{ symbol: string; name: string; price: number; change24h: number }>
   currentUser?: { email: string; username: string; fullName: string; level: number }
+  /** Level 2 retailer credit desk — combined with level for badge label. */
+  retailerCreditDesk?: boolean
   /** Populated from GET /api/user/referral — share link + counts */
   referral?: { referralCode: string; referralLink: string; refereeCount: number } | null
   onLogout?: () => void | Promise<void>
 }
 
-export function Header({ activeTab, onTabChange, coins = [], currentUser, referral = null, onLogout }: HeaderProps) {
+export function Header({
+  activeTab,
+  onTabChange,
+  coins = [],
+  currentUser,
+  referral = null,
+  onLogout,
+  retailerCreditDesk = false,
+}: HeaderProps) {
   const { t } = useUserPreferences()
   const { unreadCount } = useNexusNotifications()
   const [showNotifications, setShowNotifications] = useState(false)
@@ -236,7 +246,8 @@ export function Header({ activeTab, onTabChange, coins = [], currentUser, referr
                               <h4 className="truncate font-semibold text-foreground">{currentUser?.fullName || "User"}</h4>
                               <p className="text-sm text-muted-foreground">@{currentUser?.username || "user"}</p>
                               <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/20 px-2 py-0.5 text-xs font-semibold text-success">
-                                <Check className="h-3 w-3" /> Level {TRADING_USER_LEVEL}
+                                <Check className="h-3 w-3" />{" "}
+                                {getTierBadgeLabel(currentUser?.level ?? 1, retailerCreditDesk)}
                               </span>
                             </div>
                           </div>

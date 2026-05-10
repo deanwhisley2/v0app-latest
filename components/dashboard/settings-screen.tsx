@@ -40,6 +40,7 @@ import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user
 import type { FiatCurrencyCode } from "@/lib/currency-display"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
+import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
 
 type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
 type WhitelistItem = {
@@ -92,6 +93,8 @@ interface SettingsScreenProps {
   onRequestViewConsumed?: () => void
   isGuestSession?: boolean
   tradingUserLevel?: number
+  /** Level 2 designated retail credit desk (profiles.retailer_credit_seller or env allowlist). */
+  retailerCreditDesk?: boolean
 }
 
 export function SettingsScreen({
@@ -100,6 +103,7 @@ export function SettingsScreen({
   onRequestViewConsumed,
   isGuestSession = false,
   tradingUserLevel = 1,
+  retailerCreditDesk = false,
 }: SettingsScreenProps) {
   const { t, language: appLanguage, currency: appCurrency, setPreferences } = useUserPreferences()
   const [currentView, setCurrentView] = useState<SettingsView>("main")
@@ -413,8 +417,23 @@ export function SettingsScreen({
 
   // Main settings list
   if (currentView === "main") {
+    const tier = resolveNexusTierDefinition(tradingUserLevel, retailerCreditDesk)
     return (
       <div className="space-y-4">
+        {!isGuestSession && (
+          <Card className="border-primary/30 bg-primary/5 p-4">
+            <h3 className="text-sm font-semibold text-foreground">{tier.title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{tier.summary}</p>
+            <ul className="mt-3 list-inside list-disc space-y-1 text-[11px] text-muted-foreground">
+              {tier.capabilities.map((line, idx) => (
+                <li key={`${tier.key}-${idx}`}>{line}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              Tier is set from your profile in the database; contact support to change it.
+            </p>
+          </Card>
+        )}
         {!selfieEnrolled && (
           <Card className="border-warning/40 bg-warning/10 p-4">
             <p className="text-sm font-semibold text-warning">Security required: add your selfie now</p>
