@@ -4,6 +4,7 @@
  * Meaning: 1 USD == 3900 UGX (user pays ~19,500 UGX for a $5 minimum deposit).
  */
 
+import { USD_TO_FX, type FiatCurrencyCode } from "@/lib/currency-display"
 import { NEXUS_MIN_DEPOSIT_USD, NEXUS_MIN_WITHDRAW_USD, roundUsd2 } from "@/lib/nexus-financial-policy"
 
 export type FxLocalPerUsdMap = Record<string, number>
@@ -32,7 +33,8 @@ export function readFxLocalPerUsdMap(): FxLocalPerUsdMap {
 /** Convert local currency units to USD using ISO 4217 code (e.g. UGX). */
 export function localUnitsToUsd(amountLocal: number, currencyCode: string): number | null {
   const code = currencyCode.trim().toUpperCase()
-  const rate = readFxLocalPerUsdMap()[code]
+  const envMap = readFxLocalPerUsdMap()
+  const rate = envMap[code] ?? USD_TO_FX[code as FiatCurrencyCode]
   if (!rate || !Number.isFinite(amountLocal)) return null
   return roundUsd2(amountLocal / rate)
 }
@@ -40,7 +42,8 @@ export function localUnitsToUsd(amountLocal: number, currencyCode: string): numb
 /** Convert USD to local currency units for display / limits messaging. */
 export function usdToLocalUnits(usd: number, currencyCode: string): number | null {
   const code = currencyCode.trim().toUpperCase()
-  const rate = readFxLocalPerUsdMap()[code]
+  const envMap = readFxLocalPerUsdMap()
+  const rate = envMap[code] ?? USD_TO_FX[code as FiatCurrencyCode]
   if (!rate) return null
   return Math.round(usd * rate * 100) / 100
 }

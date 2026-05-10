@@ -199,11 +199,12 @@ export function mulberry32(seed: number): () => number {
 
 export type PeriodMonths = 1 | 3 | 6
 
+/** Conservative headline amounts so “live activity” feels plausible, not lottery-sized. */
 function usdForStory(period: PeriodMonths, rnd: () => number): number {
   const r = rnd()
-  if (period === 1) return Math.round(150 + r * 4_850)
-  if (period === 3) return Math.round(800 + r * 14_200)
-  return Math.round(2_500 + r * 47_500)
+  if (period === 1) return Math.round(35 + r * 920)
+  if (period === 3) return Math.round(180 + r * 5_200)
+  return Math.round(520 + r * 14_800)
 }
 
 const PERIOD_LABEL: Record<PeriodMonths, string> = {

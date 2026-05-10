@@ -51,8 +51,8 @@ export function useAuthTestimonialNotifs(opts: {
       window.setTimeout(() => setVisible(false), STRIP_MS)
     }
 
-    const d1 = 5200 + Math.random() * 5200
-    const d2 = 50_000 + Math.random() * 18_000
+    const d1 = 8500 + Math.random() * 9000
+    const d2 = 72_000 + Math.random() * 48_000
     const t1 = window.setTimeout(fire, d1)
     const t2 = window.setTimeout(fire, d2)
     return () => {

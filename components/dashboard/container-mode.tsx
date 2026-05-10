@@ -1,14 +1,27 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { supabase } from "@/lib/supabaseClient"
 import {
   buildContainerDailySchedule,
   completedFixDaysSince,
+  CONTAINER_PERIOD_RETURN_MONTHLY_PCT,
   fixPeriodDayCount,
   scheduledEarnedUsd,
+  type FixPeriodMonths,
 } from "@/lib/container-earnings-schedule"
+import {
+  COPY_TRADE_CYCLE_MS,
+  COPY_TRADE_FORCE_CANCEL_FEE_RATE,
+  COPY_TRADE_WITHDRAW_FEE_RATE,
+  estimateCopyAutoAdjustExitUsd,
+  estimateCopyForcePulloutUsd,
+} from "@/lib/copy-trade-policy"
+import { fixedTradeScheduleProjection } from "@/lib/fixed-trade-projection"
+import { localFiatUnitsToUsd } from "@/lib/currency-display"
+import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
+import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,7 +55,6 @@ import {
   ArrowUpRight,
   Calendar,
   Timer,
-  Ban,
   Eye,
   RefreshCw,
   MessageSquare,
@@ -78,6 +90,12 @@ interface ActiveCopyTrade {
   minEndTime: Date // 24 hours minimum
   earned: number
   isTrading: boolean
+  /** Continue in recovery toward modeled +5% exit (see copy-trade policy). */
+  autoAdjust: boolean
+  /** Drawdown / adverse-move stress indicator for UX (0–1). */
+  drawdownPct: number
+  /** Desk holding through volatility while auto-adjust is on. */
+  recoveryHold: boolean
 }
 
 interface ActiveFixTrade {
@@ -337,91 +355,58 @@ export function ContainerMode({
   retailerCreditSeller = false,
   retailerLiquidityOpsBlocked = false,
 }: ContainerModeProps) {
-  const { formatUserMoney } = useUserPreferences()
+  const { formatUserMoney, currency } = useUserPreferences()
+  const { addNotification } = useNexusNotifications()
   const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
   const [copyAmount, setCopyAmount] = useState("500")
   const [fixAmount, setFixAmount] = useState("1000")
   const [fixPeriod, setFixPeriod] = useState<FixPeriod>(1)
-  const [riskMultiplier, setRiskMultiplier] = useState(1)
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [copyRiskAcknowledged, setCopyRiskAcknowledged] = useState(false)
 
-  // Active trades state
-  const [activeCopyTrades, setActiveCopyTrades] = useState<ActiveCopyTrade[]>([
-    {
-      traderId: "tr_001",
-      amount: 500,
-      startTime: new Date(Date.now() - 12 * 60 * 60 * 1000), // 12 hours ago
-      minEndTime: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 hours from now
-      earned: 23.45,
-      isTrading: true,
-    }
-  ])
+  const [activeCopyTrades, setActiveCopyTrades] = useState<ActiveCopyTrade[]>([])
 
-  const [activeFixTrades, setActiveFixTrades] = useState<ActiveFixTrade[]>(() => {
-    const traderId = "tr_001"
-    const amount = 2000
-    const period = 3 as FixPeriod
-    const startTime = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
-    const endTime = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000)
-    const seed = `${traderId}-${amount}-${period}-${startTime.getTime()}`
-    const dailySchedule = buildContainerDailySchedule(amount, period, seed)
-    const earned = scheduledEarnedUsd(dailySchedule, startTime)
-    return [
-      {
-        traderId,
-        amount,
-        period,
-        startTime,
-        endTime,
-        earned,
-        isLocked: true,
-        canWithdrawEarnings: true,
-        lastWithdrawalDate: null,
-        totalWithdrawn: 0,
-        withdrawablePercent: 50,
-        dailyWithdrawUsed: 0,
-        coinSymbol: "BTC",
-        fixedPrice: 67500,
-        dailySchedule,
-      },
-    ]
-  })
+  const [activeFixTrades, setActiveFixTrades] = useState<ActiveFixTrade[]>([])
 
   // Countdown timer effect
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
-  
-  // Live preview simulation for Fix Trade
-  const [livePreview, setLivePreview] = useState({
-    coinSymbol: "BTC",
-    basePrice: 67500,
-    currentPrice: 67500,
-    priceChange: 0,
-    earnings: 0,
-    isPositive: true,
-  })
 
-  // Live user join stats
-  const [liveStats, setLiveStats] = useState({
-    totalUsers: 287654,
-    todayJoins: 1247,
-    activeFixTrades: 42891,
-    totalEarned: 12500000,
-  })
+  /** Illustrative counts only; `totalEarned` is USD-normalized aggregate for display via formatUserMoney (not raw points). */
+  const liveStats = useMemo(
+    () => ({
+      totalUsers: 12_400,
+      todayJoins: 42,
+      activeFixTrades: 2_860,
+      /** USD-equivalent demo aggregate — avoids treating millions as fiat-local input. */
+      totalEarnedUsd: 118_000,
+    }),
+    []
+  )
+
+  const fixProjectionPreview = useMemo(() => {
+    if (activeTab !== "fix" || !selectedTrader) return null
+    const principalUsd = localFiatUnitsToUsd(parseFloat(fixAmount) || 0, currency)
+    if (principalUsd <= 0) return null
+    const seed = `${selectedTrader.id}-${fixPeriod}-${principalUsd}`
+    return fixedTradeScheduleProjection(principalUsd, fixPeriod as FixPeriodMonths, seed)
+  }, [activeTab, selectedTrader, fixAmount, fixPeriod, currency])
 
   const joinNotificationLines = useMemo(() => {
     const m = (usd: number) => formatUserMoney(usd)
     return [
-      () => `John D. from Nigeria just joined Fix Trade with ${m(2000)}`,
-      () => `Mary K. from Kenya started Copy Trading Marcus Chen`,
-      () => `Peter M. from Uganda fixed ${m(5000)} for 6 months`,
-      () => `Alice N. from Tanzania earned ${m(340)} today!`,
-      () => `Michael O. from Ghana joined with ${m(1500)}`,
-      () => `Sandra L. from South Africa started following Elena Rodriguez`,
+      () => `Member opened a fixed-term allocation (~${m(420)})`,
+      () => `Trader desk activity: modest scheduled accrual on a ${m(210)} stake`,
+      () => `New follower joined copy rotation (${m(350)}, 24h cycle)`,
+      () => `Scheduled earnings milestone on a ${m(180)} fixed lock`,
+      () => `Member reviewed Container wallet — withdrawal queue steady`,
+      () => `Desk cleared an inbound confirmation under ${m(95)}`,
     ]
   }, [formatUserMoney])
+
+  const copyAutoExitDoneRef = useRef<Set<string>>(new Set())
 
   const [joinNotifMessage, setJoinNotifMessage] = useState("")
   const [showJoinNotif, setShowJoinNotif] = useState(false)
@@ -461,37 +446,58 @@ export function ContainerMode({
     return () => clearInterval(interval)
   }, [activeCopyTrades, activeFixTrades])
 
-  // Simulate earnings increase
+  const notifyCopy = useCallback(
+    (title: string, message: string) => {
+      addNotification({ type: "system", title, message, nav: { kind: "wallet" } })
+    },
+    [addNotification]
+  )
+
+  /** Bounded copy-trade mark-to-model (not spot leverage); separate from fixed schedule. */
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveCopyTrades(trades => trades.map(trade => ({
-        ...trade,
-        earned: trade.earned + (Math.random() * 0.5 - 0.1),
-        isTrading: Math.random() > 0.3,
-      })))
+    if (activeCopyTrades.length === 0) return
+    const tick = () => {
+      setActiveCopyTrades((trades) => {
+        const kept: ActiveCopyTrade[] = []
+        for (const t of trades) {
+          const elapsed = Date.now() - t.startTime.getTime()
+          const progress = Math.min(1, elapsed / COPY_TRADE_CYCLE_MS)
+          const drift = (Math.random() - 0.47) * 0.004 * t.amount
+          let earned = Math.round((t.earned + drift) * 100) / 100
+          const maxUp = t.amount * 0.06 * progress
+          const maxDown = -t.amount * 0.12 * progress
+          earned = Math.max(maxDown, Math.min(maxUp, earned))
+          let drawdownPct = Math.max(0, Math.min(0.35, t.drawdownPct + (Math.random() - 0.46) * 0.015))
+          if (earned > t.amount * 0.015) drawdownPct *= 0.88
+          const recoveryHold = t.autoAdjust && drawdownPct > 0.045 && earned < t.amount * 0.02
 
-      setActiveFixTrades((trades) =>
-        trades.map((trade) =>
-          trade.dailySchedule?.length
-            ? trade
-            : {
-                ...trade,
-                earned: trade.earned + (Math.random() * 2),
-              }
-        )
-      )
+          if (
+            t.autoAdjust &&
+            earned >= t.amount * 0.049 &&
+            !copyAutoExitDoneRef.current.has(t.traderId)
+          ) {
+            copyAutoExitDoneRef.current.add(t.traderId)
+            const est = estimateCopyAutoAdjustExitUsd(t.amount)
+            notifyCopy(
+              "Copy trade — auto-adjust exit",
+              `Desk closed near +5% target. Est. net after ${(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal fee: ${formatUserMoney(est.netToMainUsd)} (modeled; final may vary).`
+            )
+            notifyCopy(
+              "Fees deducted (copy)",
+              `Withdrawal fee ≈ ${formatUserMoney(est.withdrawFeeUsd)} on modeled gross ${formatUserMoney(est.grossUsd)}.`
+            )
+            continue
+          }
 
-      // Update live stats
-      setLiveStats(prev => ({
-        ...prev,
-        todayJoins: prev.todayJoins + Math.floor(Math.random() * 3),
-        activeFixTrades: prev.activeFixTrades + Math.floor(Math.random() * 5),
-        totalEarned: prev.totalEarned + Math.floor(Math.random() * 500),
-      }))
-    }, 3000)
-
-    return () => clearInterval(interval)
-  }, [])
+          kept.push({ ...t, earned, drawdownPct, recoveryHold, isTrading: true })
+        }
+        return kept
+      })
+    }
+    tick()
+    const id = window.setInterval(tick, 5000)
+    return () => window.clearInterval(id)
+  }, [activeCopyTrades.length, formatUserMoney, notifyCopy])
 
   // Keep fixed-trade earnings aligned with the locked-period daily curve (container / platform deposit).
   useEffect(() => {
@@ -519,60 +525,14 @@ export function ContainerMode({
       setTimeout(() => setShowJoinNotif(false), 4000)
     }
 
-    const initialTimeout = setTimeout(showNotif, 5000)
-    const interval = setInterval(showNotif, 15000 + Math.random() * 10000)
+    const initialTimeout = setTimeout(showNotif, 22_000)
+    const interval = setInterval(showNotif, 62_000 + Math.random() * 48_000)
 
     return () => {
       clearTimeout(initialTimeout)
       clearInterval(interval)
     }
   }, [joinNotificationLines])
-
-  // Live preview simulation for Fix Trade modal
-  useEffect(() => {
-    if (!selectedTrader || activeTab !== "fix") return
-
-    const coins = [
-      { symbol: "BTC", price: 67500 },
-      { symbol: "ETH", price: 3450 },
-      { symbol: "SOL", price: 142 },
-      { symbol: "BNB", price: 580 },
-      { symbol: "AVAX", price: 35 },
-    ]
-    
-    // Pick a random coin for this preview
-    const randomCoin = coins[Math.floor(Math.random() * coins.length)]
-    setLivePreview(prev => ({
-      ...prev,
-      coinSymbol: randomCoin.symbol,
-      basePrice: randomCoin.price,
-      currentPrice: randomCoin.price,
-    }))
-
-    // Simulate real-time price movement
-    const interval = setInterval(() => {
-      setLivePreview(prev => {
-        // Simulate price volatility (-1.5% to +1.5%)
-        const changePercent = (Math.random() - 0.48) * 3
-        const newPrice = prev.basePrice * (1 + changePercent / 100)
-        const totalChangePercent = ((newPrice - prev.basePrice) / prev.basePrice) * 100
-        
-        // Calculate earnings based on amount and price change
-        const amount = parseFloat(fixAmount) || 0
-        const earnings = (amount * totalChangePercent) / 100
-        
-        return {
-          ...prev,
-          currentPrice: newPrice,
-          priceChange: totalChangePercent,
-          earnings: earnings,
-          isPositive: totalChangePercent >= 0,
-        }
-      })
-    }, 1500)
-
-    return () => clearInterval(interval)
-  }, [selectedTrader, activeTab, fixAmount])
 
   const availableTraders = masterTraders.filter((t) => t.minLevel <= userLevel)
   const lockedTraders = masterTraders.filter((t) => t.minLevel > userLevel)
@@ -591,8 +551,14 @@ export function ContainerMode({
                       activeFixTrades.reduce((sum, t) => sum + t.earned, 0)
 
   const handleActivateCopy = (trader: MasterTrader) => {
-    const amount = parseFloat(copyAmount)
-    if (isNaN(amount) || amount <= 0) return
+    const raw = parseFloat(copyAmount)
+    const amount = localFiatUnitsToUsd(raw, currency)
+    if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
+    if (amount < 100) {
+      alert("Minimum copy allocation is $100 USD equivalent in your currency.")
+      return
+    }
+    if (!copyRiskAcknowledged) return
 
     setIsProcessing(true)
     setTimeout(() => {
@@ -600,19 +566,77 @@ export function ContainerMode({
         traderId: trader.id,
         amount,
         startTime: new Date(),
-        minEndTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours minimum
+        minEndTime: new Date(Date.now() + COPY_TRADE_CYCLE_MS),
         earned: 0,
         isTrading: true,
+        autoAdjust: false,
+        drawdownPct: 0,
+        recoveryHold: false,
       }
-      setActiveCopyTrades([...activeCopyTrades, newTrade])
+      copyAutoExitDoneRef.current.delete(trader.id)
+      setActiveCopyTrades((prev) => [...prev, newTrade])
+      notifyCopy(
+        "Copy trade started",
+        `${formatUserMoney(amount)} allocated to ${trader.name}. 24h aggressive cycle — uninsured, separate from fixed insurance.`
+      )
+      notifyCopy(
+        "Recovery-hold possible",
+        "If the desk is underwater, capital may stay in play briefly to avoid unnecessary damage; force pull-out remains available."
+      )
       setSelectedTrader(null)
+      setCopyRiskAcknowledged(false)
       setIsProcessing(false)
     }, 1500)
   }
 
+  const toggleCopyAutoAdjust = (traderId: string) => {
+    setActiveCopyTrades((prev) =>
+      prev.map((t) => {
+        if (t.traderId !== traderId) return t
+        const next = !t.autoAdjust
+        notifyCopy(
+          next ? "Auto-adjust enabled" : "Auto-adjust disabled",
+          next
+            ? "Desk may hold through drawdowns toward a modeled +5% exit (then withdrawal fee). Not insured."
+            : "You disabled recovery continuation toward the auto target."
+        )
+        return { ...t, autoAdjust: next }
+      })
+    )
+  }
+
+  const handleForcePullOutCopy = (traderId: string) => {
+    const trade = activeCopyTrades.find((t) => t.traderId === traderId)
+    if (!trade) return
+
+    const settlement = estimateCopyForcePulloutUsd({
+      stakeUsd: trade.amount,
+      floatingPnLUsd: trade.earned,
+      coinImpactFraction: trade.drawdownPct,
+    })
+
+    setIsProcessing(true)
+    setTimeout(() => {
+      setActiveCopyTrades((prev) => prev.filter((t) => t.traderId !== traderId))
+      copyAutoExitDoneRef.current.delete(traderId)
+      setShowCancelConfirm(null)
+      setIsProcessing(false)
+      notifyCopy(
+        "Force pull-out completed",
+        `Est. net to Nexus Main ≈ ${formatUserMoney(settlement.netToMainUsd)} after cancel ${(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}%, withdrawal ${(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}%, and modeled coin impact. Final amount confirms at settlement.`
+      )
+      notifyCopy("Fees trace (copy)", `Cancel ≈ ${formatUserMoney(settlement.cancelFeeUsd)}, withdrawal ≈ ${formatUserMoney(settlement.withdrawFeeUsd)}.`)
+    }, 900)
+  }
+
   const handleActivateFix = (trader: MasterTrader) => {
-    const amount = parseFloat(fixAmount)
-    if (isNaN(amount) || amount <= 0) return
+    const raw = parseFloat(fixAmount)
+    const amount = localFiatUnitsToUsd(raw, currency)
+    if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
+    if (amount < 500) {
+      alert("Minimum fixed stake is $500 USD equivalent in your currency.")
+      return
+    }
     if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
 
     setIsProcessing(true)
@@ -649,33 +673,14 @@ export function ContainerMode({
         dailySchedule,
       }
       setActiveFixTrades([...activeFixTrades, newTrade])
+      addNotification({
+        type: "system",
+        title: "Fixed trade schedule active",
+        message: `${formatUserMoney(amount)} · ${fixPeriod} month lock. Earnings accrue on the policy daily curve (not spot-intraday hype).`,
+        nav: { kind: "wallet" },
+      })
       setSelectedTrader(null)
       setIsProcessing(false)
-    }, 1500)
-  }
-
-  const handleCancelCopyTrade = (traderId: string) => {
-    const trade = activeCopyTrades.find(t => t.traderId === traderId)
-    if (!trade) return
-
-    const canCancel = Date.now() >= trade.minEndTime.getTime()
-    if (!canCancel) {
-      alert("Cannot cancel before 24 hours minimum period")
-      return
-    }
-
-    // 10% stake + 1.6% reverse fee
-    const cancellationFee = trade.amount * 0.10 + trade.amount * 0.016
-    const returnAmount = trade.amount + trade.earned - cancellationFee
-
-    setIsProcessing(true)
-    setTimeout(() => {
-      setActiveCopyTrades(activeCopyTrades.filter(t => t.traderId !== traderId))
-      setShowCancelConfirm(null)
-      setIsProcessing(false)
-      alert(
-        `Trade cancelled. Returned: ${formatUserMoney(returnAmount)} (Fee: ${formatUserMoney(cancellationFee)})`
-      )
     }, 1500)
   }
 
@@ -836,7 +841,7 @@ export function ContainerMode({
             </div>
             <div className="flex items-center gap-1">
               <DollarSign className="h-4 w-4 text-success" />
-              <span className="font-mono font-bold text-success">{formatUserMoney(liveStats.totalEarned)}</span>
+              <span className="font-mono font-bold text-success">{formatUserMoney(liveStats.totalEarnedUsd)}</span>
               <span className="text-muted-foreground">earned</span>
             </div>
           </div>
@@ -918,13 +923,19 @@ export function ContainerMode({
                   Follow expert traders and automatically copy their trades. Choose between:
                 </p>
                 <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <Copy className="h-3 w-3 text-primary" />
-                    <strong>Copy Trade:</strong> Real-time copying, min 24hrs, can cancel with 10% + 1.6% fee
+                  <li className="flex items-start gap-2">
+                    <Copy className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                    <span>
+                      <strong>Copy:</strong> 24h uninsured cycles — aggressive, separate risk pools from fixed insurance.
+                      Force pull-out applies cancel + withdrawal + market haircut.
+                    </span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <Lock className="h-3 w-3 text-warning" />
-                    <strong>Fix Trade:</strong> Fixed period (1/3/6 months), funds locked — more time for your trader to work the plan
+                  <li className="flex items-start gap-2">
+                    <Lock className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
+                    <span>
+                      <strong>Fixed:</strong> Locked 1/3/6 months on the scheduled earnings curve (policy) — distinct from
+                      copy-trading risk.
+                    </span>
                   </li>
                 </ul>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -1015,25 +1026,31 @@ export function ContainerMode({
                 Active Copy Trades
               </h4>
               <div className="space-y-3">
-                {activeCopyTrades.map(trade => {
+                {activeCopyTrades.map((trade) => {
                   const trader = getTraderById(trade.traderId)
                   if (!trader) return null
-                  const canCancel = Date.now() >= trade.minEndTime.getTime()
 
                   return (
                     <div key={trade.traderId} className="rounded-lg border border-border bg-muted/30 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className="relative">
-                            <div 
+                            <div
                               className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                              style={{ backgroundColor: trader.riskLevel === "Low" ? "#22C55E" : trader.riskLevel === "Medium" ? "#EAB308" : "#EF4444" }}
+                              style={{
+                                backgroundColor:
+                                  trader.riskLevel === "Low"
+                                    ? "#22C55E"
+                                    : trader.riskLevel === "Medium"
+                                      ? "#EAB308"
+                                      : "#EF4444",
+                              }}
                             >
                               {trader.avatar}
                             </div>
                             {trade.isTrading && (
                               <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                                 <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full bg-success">
                                   <RefreshCw className="h-2 w-2 text-white animate-spin" />
                                 </span>
@@ -1046,10 +1063,22 @@ export function ContainerMode({
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-mono font-bold text-success">+{formatUserMoney(trade.earned)}</p>
-                          <p className="text-xs text-muted-foreground">earned</p>
+                          <p
+                            className={`font-mono font-bold ${trade.earned >= 0 ? "text-success" : "text-destructive"}`}
+                          >
+                            {trade.earned >= 0 ? "+" : ""}
+                            {formatUserMoney(trade.earned)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">modeled P/L (24h desk)</p>
                         </div>
                       </div>
+
+                      {trade.recoveryHold ? (
+                        <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-100">
+                          Recovery hold: desk staying in position during stress — not insured. Force pull-out always
+                          available.
+                        </div>
+                      ) : null}
 
                       <div className="grid grid-cols-3 gap-2 mb-3 text-center text-sm">
                         <div className="rounded bg-background p-2">
@@ -1057,33 +1086,39 @@ export function ContainerMode({
                           <p className="font-mono font-medium">{formatUserMoney(trade.amount)}</p>
                         </div>
                         <div className="rounded bg-background p-2">
-                          <p className="text-xs text-muted-foreground">Time Left</p>
+                          <p className="text-xs text-muted-foreground">Cycle</p>
                           <p className="font-mono font-medium text-warning">{countdowns[`copy_${trade.traderId}`]}</p>
                         </div>
                         <div className="rounded bg-background p-2">
-                          <p className="text-xs text-muted-foreground">Status</p>
-                          <p className={`font-medium ${trade.isTrading ? "text-success" : "text-muted-foreground"}`}>
-                            {trade.isTrading ? "Trading" : "Waiting"}
+                          <p className="text-xs text-muted-foreground">Drawdown (model)</p>
+                          <p className="font-mono font-medium text-muted-foreground">
+                            {(trade.drawdownPct * 100).toFixed(1)}%
                           </p>
                         </div>
                       </div>
 
-                      {canCancel ? (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full text-destructive hover:bg-destructive/10"
-                          onClick={() => setShowCancelConfirm(trade.traderId)}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant={trade.autoAdjust ? "default" : "outline"}
+                          size="sm"
+                          className="w-full"
+                          onClick={() => toggleCopyAutoAdjust(trade.traderId)}
+                          disabled={isProcessing}
                         >
-                          <Ban className="h-3 w-3 mr-1" />
-                          Cancel Trade (10% + 1.6% fee)
+                          Auto adjust {trade.autoAdjust ? "on" : "off"}
                         </Button>
-                      ) : (
-                        <p className="text-center text-xs text-muted-foreground">
-                          <Lock className="inline h-3 w-3 mr-1" />
-                          Locked for 24hr minimum
-                        </p>
-                      )}
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => setShowCancelConfirm(trade.traderId)}
+                          disabled={isProcessing}
+                        >
+                          Force pull out
+                        </Button>
+                      </div>
                     </div>
                   )
                 })}
@@ -1271,15 +1306,21 @@ export function ContainerMode({
       {/* ============ COPY TRADE TAB ============ */}
       {activeTab === "copy" && (
         <div className="space-y-4">
-          <Card className="border-border bg-card p-4">
+          <Card className="border-destructive/25 bg-destructive/5 p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 shrink-0 text-primary" />
+              <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
               <div className="text-sm">
-                <p className="font-medium">Copy Trade Rules</p>
-                <ul className="mt-1 text-muted-foreground space-y-1">
-                  <li>- Minimum 24 hours before you can cancel</li>
-                  <li>- Cancellation fee: 10% of stake + 1.6% reverse fee</li>
-                  <li>- Real-time trade mirroring with your chosen allocation</li>
+                <p className="font-medium text-destructive">Copy trading — higher risk (separate from fixed)</p>
+                <ul className="mt-2 text-muted-foreground space-y-1.5">
+                  <li>24-hour aggressive cycles; not insured — no guaranteed protection vs fixed-term container locks.</li>
+                  <li>Capital may sit in recovery-hold during drawdowns; force pull-out applies fees immediately.</li>
+                  <li>
+                    Force exit uses modeled{" "}
+                    <strong>{(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}%</strong> cancel +{" "}
+                    <strong>{(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}%</strong> withdrawal + adverse-move
+                    haircut (final at settlement).
+                  </li>
+                  <li>Auto-adjust targets ~+5% then withdrawal fee — informational until execution confirms.</li>
                 </ul>
               </div>
             </div>
@@ -1329,8 +1370,8 @@ export function ContainerMode({
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-lg font-bold text-success">+{trader.monthlyReturn}%</p>
-                      <p className="text-xs text-muted-foreground">{trader.winRate}% Win Rate</p>
+                      <p className="font-mono text-sm font-bold text-muted-foreground">{trader.winRate}% desk win (illustr.)</p>
+                      <p className="text-xs text-muted-foreground">24h cycle · uninsured · not fixed-term insurance</p>
                     </div>
                   </div>
                   
@@ -1470,8 +1511,10 @@ export function ContainerMode({
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-lg font-bold text-success">+{(trader.monthlyReturn * 1.2).toFixed(1)}%</p>
-                      <p className="text-xs text-muted-foreground">Fixed bonus +20%</p>
+                      <p className="font-mono text-sm font-bold text-success">
+                        ~{CONTAINER_PERIOD_RETURN_MONTHLY_PCT}% / mo curve
+                      </p>
+                      <p className="text-xs text-muted-foreground">Scheduled earnings on stake (policy)</p>
                     </div>
                   </div>
                   
@@ -1571,15 +1614,19 @@ export function ContainerMode({
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <p className="text-xs text-muted-foreground">Win Rate</p>
+                <p className="text-xs text-muted-foreground">{activeTab === "fix" ? "Desk track (info)" : "Win rate (info)"}</p>
                 <p className="text-lg font-bold text-success">{selectedTrader.winRate}%</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <p className="text-xs text-muted-foreground">Monthly Return</p>
+                <p className="text-xs text-muted-foreground">
+                  {activeTab === "fix" ? "Schedule target (policy)" : "24h cycle risk"}
+                </p>
                 <p className="text-lg font-bold text-primary">
-                  +{activeTab === "fix" 
-                    ? (selectedTrader.monthlyReturn * 1.2).toFixed(1) 
-                    : selectedTrader.monthlyReturn}%
+                  {activeTab === "fix"
+                    ? fixProjectionPreview
+                      ? formatUserMoney(fixProjectionPreview.totalTargetUsd)
+                      : "—"
+                    : "Uninsured"}
                 </p>
               </div>
             </div>
@@ -1599,12 +1646,34 @@ export function ContainerMode({
                     />
                     <p className="mt-1 text-xs text-muted-foreground">Minimum: {formatUserMoney(100)}</p>
                   </div>
-                  <div className="rounded-lg bg-destructive/10 p-3 text-sm">
-                    <p className="font-medium text-destructive">Copy Trade Terms:</p>
-                    <p className="text-muted-foreground mt-1">
-                      24hr minimum lock. Cancel fee: 10% stake + 1.6% reverse ={" "}
-                      {formatUserMoney((parseFloat(copyAmount) || 0) * 0.116)}
-                    </p>
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm space-y-2">
+                    <p className="font-medium text-destructive">Acknowledge copy-trading risk</p>
+                    <ul className="list-disc pl-4 text-muted-foreground space-y-1">
+                      <li>Copy desks are uninsured and uncorrelated with fixed-trade insurance pools.</li>
+                      <li>24h cycles prioritize opportunity — volatility and temporary capital lock are expected.</li>
+                      <li>
+                        Force pull-out: {(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}% cancel +{" "}
+                        {(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal + market impact
+                        {localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency) >= 100
+                          ? ` (illustrative net ≈ ${formatUserMoney(
+                              estimateCopyForcePulloutUsd({
+                                stakeUsd: localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency),
+                                floatingPnLUsd: 0,
+                                coinImpactFraction: 0.08,
+                              }).netToMainUsd
+                            )} at 8% stress)`
+                          : " (enter amount for sample net)"}
+                        .
+                      </li>
+                    </ul>
+                    <label className="flex cursor-pointer items-start gap-2 pt-1">
+                      <Checkbox
+                        checked={copyRiskAcknowledged}
+                        onCheckedChange={(v) => setCopyRiskAcknowledged(v === true)}
+                        className="mt-0.5"
+                      />
+                      <span>I understand copy trading is high-risk, uninsured, and separate from fixed container locks.</span>
+                    </label>
                   </div>
                 </>
               ) : (
@@ -1638,50 +1707,40 @@ export function ContainerMode({
                       ))}
                     </div>
                   </div>
-                  {/* Live Preview Box */}
-                  <div className={`rounded-lg border-2 p-4 ${livePreview.isPositive ? "border-success/50 bg-success/5" : "border-destructive/50 bg-destructive/5"}`}>
+                  {/* Policy projection — matches container earnings schedule engine */}
+                  <div className="rounded-lg border-2 border-primary/40 bg-primary/5 p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2 w-2 rounded-full animate-pulse ${livePreview.isPositive ? "bg-success" : "bg-destructive"}`} />
-                        <span className="text-xs font-medium text-muted-foreground">LIVE PREVIEW</span>
-                      </div>
-                      <span className="rounded bg-muted px-2 py-0.5 text-xs font-mono font-bold">
-                        {livePreview.coinSymbol}
+                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Policy schedule (illustrative)
+                      </span>
+                      <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+                        {fixProjectionPreview ? `${fixProjectionPreview.dayCount}d curve` : "—"}
                       </span>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Fixed price (USD spot)</p>
-                        <p className="font-mono font-bold">${livePreview.basePrice.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Current (USD spot)</p>
-                        <p className={`font-mono font-bold ${livePreview.isPositive ? "text-success" : "text-destructive"}`}>
-                          ${livePreview.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    {fixProjectionPreview ? (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total targeted earnings (model)</span>
+                          <span className="font-mono font-semibold text-success">
+                            {formatUserMoney(fixProjectionPreview.totalTargetUsd)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Illustrative day 1 accrual</span>
+                          <span className="font-mono">{formatUserMoney(fixProjectionPreview.dayOneUsd)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">First week cumulative (model)</span>
+                          <span className="font-mono">{formatUserMoney(fixProjectionPreview.weekOneUsd)}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground pt-1">
+                          Uses the same daily bucket schedule as your live fixed lock — not live coin leverage.
+                          Insurance &amp; withdrawal fees apply at lock per Nexus financial policy.
                         </p>
                       </div>
-                    </div>
-
-                    <div className="flex items-center justify-between rounded-lg bg-background p-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Real-time Earnings</p>
-                        <p className={`text-2xl font-mono font-bold ${livePreview.isPositive ? "text-success" : "text-destructive"}`}>
-                          {livePreview.isPositive ? "+" : ""}
-                          {formatUserMoney(livePreview.earnings)}
-                        </p>
-                      </div>
-                      <div className={`rounded-lg px-3 py-2 ${livePreview.isPositive ? "bg-success/20" : "bg-destructive/20"}`}>
-                        <p className={`text-lg font-mono font-bold ${livePreview.isPositive ? "text-success" : "text-destructive"}`}>
-                          {livePreview.isPositive ? "+" : ""}{livePreview.priceChange.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <p className="mt-2 text-xs text-center text-muted-foreground">
-                      Live preview: how {livePreview.coinSymbol} might move while your trader manages the stake — your
-                      real Container view tracks day‑by‑day earnings once you lock.
-                    </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Enter a stake amount to preview the schedule.</p>
+                    )}
                   </div>
 
                   <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm text-muted-foreground space-y-2">
@@ -1736,6 +1795,7 @@ export function ContainerMode({
                 onClick={() => activeTab === "copy" ? handleActivateCopy(selectedTrader) : handleActivateFix(selectedTrader)}
                 disabled={
                   isProcessing ||
+                  (activeTab === "copy" && !copyRiskAcknowledged) ||
                   (activeTab === "fix" &&
                     (!traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel) ||
                       fixLiquidityGate))
@@ -1762,32 +1822,41 @@ export function ContainerMode({
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
                 <AlertCircle className="h-8 w-8 text-destructive" />
               </div>
-              <h3 className="text-lg font-semibold">Cancel Copy Trade?</h3>
+              <h3 className="text-lg font-semibold">Force pull out?</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Cancellation will incur a fee of <strong>10% of stake + 1.6% reverse fee</strong>
+                Applies {(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}% cancel +{" "}
+                {(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal + modeled coin impact. Final amount confirms
+                after execution.
               </p>
               {(() => {
-                const trade = activeCopyTrades.find(t => t.traderId === showCancelConfirm)
+                const trade = activeCopyTrades.find((t) => t.traderId === showCancelConfirm)
                 if (!trade) return null
-                const fee = trade.amount * 0.116
-                const returnAmt = trade.amount + trade.earned - fee
+                const est = estimateCopyForcePulloutUsd({
+                  stakeUsd: trade.amount,
+                  floatingPnLUsd: trade.earned,
+                  coinImpactFraction: trade.drawdownPct,
+                })
                 return (
-                    <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
+                  <div className="mt-4 rounded-lg bg-muted p-3 text-sm space-y-1">
                     <div className="flex justify-between">
-                      <span>Stake:</span>
+                      <span>Stake</span>
                       <span>{formatUserMoney(trade.amount)}</span>
                     </div>
-                    <div className="flex justify-between text-success">
-                      <span>Earned:</span>
-                      <span>+{formatUserMoney(trade.earned)}</span>
+                    <div className="flex justify-between">
+                      <span>Modeled P/L</span>
+                      <span>{formatUserMoney(trade.earned)}</span>
                     </div>
                     <div className="flex justify-between text-destructive">
-                      <span>Fee:</span>
-                      <span>-{formatUserMoney(fee)}</span>
+                      <span>Cancel fee</span>
+                      <span>-{formatUserMoney(est.cancelFeeUsd)}</span>
                     </div>
-                    <div className="flex justify-between font-bold mt-2 pt-2 border-t border-border">
-                      <span>You receive:</span>
-                      <span>{formatUserMoney(returnAmt)}</span>
+                    <div className="flex justify-between text-destructive">
+                      <span>Withdrawal fee</span>
+                      <span>-{formatUserMoney(est.withdrawFeeUsd)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold mt-2 border-t border-border pt-2">
+                      <span>Est. net</span>
+                      <span>{formatUserMoney(est.netToMainUsd)}</span>
                     </div>
                   </div>
                 )
@@ -1800,10 +1869,10 @@ export function ContainerMode({
               <Button 
                 variant="destructive" 
                 className="flex-1"
-                onClick={() => handleCancelCopyTrade(showCancelConfirm)}
+                onClick={() => handleForcePullOutCopy(showCancelConfirm)}
                 disabled={isProcessing}
               >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Cancel"}
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm pull out"}
               </Button>
             </div>
           </Card>

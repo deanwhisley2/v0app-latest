@@ -130,7 +130,7 @@ export function useDashboardTestimonialNotifs(opts: {
       return
     }
 
-    const delay = 5000 + Math.random() * 7000
+    const delay = 14_000 + Math.random() * 22_000
     const t = window.setTimeout(() => {
       try {
         sessionStorage.setItem(lk, "1")
@@ -152,7 +152,7 @@ export function useDashboardTestimonialNotifs(opts: {
       return
     }
 
-    const delay = 72_000 + Math.random() * 28_000
+    const delay = 210_000 + Math.random() * 120_000
     const t = window.setTimeout(() => {
       try {
         sessionStorage.setItem(pairKey, "1")

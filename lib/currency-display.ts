@@ -1,3 +1,14 @@
+/**
+ * Display & funding conversion helpers.
+ *
+ * **Canonical accounting unit for API / `user_balances` / ledger paths: USD-equivalent**
+ * (sometimes called “Nexus normalized units” — always USD in code, never raw local floats).
+ *
+ * `formatMoneyAmount(amountUsd, …)` multiplies USD → local for Intl display.
+ * User **input** in their preferred fiat must be converted **to USD first** via
+ * `localFiatUnitsToUsd` before comparing to balances or sending to APIs.
+ */
+
 /** Approximate USD → local rates for display (container / wallet copy). Not FX trading quotes. */
 export const USD_TO_FX: Record<string, number> = {
   USD: 1,
@@ -26,6 +37,34 @@ export function isSupportedFiat(code: string): code is FiatCurrencyCode {
 export function convertFromUsd(amountUsd: number, currency: string): number {
   const rate = USD_TO_FX[currency as FiatCurrencyCode] ?? USD_TO_FX.USD
   return amountUsd * rate
+}
+
+/** User-typed amount in their fiat → USD accounting unit (inverse of convertFromUsd). */
+export function localFiatUnitsToUsd(amountLocal: number, currency: string): number {
+  if (!Number.isFinite(amountLocal)) return 0
+  const c = isSupportedFiat(currency) ? currency : "USD"
+  const rate = USD_TO_FX[c as FiatCurrencyCode] ?? 1
+  if (c === "USD") return Math.round(amountLocal * 100) / 100
+  return Math.round((amountLocal / rate) * 1e6) / 1e6
+}
+
+/** Format a number already in local fiat (e.g. echoing raw input). Does NOT treat value as USD. */
+export function formatLocalFiatAmount(amountLocal: number, currency: string, locale: string): string {
+  const c = isSupportedFiat(currency) ? currency : "USD"
+  try {
+    return new Intl.NumberFormat(locale || "en", {
+      style: "currency",
+      currency: c,
+      maximumFractionDigits: c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK" ? 0 : 2,
+    }).format(amountLocal)
+  } catch {
+    return `${c} ${amountLocal.toFixed(0)}`
+  }
+}
+
+/** Format ledger/API USD for the user’s display currency (same as UserPreferences formatUserMoney). */
+export function formatAccountingUsdForDisplay(amountUsd: number, currency: string, locale: string): string {
+  return formatMoneyAmount(amountUsd, currency, locale)
 }
 
 export function formatMoneyAmount(amountUsd: number, currency: string, locale: string): string {

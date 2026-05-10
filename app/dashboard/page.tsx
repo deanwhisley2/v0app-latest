@@ -43,6 +43,11 @@ import {
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
+import {
+  convertFromUsd,
+  formatLocalFiatAmount,
+  localFiatUnitsToUsd,
+} from "@/lib/currency-display"
 
 interface CurrentUser {
   email: string
@@ -133,7 +138,7 @@ export default function DashboardPage() {
   const { user, isLoading: authLoading, signOut, isGuestSession } = useAuth()
   const op = useOperationalBootstrap()
   const activityUserId = user?.id ?? "guest"
-  const { formatUserMoney } = useUserPreferences()
+  const { formatUserMoney, currency, locale } = useUserPreferences()
   const testimonialNotif = useDashboardTestimonialNotifs({
     enabled: Boolean(user) && !isGuestSession,
     userId: user?.id,
@@ -1348,7 +1353,15 @@ export default function DashboardPage() {
   }, [showFundModal, l1FundSource])
 
   const handleFundSubmit = useCallback(() => {
-    const amount = parseFloat(fundAmount)
+    const amountRaw = parseFloat(fundAmount)
+    /** Withdraw & local mobile-money funding: user types preferred fiat → ledger uses USD-normalized units. */
+    let ledgerUsd = amountRaw
+    if (showFundModal === "withdraw") {
+      ledgerUsd = localFiatUnitsToUsd(amountRaw, currency)
+    } else if (showFundModal === "add" && l1FundSource === "local") {
+      ledgerUsd = localFiatUnitsToUsd(amountRaw, currency)
+    }
+    const amount = ledgerUsd
     const level = currentUser?.level ?? 1
     if (!(amount > 0) && !(showFundModal === "withdraw")) {
       if (showFundModal === "add" && customerRetailFunding && l1FundSource === "crypto") return
@@ -1475,6 +1488,8 @@ export default function DashboardPage() {
     retailerCreditDesk,
     formatUserMoney,
     withdrawalPendingBalance,
+    currency,
+    l1FundSource,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -1656,7 +1671,9 @@ export default function DashboardPage() {
               {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Deducted from Nexus Main at request; released or refunded by Level 5 liquidity admin only.
+              Funds deducted from your Nexus Main Account at withdrawal request and temporarily held for automated
+              processing. Funds are either released to your withdrawal destination upon approval or refunded back to your
+              Nexus account if processing fails.
             </p>
           </div>
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
@@ -2127,35 +2144,39 @@ export default function DashboardPage() {
               <div className="mb-4">
                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
                   {showFundModal === "withdraw"
-                    ? "Withdraw amount (Nexus units)"
+                    ? `Withdraw amount (${currency})`
                     : retailerCreditDesk
-                      ? "Requested admin top-up amount (Nexus units)"
-                      : "Funding amount (match what you send)"}
+                      ? `Requested admin top-up (${currency})`
+                      : `Funding amount in ${currency} (match what you send)`}
                 </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  <input
-                    type="number"
-                    value={fundAmount}
-                    onChange={(e) => setFundAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full rounded-lg border border-border bg-background py-3 pl-8 pr-4 font-mono text-lg outline-none transition-colors focus:border-primary"
-                  />
-                </div>
+                <input
+                  type="number"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value)}
+                  placeholder={`0 (${currency})`}
+                  className="w-full rounded-lg border border-border bg-background py-3 px-4 font-mono text-lg outline-none transition-colors focus:border-primary"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Ledger uses USD-normalized accounting internally; amounts here are always your selected fiat (
+                  {currency}) and convert automatically — not raw “points”.
+                </p>
                 {showFundModal === "withdraw" && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Available: ${showBalance ? mainBalance.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "••••"}
+                    Available:{" "}
+                    {showBalance ? formatUserMoney(mainBalance) : "••••"}
                   </p>
                 )}
                 <div className="mt-2 flex gap-2">
-                  {[50, 100, 250, 500].map((amt) => (
+                  {[50, 100, 250, 500].map((usdPreset) => (
                     <button
-                      key={amt}
+                      key={usdPreset}
                       type="button"
-                      onClick={() => setFundAmount(amt.toString())}
+                      onClick={() =>
+                        setFundAmount(String(Math.round(convertFromUsd(usdPreset, currency) * 100) / 100))
+                      }
                       className="flex-1 rounded-lg bg-muted py-2 text-xs font-medium hover:bg-muted/80"
                     >
-                      ${amt}
+                      ≈{formatUserMoney(usdPreset)}
                     </button>
                   ))}
                 </div>
@@ -2186,7 +2207,9 @@ export default function DashboardPage() {
                     Processing...
                   </>
                 ) : showFundModal === "withdraw" ? (
-                  `Withdraw $${fundAmount || "0"}`
+                  fundAmount.trim()
+                    ? `Withdraw · ${formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale)}`
+                    : "Withdraw"
                 ) : customerRetailFunding && l1FundSource === "local" ? (
                   "Confirm payment sent"
                 ) : customerRetailFunding ? (
@@ -2380,7 +2403,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {!isGuestSession && (
+      {!isGuestSession && (currentUser?.level ?? 1) === 5 && (
         <div className="mx-auto max-w-[1600px] px-4 pb-1">
           <OperationalContinuityHud />
         </div>

@@ -28,6 +28,7 @@ type UserPreferencesContextValue = {
   currency: string
   locale: string
   setPreferences: (p: Partial<UserPreferences>) => void
+  /** Ledger/API balances are **USD-normalized**; this converts to the user’s display fiat only. Never pass raw local input here. */
   formatUserMoney: (amountUsd: number) => string
   /** Translate UI keys from `lib/i18n/app-messages.ts` (e.g. `nav.trade`). */
   t: (key: string) => string
