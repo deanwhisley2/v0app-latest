@@ -4,9 +4,14 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import {
+  assertNoDuplicatePendingUserFunding,
+  DuplicatePendingError,
+} from "@/lib/server/funding-duplicate-guard"
+import {
   attachProfileEmailsToRetailers,
   retailerSpendableLiquidity,
 } from "@/lib/server/retailer-funding-helpers"
+import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 
 export async function GET(request: Request) {
   try {
@@ -161,6 +166,15 @@ export async function POST(request: Request) {
       retailerResponseDeadlineAt = new Date(Date.now() + mins * 60_000).toISOString()
     }
 
+    try {
+      await assertNoDuplicatePendingUserFunding(admin, user.id, amount, fundChannel, mobileNetwork)
+    } catch (err) {
+      if (err instanceof DuplicatePendingError) {
+        return NextResponse.json({ error: err.message, code: "DUPLICATE_PENDING" }, { status: 409 })
+      }
+      throw err
+    }
+
     const { data, error } = await admin
       .from("retailer_fund_requests")
       .insert({
@@ -197,6 +211,11 @@ export async function POST(request: Request) {
           ? "Local mobile-money funding submitted; awaiting retailer verification."
           : "Retailer funding request submitted (legacy admin channel).",
       metadata: { retailerId, requestId: data.id, fundChannel },
+    })
+    await notifyUserFundingDecision(admin, {
+      userId: user.id,
+      headline: "Funding request submitted — pending review",
+      relatedId: data.id as string,
     })
     return NextResponse.json({ ok: true, request: data })
   } catch (e) {

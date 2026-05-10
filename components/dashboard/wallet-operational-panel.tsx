@@ -462,15 +462,66 @@ type AdminUserRow = {
 
 type AdminUserRowActions = "freeze" | "unfreeze" | "disable" | "enable" | "recovery_link"
 
+/** Matches GET /api/admin/operations-desk rows. */
+type OperationsDeskApiRow = {
+  kind: "retailer_float_topup" | "user_add_funds"
+  id: string
+  status: string
+  subject_user_id: string
+  subject_email: string | null
+  subject_name: string | null
+  country_code: string | null
+  tx_reference: string
+  amount: number
+  request_type_label: string
+  fund_channel: string | null
+  mobile_network: string | null
+  created_at: string
+  reviewed_at?: string | null
+  escalated_to_admin?: boolean | null
+  pending_ms: number | null
+  nexus_main_usd: number | null
+  retail_balance_usd: number | null
+  retailer_basin_usd: number | null
+  retailer_desk_email?: string | null
+  duplicate_risk_hint: string | null
+  note?: string | null
+  payer_display_name?: string | null
+  payer_phone?: string | null
+  commission_rate?: number | null
+  amount_credited?: number | null
+  resolution_note?: string | null
+}
+
+function formatPendingAge(ms: number | null): string {
+  if (ms == null) return "—"
+  const m = Math.floor(ms / 60_000)
+  if (m < 120) return `${m} min`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
+
 export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const [sub, setSub] = useState<"hub" | "users" | "history" | "approval">("hub")
+  const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(false)
-  const [approvalFunding, setApprovalFunding] = useState<Array<Record<string, unknown>>>([])
-  const [approvalTopups, setApprovalTopups] = useState<Array<Record<string, unknown>>>([])
   const [approvalRetailers, setApprovalRetailers] = useState<Array<Record<string, unknown>>>([])
+  const [deskPending, setDeskPending] = useState<OperationsDeskApiRow[]>([])
+  const [deskHistory, setDeskHistory] = useState<OperationsDeskApiRow[]>([])
+  const [treasuryMeta, setTreasuryMeta] = useState<{
+    operational_pool_env_configured: boolean
+    pool_available_usd: number | null
+  } | null>(null)
+  const [deskError, setDeskError] = useState<string | null>(null)
+  const [reviewRow, setReviewRow] = useState<OperationsDeskApiRow | null>(null)
+  const [reviewContext, setReviewContext] = useState<"active" | "history">("active")
+  const [resolutionDraft, setResolutionDraft] = useState("")
+  const [ledgerPreview, setLedgerPreview] = useState<Array<Record<string, unknown>>>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   const authHeaders = async () => {
     const {
@@ -498,31 +549,120 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const refreshApproval = useCallback(async () => {
     const h = await authHeaders()
     if (!h) return
+    setLoading(true)
+    setDeskError(null)
     try {
-      const [a, b] = await Promise.all([
-        fetch("/api/admin/retailer-funding", { headers: h }),
-        fetch("/api/admin/retailer-liquidity-topup", { headers: h }),
+      const [deskRes, rfRes] = await Promise.all([
+        fetch("/api/admin/operations-desk", { headers: h, cache: "no-store" }),
+        fetch("/api/admin/retailer-funding", { headers: h, cache: "no-store" }),
       ])
-      if (a.ok) {
-        const j = (await a.json()) as {
-          requests?: Array<Record<string, unknown>>
-          retailers?: Array<Record<string, unknown>>
-        }
-        const pending = (j.requests ?? []).filter((r) =>
-          ["pending", "under_review", "appealed", "escalated"].includes(String(r.status ?? "")),
-        )
-        setApprovalFunding(pending)
-        setApprovalRetailers(j.retailers ?? [])
+      const dj = (await deskRes.json().catch(() => ({}))) as {
+        pending?: OperationsDeskApiRow[]
+        history?: OperationsDeskApiRow[]
+        treasury?: { operational_pool_env_configured: boolean; pool_available_usd: number | null }
+        error?: string
       }
-      if (b.ok) {
-        const j = (await b.json()) as { requests?: Array<Record<string, unknown>> }
-        const pending = (j.requests ?? []).filter((r) => ["pending", "under_review"].includes(String(r.status ?? "")))
-        setApprovalTopups(pending)
+      if (!deskRes.ok) {
+        setDeskError(dj.error ?? `Operations desk (${deskRes.status}). Level 5 profile required for liquidity approvals.`)
+        setDeskPending([])
+        setDeskHistory([])
+      } else {
+        setDeskPending(dj.pending ?? [])
+        setDeskHistory(dj.history ?? [])
+        setTreasuryMeta(dj.treasury ?? null)
+      }
+      if (rfRes.ok) {
+        const rj = (await rfRes.json()) as { retailers?: Array<Record<string, unknown>> }
+        setApprovalRetailers(rj.retailers ?? [])
       }
     } catch {
-      /* ignore */
+      setDeskError("Network error loading operations desk.")
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  const openReview = useCallback(async (row: OperationsDeskApiRow, ctx: "active" | "history") => {
+    const h = await authHeaders()
+    if (!h) return
+    setReviewContext(ctx)
+    setReviewRow(row)
+    setResolutionDraft(row.resolution_note ?? "")
+    setLedgerLoading(true)
+    setLedgerPreview([])
+    try {
+      const qs = new URLSearchParams({
+        limit: "40",
+        userId: row.subject_user_id,
+      })
+      const res = await fetch(`/api/admin/financial-events?${qs.toString()}`, { headers: h, cache: "no-store" })
+      if (!res.ok) return
+      const j = (await res.json()) as { events?: Array<Record<string, unknown>> }
+      setLedgerPreview(j.events ?? [])
+    } finally {
+      setLedgerLoading(false)
+    }
+  }, [])
+
+  const executeTopupAction = useCallback(
+    async (action: "approve" | "reject" | "hold") => {
+      if (!reviewRow) return
+      const h = await authHeaders()
+      if (!h) return
+      setActionBusy(action)
+      try {
+        const res = await fetch("/api/admin/retailer-liquidity-topup", {
+          method: "PATCH",
+          headers: { ...h, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestId: reviewRow.id,
+            action,
+            resolutionNote: resolutionDraft.trim() || undefined,
+          }),
+        })
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) {
+          window.alert(j.error ?? "Action failed")
+          return
+        }
+        setReviewRow(null)
+        await refreshApproval()
+      } finally {
+        setActionBusy(null)
+      }
+    },
+    [reviewRow, resolutionDraft, refreshApproval],
+  )
+
+  const executeFundingAction = useCallback(
+    async (action: "approve" | "reject" | "under_review" | "resolve") => {
+      if (!reviewRow) return
+      const h = await authHeaders()
+      if (!h) return
+      setActionBusy(action)
+      try {
+        const res = await fetch("/api/admin/retailer-funding", {
+          method: "PATCH",
+          headers: { ...h, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestId: reviewRow.id,
+            action,
+            reason: resolutionDraft.trim() || undefined,
+          }),
+        })
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) {
+          window.alert(j.error ?? "Action failed")
+          return
+        }
+        setReviewRow(null)
+        await refreshApproval()
+      } finally {
+        setActionBusy(null)
+      }
+    },
+    [reviewRow, resolutionDraft, refreshApproval],
+  )
 
   useEffect(() => {
     if (isGuest) return
@@ -744,52 +884,317 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
       )}
 
       {sub === "approval" && (
-        <Card className="border-border bg-card p-4">
-          <h3 className="mb-3 text-lg font-semibold">Approval overview</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Open queues for retailer-mediated funding and crypto float top-ups. Detailed actions remain in dashboard modals /
-            desks — this panel is the wallet-native summary.
-          </p>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-border bg-muted/20 p-3 md:col-span-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Retail desk directory</p>
-              <p className="font-mono text-2xl font-bold">{approvalRetailers.length}</p>
-              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[11px]">
-                {approvalRetailers.slice(0, 24).map((r) => (
-                  <li key={String(r.id)} className="truncate text-muted-foreground">
-                    <span className="font-medium text-foreground">
-                      {String(r.profile_email ?? "").trim() || `${String(r.user_id ?? "").slice(0, 8)}…`}
-                    </span>{" "}
-                    · {String(r.country_code ?? "—")} · basin ${Number(r.credit_basin ?? 0).toFixed(0)}
-                  </li>
-                ))}
-              </ul>
+        <div className="space-y-4">
+          <Card className="border-border bg-card p-4">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Liquidity operations desk</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Level 5 only. Click any row for review, settlement, ledger context, and fraud signals. Resolved items remain
+                  in History.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshApproval()}
+                className="inline-flex items-center gap-2 self-start rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Refresh queue
+              </button>
             </div>
-            <div className="rounded-lg border border-border bg-muted/20 p-3">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">User funding requests</p>
-              <p className="font-mono text-2xl font-bold">{approvalFunding.length}</p>
-              <ul className="mt-2 max-h-36 space-y-1 overflow-y-auto text-[11px]">
-                {approvalFunding.slice(0, 8).map((r) => (
-                  <li key={String(r.id)} className="truncate">
-                    {String(r.tx_reference ?? r.id)} · ${Number(r.amount ?? 0).toFixed(0)} · {String(r.status)}
-                  </li>
-                ))}
-              </ul>
+
+            {treasuryMeta?.operational_pool_env_configured ? (
+              <p className="mb-4 rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs">
+                Operational pool (treasury UUID) available:{" "}
+                <span className="font-mono font-bold">${Number(treasuryMeta.pool_available_usd ?? 0).toLocaleString()}</span>{" "}
+                — approving float top-ups debits here when{" "}
+                <code className="rounded bg-muted px-1">NEXUS_ADMIN_RETAIL_POOL_USER_ID</code> is set server-side.
+              </p>
+            ) : (
+              <p className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+                Treasury pool UUID not configured — approvals still credit retailers, without automatic pooled-liquidity debit.
+              </p>
+            )}
+
+            {deskError ? (
+              <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {deskError}
+              </div>
+            ) : null}
+
+            <div className="mb-4 inline-flex rounded-lg border border-border p-1">
+              <button
+                type="button"
+                onClick={() => setApprovalView("active")}
+                className={`rounded-md px-4 py-1.5 text-xs font-semibold ${
+                  approvalView === "active" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                }`}
+              >
+                Active ({deskPending.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setApprovalView("history")}
+                className={`rounded-md px-4 py-1.5 text-xs font-semibold ${
+                  approvalView === "history" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                }`}
+              >
+                History ({deskHistory.length})
+              </button>
             </div>
-            <div className="rounded-lg border border-border bg-muted/20 p-3">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Retailer liquidity top-ups</p>
-              <p className="font-mono text-2xl font-bold">{approvalTopups.length}</p>
-              <ul className="mt-2 max-h-36 space-y-1 overflow-y-auto text-[11px]">
-                {approvalTopups.slice(0, 8).map((r) => (
-                  <li key={String(r.id)} className="truncate">
-                    {String(r.crypto_tx_reference ?? r.id)} · ${Number(r.amount_requested ?? 0).toFixed(0)} ·{" "}
-                    {String(r.status)}
-                  </li>
-                ))}
-              </ul>
+
+            <div className="max-h-[520px] overflow-auto rounded-lg border border-border">
+              <table className="w-full min-w-[920px] border-collapse text-left text-[11px]">
+                <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur">
+                  <tr className="border-b border-border">
+                    <th className="p-2 font-semibold">When / age</th>
+                    <th className="p-2 font-semibold">Type</th>
+                    <th className="p-2 font-semibold">Party</th>
+                    <th className="p-2 font-semibold">Network</th>
+                    <th className="p-2 font-semibold">Reference</th>
+                    <th className="p-2 font-semibold">Amount</th>
+                    <th className="p-2 font-semibold">Balances</th>
+                    <th className="p-2 font-semibold">Status</th>
+                    <th className="p-2 font-semibold">Risk</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(approvalView === "active" ? deskPending : deskHistory).map((row) => (
+                    <tr
+                      key={`${row.kind}-${row.id}`}
+                      className="cursor-pointer border-b border-border/60 hover:bg-muted/40"
+                      onClick={() => void openReview(row, approvalView)}
+                    >
+                      <td className="p-2 align-top">
+                        <div className="font-mono text-[10px] text-muted-foreground">
+                          {new Date(row.created_at).toLocaleString()}
+                        </div>
+                        <div className="text-[10px]">{formatPendingAge(row.pending_ms)}</div>
+                      </td>
+                      <td className="p-2 align-top">
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase">
+                          {row.kind === "retailer_float_topup" ? "Float" : "Add funds"}
+                        </span>
+                        <div className="mt-1 text-muted-foreground">{row.request_type_label}</div>
+                      </td>
+                      <td className="p-2 align-top">
+                        <div className="font-medium">{row.subject_name ?? "—"}</div>
+                        <div className="truncate text-muted-foreground">{row.subject_email ?? row.subject_user_id}</div>
+                        <div className="text-[10px] text-muted-foreground">{row.country_code ?? "Country —"}</div>
+                      </td>
+                      <td className="p-2 align-top font-mono text-[10px]">
+                        {row.kind === "user_add_funds" ? row.fund_channel ?? "—" : "_crypto_ref"}
+                        {row.mobile_network ? (
+                          <>
+                            <br />
+                            {row.mobile_network}
+                          </>
+                        ) : null}
+                      </td>
+                      <td className="p-2 align-top font-mono text-[10px] break-all">{row.tx_reference}</td>
+                      <td className="p-2 align-top font-semibold">${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 align-top font-mono text-[10px]">
+                        Main ${Number(row.nexus_main_usd ?? 0).toFixed(0)}
+                        <br />
+                        Retail ${Number(row.retail_balance_usd ?? 0).toFixed(0)}
+                        {row.retailer_basin_usd != null ? (
+                          <>
+                            <br />
+                            Basin ${Number(row.retailer_basin_usd).toFixed(0)}
+                          </>
+                        ) : null}
+                      </td>
+                      <td className="p-2 align-top uppercase text-[10px] font-semibold">{row.status}</td>
+                      <td className="p-2 align-top text-[10px] text-rose-700 dark:text-rose-400">
+                        {row.duplicate_risk_hint ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {(approvalView === "active" ? deskPending : deskHistory).length === 0 ? (
+                    <tr>
+                      <td className="p-8 text-center text-muted-foreground" colSpan={9}>
+                        {loading ? "Loading…" : "No rows in this bucket."}
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          <Card className="border-border bg-card p-4">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Retail desk directory</p>
+            <p className="mt-2 max-h-32 space-y-1 overflow-y-auto text-[11px] text-muted-foreground">
+              {approvalRetailers.slice(0, 32).map((r) => (
+                <span key={String(r.id)} className="mr-3 inline-block truncate">
+                  <span className="font-medium text-foreground">
+                    {String(r.profile_email ?? "").trim() || `${String(r.user_id ?? "").slice(0, 8)}…`}
+                  </span>{" "}
+                  · {String(r.country_code ?? "—")} · basin ${Number(r.credit_basin ?? 0).toFixed(0)}
+                </span>
+              ))}
+            </p>
+          </Card>
+
+          <Dialog open={Boolean(reviewRow)} onOpenChange={(o) => !o && setReviewRow(null)}>
+            <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Liquidity review</DialogTitle>
+              </DialogHeader>
+              {!reviewRow ? null : (
+                <div className="space-y-4 text-sm">
+                  <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
+                    <p className="font-semibold">
+                      {reviewRow.kind === "retailer_float_topup" ? "Retailer float (crypto proof)" : "Customer add funds"}
+                    </p>
+                    <p className="mt-2 text-muted-foreground">{reviewRow.request_type_label}</p>
+                    <p className="mt-2 font-mono break-all">Ref · {reviewRow.tx_reference}</p>
+                    <p className="mt-1 font-mono">${Number(reviewRow.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  {reviewRow.duplicate_risk_hint ? (
+                    <div className="rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-800 dark:text-rose-100">
+                      {reviewRow.duplicate_risk_hint}
+                    </div>
+                  ) : null}
+                  <div className="grid gap-2 text-xs">
+                    <p>
+                      <span className="text-muted-foreground">Subject</span>{" "}
+                      <span className="font-medium">
+                        {reviewRow.subject_name ?? "—"} · {reviewRow.subject_email ?? ""}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Country</span> {reviewRow.country_code ?? "—"}
+                    </p>
+                    <p className="font-mono">
+                      Balances snapshot — Main ${Number(reviewRow.nexus_main_usd ?? 0).toFixed(2)} · Retail $
+                      {Number(reviewRow.retail_balance_usd ?? 0).toFixed(2)}
+                      {reviewRow.retailer_basin_usd != null ? ` · Basin $${Number(reviewRow.retailer_basin_usd).toFixed(2)}` : ""}
+                    </p>
+                    {reviewRow.kind === "user_add_funds" ? (
+                      <p className="text-xs">
+                        <span className="text-muted-foreground">Payer line</span> {reviewRow.payer_display_name ?? "—"} /{" "}
+                        {reviewRow.payer_phone ?? "—"}
+                        {reviewRow.retailer_desk_email ? (
+                          <>
+                            <br />
+                            <span className="text-muted-foreground">Desk</span> {reviewRow.retailer_desk_email}
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
+                    <p className="text-muted-foreground">
+                      User ledger snapshot (recent events for this account)
+                      {ledgerLoading ? <Loader2 className="ml-2 inline h-3 w-3 animate-spin" /> : null}
+                    </p>
+                    <ul className="max-h-36 space-y-1 overflow-y-auto rounded border border-border bg-background p-2 font-mono text-[10px]">
+                      {ledgerPreview.slice(0, 20).map((ev) => (
+                        <li key={String(ev.id)} className="truncate">
+                          {String(ev.created_at ?? "").slice(0, 19)} · {String(ev.event_type ?? "")} · $
+                          {Number(ev.gross_amount ?? 0).toFixed(0)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">
+                      Decision note (reject / hold / approve context)
+                    </label>
+                    <textarea
+                      className="mt-1 w-full rounded-md border border-border bg-background p-2 text-xs"
+                      rows={3}
+                      value={resolutionDraft}
+                      onChange={(e) => setResolutionDraft(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {reviewContext === "history" ? (
+                      <p className="text-xs text-muted-foreground">Read-only: item is in History (already adjudicated).</p>
+                    ) : reviewRow.kind === "retailer_float_topup" &&
+                      (reviewRow.status === "pending" || reviewRow.status === "under_review") ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeTopupAction("approve")}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve (+commission)"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeTopupAction("hold")}
+                          className="rounded-lg bg-slate-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "hold" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Hold / investigate"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeTopupAction("reject")}
+                          className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reject"}
+                        </button>
+                      </>
+                    ) : reviewRow.kind === "retailer_float_topup" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Queue row is read-only until status returns to pending/review — refresh desk.
+                      </p>
+                    ) : reviewRow.status === "pending" ||
+                      reviewRow.status === "under_review" ||
+                      reviewRow.status === "appealed" ||
+                      reviewRow.status === "escalated" ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeFundingAction("approve")}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeFundingAction("under_review")}
+                          className="rounded-lg bg-slate-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "under_review" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Hold / investigate"
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeFundingAction("reject")}
+                          className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reject"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeFundingAction("resolve")}
+                          className="rounded-lg border border-border px-4 py-2 text-xs font-bold disabled:opacity-50"
+                        >
+                          {actionBusy === "resolve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Resolve"}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No settlement actions remain for this request status.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
       )}
     </div>
   )

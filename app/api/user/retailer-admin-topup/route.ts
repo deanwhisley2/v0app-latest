@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
+import {
+  assertNoDuplicatePendingRetailerTopup,
+  DuplicatePendingError,
+} from "@/lib/server/funding-duplicate-guard"
 
 export async function GET(request: Request) {
   try {
@@ -49,6 +54,14 @@ export async function POST(request: Request) {
     if (!Number.isFinite(amount) || amount <= 0 || !cryptoTxReference) {
       return NextResponse.json({ error: "amountRequested and cryptoTxReference are required." }, { status: 400 })
     }
+    try {
+      await assertNoDuplicatePendingRetailerTopup(admin, user.id, amount)
+    } catch (err) {
+      if (err instanceof DuplicatePendingError) {
+        return NextResponse.json({ error: err.message, code: "DUPLICATE_PENDING" }, { status: 409 })
+      }
+      throw err
+    }
     const { data, error } = await admin
       .from("retailer_admin_topup_requests")
       .insert({
@@ -61,6 +74,11 @@ export async function POST(request: Request) {
       .select("id,amount_requested,crypto_tx_reference,status,created_at")
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await notifyUserFundingDecision(admin, {
+      userId: user.id,
+      headline: "Float top-up request queued for Level-5 review",
+      relatedId: data.id as string,
+    })
     return NextResponse.json({ ok: true, request: data })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })

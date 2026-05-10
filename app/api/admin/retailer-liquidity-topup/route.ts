@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { requireAdminUser } from "@/lib/server/security-authz"
+import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { creditRetailerLiquidityPlusCommission } from "@/lib/server/retailer-funding-helpers"
 import {
@@ -9,17 +9,18 @@ import {
   debitAdminRetailPoolIfConfigured,
   refundAdminRetailPoolIfConfigured,
 } from "@/lib/server/admin-retail-pool"
+import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 
 export async function GET(request: Request) {
   try {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    await requireAdminUser(user)
+    await requireLiquidityAdminLevel5(user)
     const admin = createAdminClient()
     const { data, error } = await admin
       .from("retailer_admin_topup_requests")
       .select(
-        "id,retailer_user_id,amount_requested,crypto_tx_reference,status,commission_rate,amount_credited,created_at,reviewed_at,note"
+        "id,retailer_user_id,amount_requested,crypto_tx_reference,status,commission_rate,amount_credited,created_at,reviewed_at,note,resolution_note,held_at"
       )
       .order("created_at", { ascending: false })
       .limit(200)
@@ -34,19 +35,25 @@ export async function PATCH(request: Request) {
   try {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    await requireAdminUser(user)
+    await requireLiquidityAdminLevel5(user)
     const body = (await request.json().catch(() => ({}))) as {
       requestId?: string
-      action?: "approve" | "reject"
+      action?: "approve" | "reject" | "hold"
+      resolutionNote?: string
     }
     const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
     if (!requestId || !body.action) {
       return NextResponse.json({ error: "requestId and action required." }, { status: 400 })
     }
+    const resolutionNote =
+      typeof body.resolutionNote === "string" ? body.resolutionNote.trim().slice(0, 1200) || null : null
+
     const admin = createAdminClient()
     const { data: row, error: fe } = await admin
       .from("retailer_admin_topup_requests")
-      .select("id,retailer_user_id,amount_requested,crypto_tx_reference,status,commission_rate")
+      .select(
+        "id,retailer_user_id,amount_requested,crypto_tx_reference,status,commission_rate,amount_credited,resolution_note",
+      )
       .eq("id", requestId)
       .maybeSingle()
     if (fe) return NextResponse.json({ error: fe.message }, { status: 500 })
@@ -55,10 +62,48 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Request already processed." }, { status: 400 })
     }
     const now = new Date().toISOString()
+
+    if (body.action === "hold") {
+      const { error: up } = await admin
+        .from("retailer_admin_topup_requests")
+        .update({
+          status: "under_review",
+          held_at: now,
+          resolution_note: resolutionNote,
+          updated_at: now,
+        })
+        .eq("id", requestId)
+      if (up) return NextResponse.json({ error: up.message }, { status: 400 })
+      await recordFinancialEvent({
+        userId: row.retailer_user_id,
+        eventType: "retailer_admin_topup_hold",
+        category: "admin",
+        amount: Number(row.amount_requested ?? 0),
+        status: "pending",
+        actorType: "admin",
+        actorId: user.id,
+        transactionRef: row.crypto_tx_reference,
+        summary: "Float top-up placed on hold / investigation by Level-5 liquidity admin.",
+        metadata: { requestId, resolutionNote },
+      })
+      await notifyUserFundingDecision(admin, {
+        userId: row.retailer_user_id,
+        headline: "Float top-up held for operations review",
+        relatedId: requestId,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
     if (body.action === "reject") {
       const { error: up } = await admin
         .from("retailer_admin_topup_requests")
-        .update({ status: "rejected", reviewed_by: user.id, reviewed_at: now, updated_at: now })
+        .update({
+          status: "rejected",
+          reviewed_by: user.id,
+          reviewed_at: now,
+          resolution_note: resolutionNote,
+          updated_at: now,
+        })
         .eq("id", requestId)
       if (up) return NextResponse.json({ error: up.message }, { status: 400 })
       await recordFinancialEvent({
@@ -70,8 +115,17 @@ export async function PATCH(request: Request) {
         actorType: "admin",
         actorId: user.id,
         transactionRef: row.crypto_tx_reference,
-        summary: "Admin rejected retailer crypto top-up request.",
-        metadata: { requestId },
+        summary: resolutionNote
+          ? `Admin rejected retailer float top-up. Note: ${resolutionNote}`
+          : "Admin rejected retailer crypto top-up request.",
+        metadata: { requestId, resolutionNote },
+      })
+      await notifyUserFundingDecision(admin, {
+        userId: row.retailer_user_id,
+        headline: resolutionNote
+          ? `Float top-up rejected: ${resolutionNote.slice(0, 80)}`
+          : "Float top-up rejected",
+        relatedId: requestId,
       })
       return NextResponse.json({ ok: true })
     }
@@ -97,6 +151,7 @@ export async function PATCH(request: Request) {
         amount_credited: credited,
         reviewed_by: user.id,
         reviewed_at: now,
+        resolution_note: resolutionNote,
         updated_at: now,
       })
       .eq("id", requestId)
@@ -133,6 +188,12 @@ export async function PATCH(request: Request) {
         metadata: { requestId, retailerUserId: row.retailer_user_id },
       })
     }
+
+    await notifyUserFundingDecision(admin, {
+      userId: row.retailer_user_id,
+      headline: `Float top-up approved (+$${credited.toFixed(2)} Retail Balance)`,
+      relatedId: requestId,
+    })
 
     return NextResponse.json({ ok: true, amountCredited: credited })
   } catch (e) {

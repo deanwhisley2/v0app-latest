@@ -1,24 +1,26 @@
 import { NextResponse } from "next/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel, requireAdminUser } from "@/lib/server/security-authz"
+import { getTradingUserLevel, requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import {
   attachProfileEmailsToRetailers,
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
+import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 
 export async function GET(request: Request) {
   try {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    await requireAdminUser(user)
+    await requireLiquidityAdminLevel5(user)
     const admin = createAdminClient()
     const [requestsRes, retailersRes] = await Promise.all([
       admin
         .from("retailer_fund_requests")
         .select(
-          "id,user_id,retailer_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,escalation_at"
+          "id,user_id,retailer_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,escalation_at,resolution_note"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -43,7 +45,7 @@ export async function PATCH(request: Request) {
   try {
     const user = await getUserFromBearer(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    await requireAdminUser(user)
+    await requireLiquidityAdminLevel5(user)
     const body = (await request.json().catch(() => ({}))) as {
       action?: "approve" | "reject" | "under_review" | "resolve" | "retailer_under_review"
       requestId?: string
@@ -52,6 +54,7 @@ export async function PATCH(request: Request) {
     }
     const admin = createAdminClient()
     const now = new Date().toISOString()
+    const resolutionNote = body.reason?.trim() ? body.reason.trim().slice(0, 1200) : null
 
     if (body.action === "retailer_under_review") {
       if (!body.retailerId) return NextResponse.json({ error: "retailerId is required" }, { status: 400 })
@@ -140,6 +143,7 @@ export async function PATCH(request: Request) {
         resolved_by: body.action === "resolve" ? user.id : null,
         resolved_at: body.action === "resolve" ? now : null,
         updated_at: now,
+        resolution_note: resolutionNote,
       }
       if (body.action === "approve") {
         localPatch.retailer_approved_by = user.id
@@ -147,7 +151,12 @@ export async function PATCH(request: Request) {
       }
       let statusQuery = admin.from("retailer_fund_requests").update(localPatch)
       statusQuery = statusQuery.eq("id", body.requestId)
-      if (body.action === "approve" || body.action === "reject" || body.action === "resolve") {
+      if (
+        body.action === "approve" ||
+        body.action === "reject" ||
+        body.action === "resolve" ||
+        body.action === "under_review"
+      ) {
         statusQuery = statusQuery.in("status", ["pending", "under_review", "appealed", "escalated"])
       }
       const { error: updateErr } = await statusQuery
@@ -177,6 +186,7 @@ export async function PATCH(request: Request) {
         },
       })
 
+      await notifyFundingStatus(admin, customerId, body.requestId, nextStatus, resolutionNote)
       return NextResponse.json({ ok: true })
     }
 
@@ -189,6 +199,7 @@ export async function PATCH(request: Request) {
         resolved_by: body.action === "resolve" ? user.id : null,
         resolved_at: body.action === "resolve" ? now : null,
         updated_at: now,
+        resolution_note: resolutionNote,
       })
       .eq("id", body.requestId)
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
@@ -248,6 +259,7 @@ export async function PATCH(request: Request) {
       },
     })
 
+    await notifyFundingStatus(admin, customerId, body.requestId, nextStatus, resolutionNote)
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Forbidden" }, { status: 403 })
@@ -256,4 +268,20 @@ export async function PATCH(request: Request) {
 
 function custIdSafe(reqRow: unknown): string {
   return String((reqRow as { user_id?: string }).user_id ?? "")
+}
+
+async function notifyFundingStatus(
+  admin: SupabaseClient,
+  customerId: string,
+  requestId: string,
+  nextStatus: string,
+  note: string | null,
+): Promise<void> {
+  let headline = ""
+  if (nextStatus === "approved") headline = "Add-funds request approved — balance updated."
+  else if (nextStatus === "rejected") headline = note ? `Add-funds rejected: ${note.slice(0, 80)}` : "Add-funds request rejected."
+  else if (nextStatus === "under_review") headline = note ? `Add-funds held: ${note.slice(0, 80)}` : "Add-funds request held for operations review."
+  else if (nextStatus === "resolved") headline = "Add-funds request resolved."
+  else return
+  await notifyUserFundingDecision(admin, { userId: customerId, headline, relatedId: requestId })
 }

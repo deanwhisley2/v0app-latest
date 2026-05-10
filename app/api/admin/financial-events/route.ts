@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Number(searchParams.get("limit") ?? 400), 800)
     const since = searchParams.get("since") ?? ""
+    const filterUserId = (searchParams.get("userId") ?? "").trim()
 
     const admin = createAdminClient()
     const lim = Number.isFinite(limit) && limit > 0 ? limit : 400
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
     let query = admin.from("container_balance_events").select(
       "id,user_id,event_type,category,gross_amount,status,transaction_ref,summary,balance_source,balance_destination,actor_type,actor_id,created_at,metadata"
     )
+    if (filterUserId) {
+      query = query.eq("user_id", filterUserId)
+    }
     if (since) {
       query = query.gte("created_at", since)
     }
