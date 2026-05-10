@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       /** Match same ISO2, or desks with no country set (legacy / ops); do not cross-match different ISO2s. */
       if (deskCc && deskCc !== customerCountry) continue
 
-      if (!retailerDeskSupportsNetwork(row.payment_numbers, mobileNetwork)) continue
+      if (!retailerDeskSupportsNetwork(row.payment_numbers, mobileNetwork, customerCountry)) continue
 
       const uid = row.user_id as string
       const rid = row.id as string

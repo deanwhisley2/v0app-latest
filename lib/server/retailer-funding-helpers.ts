@@ -37,35 +37,74 @@ export async function getUserRetailBalance(sb: SupabaseClient, userId: string): 
   return Number(v ?? 0)
 }
 
+function normMobileToken(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "")
+}
+
+/**
+ * Infer MTN vs Airtel from Uganda MSISDN (077/076/078 vs 070/074/075 national prefixes).
+ * Handles +256…, 0…, or 9-digit national starting with 7x.
+ */
+export function ugandaPhoneInfersNetwork(msisdn: string): "mtn" | "airtel" | null {
+  let d = String(msisdn).replace(/\D/g, "")
+  if (d.length < 9) return null
+  if (d.startsWith("256")) d = d.slice(3)
+  else if (d.startsWith("0")) d = d.slice(1)
+  if (d.length < 9) return null
+  const p2 = d.slice(0, 2)
+  if (p2 === "77" || p2 === "78" || p2 === "76") return "mtn"
+  if (p2 === "70" || p2 === "74" || p2 === "75") return "airtel"
+  return null
+}
+
+function selectedNetworkKindFromNeedle(needle: string): "mtn" | "airtel" | null {
+  if (needle === "mtn" || needle === "mtnmobile" || needle === "mtnmobilemoney") return "mtn"
+  if (needle === "airtel" || needle === "airtelmoney") return "airtel"
+  return null
+}
+
 /** True if desk payment_numbers indicate support for the customer's mobile network (Option B funding). */
 export function retailerDeskSupportsNetwork(
   paymentNumbers: unknown,
   mobileNetwork: string,
+  /** When set (e.g. UG), MTN/Airtel can match generic labels via MSISDN prefixes on payment lines. */
+  customerCountryIso2?: string,
 ): boolean {
   const raw = mobileNetwork.trim()
   if (!raw || /^other$/i.test(raw)) return true
 
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "")
-
-  const needle = norm(raw)
+  const needle = normMobileToken(raw)
   if (!needle) return true
 
   const rows = Array.isArray(paymentNumbers) ? paymentNumbers : []
   for (const p of rows) {
     const row = p as { label?: string; value?: string }
-    const lab = norm(String(row?.label ?? ""))
-    const val = norm(String(row?.value ?? ""))
+    const lab = normMobileToken(String(row?.label ?? ""))
+    const val = normMobileToken(String(row?.value ?? ""))
     if (!lab && !val) continue
     if (lab.includes(needle) || needle.includes(lab)) return true
     if (val.includes(needle) || needle.includes(val)) return true
     const bundle = lab + val
     if (bundle.includes(needle)) return true
   }
+
+  const cc = String(customerCountryIso2 ?? "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 2)
+  const want = selectedNetworkKindFromNeedle(needle)
+  if (cc === "UG" && want) {
+    for (const p of rows) {
+      const row = p as { value?: string }
+      const inf = ugandaPhoneInfersNetwork(String(row?.value ?? ""))
+      if (inf === want) return true
+    }
+  }
+
   return false
 }
 

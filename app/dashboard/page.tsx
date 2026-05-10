@@ -2183,9 +2183,16 @@ export default function DashboardPage() {
                     </div>
 
                     {!loadingQualifiedRetailers && localMmRetailersSearched && qualifiedRetailers.length === 0 ? (
-                      <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-100">
-                        No active retailer currently has enough liquidity for this amount/network. Try another amount, network,
-                        or wait for available liquidity.
+                      <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-100 space-y-1.5">
+                        <p className="font-medium">No desk matched this corridor yet.</p>
+                        <p>
+                          Common fixes: try <strong>Network → Other</strong> if the desk uses generic payment labels; lower the
+                          amount; pick MTN vs Airtel to match the line you will pay (Uganda lines are matched by number prefix when
+                          labels say “primary”).
+                        </p>
+                        <p className="text-muted-foreground">
+                          Transaction reference appears after you select an available desk below — none qualify right now.
+                        </p>
                       </div>
                     ) : null}
 

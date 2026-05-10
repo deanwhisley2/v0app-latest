@@ -23,6 +23,23 @@ function main() {
   assert(!retailerDeskSupportsNetwork([{ label: "Airtel", value: "075" }], "MTN"), "network matcher rejects mismatch")
   assert(retailerDeskSupportsNetwork([], "Other"), "Other skips strict network filter")
 
+  assert(
+    !retailerDeskSupportsNetwork([{ label: "primary", value: "0770001001" }], "MTN"),
+    "without country hint generic labels do not infer MTN",
+  )
+  assert(
+    retailerDeskSupportsNetwork([{ label: "primary", value: "0770001001" }], "MTN", "UG"),
+    "UG: generic label + 077… matches MTN via prefix",
+  )
+  assert(
+    retailerDeskSupportsNetwork([{ label: "primary", value: "0750001002" }], "Airtel", "UG"),
+    "UG: generic label + 075… matches Airtel via prefix",
+  )
+  assert(
+    !retailerDeskSupportsNetwork([{ label: "primary", value: "0750001002" }], "MTN", "UG"),
+    "UG: Airtel MSISDN must not match MTN selection",
+  )
+
   const api = read("app/api/user/qualified-retailers/route.ts")
   assert(api.includes('searchParams.get("network")'), "API requires network query param")
   assert(api.includes("retailerDeskSupportsNetwork"), "API filters by desk payment_numbers vs network")
@@ -32,9 +49,9 @@ function main() {
   assert(dash.includes("Step 1 of 2"), "qualification screen is step 1")
   assert(dash.includes("Step 2 of 2"), "retailer matching is step 2")
   assert(dash.includes("Continue · find retailers"), "single primary action after qualification fields")
-  assert(dash.includes("Transaction reference (after you pay)"), "reference only after desk selection")
+  assert(dash.includes("Transaction ID / reference"), "transaction reference field present after desk selection")
   assert(dash.includes("Available desks"), "retailer list on second screen")
-  assert(dash.includes("No active retailer currently has enough liquidity"), "required empty state copy")
+  assert(dash.includes("No desk matched this corridor yet"), "empty-state copy for unmatched desks")
   assert(dash.includes("handleLoadQualifiedRetailers"), "load hook retained")
   assert(!dash.includes("<option value=\"\">Select qualified retailer…"), "premature retailer dropdown removed")
 
