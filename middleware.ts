@@ -111,12 +111,22 @@ export async function middleware(request: NextRequest) {
           return res
         }
         if (p?.operational_freeze_at) {
-          const frozenBlock =
+          const frozenExpert =
             path.startsWith("/expert-mode") ||
             path.startsWith("/joelin") ||
             path.startsWith("/bot-commander") ||
             path.startsWith("/api/expert/")
-          if (frozenBlock) {
+          if (frozenExpert) {
+            if (path.startsWith("/api/")) {
+              return NextResponse.json(
+                {
+                  error:
+                    "Account frozen: advanced execution and expert APIs are blocked until compliance review completes.",
+                  code: "ACCOUNT_FROZEN",
+                },
+                { status: 403, headers: { "Cache-Control": "no-store" } },
+              )
+            }
             const dash = NextResponse.redirect(new URL("/dashboard?ops=frozen_advanced", request.url))
             dash.headers.set("Cache-Control", "no-store")
             return dash
