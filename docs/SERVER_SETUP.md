@@ -51,23 +51,36 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d nexus.yourdomain.com
 ```
 
-## 5) Configure GitHub Actions secrets
+## 5) Why your phone does not match Vercel
 
-In GitHub -> Repo -> Settings -> Secrets and variables -> Actions, add:
+Pushing to `main` updates **Vercel** automatically. Your **domain** (e.g. `nexuspro.it.com`) usually points at the **VPS** (nginx → PM2 → `next start`). That server only gets new code when someone runs **`scripts/deploy.sh`** on the VPS (or you add CI below).
 
-- `SERVER_HOST`: your VPS IP or hostname
-- `SERVER_USER`: SSH user (e.g., `ubuntu`)
-- `SERVER_SSH_KEY`: private key for SSH access
-- `SERVER_PORT`: usually `22`
-- `APP_DIR`: `/var/www/nexus-pro`
+## 6) Deploy on the VPS (required for domain / phone)
 
-## 6) Auto deploy
+SSH in as your server user (e.g. `vpsuser`, `ubuntu`, `root`), then:
 
-Push to `main`, and workflow `.github/workflows/deploy.yml` will:
+```bash
+cd /var/www/nexus          # use your real clone path — same as VPS_APP_DIR below
+git fetch origin && git checkout main && git pull origin main
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+```
 
-1. SSH into server
-2. Run `scripts/deploy.sh`
-3. Pull latest code, install deps, build, restart PM2
+`deploy.sh` runs `npm ci`, `npm run build`, and restarts PM2 app **`nexus`** per `ecosystem.config.js`. You need `.env.local` on the server (see `scripts/deploy.sh`).
+
+## 7) Optional: GitHub Action to deploy the VPS on every push
+
+1. In the repo, create **`.github/workflows/deploy-vps.yml`** — copy from **`docs/snippets/github-actions-deploy-vps.yml`**.  
+   - Easiest: GitHub → **Add file** → paste (avoids PAT **`workflow`** scope).  
+   - Or use a Personal Access Token with **`workflow`** scope when pushing workflow files from the CLI.
+2. Repo → **Settings** → **Secrets and variables** → **Actions**, add:
+
+- `VPS_HOST` — VPS hostname or IP  
+- `VPS_USER` — SSH user (`vpsuser`, `ubuntu`, …)  
+- `VPS_SSH_KEY` — private key (full PEM)  
+- `VPS_APP_DIR` — e.g. `/var/www/nexus` (must match the clone on the server)
+
+The VPS clone must be able to `git pull` this repo (deploy key or HTTPS credential).
 
 ## Notes
 
