@@ -219,8 +219,16 @@ export async function PATCH(request: Request) {
 
     // approve → recycle liquidity into master operational account, then external payout is manual/off-platform
     const recycleTarget = await creditMasterLiquidityFromApprovedWithdrawal(admin, amount, actor.id)
-    const payoutStatus =
-      recycleTarget === "none" ? "pending_internal_release" : "recycled_pending_external"
+    if (recycleTarget === "none") {
+      return NextResponse.json(
+        {
+          error:
+            "Withdrawal not approved: treasury recycle is not configured. Set NEXUS_ADMIN_RETAIL_POOL_USER_ID (pool user credit requires a user_balances row — now auto-created on recycle) or NEXUS_WITHDRAWAL_RECYCLE_TO_APPROVER_WITHOUT_POOL=1. Pending withdrawal balance unchanged.",
+        },
+        { status: 409 },
+      )
+    }
+    const payoutStatus = "recycled_pending_external"
 
     const { error: upErr } = await admin
       .from("user_balances")
@@ -265,9 +273,7 @@ export async function PATCH(request: Request) {
       summary:
         recycleTarget === "pool"
           ? `Withdrawal approved — ${amount.toFixed(2)} USD recycled to master operational pool (frozen bucket cleared); complete external payout off-platform.`
-          : recycleTarget === "approver"
-            ? `Withdrawal approved — ${amount.toFixed(2)} USD credited to approving operator Nexus Main (fallback recycle); configure NEXUS_ADMIN_RETAIL_POOL_USER_ID for pooled treasury.`
-            : `Withdrawal approved — frozen bucket cleared (${amount.toFixed(2)} USD) but master pool recycle skipped (set pool UUID or NEXUS_WITHDRAWAL_RECYCLE_TO_APPROVER_WITHOUT_POOL=1).`,
+          : `Withdrawal approved — ${amount.toFixed(2)} USD credited to approving operator Nexus Main (fallback recycle); configure NEXUS_ADMIN_RETAIL_POOL_USER_ID for pooled treasury.`,
       metadata: { requestId, recycleTarget, payoutStatus },
     })
 

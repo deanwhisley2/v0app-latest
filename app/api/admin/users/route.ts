@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
@@ -93,7 +94,17 @@ export async function PATCH(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as {
       userId?: string
-      action?: "freeze" | "unfreeze" | "disable" | "enable" | "recovery_link"
+      action?:
+        | "freeze"
+        | "unfreeze"
+        | "disable"
+        | "enable"
+        | "recovery_link"
+        | "reset_password"
+        | "burn_balances"
+        | "delete_user"
+        | "set_level"
+      tradingUserLevel?: number
     }
     const userId = typeof body.userId === "string" ? body.userId.trim() : ""
     if (!userId || !body.action) {
@@ -102,6 +113,61 @@ export async function PATCH(request: Request) {
 
     const admin = createAdminClient()
     const now = new Date().toISOString()
+
+    if (userId === actor.id && (body.action === "delete_user" || body.action === "disable")) {
+      return NextResponse.json({ error: "You cannot perform this action on your own account." }, { status: 400 })
+    }
+
+    if (body.action === "reset_password") {
+      const raw = randomBytes(18).toString("base64url").replace(/[^a-zA-Z0-9]/g, "")
+      const temporaryPassword = `${raw.slice(0, 12)}Aa1`
+      const { error } = await admin.auth.admin.updateUserById(userId, {
+        password: temporaryPassword,
+      })
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({
+        ok: true,
+        temporaryPassword,
+        message:
+          "Password set by admin. Share once via a verified channel; user should sign in and change password under account settings.",
+      })
+    }
+
+    if (body.action === "burn_balances") {
+      const { data: exists } = await admin.from("user_balances").select("user_id").eq("user_id", userId).maybeSingle()
+      if (!exists) return NextResponse.json({ ok: true, message: "No user_balances row — nothing to burn." })
+      const { error } = await admin
+        .from("user_balances")
+        .update({
+          available_balance: 0,
+          retail_balance: 0,
+          withdrawal_pending_balance: 0,
+          current_stake: 0,
+          last_updated: now,
+        })
+        .eq("user_id", userId)
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ ok: true, message: "Nexus Main, Retail, and pending withdrawal buckets zeroed." })
+    }
+
+    if (body.action === "delete_user") {
+      const { error } = await admin.auth.admin.deleteUser(userId)
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ ok: true, message: "Auth user deleted (profile cascade depends on DB policies)." })
+    }
+
+    if (body.action === "set_level") {
+      const lvl = Number(body.tradingUserLevel)
+      if (![1, 2, 5].includes(lvl)) {
+        return NextResponse.json({ error: "tradingUserLevel must be 1, 2, or 5." }, { status: 400 })
+      }
+      const { error } = await admin
+        .from("profiles")
+        .update({ trading_user_level: lvl, updated_at: now })
+        .eq("id", userId)
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ ok: true, trading_user_level: lvl })
+    }
 
     if (body.action === "recovery_link") {
       const { data: u, error } = await admin.auth.admin.getUserById(userId)
@@ -131,6 +197,10 @@ export async function PATCH(request: Request) {
     if (body.action === "unfreeze") patch.operational_freeze_at = null
     if (body.action === "disable") patch.account_disabled_at = now
     if (body.action === "enable") patch.account_disabled_at = null
+
+    if (!("operational_freeze_at" in patch) && !("account_disabled_at" in patch)) {
+      return NextResponse.json({ error: "Unsupported action for profile update." }, { status: 400 })
+    }
 
     const { error: up } = await admin.from("profiles").update(patch).eq("id", userId)
     if (up) return NextResponse.json({ error: up.message }, { status: 400 })

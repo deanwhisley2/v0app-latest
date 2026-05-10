@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowLeftRight,
-  Bot,
+  Bookmark,
   CheckCircle2,
   Clock,
   History,
   Loader2,
-  MessageSquare,
   Search,
   ShieldCheck,
   Users,
@@ -460,7 +459,15 @@ type AdminUserRow = {
   } | null
 }
 
-type AdminUserRowActions = "freeze" | "unfreeze" | "disable" | "enable" | "recovery_link"
+type AdminUserRowActions =
+  | "freeze"
+  | "unfreeze"
+  | "disable"
+  | "enable"
+  | "recovery_link"
+  | "reset_password"
+  | "burn_balances"
+  | "delete_user"
 
 /** Matches GET /api/admin/operations-desk rows. */
 type OperationsDeskApiRow = {
@@ -503,8 +510,16 @@ function formatPendingAge(ms: number | null): string {
   return `${h}h ${m % 60}m`
 }
 
+type DeskSnoozeEntry = { key: string; note: string; at: number }
+
+const DESK_SNOOZE_LS = "nexus_l5_desk_snooze_v1"
+
+function deskRowKey(row: OperationsDeskApiRow): string {
+  return `${row.kind}:${row.id}`
+}
+
 export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
-  const [sub, setSub] = useState<"hub" | "users" | "history" | "approval">("hub")
+  const [sub, setSub] = useState<"approval" | "users" | "history">("approval")
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -536,6 +551,30 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const [ledgerPreview, setLedgerPreview] = useState<Array<Record<string, unknown>>>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [actionBusy, setActionBusy] = useState<string | null>(null)
+  const [deskSnoozed, setDeskSnoozed] = useState<DeskSnoozeEntry[]>([])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DESK_SNOOZE_LS)
+      if (raw) setDeskSnoozed(JSON.parse(raw) as DeskSnoozeEntry[])
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const persistDeskSnooze = useCallback((next: DeskSnoozeEntry[]) => {
+    setDeskSnoozed(next)
+    try {
+      localStorage.setItem(DESK_SNOOZE_LS, JSON.stringify(next))
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const visibleDeskPending = useMemo(() => {
+    const hide = new Set(deskSnoozed.map((s) => s.key))
+    return deskPending.filter((r) => !hide.has(deskRowKey(r)))
+  }, [deskPending, deskSnoozed])
 
   const authHeaders = async () => {
     const {
@@ -732,11 +771,29 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const runUserAction = async (userId: string, action: AdminUserRowActions) => {
     const h = await authHeaders()
     if (!h) return
-    const body: { userId: string; action: string } = { userId, action }
     if (action === "recovery_link") {
       const ok = window.confirm("Generate a one-time recovery link? Deliver it securely to the user.")
       if (!ok) return
     }
+    if (action === "reset_password") {
+      const ok = window.confirm(
+        "Set a new random password on this account? The temporary password will be copied once — share via a verified channel.",
+      )
+      if (!ok) return
+    }
+    if (action === "burn_balances") {
+      const ok = window.confirm(
+        "ZERO Nexus Main, Retail Balance, and withdrawal pending for this user? This cannot be undone from the UI.",
+      )
+      if (!ok) return
+    }
+    if (action === "delete_user") {
+      const ok = window.confirm(
+        "PERMANENTLY delete this auth account from Supabase? Related rows may cascade depending on DB policy.",
+      )
+      if (!ok) return
+    }
+    const body: Record<string, unknown> = { userId, action }
     setLoading(true)
     try {
       const res = await fetch("/api/admin/users", {
@@ -744,7 +801,12 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
         headers: { ...h, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      const j = (await res.json().catch(() => ({}))) as { error?: string; recoveryActionLink?: string }
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        recoveryActionLink?: string
+        temporaryPassword?: string
+        message?: string
+      }
       if (!res.ok) {
         window.alert(j.error ?? "Failed")
         return
@@ -752,6 +814,13 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
       if (action === "recovery_link" && j.recoveryActionLink) {
         await navigator.clipboard.writeText(j.recoveryActionLink).catch(() => null)
         window.alert("Recovery link copied to clipboard. Send through a verified channel.")
+      }
+      if (action === "reset_password" && j.temporaryPassword) {
+        await navigator.clipboard.writeText(j.temporaryPassword).catch(() => null)
+        window.alert(j.message ?? "Temporary password copied once. User should sign in and change password.")
+      }
+      if (action === "burn_balances" || action === "delete_user") {
+        window.alert(j.message ?? "Done.")
       }
     } finally {
       setLoading(false)
@@ -780,15 +849,44 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     }
   }
 
+  const runSetUserLevel = async (userId: string, tradingUserLevel: 1 | 2 | 5) => {
+    const h = await authHeaders()
+    if (!h) return
+    setLoading(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { ...h, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action: "set_level", tradingUserLevel }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        window.alert(j.error ?? "Failed")
+        return
+      }
+      await searchUsers()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const snoozeDeskRow = (row: OperationsDeskApiRow) => {
+    const note = window.prompt("Optional note (saved on this device only). Row moves to Saved below.") ?? ""
+    persistDeskSnooze([...deskSnoozed, { key: deskRowKey(row), note: note.trim(), at: Date.now() }])
+  }
+
+  const restoreSnoozedDeskRow = (key: string) => {
+    persistDeskSnooze(deskSnoozed.filter((s) => s.key !== key))
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         {(
           [
-            { id: "hub" as const, label: "Operations hub", icon: MessageSquare },
+            { id: "approval" as const, label: "Approval desk", icon: ShieldCheck },
             { id: "users" as const, label: "Users", icon: Users },
             { id: "history" as const, label: "History", icon: History },
-            { id: "approval" as const, label: "Approval", icon: ShieldCheck },
           ] as const
         ).map((tab) => (
           <button
@@ -805,36 +903,12 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
         ))}
       </div>
 
-      {sub === "hub" && (
-        <Card className="border-border bg-card p-6">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <Bot className="h-5 w-5 text-primary" />
-            </div>
-            <div className="space-y-3 text-sm">
-              <div>
-                <h3 className="text-lg font-semibold">Admin communication &amp; operations hub</h3>
-                <p className="mt-1 text-muted-foreground">
-                  Central coordination for disputes, funding fallbacks, and operational anomalies. Pair this view with Joelin /
-                  Expert flows for narrative analysis — escalate to humans when automation cannot safely close a case.
-                </p>
-              </div>
-              <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                <li>Use AI panels to summarize transaction clusters, appealed funding, and retailer health.</li>
-                <li>Route unresolved appeals after the retailer response window to this hub + Approval tab.</li>
-                <li>Never distribute recovery links outside verified channels.</li>
-              </ul>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {sub === "users" && (
         <Card className="border-border bg-card p-4">
           <h3 className="mb-3 text-lg font-semibold">Global user controls</h3>
           <p className="mb-3 text-sm text-muted-foreground">
-            Search accounts by UUID or email substring. Governance flags are persisted on profiles — wire auth middleware to
-            enforce freezes/disables in trading routes as a follow-through.
+            Search by UUID or email fragment. Set tier (L1 / L2 / L5), governance flags, one-time admin password, or burn
+            liquid balances. Destructive actions require confirmation.
           </p>
           <div className="mb-4 flex gap-2">
             <input
@@ -868,42 +942,89 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                     {u.profile?.account_disabled_at ? " · Disabled" : ""}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-md bg-muted px-2 py-1 text-xs font-semibold"
-                    onClick={() => void runUserAction(u.id, "freeze")}
-                  >
-                    Freeze
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md bg-muted px-2 py-1 text-xs font-semibold"
-                    onClick={() => void runUserAction(u.id, "unfreeze")}
-                  >
-                    Unfreeze
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"
-                    onClick={() => void runUserAction(u.id, "disable")}
-                  >
-                    Disable
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md bg-muted px-2 py-1 text-xs font-semibold"
-                    onClick={() => void runUserAction(u.id, "enable")}
-                  >
-                    Enable
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary"
-                    onClick={() => void runUserAction(u.id, "recovery_link")}
-                  >
-                    Recovery link
-                  </button>
+                <div className="flex w-full max-w-2xl flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Tier</span>
+                    <button
+                      type="button"
+                      className="rounded border border-border bg-background px-2 py-0.5 text-[10px] font-semibold hover:bg-muted"
+                      onClick={() => void runSetUserLevel(u.id, 1)}
+                    >
+                      L1
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-border bg-background px-2 py-0.5 text-[10px] font-semibold hover:bg-muted"
+                      onClick={() => void runSetUserLevel(u.id, 2)}
+                    >
+                      L2
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                      onClick={() => void runSetUserLevel(u.id, 5)}
+                    >
+                      L5
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md bg-muted px-2 py-1 text-xs font-semibold"
+                      onClick={() => void runUserAction(u.id, "freeze")}
+                    >
+                      Freeze
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-muted px-2 py-1 text-xs font-semibold"
+                      onClick={() => void runUserAction(u.id, "unfreeze")}
+                    >
+                      Unfreeze
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"
+                      onClick={() => void runUserAction(u.id, "disable")}
+                    >
+                      Disable
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-muted px-2 py-1 text-xs font-semibold"
+                      onClick={() => void runUserAction(u.id, "enable")}
+                    >
+                      Enable
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary"
+                      onClick={() => void runUserAction(u.id, "recovery_link")}
+                    >
+                      Recovery link
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-900 dark:text-amber-100"
+                      onClick={() => void runUserAction(u.id, "reset_password")}
+                    >
+                      Admin set password
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-orange-500/15 px-2 py-1 text-xs font-semibold text-orange-900 dark:text-orange-100"
+                      onClick={() => void runUserAction(u.id, "burn_balances")}
+                    >
+                      Burn balances
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-destructive px-2 py-1 text-xs font-semibold text-destructive-foreground"
+                      onClick={() => void runUserAction(u.id, "delete_user")}
+                    >
+                      Delete user
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1067,7 +1188,7 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                   approvalView === "active" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
                 }`}
               >
-                Active ({deskPending.length})
+                Active ({visibleDeskPending.length}/{deskPending.length})
               </button>
               <button
                 type="button"
@@ -1093,10 +1214,11 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                     <th className="p-2 font-semibold">Balances</th>
                     <th className="p-2 font-semibold">Status</th>
                     <th className="p-2 font-semibold">Risk</th>
+                    <th className="p-2 font-semibold">Queue</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(approvalView === "active" ? deskPending : deskHistory).map((row) => (
+                  {(approvalView === "active" ? visibleDeskPending : deskHistory).map((row) => (
                     <tr
                       key={`${row.kind}-${row.id}`}
                       className="cursor-pointer border-b border-border/60 hover:bg-muted/40"
@@ -1164,11 +1286,26 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                       <td className="p-2 align-top text-[10px] text-rose-700 dark:text-rose-400">
                         {row.duplicate_risk_hint ?? "—"}
                       </td>
+                      <td className="p-2 align-top" onClick={(e) => e.stopPropagation()}>
+                        {approvalView === "active" ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-2 py-1 text-[10px] font-semibold hover:bg-muted"
+                            title="Hide from main queue — review later under Saved"
+                            onClick={() => snoozeDeskRow(row)}
+                          >
+                            <Bookmark className="h-3 w-3" />
+                            Save
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                     </tr>
                   ))}
-                  {(approvalView === "active" ? deskPending : deskHistory).length === 0 ? (
+                  {(approvalView === "active" ? visibleDeskPending : deskHistory).length === 0 ? (
                     <tr>
-                      <td className="p-8 text-center text-muted-foreground" colSpan={9}>
+                      <td className="p-8 text-center text-muted-foreground" colSpan={10}>
                         {loading ? "Loading…" : "No rows in this bucket."}
                       </td>
                     </tr>
@@ -1176,6 +1313,31 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                 </tbody>
               </table>
             </div>
+            {approvalView === "active" && deskSnoozed.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/25 p-3 text-[11px]">
+                <p className="mb-2 font-semibold text-foreground">Saved for later (this browser)</p>
+                <ul className="max-h-40 space-y-2 overflow-y-auto">
+                  {deskSnoozed.map((s) => (
+                    <li
+                      key={s.key}
+                      className="flex flex-wrap items-start justify-between gap-2 rounded border border-border bg-background px-2 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-mono text-[10px] text-muted-foreground break-all">{s.key}</span>
+                        {s.note ? <p className="text-muted-foreground">{s.note}</p> : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 text-[10px] font-semibold text-primary underline"
+                        onClick={() => restoreSnoozedDeskRow(s.key)}
+                      >
+                        Restore
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </Card>
 
           <Card className="border-border bg-card p-4">

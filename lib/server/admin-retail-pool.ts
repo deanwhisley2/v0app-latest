@@ -104,10 +104,27 @@ async function debitUserAvailableBalance(sb: SupabaseClient, userId: string, amo
 
 async function creditUserAvailableBalance(sb: SupabaseClient, userId: string, amount: number): Promise<void> {
   if (!(amount > 0)) return
-  const { data: row } = await sb.from("user_balances").select("available_balance").eq("user_id", userId).maybeSingle()
+  const { data: row, error: selErr } = await sb
+    .from("user_balances")
+    .select("available_balance, retail_balance, withdrawal_pending_balance")
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (selErr) throw new Error(selErr.message)
   const avail = Number(row?.available_balance ?? 0)
+  const retail = Number((row as { retail_balance?: unknown } | null)?.retail_balance ?? 0)
+  const pend = Number((row as { withdrawal_pending_balance?: unknown } | null)?.withdrawal_pending_balance ?? 0)
   const now = new Date().toISOString()
-  await sb.from("user_balances").update({ available_balance: avail + amount, last_updated: now }).eq("user_id", userId)
+  const { error: upErr } = await sb.from("user_balances").upsert(
+    {
+      user_id: userId,
+      available_balance: avail + amount,
+      retail_balance: retail,
+      withdrawal_pending_balance: pend,
+      last_updated: now,
+    },
+    { onConflict: "user_id" },
+  )
+  if (upErr) throw new Error(upErr.message)
 }
 
 /**
