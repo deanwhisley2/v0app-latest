@@ -146,7 +146,8 @@ export async function buildOperationalBootstrapV1(params: {
     email?: string
     full_name?: string | null
     is_verified?: boolean
-    trading_user_level?: number
+    /** PostgREST may return numeric columns as number or string depending on driver/column type. */
+    trading_user_level?: number | string
     retailer_credit_seller?: boolean | null
     funding_country_code?: string | null
     nexus_exchanges?: StoredExchangePayload[] | null
@@ -172,6 +173,12 @@ export async function buildOperationalBootstrapV1(params: {
 
   const bal = balanceRes.data as Record<string, unknown> | null
 
+  const normalizedTradingLevel = ((): 1 | 2 | 5 => {
+    const n = Number(rawProfile?.trading_user_level ?? 1)
+    if (n === 2 || n === 5) return n
+    return 1
+  })()
+
   return {
     version: 1,
     userId: params.userId,
@@ -185,10 +192,7 @@ export async function buildOperationalBootstrapV1(params: {
           email: rawProfile.email ?? null,
           fullName: (rawProfile.full_name as string | null) ?? null,
           isVerified: typeof rawProfile.is_verified === "boolean" ? rawProfile.is_verified : null,
-          tradingUserLevel:
-            rawProfile.trading_user_level === 2 || rawProfile.trading_user_level === 5
-              ? rawProfile.trading_user_level
-              : 1,
+          tradingUserLevel: normalizedTradingLevel,
           retailerCreditSeller: computeRetailerCreditSeller(
             params.userId,
             rawProfile.email ?? null,
