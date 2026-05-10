@@ -1424,13 +1424,21 @@ export default function DashboardPage() {
     setFundNote("")
   }, [])
 
+  /** Reset desk matching when corridor inputs change — do NOT tie to fundAmount or step 2 loses selection while payer enters Tx ID. */
   useEffect(() => {
     if (l1FundSource !== "local") return
     setQualifiedRetailers([])
     setSelectedRetailerId("")
     setLocalMmRetailersSearched(false)
     setLocalMmWizardStep(1)
-  }, [fundAmount, fundingCountryCodeInput, fundMobileNetwork, l1FundSource])
+  }, [fundingCountryCodeInput, fundMobileNetwork, l1FundSource])
+
+  useEffect(() => {
+    if (l1FundSource !== "local" || localMmWizardStep !== 2) return
+    if (qualifiedRetailers.length === 1 && !selectedRetailerId) {
+      setSelectedRetailerId(qualifiedRetailers[0].id)
+    }
+  }, [l1FundSource, localMmWizardStep, qualifiedRetailers, selectedRetailerId])
 
   useEffect(() => {
     if (showFundModal !== "add") setLocalMmWizardStep(1)
@@ -1477,6 +1485,10 @@ export default function DashboardPage() {
       if (showFundModal === "add" && customerRetailFunding && l1FundSource === "pick") return
       if (showFundModal === "add" && retailerCreditDesk) return
       if (showFundModal === "add" && level === 5) return
+      if (showFundModal === "add" && customerRetailFunding && l1FundSource === "local") {
+        showToast("Enter a valid funding amount on step 1.", "error")
+        return
+      }
       return
     }
 
@@ -1612,7 +1624,6 @@ export default function DashboardPage() {
     formatUserMoney,
     withdrawalPendingBalance,
     currency,
-    l1FundSource,
     localMmWizardStep,
   ])
 
@@ -2137,14 +2148,20 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                            Transaction reference (after you pay)
+                            Transaction ID / reference (after you pay)
                           </label>
+                          <p className="mb-1.5 text-[10px] text-muted-foreground">
+                            Send payment off-app first, then paste the operator receipt ID here so the retailer can match your
+                            payment before they approve.
+                          </p>
                           <input
                             type="text"
+                            inputMode="text"
+                            autoComplete="off"
                             value={fundTxReference}
                             onChange={(e) => setFundTxReference(e.target.value)}
-                            placeholder="MoMo reference from your receipt"
-                            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                            placeholder="e.g. MoMo transaction ID from SMS or receipt"
+                            className="w-full rounded-md border border-border bg-background px-3 py-2.5 font-mono text-sm"
                           />
                         </div>
                         <div>
@@ -2534,6 +2551,24 @@ export default function DashboardPage() {
             )}
 
             <div className="flex flex-col gap-2">
+              {showFundModal === "add" &&
+              customerRetailFunding &&
+              l1FundSource === "local" &&
+              localMmWizardStep === 2 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  {!selectedRetailerId
+                    ? "Select a desk above."
+                    : !fundTxReference.trim()
+                      ? "Enter your transaction ID / reference from the receipt."
+                      : !fundPayerName.trim() || !fundPayerPhone.trim()
+                        ? "Sender name and phone are required (step 1)."
+                        : !fundMobileNetwork.trim() || fundingCountryCodeInput.trim().length !== 2
+                          ? "Country and network must be set (use Edit details if needed)."
+                          : !(parseFloat(fundAmount) > 0)
+                            ? "Funding amount is missing — use Edit details."
+                            : "Ready — confirm to notify the retailer."}
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={handleFundSubmit}
