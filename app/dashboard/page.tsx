@@ -2369,21 +2369,20 @@ export default function DashboardPage() {
                     </p>
                     {paymentNumbersCooldown && !paymentNumbersCooldown.canEditPaymentNumbers && paymentNumbersCooldown.nextEligibleAt ? (
                       <p className="text-[11px] text-amber-800 dark:text-amber-200">
-                        Payment lines can be edited after{" "}
+                        Changing MoMo / payment lines is limited to once per 7 days (next eligible{" "}
                         {new Date(paymentNumbersCooldown.nextEligibleAt).toLocaleString(undefined, {
                           dateStyle: "medium",
                           timeStyle: "short",
                         })}
-                        . Contact support for an urgent reset.
+                        ). You can still update liquidity and contacts below; contact support for an urgent number reset.
                       </p>
                     ) : null}
                     <button
                       type="button"
-                      disabled={!paymentNumbersCooldown?.canEditPaymentNumbers}
                       onClick={() => setDeskEditPaymentLines(true)}
-                      className="text-xs font-semibold text-primary underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="text-xs font-semibold text-primary underline underline-offset-2"
                     >
-                      Edit desk details (MoMo lines limited to once per 7 days)
+                      Edit desk details
                     </button>
                   </div>
                 ) : null}
