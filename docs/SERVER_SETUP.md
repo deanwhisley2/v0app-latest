@@ -51,9 +51,9 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d nexus.yourdomain.com
 ```
 
-## 5) Why your phone does not match Vercel
+## 5) Why pushing git does not change the public site by itself
 
-Pushing to `main` updates **Vercel** automatically. Your **domain** (e.g. `nexuspro.it.com`) usually points at the **VPS** (nginx → PM2 → `next start`). That server only gets new code when someone runs **`scripts/deploy.sh`** on the VPS (or you add CI below).
+`git push` only updates **GitHub**. **nexuspro.it.com** (or any custom domain) points at **your VPS** (nginx → PM2 → `next start`). The live site changes only after the server **pulls the new commit** and **rebuilds** — e.g. run **`scripts/deploy.sh`** on the VPS (or the optional GitHub Action in §7).
 
 ## 6) Deploy on the VPS (required for domain / phone)
 

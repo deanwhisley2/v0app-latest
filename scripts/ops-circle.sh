@@ -10,7 +10,8 @@ set -euo pipefail
 
 VPS_HOST="${VPS_HOST:-67.159.52.40}"
 VPS_USER="${VPS_USER:-vpsuser}"
-APP_URL="${APP_URL:-http://localhost:3000}"
+# Public site (override for curls from the VPS): https://nexuspro.it.com — internal Node often listens on :3000 behind nginx.
+APP_URL="${APP_URL:-http://127.0.0.1:3000}"
 
 echo "=== LOCAL: git + gh ==="
 git status --short --branch

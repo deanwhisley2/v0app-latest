@@ -60,11 +60,11 @@ export async function GET() {
     optional_services: optionalServices,
     deployment: {
       node_env: process.env.NODE_ENV ?? "development",
-      /** Set by some CI hosts; null on a plain VPS. */
+      /** Set by CI or deploy scripts (optional); null on a plain VPS build. */
       git_commit:
-        process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
-        process.env.RAILWAY_GIT_COMMIT_SHA?.trim() ||
         process.env.GITHUB_SHA?.trim() ||
+        process.env.GIT_COMMIT?.trim() ||
+        process.env.RAILWAY_GIT_COMMIT_SHA?.trim() ||
         null,
     },
     /** What each trading tier is supposed to include (aligned with app gating). */
