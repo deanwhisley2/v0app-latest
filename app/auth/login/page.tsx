@@ -27,7 +27,7 @@ export default function LoginPage() {
   const [joelinMessages, setJoelinMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
     {
       role: "assistant",
-      text: "I am Joelin. I can explain how Nexus works, container mode benefits, and guide you to human support (admin desk coming soon).",
+      text: "I’m Joelin — I can explain Nexus Main / Wallet rules, referrals, Container fixed flows, deposits & withdrawals, and where to tap next (or guide you toward official support).",
     },
   ])
   const resetSuccess =
@@ -317,6 +317,12 @@ export default function LoginPage() {
               </button>
               <button type="button" onClick={() => void askJoelin("How do I contact a human assistant?")} className="rounded-md border border-border px-2 py-1 text-xs">
                 Human assistant
+              </button>
+              <button type="button" onClick={() => void askJoelin("How do referrals work?")} className="rounded-md border border-border px-2 py-1 text-xs">
+                Referrals
+              </button>
+              <button type="button" onClick={() => void askJoelin("Explain Nexus Main wallet and withdrawals")} className="rounded-md border border-border px-2 py-1 text-xs">
+                Wallet rules
               </button>
             </div>
             <div className="flex items-center gap-2">

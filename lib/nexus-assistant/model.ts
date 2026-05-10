@@ -6,6 +6,11 @@ import {
   containerCustomerEarningsStory,
   LEVEL_HINT,
   NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
+  NEXUS_WALLET_AND_WITHDRAWAL_RULES,
+  NEXUS_REFERRAL_PROGRAM_GUIDE,
+  NEXUS_FIXED_EARLY_EXIT_GUIDE,
+  NEXUS_FIXED_ACCESS_TIER_HINT,
+  NEXUS_UI_WHERE_TO_GO,
 } from "./knowledge"
 
 function norm(s: string) {
@@ -119,6 +124,8 @@ function authReply(q: string, authStep?: string): string | null {
     return [
       "Welcome in advance — on Sign Up, use a real email and phone you control; we use them for security, not spam.",
       "",
+      "If someone invited you, enter their Referral ID or open their signup link with ?ref= so attribution saves cleanly.",
+      "",
       "After registration you’ll verify, then land on the dashboard where Connected Exchanges and Security Center are your next best clicks.",
     ].join("\n")
   }
@@ -154,7 +161,8 @@ function helpTour(surface: NexusAssistantSurface): string {
     "Quick tour — Nexus PRO is built as a stack:",
     "",
     "• Trade / Wallstreet — live context, signals workspace, automation helpers.",
-    "• Wallet — balances, earn tiles, movement history (what your tier shows).",
+    "• Wallet — Nexus Main, pending withdrawals, Container-related balances, Add Funds / Withdraw.",
+    "• Profile menu (avatar) — your referral link and Referrals view after sign-in.",
     "• Settings — exchanges, security, funding, notifications, About/legal.",
     "",
     tail,
@@ -189,10 +197,31 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   if (block) return block
 
   if (!q) {
-    return "Type a short question about Nexus PRO — for example: help, container, earnings, exchange, or security."
+    return "Type a short question about Nexus PRO — for example: help, wallet, referral, container, withdrawal, funding, exchange, or security."
   }
 
   if (isGreeting(q)) return greetingReply(surface, isGuest)
+
+  if (
+    hasAny(q, [
+      "where is",
+      "where do i find",
+      "how do i open wallet",
+      "how to add fund",
+      "how to deposit",
+      "how to withdraw",
+      "open referrals",
+      "referral link where",
+    ])
+  ) {
+    return [
+      "Here’s where common actions live:",
+      "",
+      NEXUS_UI_WHERE_TO_GO,
+      "",
+      "Say referral, wallet, or container if you want rules for that area.",
+    ].join("\n")
+  }
 
   if (hasAny(q, ["help", "lost", "where do i", "how do i start", "menu"])) {
     return helpTour(surface)
@@ -259,6 +288,66 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     return lines.join("\n")
   }
 
+  if (
+    hasAny(q, [
+      "referral",
+      "referrals",
+      "refer a friend",
+      "invite friend",
+      "invite code",
+      "referral code",
+      "referral link",
+      "my referral",
+      "ref code",
+      "?ref",
+      "invite link",
+    ])
+  ) {
+    return [
+      NEXUS_REFERRAL_PROGRAM_GUIDE,
+      "",
+      "Navigation: tap your avatar → Referrals (or Refer to Earn) after you’re logged in.",
+    ].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "pending withdrawal",
+      "frozen withdrawal",
+      "withdraw approved",
+      "withdraw rejected",
+      "liquidity admin",
+      "approve my withdrawal",
+      "withdrawal pending",
+      "why withdraw stuck",
+    ])
+  ) {
+    return [
+      NEXUS_WALLET_AND_WITHDRAWAL_RULES,
+      "",
+      "If your withdrawal stays pending, it’s waiting in the operator queue — use official support if it exceeds the usual timing window shown near Wallet.",
+    ].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "early exit",
+      "early pullout",
+      "pull out early",
+      "leave early",
+      "cancel fixed",
+      "default fee",
+      "break the lock",
+      "end fix early",
+    ])
+  ) {
+    return [
+      NEXUS_FIXED_EARLY_EXIT_GUIDE,
+      "",
+      NEXUS_FIXED_ACCESS_TIER_HINT,
+    ].join("\n")
+  }
+
   // Container — high priority when user names it
   if (
     hasAny(q, [
@@ -281,9 +370,33 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
       "",
       "Practical rhythm: open Container daily to watch scheduled accrual and any withdrawal windows the UI unlocks — that’s the “every day” habit successful users build (checking progress, not chasing hype).",
       "",
+      "Funding rule: fixed locks spend from Nexus Main only — if Main can’t cover stake plus upfront fees, reduce size or add funds first.",
+      "",
       focusSymbol
         ? `You currently have ${focusSymbol} on the desk — you can still run Container flows; the coin context and container pick are independent, so follow whichever plan matches your risk plan.`
         : "Pick a coin context on the desk when you want price-linked views; container schedules are about the program you join, not a single tweet-sized tip.",
+    ].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "insurance fee",
+      "upfront fee",
+      "fee when i open",
+      "deduct fee",
+      "why fee",
+      "nexus main",
+      "main balance",
+      "not enough balance",
+      "insufficient balance",
+    ])
+  ) {
+    return [
+      "Fixed programs quote fees at initiation (including insurance-style charges) — they’re separate from your locked stake and are shown before you confirm.",
+      "",
+      NEXUS_WALLET_AND_WITHDRAWAL_RULES,
+      "",
+      NEXUS_FIXED_ACCESS_TIER_HINT,
     ].join("\n")
   }
 
@@ -352,9 +465,11 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     ].join("\n")
   }
 
-  if (hasAny(q, ["deposit", "withdraw", "funding", "add funds", "cash out", "balance"])) {
+  if (hasAny(q, ["deposit", "withdraw", "funding", "add funds", "cash out", "balance", "minimum deposit", "minimum withdraw", "min deposit", "min withdrawal"])) {
     return [
-      "Dashboard header → Add Funds: Option A is company crypto treasury; Option B is local mobile money through vetted desks when your country aligns.",
+      NEXUS_WALLET_AND_WITHDRAWAL_RULES,
+      "",
+      "Dashboard → Add Funds / Withdraw: Option A is company crypto treasury; Option B is local mobile money through vetted desks when your country aligns.",
       "",
       NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
       "",
@@ -406,7 +521,7 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   return [
     `I’m focused on ${NEXUS_PRODUCT_NAME} — I didn’t match a specific intent in that message.`,
     "",
-    "Try one word: help, container, earnings, exchange, security, funding, trade.",
+    "Try one word: help, wallet, referral, withdrawal, container, earnings, exchange, security, funding, trade.",
     "",
     isGuest
       ? "Guest tip: registering unlocks the full funding + exchange linking loop when your team enables it."

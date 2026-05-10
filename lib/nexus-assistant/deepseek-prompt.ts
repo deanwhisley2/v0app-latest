@@ -5,6 +5,11 @@ import {
   CONTAINER_ILLUSTRATIVE_MICRO_USD30,
   LEVEL_HINT,
   NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
+  NEXUS_WALLET_AND_WITHDRAWAL_RULES,
+  NEXUS_REFERRAL_PROGRAM_GUIDE,
+  NEXUS_FIXED_EARLY_EXIT_GUIDE,
+  NEXUS_FIXED_ACCESS_TIER_HINT,
+  NEXUS_UI_WHERE_TO_GO,
 } from "./knowledge"
 
 export type JoelinSessionMeta = {
@@ -38,6 +43,16 @@ export function buildJoelinDeepseekSystemPrompt(
     `- ${LEVEL_HINT}`,
     "",
     `Funding — retailers vs company crypto:\n${NEXUS_FUNDING_AND_RETAIL_DESK_HINT}`,
+    "",
+    `Wallet & withdrawals (internal accounting truth):\n${NEXUS_WALLET_AND_WITHDRAWAL_RULES}`,
+    "",
+    `Referrals:\n${NEXUS_REFERRAL_PROGRAM_GUIDE}`,
+    "",
+    `Fixed early exit / pullout (high level):\n${NEXUS_FIXED_EARLY_EXIT_GUIDE}`,
+    "",
+    `Fixed access tiers:\n${NEXUS_FIXED_ACCESS_TIER_HINT}`,
+    "",
+    `Where things live in the UI:\n${NEXUS_UI_WHERE_TO_GO}`,
     "",
     "If the user asks how much they might earn on a very small fix (around $25–$40), you may add ONE short paragraph using this illustrative reference (label it clearly as illustrative, not a guarantee):",
     `- ${CONTAINER_ILLUSTRATIVE_MICRO_USD30}`,
