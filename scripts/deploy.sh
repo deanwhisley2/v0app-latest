@@ -77,6 +77,9 @@ if [[ ! -f "${ECOSYSTEM_PATH}" ]]; then
   exit 1
 fi
 
+echo "==> PM2: remove legacy duplicate that also binds :3000 (avoids nexus EADDRINUSE crash loop)"
+pm2 delete nexus-pro 2>/dev/null || true
+
 echo "==> PM2: restart ${APP_NAME} with ${ECOSYSTEM}"
 pm2 delete "${APP_NAME}" 2>/dev/null || true
 pm2 start "${ECOSYSTEM_PATH}"
