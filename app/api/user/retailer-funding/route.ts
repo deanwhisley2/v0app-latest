@@ -3,7 +3,10 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getRetailFundingCustomerGate } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { retailerSpendableLiquidity } from "@/lib/server/retailer-funding-helpers"
+import {
+  attachProfileEmailsToRetailers,
+  retailerSpendableLiquidity,
+} from "@/lib/server/retailer-funding-helpers"
 
 export async function GET(request: Request) {
   try {
@@ -24,15 +27,18 @@ export async function GET(request: Request) {
     if (requestsRes.error) return NextResponse.json({ error: requestsRes.error.message }, { status: 500 })
 
     /** Full desk directory only for designated Level-2 retailer credit sellers; buyers use GET /qualified-retailers. */
-    const retailers =
+    const rawRetailers =
       level === 2 && gate.retailerCreditSeller
         ? (
             await admin
               .from("retailer_profiles")
-              .select("id,user_id,payment_numbers,credit_basin,under_review,under_review_reason,updated_at")
+              .select(
+                "id,user_id,payment_numbers,credit_basin,under_review,under_review_reason,country_code,is_country_retailer,liquidity_status,updated_at"
+              )
               .order("updated_at", { ascending: false })
           ).data ?? []
         : []
+    const retailers = await attachProfileEmailsToRetailers(admin, rawRetailers)
 
     return NextResponse.json({
       userLevel: level,

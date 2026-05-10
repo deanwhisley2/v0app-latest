@@ -184,3 +184,16 @@ export async function transferRetailPoolInternal(
     })
   return { retail_balance: retail, available_balance: main }
 }
+
+/** Attach profiles.email for retailer_profiles rows (admin + L2 desk network directory). */
+export async function attachProfileEmailsToRetailers<T extends { user_id: string }>(
+  sb: SupabaseClient,
+  rows: T[],
+): Promise<Array<T & { profile_email: string | null }>> {
+  if (!rows.length) return []
+  const ids = [...new Set(rows.map((r) => r.user_id))]
+  const { data } = await sb.from("profiles").select("id,email").in("id", ids)
+  const rows_raw = (data ?? []) as { id: string; email: string | null }[]
+  const map = new Map<string, string | null>(rows_raw.map((p) => [p.id, p.email ?? null]))
+  return rows.map((r) => ({ ...r, profile_email: map.get(r.user_id) ?? null }))
+}

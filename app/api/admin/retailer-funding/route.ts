@@ -3,7 +3,10 @@ import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel, requireAdminUser } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { transferRetailCreditToCustomer } from "@/lib/server/retailer-funding-helpers"
+import {
+  attachProfileEmailsToRetailers,
+  transferRetailCreditToCustomer,
+} from "@/lib/server/retailer-funding-helpers"
 
 export async function GET(request: Request) {
   try {
@@ -29,7 +32,8 @@ export async function GET(request: Request) {
     ])
     if (requestsRes.error) return NextResponse.json({ error: requestsRes.error.message }, { status: 500 })
     if (retailersRes.error) return NextResponse.json({ error: retailersRes.error.message }, { status: 500 })
-    return NextResponse.json({ requests: requestsRes.data ?? [], retailers: retailersRes.data ?? [] })
+    const retailers = await attachProfileEmailsToRetailers(admin, retailersRes.data ?? [])
+    return NextResponse.json({ requests: requestsRes.data ?? [], retailers })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Forbidden" }, { status: 403 })
   }

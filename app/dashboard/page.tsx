@@ -79,6 +79,8 @@ type RetailerRow = {
   contact_phone?: string | null
   registered_payee_names?: string | null
   estimated_response_minutes?: number | null
+  /** Set by API from public.profiles.email for desk directory views. */
+  profile_email?: string | null
 }
 
 type QualifiedRetailer = RetailerRow & { spendable_liquidity?: number }
@@ -197,6 +199,7 @@ export default function DashboardPage() {
     }>
   >([])
   const [adminFundingQueue, setAdminFundingQueue] = useState<RetailerFundingRequest[]>([])
+  const [adminRetailerRows, setAdminRetailerRows] = useState<RetailerRow[]>([])
   const [topupCryptoRef, setTopupCryptoRef] = useState("")
   const [topupNote, setTopupNote] = useState("")
   const [deskCountryCode, setDeskCountryCode] = useState("")
@@ -860,7 +863,58 @@ export default function DashboardPage() {
         /* ignore */
       }
     })()
-  }, [authLoading, user, isGuestSession, op.snapshot?.profile?.fundingCountryCode])
+  }, [
+    authLoading,
+    user,
+    isGuestSession,
+    op.snapshot?.profile?.fundingCountryCode,
+    op.snapshot?.profile?.tradingUserLevel,
+    op.snapshot?.profile?.retailerCreditSeller,
+  ])
+
+  /** Level 5: preload admin funding + retailer directory so Wallet / Add Funds reflects pipelines without waiting on modals. */
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession) return
+    if ((op.snapshot?.profile?.tradingUserLevel ?? 1) !== 5) return
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const [rf, aq] = await Promise.all([
+          fetch("/api/admin/retailer-funding", {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }),
+          fetch("/api/admin/retailer-liquidity-topup", {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }),
+        ])
+        if (rf.ok) {
+          const fj = (await rf.json()) as { requests?: RetailerFundingRequest[]; retailers?: RetailerRow[] }
+          setAdminFundingQueue(fj.requests ?? [])
+          setAdminRetailerRows(fj.retailers ?? [])
+        }
+        if (aq.ok) {
+          const aj = (await aq.json()) as {
+            requests?: Array<{
+              id: string
+              retailer_user_id: string
+              amount_requested: number
+              crypto_tx_reference: string
+              status: string
+            }>
+          }
+          setAdminTopupQueue(aj.requests ?? [])
+        }
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [authLoading, user, isGuestSession, op.snapshot?.profile?.tradingUserLevel])
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession) return
@@ -984,8 +1038,10 @@ export default function DashboardPage() {
           if (rf.ok) {
             const fj = (await rf.json()) as {
               requests?: RetailerFundingRequest[]
+              retailers?: RetailerRow[]
             }
             setAdminFundingQueue(fj.requests ?? [])
+            setAdminRetailerRows(fj.retailers ?? [])
           }
         }
       } catch {
@@ -2021,6 +2077,35 @@ export default function DashboardPage() {
                 >
                   Save retailer desk
                 </button>
+                <div className="rounded border border-border bg-background p-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Registered retail desks (network)</p>
+                  <p className="mb-2 text-[10px] text-muted-foreground">
+                    Same directory admins see. Enable country + liquidity + payment lines so you appear to matching customers.
+                  </p>
+                  <div className="max-h-36 space-y-1 overflow-y-auto text-[11px]">
+                    {retailerRows.length === 0 ? (
+                      <p className="text-muted-foreground">No desks loaded — refresh or check Level 2 + retailer desk flag.</p>
+                    ) : (
+                      retailerRows.map((row) => (
+                        <div
+                          key={row.id}
+                          className="flex flex-col gap-0.5 border-b border-border/50 py-1 last:border-0 md:flex-row md:items-center md:justify-between"
+                        >
+                          <span className="font-medium">
+                            {row.profile_email ?? `${row.user_id.slice(0, 8)}…`}
+                            {row.user_id === user?.id ? (
+                              <span className="ml-1 rounded bg-primary/15 px-1 text-[10px] text-primary">you</span>
+                            ) : null}
+                          </span>
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {row.country_code ?? "—"} · {row.liquidity_status ?? "—"} · basin $
+                            {Number(row.credit_basin ?? 0).toFixed(0)}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
                 <div className="max-h-36 space-y-2 overflow-y-auto rounded border border-border bg-background p-2">
                   <p className="text-[10px] font-semibold uppercase text-muted-foreground">Incoming local funds</p>
                   {retailerIncoming.length === 0 ? (
@@ -2091,6 +2176,33 @@ export default function DashboardPage() {
 
             {(currentUser?.level ?? 1) === 5 && showFundModal === "add" && (
               <>
+                <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
+                  <p className="text-xs font-semibold text-muted-foreground">Registered retail desks (network)</p>
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    All Level-2 retailer_profiles; match payout identity and country visibility to qualified customer flows.
+                  </p>
+                  <div className="max-h-44 space-y-1 overflow-y-auto text-[11px]">
+                    {adminRetailerRows.length === 0 ? (
+                      <p className="text-muted-foreground">No retailer_profiles rows yet.</p>
+                    ) : (
+                      adminRetailerRows.map((row) => (
+                        <div
+                          key={row.id}
+                          className="flex flex-col gap-0.5 rounded border border-border/60 bg-background px-2 py-1 md:flex-row md:items-center md:justify-between"
+                        >
+                          <span className="font-medium">
+                            {row.profile_email ?? `${row.user_id.slice(0, 8)}…`}
+                          </span>
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {row.country_code ?? "—"} · liq {row.liquidity_status ?? "—"} · basin $
+                            {Number(row.credit_basin ?? 0).toFixed(0)}
+                            {row.under_review ? " · under_review" : ""}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
                 <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3">
                   <p className="text-xs font-semibold text-muted-foreground">User funding appeals / legacy queue</p>
                   <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">

@@ -470,6 +470,7 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const [loading, setLoading] = useState(false)
   const [approvalFunding, setApprovalFunding] = useState<Array<Record<string, unknown>>>([])
   const [approvalTopups, setApprovalTopups] = useState<Array<Record<string, unknown>>>([])
+  const [approvalRetailers, setApprovalRetailers] = useState<Array<Record<string, unknown>>>([])
 
   const authHeaders = async () => {
     const {
@@ -503,11 +504,15 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
         fetch("/api/admin/retailer-liquidity-topup", { headers: h }),
       ])
       if (a.ok) {
-        const j = (await a.json()) as { requests?: Array<Record<string, unknown>> }
+        const j = (await a.json()) as {
+          requests?: Array<Record<string, unknown>>
+          retailers?: Array<Record<string, unknown>>
+        }
         const pending = (j.requests ?? []).filter((r) =>
           ["pending", "under_review", "appealed", "escalated"].includes(String(r.status ?? "")),
         )
         setApprovalFunding(pending)
+        setApprovalRetailers(j.retailers ?? [])
       }
       if (b.ok) {
         const j = (await b.json()) as { requests?: Array<Record<string, unknown>> }
@@ -746,6 +751,20 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
             desks — this panel is the wallet-native summary.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border border-border bg-muted/20 p-3 md:col-span-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Retail desk directory</p>
+              <p className="font-mono text-2xl font-bold">{approvalRetailers.length}</p>
+              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[11px]">
+                {approvalRetailers.slice(0, 24).map((r) => (
+                  <li key={String(r.id)} className="truncate text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {String(r.profile_email ?? "").trim() || `${String(r.user_id ?? "").slice(0, 8)}…`}
+                    </span>{" "}
+                    · {String(r.country_code ?? "—")} · basin ${Number(r.credit_basin ?? 0).toFixed(0)}
+                  </li>
+                ))}
+              </ul>
+            </div>
             <div className="rounded-lg border border-border bg-muted/20 p-3">
               <p className="text-xs font-semibold uppercase text-muted-foreground">User funding requests</p>
               <p className="font-mono text-2xl font-bold">{approvalFunding.length}</p>
