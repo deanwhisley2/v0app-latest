@@ -13,7 +13,7 @@ type ProfileLite = {
 }
 
 export type OperationsDeskRow = {
-  kind: "retailer_float_topup" | "user_add_funds"
+  kind: "retailer_float_topup" | "user_add_funds" | "user_withdrawal"
   id: string
   status: string
   /** Primary subject (customer for funding, retailer for top-up). */
@@ -42,6 +42,10 @@ export type OperationsDeskRow = {
   commission_rate?: number | null
   amount_credited?: number | null
   resolution_note?: string | null
+  /** Withdrawal recycle / external payout lifecycle (withdrawal_requests.payout_status). */
+  payout_status?: string | null
+  /** User's frozen withdrawal bucket at desk snapshot (withdrawal_pending_balance). */
+  withdrawal_pending_usd?: number | null
 }
 
 function msSince(iso: string): number | null {
@@ -57,7 +61,7 @@ export async function GET(request: Request) {
     await requireLiquidityAdminLevel5(actor)
     const admin = createAdminClient()
 
-    const [topUpsRes, fundingRes] = await Promise.all([
+    const [topUpsRes, fundingRes, withdrawalRes] = await Promise.all([
       admin
         .from("retailer_admin_topup_requests")
         .select(
@@ -72,13 +76,22 @@ export async function GET(request: Request) {
         )
         .order("created_at", { ascending: false })
         .limit(200),
+      admin
+        .from("withdrawal_requests")
+        .select(
+          "id,user_id,amount,currency_context,status,transaction_ref,created_at,reviewed_at,resolution_note,payout_status,held_at,metadata"
+        )
+        .order("created_at", { ascending: false })
+        .limit(200),
     ])
 
     if (topUpsRes.error) return NextResponse.json({ error: topUpsRes.error.message }, { status: 500 })
     if (fundingRes.error) return NextResponse.json({ error: fundingRes.error.message }, { status: 500 })
+    if (withdrawalRes.error) return NextResponse.json({ error: withdrawalRes.error.message }, { status: 500 })
 
     const topRows = topUpsRes.data ?? []
     const fundRows = fundingRes.data ?? []
+    const wdRows = withdrawalRes.data ?? []
     const userIds = new Set<string>()
     const retailerIds: string[] = []
     for (const r of topRows) userIds.add((r as { retailer_user_id: string }).retailer_user_id)
@@ -86,6 +99,7 @@ export async function GET(request: Request) {
       userIds.add((r as { user_id: string }).user_id)
       retailerIds.push((r as { retailer_id: string }).retailer_id)
     }
+    for (const r of wdRows) userIds.add(String((r as { user_id: string }).user_id))
 
     const retailerProfilesRes = retailerIds.length
       ? await admin
@@ -101,14 +115,20 @@ export async function GET(request: Request) {
 
     const balancesRes = await admin
       .from("user_balances")
-      .select("user_id,available_balance,retail_balance")
+      .select("user_id,available_balance,retail_balance,withdrawal_pending_balance")
       .in("user_id", [...userIds])
-    const balMap = new Map<string, { m: number; r: number }>()
+    const balMap = new Map<string, { m: number; r: number; w: number }>()
     for (const b of balancesRes.data ?? []) {
-      const row = b as { user_id: string; available_balance?: unknown; retail_balance?: unknown }
+      const row = b as {
+        user_id: string
+        available_balance?: unknown
+        retail_balance?: unknown
+        withdrawal_pending_balance?: unknown
+      }
       balMap.set(row.user_id, {
         m: Number(row.available_balance ?? 0),
         r: Number(row.retail_balance ?? 0),
+        w: Number(row.withdrawal_pending_balance ?? 0),
       })
     }
 
@@ -199,6 +219,7 @@ export async function GET(request: Request) {
         pending_ms: terminal ? null : msSince(created_at),
         nexus_main_usd: bal ? bal.m : null,
         retail_balance_usd: bal ? bal.r : null,
+        withdrawal_pending_usd: bal ? bal.w : null,
         retailer_basin_usd: null,
         duplicate_risk_hint: terminal ? null : duplicateTopupRisk(retailerUserId, amount, id),
         note: raw.note ? String(raw.note) : null,
@@ -248,6 +269,7 @@ export async function GET(request: Request) {
         pending_ms: terminal ? null : msSince(created_at),
         nexus_main_usd: bal ? bal.m : null,
         retail_balance_usd: bal ? bal.r : null,
+        withdrawal_pending_usd: bal ? bal.w : null,
         retailer_basin_usd: basin,
         retailer_desk_profile_id: retailPid || null,
         retailer_desk_email: deskProf?.email ?? null,
@@ -261,10 +283,69 @@ export async function GET(request: Request) {
       }
     }
 
+    const mapWithdrawal = (
+      raw: Record<string, unknown>,
+      terminal: boolean,
+    ): OperationsDeskRow => {
+      const id = String(raw.id)
+      const uid = String(raw.user_id ?? "")
+      const prof = profMap.get(uid)
+      const bal = balMap.get(uid)
+      const amount = Number(raw.amount ?? 0)
+      const meta = (raw.metadata as Record<string, unknown>) ?? {}
+      const rail = meta.payout_rail != null ? String(meta.payout_rail).trim() : ""
+      const dest =
+        meta.destination_hint != null
+          ? String(meta.destination_hint).trim()
+          : meta.destination != null
+            ? String(meta.destination).trim()
+            : ""
+      const networkParts = [rail || null, dest || null].filter(Boolean) as string[]
+      const payoutRailLine = networkParts.length ? networkParts.join(" · ") : null
+      const cc = String(raw.currency_context ?? "").trim() || null
+      const created_at = String(raw.created_at ?? "")
+      const status = String(raw.status ?? "")
+      const ps = raw.payout_status != null ? String(raw.payout_status) : null
+      return {
+        kind: "user_withdrawal",
+        id,
+        status,
+        subject_user_id: uid,
+        subject_email: prof?.email ?? null,
+        subject_name: prof?.full_name ?? null,
+        country_code: prof?.funding_country_code ?? null,
+        tx_reference: String(raw.transaction_ref ?? ""),
+        amount,
+        request_type_label: "Withdrawal / cashout (internal recycle → master pool)",
+        fund_channel: cc,
+        mobile_network: payoutRailLine,
+        created_at,
+        reviewed_at: raw.reviewed_at ? String(raw.reviewed_at) : null,
+        escalated_to_admin: null,
+        pending_ms: terminal ? null : msSince(created_at),
+        nexus_main_usd: bal ? bal.m : null,
+        retail_balance_usd: bal ? bal.r : null,
+        withdrawal_pending_usd: bal ? bal.w : null,
+        retailer_basin_usd: null,
+        retailer_desk_profile_id: null,
+        retailer_desk_email: null,
+        duplicate_risk_hint: null,
+        note: null,
+        payer_display_name: null,
+        payer_phone: null,
+        commission_rate: null,
+        amount_credited: null,
+        resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,
+        payout_status: ps,
+      }
+    }
+
     const pendingTopStatuses = ["pending", "under_review"]
     const pendingFundStatuses = ["pending", "under_review", "appealed", "escalated"]
     const terminalTopStatuses = ["approved", "rejected"]
     const terminalFundStatuses = ["approved", "rejected", "resolved"]
+    const pendingWdStatuses = ["pending", "under_review"]
+    const terminalWdStatuses = ["approved", "rejected"]
 
     const pending: OperationsDeskRow[] = []
     const history: OperationsDeskRow[] = []
@@ -281,6 +362,13 @@ export async function GET(request: Request) {
       const row = mapFunding(r as Record<string, unknown>, !pendingFundStatuses.includes(st))
       if (pendingFundStatuses.includes(st)) pending.push(row)
       else if (terminalFundStatuses.includes(st)) history.push(row)
+      else history.push(row)
+    }
+    for (const r of wdRows) {
+      const st = String((r as { status: string }).status ?? "")
+      const row = mapWithdrawal(r as Record<string, unknown>, !pendingWdStatuses.includes(st))
+      if (pendingWdStatuses.includes(st)) pending.push(row)
+      else if (terminalWdStatuses.includes(st)) history.push(row)
       else history.push(row)
     }
 

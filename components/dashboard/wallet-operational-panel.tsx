@@ -464,7 +464,7 @@ type AdminUserRowActions = "freeze" | "unfreeze" | "disable" | "enable" | "recov
 
 /** Matches GET /api/admin/operations-desk rows. */
 type OperationsDeskApiRow = {
-  kind: "retailer_float_topup" | "user_add_funds"
+  kind: "retailer_float_topup" | "user_add_funds" | "user_withdrawal"
   id: string
   status: string
   subject_user_id: string
@@ -491,6 +491,8 @@ type OperationsDeskApiRow = {
   commission_rate?: number | null
   amount_credited?: number | null
   resolution_note?: string | null
+  payout_status?: string | null
+  withdrawal_pending_usd?: number | null
 }
 
 function formatPendingAge(ms: number | null): string {
@@ -648,6 +650,36 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
             requestId: reviewRow.id,
             action,
             reason: resolutionDraft.trim() || undefined,
+          }),
+        })
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) {
+          window.alert(j.error ?? "Action failed")
+          return
+        }
+        setReviewRow(null)
+        await refreshApproval()
+      } finally {
+        setActionBusy(null)
+      }
+    },
+    [reviewRow, resolutionDraft, refreshApproval],
+  )
+
+  const executeWithdrawalAction = useCallback(
+    async (decision: "approve" | "reject" | "hold") => {
+      if (!reviewRow) return
+      const h = await authHeaders()
+      if (!h) return
+      setActionBusy(decision)
+      try {
+        const res = await fetch("/api/admin/withdrawal-requests", {
+          method: "PATCH",
+          headers: { ...h, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestId: reviewRow.id,
+            decision,
+            resolutionNote: resolutionDraft.trim() || undefined,
           }),
         })
         const j = (await res.json().catch(() => ({}))) as { error?: string }
@@ -978,7 +1010,11 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                       </td>
                       <td className="p-2 align-top">
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase">
-                          {row.kind === "retailer_float_topup" ? "Float" : "Add funds"}
+                          {row.kind === "retailer_float_topup"
+                            ? "Float"
+                            : row.kind === "user_withdrawal"
+                              ? "Withdraw"
+                              : "Add funds"}
                         </span>
                         <div className="mt-1 text-muted-foreground">{row.request_type_label}</div>
                       </td>
@@ -988,7 +1024,11 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                         <div className="text-[10px] text-muted-foreground">{row.country_code ?? "Country —"}</div>
                       </td>
                       <td className="p-2 align-top font-mono text-[10px]">
-                        {row.kind === "user_add_funds" ? row.fund_channel ?? "—" : "crypto_ref"}
+                        {row.kind === "user_withdrawal"
+                          ? row.fund_channel ?? "—"
+                          : row.kind === "user_add_funds"
+                            ? row.fund_channel ?? "—"
+                            : "crypto_ref"}
                         {row.mobile_network ? (
                           <>
                             <br />
@@ -1002,6 +1042,12 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                         Main ${Number(row.nexus_main_usd ?? 0).toFixed(0)}
                         <br />
                         Retail ${Number(row.retail_balance_usd ?? 0).toFixed(0)}
+                        {row.withdrawal_pending_usd != null ? (
+                          <>
+                            <br />
+                            Pending WD ${Number(row.withdrawal_pending_usd).toFixed(0)}
+                          </>
+                        ) : null}
                         {row.retailer_basin_usd != null ? (
                           <>
                             <br />
@@ -1009,7 +1055,12 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                           </>
                         ) : null}
                       </td>
-                      <td className="p-2 align-top uppercase text-[10px] font-semibold">{row.status}</td>
+                      <td className="p-2 align-top text-[10px] font-semibold">
+                        <span className="uppercase">{row.status}</span>
+                        {row.kind === "user_withdrawal" && row.payout_status ? (
+                          <span className="block font-normal normal-case text-muted-foreground">{row.payout_status}</span>
+                        ) : null}
+                      </td>
                       <td className="p-2 align-top text-[10px] text-rose-700 dark:text-rose-400">
                         {row.duplicate_risk_hint ?? "—"}
                       </td>
@@ -1050,7 +1101,11 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                 <div className="space-y-4 text-sm">
                   <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
                     <p className="font-semibold">
-                      {reviewRow.kind === "retailer_float_topup" ? "Retailer float (crypto proof)" : "Customer add funds"}
+                      {reviewRow.kind === "retailer_float_topup"
+                        ? "Retailer float (crypto proof)"
+                        : reviewRow.kind === "user_withdrawal"
+                          ? "Withdrawal / cashout"
+                          : "Customer add funds"}
                     </p>
                     <p className="mt-2 text-muted-foreground">{reviewRow.request_type_label}</p>
                     <p className="mt-2 font-mono break-all">Ref · {reviewRow.tx_reference}</p>
@@ -1074,8 +1129,20 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                     <p className="font-mono">
                       Balances snapshot — Main ${Number(reviewRow.nexus_main_usd ?? 0).toFixed(2)} · Retail $
                       {Number(reviewRow.retail_balance_usd ?? 0).toFixed(2)}
+                      {reviewRow.withdrawal_pending_usd != null
+                        ? ` · Withdrawal pending $${Number(reviewRow.withdrawal_pending_usd).toFixed(2)}`
+                        : ""}
                       {reviewRow.retailer_basin_usd != null ? ` · Basin $${Number(reviewRow.retailer_basin_usd).toFixed(2)}` : ""}
                     </p>
+                    {reviewRow.kind === "user_withdrawal" ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Currency context · {reviewRow.fund_channel ?? "—"}
+                        <br />
+                        Payout rail / destination · {reviewRow.mobile_network ?? "—"}
+                        <br />
+                        Payout state · {reviewRow.payout_status ?? "—"}
+                      </p>
+                    ) : null}
                     {reviewRow.kind === "user_add_funds" ? (
                       <p className="text-xs">
                         <span className="text-muted-foreground">Payer line</span> {reviewRow.payer_display_name ?? "—"} /{" "}
@@ -1146,6 +1213,38 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                     ) : reviewRow.kind === "retailer_float_topup" ? (
                       <p className="text-xs text-muted-foreground">
                         Queue row is read-only until status returns to pending/review — refresh desk.
+                      </p>
+                    ) : reviewRow.kind === "user_withdrawal" &&
+                      (reviewRow.status === "pending" || reviewRow.status === "under_review") ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeWithdrawalAction("approve")}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve (recycle)"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeWithdrawalAction("hold")}
+                          className="rounded-lg bg-slate-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "hold" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Hold / investigate"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeWithdrawalAction("reject")}
+                          className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {actionBusy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reject"}
+                        </button>
+                      </>
+                    ) : reviewRow.kind === "user_withdrawal" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Withdrawal already settled — payout rail is outside this dialog.
                       </p>
                     ) : reviewRow.status === "pending" ||
                       reviewRow.status === "under_review" ||

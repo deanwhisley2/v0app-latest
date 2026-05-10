@@ -18,6 +18,9 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       amount?: number
       currencyContext?: string
+      /** Shown on L5 withdrawal desk (payout rail / destination hint — no PII required). */
+      payoutRail?: string
+      destinationHint?: string
     }
     const amount = Number(body.amount ?? 0)
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -68,6 +71,11 @@ export async function POST(request: Request) {
 
     const txRef = crypto.randomUUID()
 
+    const rail =
+      typeof body.payoutRail === "string" ? body.payoutRail.trim().slice(0, 64) || null : null
+    const destHint =
+      typeof body.destinationHint === "string" ? body.destinationHint.trim().slice(0, 200) || null : null
+
     const { data: ins, error: wrErr } = await admin
       .from("withdrawal_requests")
       .insert({
@@ -76,7 +84,11 @@ export async function POST(request: Request) {
         currency_context: (body.currencyContext ?? "USD").slice(0, 12),
         status: "pending",
         transaction_ref: txRef,
-        metadata: { source: "user_withdrawal_request" },
+        metadata: {
+          source: "user_withdrawal_request",
+          ...(rail ? { payout_rail: rail } : {}),
+          ...(destHint ? { destination_hint: destHint } : {}),
+        },
       })
       .select("id,created_at,transaction_ref")
       .single()

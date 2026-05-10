@@ -12,6 +12,15 @@ function useApproverWhenPoolUnset(): boolean {
   return process.env.NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL?.trim() === "1"
 }
 
+/** When set, platform credits (float approvals) must debit pool or approver — never silent "none". */
+export function masterLiquidityStrictEnabled(): boolean {
+  return process.env.NEXUS_MASTER_LIQUIDITY_STRICT?.trim() === "1"
+}
+
+function recycleWithdrawalToApproverWhenNoPool(): boolean {
+  return process.env.NEXUS_WITHDRAWAL_RECYCLE_TO_APPROVER_WITHOUT_POOL?.trim() === "1"
+}
+
 async function debitUserAvailableBalance(sb: SupabaseClient, userId: string, amount: number, label: string): Promise<void> {
   if (!(amount > 0) || Number.isNaN(amount)) throw new Error(`Invalid ${label} debit amount.`)
   const { data: row } = await sb.from("user_balances").select("available_balance").eq("user_id", userId).maybeSingle()
@@ -51,6 +60,34 @@ export async function debitFloatLiquidityOnApproval(
   }
   if (useApproverWhenPoolUnset()) {
     await debitUserAvailableBalance(sb, approverUserId, amount, "Approver account")
+    return "approver"
+  }
+  if (masterLiquidityStrictEnabled()) {
+    throw new Error(
+      "NEXUS_MASTER_LIQUIDITY_STRICT requires NEXUS_ADMIN_RETAIL_POOL_USER_ID (master pool) or NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1 for float/settlement debits.",
+    )
+  }
+  return "none"
+}
+
+export type RecycleTarget = "pool" | "approver" | "none"
+
+/**
+ * After L5 approves a withdrawal, recycled USD returns to the operational master (pool user) or
+ * (with env) the approving operator — completing the internal loop before external payout rails.
+ */
+export async function creditMasterLiquidityFromApprovedWithdrawal(
+  sb: SupabaseClient,
+  amount: number,
+  approverUserId: string,
+): Promise<RecycleTarget> {
+  const poolUid = adminRetailPoolUserId()
+  if (poolUid) {
+    await creditUserAvailableBalance(sb, poolUid, amount)
+    return "pool"
+  }
+  if (recycleWithdrawalToApproverWhenNoPool()) {
+    await creditUserAvailableBalance(sb, approverUserId, amount)
     return "approver"
   }
   return "none"
