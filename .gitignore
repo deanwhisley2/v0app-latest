@@ -10,6 +10,9 @@ next.user-config.*
 # Environment variables
 .env*.local
 
+# TypeScript incremental build (local cache)
+*.tsbuildinfo
+
 # Common ignores
 node_modules
 .next/
