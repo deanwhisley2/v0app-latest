@@ -6,10 +6,12 @@ type Props = {
   visible: boolean
   text: string
   onDismiss: () => void
+  /** Shown under the quote (e.g. Container Mode vs community strip on auth). */
+  subtitle?: string
 }
 
 /** Same corner style as Container join toasts; sits slightly higher to reduce overlap. */
-export function DashboardTestimonialStrip({ visible, text, onDismiss }: Props) {
+export function DashboardTestimonialStrip({ visible, text, onDismiss, subtitle = "Container Mode" }: Props) {
   if (!visible || !text) return null
 
   return (
@@ -20,7 +22,7 @@ export function DashboardTestimonialStrip({ visible, text, onDismiss }: Props) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium leading-snug">{text}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Container Mode</p>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         </div>
         <button
           type="button"

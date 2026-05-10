@@ -142,6 +142,28 @@ export function useDashboardTestimonialNotifs(opts: {
     return () => clearTimeout(t)
   }, [opts.enabled, opts.userId])
 
+  /** Second onboarding strip later in the same tab session (dashboard only). */
+  useEffect(() => {
+    if (!opts.enabled || !opts.userId) return
+    const pairKey = `nexus_dash_welcome_second_v1:${opts.userId}`
+    try {
+      if (sessionStorage.getItem(pairKey)) return
+    } catch {
+      return
+    }
+
+    const delay = 72_000 + Math.random() * 28_000
+    const t = window.setTimeout(() => {
+      try {
+        sessionStorage.setItem(pairKey, "1")
+      } catch {
+        /* ignore */
+      }
+      showOneRef.current()
+    }, delay)
+    return () => clearTimeout(t)
+  }, [opts.enabled, opts.userId])
+
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)

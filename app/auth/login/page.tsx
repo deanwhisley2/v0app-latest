@@ -3,33 +3,42 @@
 import { useCallback, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bot, MessageCircle, X } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
+import { AuthJoelinPanel } from "@/components/auth/auth-joelin-panel"
+import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
+import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
+
+const LOGIN_JOELIN_CHIPS = [
+  { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
+  { label: "Container mode", prompt: "Explain Container Mode benefits and how fixed trades work at a high level." },
+  { label: "Wallet & withdrawals", prompt: "Explain Nexus Main wallet rules and how withdrawals work." },
+  { label: "Referrals", prompt: "How do referrals work for Nexus Pro?" },
+  { label: "Trust & safety", prompt: "Why should I trust Nexus Pro with deposits? What safeguards exist?" },
+  { label: "Human support", prompt: "How do I reach a human assistant or official support?" },
+  { label: "Forgot password flow", prompt: "How does password recovery work if I lose access?" },
+]
 
 export default function LoginPage() {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
+  const { formatUserMoney } = useUserPreferences()
+  const testimonialNotif = useAuthTestimonialNotifs({
+    enabled: true,
+    pageKey: "login",
+    formatUserMoney,
+  })
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showJoelin, setShowJoelin] = useState(false)
-  const [joelinInput, setJoelinInput] = useState("")
-  const [joelinBusy, setJoelinBusy] = useState(false)
-  const [joelinMessages, setJoelinMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
-    {
-      role: "assistant",
-      text: "I’m Joelin — I can explain Nexus Main / Wallet rules, referrals, Container fixed flows, deposits & withdrawals, and where to tap next (or guide you toward official support).",
-    },
-  ])
   const resetSuccess =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("reset") === "success"
@@ -140,25 +149,6 @@ export default function LoginPage() {
       }
     } finally {
       setIsSubmitting(false)
-    }
-  }
-
-  async function askJoelin(seed?: string) {
-    const prompt = (seed ?? joelinInput).trim()
-    if (!prompt || joelinBusy) return
-    setJoelinMessages((prev) => [...prev, { role: "user", text: prompt }])
-    setJoelinInput("")
-    setJoelinBusy(true)
-    try {
-      const reply = await requestNexusAssistantReply({
-        userMessage: prompt,
-        surface: "auth_screen",
-        isGuest: false,
-        tradingUserLevel: 1,
-      })
-      setJoelinMessages((prev) => [...prev, { role: "assistant", text: reply }])
-    } finally {
-      setJoelinBusy(false)
     }
   }
 
@@ -278,71 +268,26 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
-      <button
-        type="button"
-        onClick={() => setShowJoelin(true)}
-        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
-        aria-label="Open Joelin assistant"
-      >
-        <Bot className="h-6 w-6" />
-      </button>
 
-      {showJoelin && (
-        <div className="fixed bottom-6 right-6 z-50 w-[360px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-primary" />
-              <p className="font-semibold">Joelin Assistant</p>
-            </div>
-            <button type="button" onClick={() => setShowJoelin(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="max-h-72 space-y-2 overflow-y-auto p-3 text-sm">
-            {joelinMessages.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
-                <div className={`inline-block max-w-[90%] rounded-xl px-3 py-2 ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                  {m.text}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-border p-3">
-            <div className="mb-2 flex flex-wrap gap-2">
-              <button type="button" onClick={() => void askJoelin("Explain container mode benefits")} className="rounded-md border border-border px-2 py-1 text-xs">
-                Container mode
-              </button>
-              <button type="button" onClick={() => void askJoelin("Why should I trust Nexus Pro?")} className="rounded-md border border-border px-2 py-1 text-xs">
-                Why trust us?
-              </button>
-              <button type="button" onClick={() => void askJoelin("How do I contact a human assistant?")} className="rounded-md border border-border px-2 py-1 text-xs">
-                Human assistant
-              </button>
-              <button type="button" onClick={() => void askJoelin("How do referrals work?")} className="rounded-md border border-border px-2 py-1 text-xs">
-                Referrals
-              </button>
-              <button type="button" onClick={() => void askJoelin("Explain Nexus Main wallet and withdrawals")} className="rounded-md border border-border px-2 py-1 text-xs">
-                Wallet rules
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={joelinInput}
-                onChange={(e) => setJoelinInput(e.target.value)}
-                placeholder="Ask Joelin..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void askJoelin()
-                }}
-                disabled={joelinBusy}
-              />
-              <Button type="button" size="icon" onClick={() => void askJoelin()} disabled={joelinBusy || !joelinInput.trim()}>
-                <MessageCircle className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="mt-2 text-[10px] text-muted-foreground">Human assistant (admin login) is planned next release.</p>
-          </div>
-        </div>
-      )}
+      <AuthJoelinPanel
+        scope="login"
+        authStep="signin"
+        defaultOpen
+        initialMessages={[
+          {
+            role: "assistant",
+            text: "I’m Joelin — ask me about Nexus Main / wallet rules, referrals, Container fixed flows, deposits & withdrawals, or what to tap next after you sign in.",
+          },
+        ]}
+        chips={LOGIN_JOELIN_CHIPS}
+      />
+
+      <DashboardTestimonialStrip
+        visible={testimonialNotif.visible}
+        text={testimonialNotif.text}
+        onDismiss={testimonialNotif.dismiss}
+        subtitle="Community"
+      />
     </div>
   )
 }

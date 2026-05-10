@@ -15,6 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { AuthJoelinPanel } from "@/components/auth/auth-joelin-panel"
+import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
+import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
@@ -26,9 +29,24 @@ import {
   validateSelfieQuality,
 } from "@/lib/selfie-hash"
 
+const REGISTER_JOELIN_CHIPS = [
+  { label: "Registration steps", prompt: "What happens step by step after I submit this registration form?" },
+  { label: "Email verification", prompt: "Why do I need to verify my email and how long does it take?" },
+  { label: "Referral field", prompt: "How does the referral id or signup link help me or my inviter?" },
+  { label: "Security selfie", prompt: "What is the optional security selfie for and should I add it now?" },
+  { label: "Currency choice", prompt: "How should I choose my display currency on Nexus Pro?" },
+  { label: "Wallet basics", prompt: "Explain Nexus Main wallet vs Container mode at a simple level for a new user." },
+  { label: "Trust & fees", prompt: "What should a new member know about deposits and Container Mode fees?" },
+]
+
 export default function RegisterPage() {
   const router = useRouter()
-  const { language: ctxLang, currency: ctxCur, setPreferences } = useUserPreferences()
+  const { language: ctxLang, currency: ctxCur, setPreferences, formatUserMoney } = useUserPreferences()
+  const testimonialNotif = useAuthTestimonialNotifs({
+    enabled: true,
+    pageKey: "register",
+    formatUserMoney,
+  })
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -370,6 +388,26 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+
+      <AuthJoelinPanel
+        scope="register"
+        authStep="signup"
+        defaultOpen
+        initialMessages={[
+          {
+            role: "assistant",
+            text: "Hi — I’m Joelin. Ask me about verification, referrals, the optional selfie, currency & language, or what to expect after you create your account.",
+          },
+        ]}
+        chips={REGISTER_JOELIN_CHIPS}
+      />
+
+      <DashboardTestimonialStrip
+        visible={testimonialNotif.visible}
+        text={testimonialNotif.text}
+        onDismiss={testimonialNotif.dismiss}
+        subtitle="Community"
+      />
     </div>
   )
 }
