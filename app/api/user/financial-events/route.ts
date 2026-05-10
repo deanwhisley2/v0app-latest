@@ -15,9 +15,12 @@ export async function GET(request: Request) {
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(100)
+      .limit(120)
     if (error) throw new Error(error.message)
-    return NextResponse.json({ events: data ?? [] })
+    /** Internal treasury mirror rows used to harass pool login accounts; summaries live on retailer events. */
+    const filtered =
+      data?.filter((row) => (row as { event_type?: string }).event_type !== "admin_retail_pool_debited") ?? []
+    return NextResponse.json({ events: filtered.slice(0, 100) })
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Internal error" },

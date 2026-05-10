@@ -6,8 +6,8 @@ import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { creditRetailerLiquidityPlusCommission } from "@/lib/server/retailer-funding-helpers"
 import {
   adminRetailPoolUserId,
-  debitAdminRetailPoolIfConfigured,
-  refundAdminRetailPoolIfConfigured,
+  debitFloatLiquidityOnApproval,
+  refundFloatLiquidityDebit,
 } from "@/lib/server/admin-retail-pool"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 
@@ -134,11 +134,11 @@ export async function PATCH(request: Request) {
     const rate = Number(row.commission_rate ?? 0.05)
     const credited = Math.round(base * (1 + Math.max(0, Number.isFinite(rate) ? rate : 0)) * 100) / 100
 
-    await debitAdminRetailPoolIfConfigured(admin, credited)
+    const liquiditySource = await debitFloatLiquidityOnApproval(admin, credited, user.id)
     try {
       await creditRetailerLiquidityPlusCommission(admin, row.retailer_user_id, base, rate)
     } catch (err) {
-      await refundAdminRetailPoolIfConfigured(admin, credited)
+      await refundFloatLiquidityDebit(admin, credited, liquiditySource, user.id)
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Could not credit retailer; treasury restored." },
         { status: 400 },
@@ -157,6 +157,14 @@ export async function PATCH(request: Request) {
       .eq("id", requestId)
     if (up) return NextResponse.json({ error: up.message }, { status: 400 })
 
+    const poolUid = adminRetailPoolUserId()
+    const treasuryNote =
+      liquiditySource === "pool"
+        ? `Company pool debited ${credited.toFixed(2)} (NEXUS_ADMIN_RETAIL_POOL_USER_ID).`
+        : liquiditySource === "approver"
+          ? `Approver Nexus Main debited ${credited.toFixed(2)} (NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL).`
+          : "No treasury debit configured — retailer credited without company-side deduction."
+
     await recordFinancialEvent({
       userId: row.retailer_user_id,
       eventType: "retailer_admin_topup_approved",
@@ -167,27 +175,16 @@ export async function PATCH(request: Request) {
       actorType: "admin",
       actorId: user.id,
       transactionRef: row.crypto_tx_reference,
-      summary: `Admin approved retailer crypto top-up. Credited base ${base} + commission (${rate * 100}%) = ${credited}.`,
-      metadata: { requestId, baseRequested: base, commissionRate: rate },
+      summary: `Admin approved retailer crypto top-up. Credited base ${base} + commission (${rate * 100}%) = ${credited}. ${treasuryNote}`,
+      metadata: {
+        requestId,
+        baseRequested: base,
+        commissionRate: rate,
+        companyLiquidityDebitUsd: liquiditySource === "none" ? 0 : credited,
+        companyLiquidityDebitSource: liquiditySource,
+        treasuryPoolUserId: poolUid,
+      },
     })
-
-    const poolUid = adminRetailPoolUserId()
-    if (poolUid) {
-      await recordFinancialEvent({
-        userId: poolUid,
-        eventType: "admin_retail_pool_debited",
-        category: "admin",
-        amount: credited,
-        balanceSource: "nexus_main_available",
-        balanceDestination: "retailer_retail_balance_credit",
-        status: "completed",
-        actorType: "admin",
-        actorId: user.id,
-        transactionRef: row.crypto_tx_reference,
-        summary: `Treasury retail pool debited ${credited} USD for approved retailer float (NEXUS_ADMIN_RETAIL_POOL_USER_ID).`,
-        metadata: { requestId, retailerUserId: row.retailer_user_id },
-      })
-    }
 
     await notifyUserFundingDecision(admin, {
       userId: row.retailer_user_id,

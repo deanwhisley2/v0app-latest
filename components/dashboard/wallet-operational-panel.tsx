@@ -914,7 +914,10 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
               </p>
             ) : (
               <p className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-                Treasury pool UUID not configured — approvals still credit retailers, without automatic pooled-liquidity debit.
+                No <code className="rounded bg-muted px-1">NEXUS_ADMIN_RETAIL_POOL_USER_ID</code> — set that for a dedicated treasury user, or set{" "}
+                <code className="rounded bg-muted px-1">NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1</code> to debit the
+                approving Level-5 Nexus Main on each float approval. Otherwise approvals credit retailers with no company-side
+                deduction.
               </p>
             )}
 
