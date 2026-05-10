@@ -180,6 +180,8 @@ export default function DashboardPage() {
   const [fundMobileNetwork, setFundMobileNetwork] = useState("")
   const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
   const [loadingQualifiedRetailers, setLoadingQualifiedRetailers] = useState(false)
+  /** True after user ran “See eligible retailers” at least once (enables empty-state message). */
+  const [localMmRetailersSearched, setLocalMmRetailersSearched] = useState(false)
   const [cryptoFundingMeta, setCryptoFundingMeta] = useState<{
     companyCryptoWallet: string | null
     companyCryptoNetwork: string
@@ -1357,12 +1359,25 @@ export default function DashboardPage() {
   const handleLoadQualifiedRetailers = useCallback(async () => {
     const amt = parseFloat(fundAmount)
     if (!(amt > 0) || Number.isNaN(amt)) {
-      showToast("Enter the amount you will send first.", "error")
+      showToast("Enter the amount you will send.", "error")
       return
     }
     const cc = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
     if (cc.length !== 2) {
       showToast("Enter your 2-letter country code (e.g. UG, KE).", "error")
+      return
+    }
+    const net = fundMobileNetwork.trim()
+    if (!net) {
+      showToast("Choose your payment network first (MTN, Airtel, M-Pesa, …).", "error")
+      return
+    }
+    if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
+      showToast("Enter sender name and sending mobile number so we can match your payment.", "error")
+      return
+    }
+    if (!fundTxReference.trim()) {
+      showToast("Enter your mobile-money transaction reference before choosing a desk.", "error")
       return
     }
     setLoadingQualifiedRetailers(true)
@@ -1377,23 +1392,34 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: cc }),
       })
-      const res = await fetch(
-        `/api/user/qualified-retailers?amount=${encodeURIComponent(String(amt))}&country=${encodeURIComponent(cc)}&currency=${encodeURIComponent(currency)}`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-      )
+      const qs = new URLSearchParams({
+        amount: String(amt),
+        country: cc,
+        currency,
+        network: net,
+      })
+      const res = await fetch(`/api/user/qualified-retailers?${qs.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
       const out = (await res.json().catch(() => ({}))) as { error?: string; retailers?: QualifiedRetailer[] }
       if (!res.ok) throw new Error(out.error || "Could not load retailers.")
       setQualifiedRetailers(out.retailers ?? [])
       setSelectedRetailerId("")
-      if ((out.retailers ?? []).length === 0) {
-        showToast("No desks can cover this amount in that country yet. Try Crypto funding or retry later.")
-      }
+      setLocalMmRetailersSearched(true)
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Load failed.", "error")
     } finally {
       setLoadingQualifiedRetailers(false)
     }
-  }, [fundAmount, fundingCountryCodeInput, currency, showToast])
+  }, [fundAmount, fundingCountryCodeInput, currency, fundMobileNetwork, fundPayerName, fundPayerPhone, fundTxReference, showToast])
+
+  useEffect(() => {
+    if (l1FundSource !== "local") return
+    setQualifiedRetailers([])
+    setSelectedRetailerId("")
+    setLocalMmRetailersSearched(false)
+  }, [fundAmount, fundingCountryCodeInput, fundMobileNetwork, l1FundSource])
 
   useEffect(() => {
     if (showFundModal !== "add" || l1FundSource !== "crypto") return
@@ -1531,6 +1557,7 @@ export default function DashboardPage() {
           setSelectedRetailerId("")
           setFundTxReference("")
           setL1FundSource("pick")
+          setLocalMmRetailersSearched(false)
           setShowFundModal(null)
           setFundAmount("")
           setFundNote("")
@@ -1885,23 +1912,22 @@ export default function DashboardPage() {
                 )}
 
                 {l1FundSource === "local" && (
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-2 sm:p-3">
-                    <p className="text-[10px] font-semibold text-muted-foreground">Country & network (amount below)</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        maxLength={2}
-                        value={fundingCountryCodeInput}
-                        onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
-                        placeholder="UG"
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs uppercase sm:text-sm"
-                      />
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-2 sm:p-3">
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Guided flow: choose network → enter amount and your transaction details → see eligible desks only after
+                      qualification → pick a desk → send MoMo → confirm below.
+                    </p>
+
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        1 · Payment network
+                      </p>
                       <select
                         value={fundMobileNetwork}
                         onChange={(e) => setFundMobileNetwork(e.target.value)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs sm:text-sm"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium"
                       >
-                        <option value="">Network…</option>
+                        <option value="">Select network…</option>
                         <option value="MTN">MTN</option>
                         <option value="Airtel">Airtel</option>
                         <option value="MPesa">M-Pesa</option>
@@ -1909,77 +1935,163 @@ export default function DashboardPage() {
                         <option value="Other">Other</option>
                       </select>
                     </div>
-                    <button
-                      type="button"
-                      disabled={loadingQualifiedRetailers}
-                      onClick={() => void handleLoadQualifiedRetailers()}
-                      className="w-full rounded-lg bg-muted py-1.5 text-[11px] font-semibold hover:bg-muted/80 disabled:opacity-50 sm:py-2 sm:text-xs"
-                    >
-                      {loadingQualifiedRetailers ? "Searching…" : "Find desks"}
-                    </button>
-                    <select
-                      value={selectedRetailerId}
-                      onChange={(e) => setSelectedRetailerId(e.target.value)}
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Select qualified retailer…</option>
-                      {qualifiedRetailers.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          Desk {String(r.country_code ?? "")} • {r.liquidity_status ?? "—"} • spendable{" "}
-                          {typeof r.spendable_liquidity === "number" ? r.spendable_liquidity.toFixed(0) : "—"}
-                        </option>
-                      ))}
-                    </select>
-                    {qualifiedRetailers.find((r) => r.id === selectedRetailerId) ? (
-                      <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border border-warning/40 bg-warning/10 p-2 text-[10px] sm:max-h-40 sm:text-[11px]">
-                        <p className="font-semibold text-warning">Pay to (verify)</p>
-                        <p>Numbers: {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
-                          .map((p) => `${p.label || ""}:${p.value}`.trim())
-                          .join(" · ") || "(none)"}
+
+                    <div className="space-y-2 border-t border-border/60 pt-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        2 · Your funding transaction
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="mb-0.5 block text-[10px] text-muted-foreground">Country (ISO2)</label>
+                          <input
+                            type="text"
+                            maxLength={2}
+                            value={fundingCountryCodeInput}
+                            onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
+                            placeholder="UG"
+                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs uppercase sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-0.5 block text-[10px] text-muted-foreground">
+                            Amount ({currency})
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={fundAmount}
+                            onChange={(e) => setFundAmount(e.target.value)}
+                            placeholder="0"
+                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs sm:text-sm"
+                          />
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={fundPayerName}
+                        onChange={(e) => setFundPayerName(e.target.value)}
+                        placeholder="Sender name (as on mobile money)"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="tel"
+                        value={fundPayerPhone}
+                        onChange={(e) => setFundPayerPhone(e.target.value)}
+                        placeholder="Sending mobile number"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={fundTxReference}
+                        onChange={(e) => setFundTxReference(e.target.value)}
+                        placeholder="Mobile money transaction reference"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={fundNote}
+                        onChange={(e) => setFundNote(e.target.value)}
+                        placeholder="Optional memo"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      />
+                    </div>
+
+                    <div className="border-t border-border/60 pt-2">
+                      <button
+                        type="button"
+                        disabled={loadingQualifiedRetailers}
+                        onClick={() => void handleLoadQualifiedRetailers()}
+                        className="w-full rounded-lg bg-primary py-2 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 sm:text-xs"
+                      >
+                        {loadingQualifiedRetailers ? "Searching eligible desks…" : "See eligible retailers"}
+                      </button>
+                      <p className="mt-1.5 text-[10px] text-muted-foreground">
+                        Retailers are filtered by country, network, liquidity, and desk capacity — only after your details are
+                        entered.
+                      </p>
+                    </div>
+
+                    {!loadingQualifiedRetailers && localMmRetailersSearched && qualifiedRetailers.length === 0 ? (
+                      <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-100">
+                        No active retailer currently has enough liquidity for this amount/network. Try another amount, network,
+                        or wait for available liquidity.
+                      </div>
+                    ) : null}
+
+                    {qualifiedRetailers.length > 0 ? (
+                      <div className="space-y-2 border-t border-border/60 pt-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          3 · Choose a desk
+                        </p>
+                        <div className="grid max-h-[280px] gap-2 overflow-y-auto sm:grid-cols-2">
+                          {qualifiedRetailers.map((r) => {
+                            const active = selectedRetailerId === r.id
+                            const nums = (r.payment_numbers ?? [])
+                              .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                              .filter(Boolean)
+                            const statusLabel = String(r.liquidity_status ?? "—")
+                            const spend = typeof r.spendable_liquidity === "number" ? r.spendable_liquidity.toFixed(0) : "—"
+                            return (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => setSelectedRetailerId(r.id)}
+                                className={`rounded-lg border p-2.5 text-left text-[11px] transition-colors ${
+                                  active ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-background hover:bg-muted/50"
+                                }`}
+                              >
+                                <p className="font-semibold text-foreground">
+                                  Desk · {String(r.country_code ?? "").toUpperCase() || "—"}
+                                </p>
+                                <p className="mt-1 font-mono text-[10px] text-muted-foreground line-clamp-2">
+                                  {nums.length ? nums.join(" · ") : "Payment numbers on file"}
+                                </p>
+                                <p className="mt-1 text-[10px]">
+                                  <span className="rounded bg-muted px-1 py-0.5 uppercase">{statusLabel}</span>
+                                  {" · "}
+                                  <span className="text-muted-foreground">Avail ~${spend}</span>
+                                  {typeof r.estimated_response_minutes === "number" ? (
+                                    <span className="text-muted-foreground"> · ~{r.estimated_response_minutes} min</span>
+                                  ) : null}
+                                </p>
+                                <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                                  WA {r.whatsapp_number || "—"} · {r.contact_phone || "—"}
+                                </p>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {qualifiedRetailers.find((x) => x.id === selectedRetailerId) ? (
+                      <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
+                        <p className="font-semibold text-warning">4 · Pay this desk only (verify names)</p>
+                        <p>
+                          Numbers:{" "}
+                          {(qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.payment_numbers ?? [])
+                            .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                            .join(" · ") || "(none)"}
                         </p>
                         <p>
-                          WhatsApp/call: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.whatsapp_number || "—"}{" "}
-                          / {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.contact_phone || "—"}
+                          Registered payee name(s):{" "}
+                          {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.registered_payee_names ||
+                            "Confirm with desk"}
                         </p>
-                        <p>Payee name(s): {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.registered_payee_names || "See numbers above"}</p>
                         <p>
-                          Desk status: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.liquidity_status} · ETA ~{" "}
-                          {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.estimated_response_minutes ?? "—"} min
+                          WhatsApp / call: {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.whatsapp_number || "—"}{" "}
+                          · {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.contact_phone || "—"}
                         </p>
-                        <p className="text-destructive">
-                          Confirm only after you sent mobile money matching these exact identities. Wrong numbers void the
-                          request.
+                        <p className="text-muted-foreground">
+                          Network filter: {fundMobileNetwork || "—"} · Desk status:{" "}
+                          {qualifiedRetailers.find((x) => x.id === selectedRetailerId)?.liquidity_status ?? "—"}
+                        </p>
+                        <p className="font-medium text-destructive">
+                          Send only after you confirm payee names and numbers match. Wrong destination voids the request.
                         </p>
                       </div>
                     ) : null}
-                    <input
-                      type="text"
-                      value={fundPayerName}
-                      onChange={(e) => setFundPayerName(e.target.value)}
-                      placeholder="Your name (as sent from mobile money)"
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="tel"
-                      value={fundPayerPhone}
-                      onChange={(e) => setFundPayerPhone(e.target.value)}
-                      placeholder="Sending mobile number"
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="text"
-                      value={fundTxReference}
-                      onChange={(e) => setFundTxReference(e.target.value)}
-                      placeholder="Mobile money transaction reference…"
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="text"
-                      value={fundNote}
-                      onChange={(e) => setFundNote(e.target.value)}
-                      placeholder="Optional memo"
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    />
                   </div>
                 )}
 
@@ -2296,8 +2408,8 @@ export default function DashboardPage() {
 
             <div className="shrink-0 space-y-2 border-t border-border/70 bg-card px-4 pb-3 pt-3 sm:px-0">
             {(showFundModal === "withdraw" ||
-              (customerRetailFunding && l1FundSource === "local") ||
-              retailerCreditDesk) && (
+              retailerCreditDesk ||
+              (customerRetailFunding && l1FundSource !== "local")) && (
               <div className="mb-0">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground sm:text-sm">
                   {showFundModal === "withdraw"
@@ -2348,7 +2460,17 @@ export default function DashboardPage() {
                   (showFundModal === "withdraw" && (!fundAmount || parseFloat(fundAmount) <= 0)) ||
                   (showFundModal === "add" && customerRetailFunding && l1FundSource !== "local") ||
                   (showFundModal === "add" && retailerCreditDesk) ||
-                  (showFundModal === "add" && (currentUser?.level ?? 1) === 5)
+                  (showFundModal === "add" && (currentUser?.level ?? 1) === 5) ||
+                  (showFundModal === "add" &&
+                    customerRetailFunding &&
+                    l1FundSource === "local" &&
+                    (!selectedRetailerId ||
+                      !fundTxReference.trim() ||
+                      !fundPayerName.trim() ||
+                      !fundPayerPhone.trim() ||
+                      !fundMobileNetwork.trim() ||
+                      fundingCountryCodeInput.trim().length !== 2 ||
+                      !(parseFloat(fundAmount) > 0)))
                 }
                 className={`flex w-full items-center justify-center gap-2 rounded-lg py-3 font-semibold text-white transition-colors disabled:opacity-50 ${
                   showFundModal === "add" ? "bg-success hover:bg-success/90" : "bg-primary hover:bg-primary/90"

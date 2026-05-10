@@ -37,6 +37,52 @@ export async function getUserRetailBalance(sb: SupabaseClient, userId: string): 
   return Number(v ?? 0)
 }
 
+/** True if desk payment_numbers indicate support for the customer's mobile network (Option B funding). */
+export function retailerDeskSupportsNetwork(
+  paymentNumbers: unknown,
+  mobileNetwork: string,
+): boolean {
+  const raw = mobileNetwork.trim()
+  if (!raw || /^other$/i.test(raw)) return true
+
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "")
+
+  const needle = norm(raw)
+  if (!needle) return true
+
+  const rows = Array.isArray(paymentNumbers) ? paymentNumbers : []
+  for (const p of rows) {
+    const row = p as { label?: string; value?: string }
+    const lab = norm(String(row?.label ?? ""))
+    const val = norm(String(row?.value ?? ""))
+    if (!lab && !val) continue
+    if (lab.includes(needle) || needle.includes(lab)) return true
+    if (val.includes(needle) || needle.includes(val)) return true
+    const bundle = lab + val
+    if (bundle.includes(needle)) return true
+  }
+  return false
+}
+
+/** Optional: hide desks that are clearly overloaded with open tickets (ops safety). */
+export async function countOpenInboundRequestsForRetailer(
+  sb: SupabaseClient,
+  retailerProfileId: string,
+): Promise<number> {
+  const { count, error } = await sb
+    .from(TABLE_REQUESTS)
+    .select("id", { count: "exact", head: true })
+    .eq("retailer_id", retailerProfileId)
+    .in("status", ["pending", "under_review", "appealed", "escalated"])
+  if (error) return 0
+  return count ?? 0
+}
+
 /** Retail operational float minus reserved pending inbound mobile-money totals. */
 export async function retailerSpendableLiquidity(
   sb: SupabaseClient,

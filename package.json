@@ -11,6 +11,7 @@
     "operational:smoke": "npx tsx scripts/operational-smoke-check.ts",
     "nexus:financial-batch1-check": "npx tsx scripts/nexus-financial-batch1-check.ts",
     "nexus:master-liquidity-check": "npx tsx scripts/master-liquidity-architecture-check.ts",
+    "nexus:local-mm-flow-check": "npx tsx scripts/local-mm-funding-flow-check.ts",
     "observation:window": "npx tsx scripts/observation-window.ts",
     "focus-observer:daemon": "npx tsx scripts/focus-20-observer-daemon.ts",
     "lint": "eslint .",
