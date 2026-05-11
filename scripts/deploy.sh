@@ -45,11 +45,12 @@ if [[ ! -f "${ENV_LOCAL}" ]]; then
   exit 1
 fi
 
-echo "==> Sourcing .env.local"
-set -a
-# shellcheck disable=SC1090
-source "${ENV_LOCAL}"
-set +a
+# Do not `source` .env.local here — unquoted spaces/special characters break bash and abort deploy.
+# Next.js loads `.env.local` from APP_DIR during `npm run build` / `next start` (see Next env docs).
+if [[ ! -r "${ENV_LOCAL}" ]]; then
+  echo "ERROR: ${ENV_LOCAL} not readable."
+  exit 1
+fi
 
 echo "==> Git pull (main)"
 git fetch --all --prune
