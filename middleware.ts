@@ -113,6 +113,15 @@ export async function middleware(request: NextRequest) {
         { status: 403, headers: { "Cache-Control": "no-store" } },
       )
     }
+    if (userRole === "ADMIN" && pathname.startsWith("/dashboard")) {
+      return NextResponse.redirect(new URL("/admin/treasury", request.url))
+    }
+    if (userRole === "ADMIN" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
+      return NextResponse.json(
+        { error: "Level-5 admin accounts are supervisory and cannot use trading APIs." },
+        { status: 403, headers: { "Cache-Control": "no-store" } },
+      )
+    }
     if (userRole !== "ADMIN" && matchesAnyPath(pathname, ADMIN_ONLY_PATHS)) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }

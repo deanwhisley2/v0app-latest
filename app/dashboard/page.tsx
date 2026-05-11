@@ -591,8 +591,13 @@ export default function DashboardPage() {
     if (authLoading || !user || isGuestSession) return
     if (retailerCreditDesk) {
       router.replace("/retailer/dashboard")
+      return
     }
-  }, [authLoading, user, isGuestSession, retailerCreditDesk, router])
+    const lvl = op.snapshot?.profile?.tradingUserLevel ?? 1
+    if (lvl === 5) {
+      router.replace("/admin/treasury")
+    }
+  }, [authLoading, user, isGuestSession, retailerCreditDesk, router, op.snapshot?.profile?.tradingUserLevel])
 
   const applyRetailerProfileFromApi = useCallback(
     (payload: {

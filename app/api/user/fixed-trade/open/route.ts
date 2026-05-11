@@ -54,9 +54,9 @@ export async function POST(request: Request) {
     if (pErr) throw new Error(pErr.message)
 
     const tradingLv = Number(profile?.trading_user_level ?? 1)
-    if (tradingLv === 2) {
+    if (tradingLv === 2 || tradingLv === 5) {
       return NextResponse.json(
-        { error: "Retailer accounts are operational liquidity desks and cannot open fixed trades." },
+        { error: "Retailer and Level-5 admin accounts are operational/supervisory and cannot open fixed trades." },
         { status: 403 }
       )
     }

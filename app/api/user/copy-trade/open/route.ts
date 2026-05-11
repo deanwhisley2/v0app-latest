@@ -12,9 +12,9 @@ export async function POST(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
-    if (level === 2) {
+    if (level === 2 || level === 5) {
       return NextResponse.json(
-        { error: "Retailer accounts are operational liquidity desks and cannot open copy-trade sessions." },
+        { error: "Retailer and Level-5 admin accounts are operational/supervisory and cannot open copy-trade sessions." },
         { status: 403 }
       )
     }
