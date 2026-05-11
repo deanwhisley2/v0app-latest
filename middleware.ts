@@ -91,6 +91,11 @@ export async function middleware(request: NextRequest) {
   // Role-based routing guard: USER vs RETAILER vs ADMIN.
   if (user) {
     let userRole: "USER" | "RETAILER" | "ADMIN" = "USER"
+    const jwtLevel = Number(
+      (user.app_metadata as Record<string, unknown> | undefined)?.trading_user_level ?? 0
+    )
+    if (jwtLevel === 5) userRole = "ADMIN"
+    else if (jwtLevel === 2) userRole = "RETAILER"
     try {
       const { data: prof } = await supabase
         .from("profiles")
@@ -122,9 +127,8 @@ export async function middleware(request: NextRequest) {
         { status: 403, headers: { "Cache-Control": "no-store" } },
       )
     }
-    if (userRole !== "ADMIN" && matchesAnyPath(pathname, ADMIN_ONLY_PATHS)) {
-      return NextResponse.redirect(new URL("/dashboard", request.url))
-    }
+    // Do not hard-block /admin/* by inferred role in middleware.
+    // Page-level checks use service-role reads (authoritative) and avoid stale/missing middleware profile reads.
     if (userRole === "USER" && matchesAnyPath(pathname, RETAILER_ONLY_PATHS)) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }
