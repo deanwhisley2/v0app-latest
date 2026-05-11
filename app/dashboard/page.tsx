@@ -8,25 +8,17 @@ import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { MarketTable } from "@/components/dashboard/market-table"
 import { AIPanel } from "@/components/dashboard/ai-panel"
 import { BottomNav } from "@/components/dashboard/bottom-nav"
 import { ToastNotification, useToast } from "@/components/dashboard/toast-notification"
 import { WalletScreen } from "@/components/dashboard/wallet-screen"
 import { SettingsScreen, type SettingsView } from "@/components/dashboard/settings-screen"
-import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
-import { TradeCoinExplorer } from "@/components/dashboard/trade-coin-explorer"
-import { PremiumTradeWorkspace } from "@/components/dashboard/premium/premium-trade-workspace"
 import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
-import { OrderHistoryScreen } from "@/components/dashboard/order-history-screen"
-import { CoinListScreen } from "@/components/dashboard/coin-list-screen"
-import { TradingAnalyticsScreen } from "@/components/dashboard/trading-analytics-screen"
-import { TradeSubnavChips } from "@/components/dashboard/trade-subnav-chips"
+import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
 import { ContainerMode } from "@/components/dashboard/container-mode"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
-import type { FocusCoinInsight } from "@/lib/expert/phase2-types"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useDashboardTestimonialNotifs } from "@/hooks/use-dashboard-testimonial-notifs"
@@ -148,8 +140,8 @@ export default function DashboardPage() {
     userId: user?.id,
     formatUserMoney,
   })
-  const [activeTab, setActiveTab] = useState("trade")
-  const [tradeView, setTradeView] = useState<DashboardTradeView>("live-trading")
+  const [activeTab, setActiveTab] = useState("container")
+  const tradeView: DashboardTradeView = "overview"
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
@@ -227,7 +219,6 @@ export default function DashboardPage() {
   const { toast, showToast, hideToast } = useToast()
 
   const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
-  const [analyzedProfitableCoins, setAnalyzedProfitableCoins] = useState<FocusCoinInsight[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -292,28 +283,6 @@ export default function DashboardPage() {
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    const loadJoelinInsights = async () => {
-      try {
-        const res = await fetch("/api/joelin/oscillator", { cache: "no-store" })
-        if (!res.ok) return
-        const data = (await res.json()) as { analyzedProfitableCoins?: FocusCoinInsight[] }
-        if (!cancelled) {
-          setAnalyzedProfitableCoins(data.analyzedProfitableCoins ?? [])
-        }
-      } catch {
-        // keep last good insights
-      }
-    }
-    void loadJoelinInsights()
-    const id = window.setInterval(loadJoelinInsights, 300_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(id)
-    }
-  }, [])
-
   const offlineGainers = useMemo(
     () => [...coinsData].sort((a, b) => b.change24h - a.change24h).slice(0, 28),
     []
@@ -324,20 +293,8 @@ export default function DashboardPage() {
   )
 
   const tradeCatalog = useMemo(() => {
-    const base = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
-    if (analyzedProfitableCoins.length === 0) return base
-    const profitable = new Set(analyzedProfitableCoins.map((c) => normalizeSymbol(c.symbol)))
-    return [...base].sort((a, b) => {
-      const aBoost = profitable.has(normalizeSymbol(a.symbol)) ? 1 : 0
-      const bBoost = profitable.has(normalizeSymbol(b.symbol)) ? 1 : 0
-      if (aBoost !== bBoost) return bBoost - aBoost
-      return b.change24h - a.change24h
-    })
-  }, [marketFeed.catalog, analyzedProfitableCoins])
-
-  const exploreGainers = marketFeed.gainers.length > 0 ? marketFeed.gainers : offlineGainers
-  const exploreVolume = marketFeed.volumeLeaders.length > 0 ? marketFeed.volumeLeaders : offlineVolume
-  const isBinanceCatalogLive = marketFeed.status === "live" && marketFeed.catalog.length > 0
+    return marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
+  }, [marketFeed.catalog])
 
   const tickerCoins = useMemo(() => {
     const src = tradeCatalog.length >= 8 ? tradeCatalog : coinsData
@@ -431,7 +388,6 @@ export default function DashboardPage() {
     const snap = readDashboardActivity(activityUserId)
     if (snap) {
       setActiveTab(snap.activeTab)
-      setTradeView(snap.tradeView)
       setSelectedCoinSymbol(snap.selectedCoinSymbol)
       setShowBalance(snap.showBalance)
       const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
@@ -450,8 +406,8 @@ export default function DashboardPage() {
     activityHydratedRef.current = true
     activityLastSerializedRef.current = JSON.stringify(
       buildActivitySnapshot(activityUserId, {
-        activeTab: snap?.activeTab ?? "trade",
-        tradeView: snap?.tradeView ?? "live-trading",
+        activeTab: snap?.activeTab ?? "container",
+        tradeView: snap?.tradeView ?? "overview",
         selectedCoinSymbol: snap?.selectedCoinSymbol ?? "BTC",
         showBalance: snap?.showBalance ?? true,
         liveAnalysis: snap
@@ -510,7 +466,6 @@ export default function DashboardPage() {
     lastWorkspacePostedRef.current = ser
 
     setActiveTab(parsed.activeTab)
-    setTradeView(parsed.tradeView)
     setSelectedCoinSymbol(parsed.selectedCoinSymbol)
     setShowBalance(parsed.showBalance)
     const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
@@ -630,6 +585,14 @@ export default function DashboardPage() {
     const level = op.snapshot?.profile?.tradingUserLevel ?? 1
     return level === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller)
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
+
+  // Enforce hard UI isolation: Level-2 retailer desks must use retailer workspace only.
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession) return
+    if (retailerCreditDesk) {
+      router.replace("/retailer/dashboard")
+    }
+  }, [authLoading, user, isGuestSession, retailerCreditDesk, router])
 
   const applyRetailerProfileFromApi = useCallback(
     (payload: {
@@ -1179,11 +1142,6 @@ export default function DashboardPage() {
     setSelectedCoinSymbol(symbol)
   }, [])
 
-  const handleTradeViewChange = useCallback((view: DashboardTradeView) => {
-    setTradeView(view)
-    setActiveTab("trade")
-  }, [])
-
   const handleHeaderTabChange = useCallback((tab: string) => {
     setActiveTab(tab)
     setSettingsRequestedView(null)
@@ -1198,8 +1156,7 @@ export default function DashboardPage() {
       switch (nav.kind) {
         case "trade":
           setSelectedCoinSymbol(nav.symbol ?? "BTC")
-          setTradeView("live-trading")
-          setActiveTab("trade")
+          setActiveTab("container")
           break
         case "wallet":
           setActiveTab("wallet")
@@ -1209,17 +1166,17 @@ export default function DashboardPage() {
           setActiveTab("settings")
           break
         case "orders":
-          setTradeView("order-history")
-          setActiveTab("trade")
+          setActiveTab("wallet")
           break
         case "expert-analysis":
-          router.push(`/expert-mode/analysis/${encodeURIComponent(nav.analysisId)}`)
+          setActiveTab("wallstreet")
+          showToast("Open Wallstreet for analysis — expert execution routes were retired.", "success")
           break
         default:
           break
       }
     },
-    [router]
+    [router, showToast]
   )
 
   useEffect(() => {
@@ -1236,17 +1193,7 @@ export default function DashboardPage() {
     return () => registerAppNavigator(null)
   }, [registerAppNavigator, handleNotificationNav])
 
-  const handleOrder = useCallback(
-    (type: "buy" | "sell", amount: number, leverage: number) => {
-      showToast(
-        `${type.toUpperCase()} Order Filled - ${selectedCoin.symbol} @ Market (${leverage}x)`,
-        "success"
-      )
-    },
-    [selectedCoin.symbol, showToast]
-  )
-
-  // Navigate from Wallstreet to Trade with analysis
+  // Navigate from Wallstreet — stay on Wallstreet with analysis overlay (no legacy live desk).
   const handleNavigateToTrade = useCallback(
     (
       coin: Coin,
@@ -1265,24 +1212,46 @@ export default function DashboardPage() {
         autoTrade,
         tradeAmount: settings.tradeAmount,
       })
-      setTradeView("live-trading")
-      setActiveTab("trade")
+      setActiveTab("wallstreet")
       showToast(
-        `${mode === "nex_auto" ? "Nex Auto-Trade" : "Manual trade"} desk opened for ${coin.symbol} (${strategies.length} strategies)`,
+        `${mode === "nex_auto" ? "Nex Auto-Trade" : "Manual trade"} overlay — ${coin.symbol} (${strategies.length} strategies)`,
         "success"
       )
     },
     [showToast]
   )
 
-  const handleLiveAnalysisTrade = useCallback((type: "buy" | "sell", amount: number) => {
-    if (liveAnalysis.coin) {
-      showToast(
-        `${type.toUpperCase()} Order - ${liveAnalysis.coin.symbol} - $${amount}`,
-        type === "buy" ? "success" : "success"
-      )
-    }
-  }, [liveAnalysis.coin, showToast])
+  const handleLiveAnalysisTrade = useCallback(
+    (type: "buy" | "sell", amount: number) => {
+      void (async () => {
+        if (!liveAnalysis.coin) return
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+          const token = session?.access_token
+          if (!token) {
+            showToast("Sign in to trade.", "error")
+            return
+          }
+          const res = await fetch("/api/user/nexus-main/assert-sufficient", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ requiredUsd: amount }),
+          })
+          const out = (await res.json().catch(() => ({}))) as { error?: string }
+          if (!res.ok) {
+            showToast(out.error || "Insufficient Nexus Main balance for this Wallstreet trade.", "error")
+            return
+          }
+          showToast(`${type.toUpperCase()} Order - ${liveAnalysis.coin.symbol} - $${amount}`, "success")
+        } catch (e) {
+          showToast(e instanceof Error ? e.message : "Trade validation failed.", "error")
+        }
+      })()
+    },
+    [liveAnalysis.coin, showToast],
+  )
 
   const handleRetailerIncomingAction = useCallback(
     async (requestId: string, action: "approve" | "reject") => {
@@ -1781,13 +1750,7 @@ export default function DashboardPage() {
   }
 
   const sidebarPanel = (
-    <Sidebar
-      coins={tradeCatalog.slice(0, 16)}
-      portfolioTotal={mainBalance}
-      portfolioChange={12.4}
-      activeTradeView={tradeView}
-      onTradeViewChange={handleTradeViewChange}
-    />
+    <Sidebar coins={tradeCatalog.slice(0, 16)} portfolioTotal={mainBalance} portfolioChange={12.4} />
   )
 
   return (
@@ -1856,22 +1819,18 @@ export default function DashboardPage() {
             {/* Action Buttons */}
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => (currentUser?.level ?? 1) <= 2 ? showToast("Joelin is locked for Level 1/2 accounts.", "error") : router.push("/joelin")}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={(currentUser?.level ?? 1) <= 2}
+                type="button"
+                onClick={() => setActiveTab("wallstreet")}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
               >
-                Joelin {(currentUser?.level ?? 1) <= 2 ? "🔒" : ""}
+                Wallstreet
               </button>
               <button
-                onClick={() =>
-                  (currentUser?.level ?? 1) <= 2
-                    ? showToast("Expert Mode is locked for Level 1/2 accounts.", "error")
-                    : router.push(`/expert-mode?symbol=${encodeURIComponent(selectedCoinSymbol)}`)
-                }
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={(currentUser?.level ?? 1) <= 2}
+                type="button"
+                onClick={() => setActiveTab("container")}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
               >
-                Expert Mode {(currentUser?.level ?? 1) <= 2 ? "🔒" : ""}
+                Container
               </button>
               <button
                 onClick={() => {
@@ -2711,148 +2670,65 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content — Container desk + Wallstreet assistant only (no legacy live/markets decks). */}
       <div className="mx-auto max-w-[1600px] px-4 pb-24 md:pb-4">
-        {activeTab === "trade" && (
+        {activeTab === "container" && (
           <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-
-            <main className="flex min-w-0 flex-1 flex-col gap-4">
-              <TradeSubnavChips active={tradeView} onChange={handleTradeViewChange} className="lg:hidden" />
-
-              {tradeView === "live-trading" && (
-                <>
-                  <TradeCoinExplorer
-                    newCoins={exploreGainers}
-                    trendingCoins={exploreVolume}
-                    leftColumnTitle={isBinanceCatalogLive ? "24h gainers" : "Sample 24h gainers"}
-                    rightColumnTitle={isBinanceCatalogLive ? "24h volume leaders" : "Sample volume"}
-                    selectedSymbol={selectedCoinSymbol}
-                    onSelectSymbol={handleCoinSelect}
-                  />
-
-                  <PremiumTradeWorkspace
-                    selectedCoin={selectedCoin}
-                    tradeCatalog={tradeCatalog}
-                    onCoinSelect={handleCoinSelect}
-                    onOrder={handleOrder}
-                    connectedExchanges={connectedExchanges}
-                    onNexExecute={(params) => {
-                      showToast(
-                        `NEX ${params.mode === "auto" ? "Joelin " : ""}trade executed — ${params.strategy} on ${params.coin} ($${params.amount})`,
-                        "success"
-                      )
-                    }}
-                    advancedTradingLocked={(currentUser?.level ?? 1) <= 2}
-                    executionLocked={(currentUser?.level ?? 1) <= 2}
-                    chartOverlay={
-                      liveAnalysis.active && liveAnalysis.coin ? (
-                        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-2 sm:p-4">
-                          <LiveAnalysisOverlay
-                            coin={liveAnalysis.coin}
-                            strategies={liveAnalysis.strategies}
-                            expertMode={liveAnalysis.expertMode}
-                            autoTrade={liveAnalysis.autoTrade}
-                            tradeAmount={liveAnalysis.tradeAmount}
-                            onClose={() => setLiveAnalysis((prev) => ({ ...prev, active: false }))}
-                            onTrade={handleLiveAnalysisTrade}
-                            onToggleAutoTrade={() => setLiveAnalysis((prev) => ({ ...prev, autoTrade: !prev.autoTrade }))}
-                          />
-                        </div>
-                      ) : null
-                    }
-                  />
-                </>
-              )}
-
-              {tradeView === "order-history" && (
-                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
-                  <OrderHistoryScreen />
-                </div>
-              )}
-
-              {tradeView === "watchlist" && (
-                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
-                  <CoinListScreen
-                    mode="watchlist"
-                    catalog={tradeCatalog}
-                    onSelectSymbol={handleCoinSelect}
-                    onOpenLiveTrading={() => handleTradeViewChange("live-trading")}
-                  />
-                </div>
-              )}
-
-              {tradeView === "favorites" && (
-                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
-                  <CoinListScreen
-                    mode="favorites"
-                    catalog={tradeCatalog}
-                    onSelectSymbol={handleCoinSelect}
-                    onOpenLiveTrading={() => handleTradeViewChange("live-trading")}
-                  />
-                </div>
-              )}
-
-              {tradeView === "analytics" && (
-                <div className="rounded-2xl border border-white/[0.06] bg-card/95 p-4 text-card-foreground shadow-inner">
-                  <TradingAnalyticsScreen availableBalance={mainBalance} />
-                </div>
-              )}
-            </main>
-          </div>
-        )}
-
-        {activeTab === "markets" && (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
             <main className="min-w-0 flex-1">
-              <MarketTable
-                coins={tradeCatalog}
-                onCoinSelect={handleCoinSelect}
-                selectedCoin={selectedCoin}
+              <ContainerMode
+                userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
+                retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
+                retailerLiquidityOpsBlocked={retailerOpsBlocked}
               />
             </main>
           </div>
         )}
 
         {activeTab === "wallstreet" && (
-          <div className="flex flex-col gap-4 lg:flex-row">
+          <div className="relative flex flex-col gap-4 lg:flex-row">
             <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-            <main className="min-w-0 flex-1">
-              {(currentUser?.level ?? 1) <= 2 ? (
-                <ContainerMode
-                  userLevel={(currentUser?.level ?? 1) as 1 | 2}
-                  retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
-                  retailerLiquidityOpsBlocked={retailerOpsBlocked}
-                />
-              ) : (
-                <AIPanel
-                  coins={tradeCatalog}
-                  selectedCoin={selectedCoin}
-                  onNavigateToTrade={handleNavigateToTrade}
-                  onStrategyCoinChange={(c) => setSelectedCoinSymbol(c.symbol)}
-                  hasExchangeConnection={
-                    process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                    connectedExchanges.length > 0
-                  }
-                  defaultExchangeId={
-                    selectedExchangeId ??
-                    connectedExchanges.find((e) => e.isDefault)?.id ??
-                    connectedExchanges[0]?.id
-                  }
-                  realTradeEligible={
-                    process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                    (connectedExchanges.length > 0 &&
-                      connectedExchanges.some((e) => (e.balance ?? 0) > 0))
-                  }
-                  exchangePermissionsOk={
-                    process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                    connectedExchanges.length > 0
-                  }
-                  userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
-                  isGuestSession={isGuestSession}
-                />
-              )}
+            <main className="relative min-w-0 flex-1">
+              <AIPanel
+                coins={tradeCatalog}
+                selectedCoin={selectedCoin}
+                onNavigateToTrade={handleNavigateToTrade}
+                onStrategyCoinChange={(c) => setSelectedCoinSymbol(c.symbol)}
+                hasExchangeConnection={
+                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                  connectedExchanges.length > 0
+                }
+                defaultExchangeId={
+                  selectedExchangeId ??
+                  connectedExchanges.find((e) => e.isDefault)?.id ??
+                  connectedExchanges[0]?.id
+                }
+                realTradeEligible={
+                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                  (connectedExchanges.length > 0 &&
+                    connectedExchanges.some((e) => (e.balance ?? 0) > 0))
+                }
+                exchangePermissionsOk={
+                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
+                  connectedExchanges.length > 0
+                }
+                userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
+                isGuestSession={isGuestSession}
+              />
+              {liveAnalysis.active && liveAnalysis.coin ? (
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-2 sm:p-4">
+                  <LiveAnalysisOverlay
+                    coin={liveAnalysis.coin}
+                    strategies={liveAnalysis.strategies}
+                    expertMode={liveAnalysis.expertMode}
+                    autoTrade={liveAnalysis.autoTrade}
+                    tradeAmount={liveAnalysis.tradeAmount}
+                    onClose={() => setLiveAnalysis((prev) => ({ ...prev, active: false }))}
+                    onTrade={handleLiveAnalysisTrade}
+                    onToggleAutoTrade={() => setLiveAnalysis((prev) => ({ ...prev, autoTrade: !prev.autoTrade }))}
+                  />
+                </div>
+              ) : null}
             </main>
           </div>
         )}
