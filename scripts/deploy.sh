@@ -52,10 +52,14 @@ if [[ ! -r "${ENV_LOCAL}" ]]; then
   exit 1
 fi
 
-echo "==> Git pull (main)"
-git fetch --all --prune
-git checkout main
-git pull origin main
+if [[ -d "${APP_DIR}/.git" ]]; then
+  echo "==> Git pull (main)"
+  git fetch --all --prune
+  git checkout main
+  git pull origin main
+else
+  echo "==> No .git in ${APP_DIR} — skipping git pull (use rsync/CI copy or clone with .git for pull-based deploy)."
+fi
 
 echo "==> Clean previous Next.js build"
 rm -rf .next
