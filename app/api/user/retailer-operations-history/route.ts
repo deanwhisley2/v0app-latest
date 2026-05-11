@@ -23,12 +23,19 @@ export async function GET(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
-    if (level !== 2) {
-      return NextResponse.json({ error: "Retailer operations history requires Level 2." }, { status: 403 })
+    if (level !== 2 && level !== 5) {
+      return NextResponse.json({ error: "Retailer operations history requires Level 2 or Level 5." }, { status: 403 })
     }
 
     const admin = createAdminClient()
-    const { data: desk } = await admin.from("retailer_profiles").select("id").eq("user_id", user.id).maybeSingle()
+    const { searchParams } = new URL(request.url)
+    const targetRetailerUserId =
+      level === 5 ? (searchParams.get("retailerUserId") ?? "").trim() || user.id : user.id
+    const { data: desk } = await admin
+      .from("retailer_profiles")
+      .select("id")
+      .eq("user_id", targetRetailerUserId)
+      .maybeSingle()
     if (!desk?.id) {
       return NextResponse.json({ timeline: [], cutoffDays: HISTORY_DAYS })
     }

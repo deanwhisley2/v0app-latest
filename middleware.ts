@@ -6,6 +6,14 @@ import { createServerClient } from "@supabase/ssr"
 const COOKIE_HEADER_WARN_BYTES = 24 * 1024
 /** Supabase chunks JWT across cookies; any single sb-* chunk over this is suspiciously large. */
 const SINGLE_SB_COOKIE_MAX_CHARS = 8000
+const USER_ONLY_PATHS = ["/dashboard", "/trading-workspace", "/war-room", "/analysis", "/race-conditions", "/api-settings"]
+const RETAILER_ONLY_PATHS = ["/retailer/dashboard", "/retailer/approvals", "/retailer/history"]
+const ADMIN_ONLY_PATHS = ["/admin/treasury", "/admin/users", "/admin/retailers"]
+const TRADING_API_PATHS = ["/api/user/fixed-trade", "/api/user/copy-trade", "/api/trades/record"]
+
+function matchesAnyPath(pathname: string, allowedPrefixes: string[]): boolean {
+  return allowedPrefixes.some((p) => pathname.startsWith(p))
+}
 
 function needsCookieRecovery(request: NextRequest): boolean {
   const cookieHeader = request.headers.get("cookie") ?? ""
@@ -36,8 +44,9 @@ function buildCookieRecoveryResponse(request: NextRequest) {
  * When `NEXT_PUBLIC_DEV_LOCAL_ONLY=1`, `/auth/*` still redirects to `/dashboard` (no login UI).
  */
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
   const isSessionClearedLogin =
-    request.nextUrl.pathname === "/auth/login" &&
+    pathname === "/auth/login" &&
     request.nextUrl.searchParams.get("reason") === "session_cleared"
 
   // Strip oversized sessions BEFORE Supabase SSR runs — avoids ERR_RESPONSE_HEADERS_TOO_BIG / 431 loops
@@ -47,7 +56,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (process.env.NEXT_PUBLIC_DEV_LOCAL_ONLY === "1") {
-    if (request.nextUrl.pathname.startsWith("/auth/")) {
+    if (pathname.startsWith("/auth/")) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }
   }
@@ -79,10 +88,43 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Role-based routing guard: USER vs RETAILER vs ADMIN.
+  if (user) {
+    let userRole: "USER" | "RETAILER" | "ADMIN" = "USER"
+    try {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("trading_user_level")
+        .eq("id", user.id)
+        .maybeSingle()
+      const level = Number((prof as { trading_user_level?: number } | null)?.trading_user_level ?? 1)
+      if (level === 5) userRole = "ADMIN"
+      else if (level === 2) userRole = "RETAILER"
+    } catch {
+      // Keep request flowing as USER on read failures.
+    }
+
+    if (userRole === "RETAILER" && matchesAnyPath(pathname, USER_ONLY_PATHS)) {
+      return NextResponse.redirect(new URL("/retailer/dashboard", request.url))
+    }
+    if (userRole === "RETAILER" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
+      return NextResponse.json(
+        { error: "Retailer accounts are operational liquidity desks and cannot access trading APIs." },
+        { status: 403, headers: { "Cache-Control": "no-store" } },
+      )
+    }
+    if (userRole !== "ADMIN" && matchesAnyPath(pathname, ADMIN_ONLY_PATHS)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
+    if (userRole === "USER" && matchesAnyPath(pathname, RETAILER_ONLY_PATHS)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
+  }
+
   /** Account governance (profiles columns optional until migration). */
   if (user?.id && !request.nextUrl.pathname.startsWith("/auth/account-disabled")) {
     try {
-      const path = request.nextUrl.pathname
+      const path = pathname
       const isAuthPublic =
         path.startsWith("/auth/login") ||
         path.startsWith("/auth/register") ||

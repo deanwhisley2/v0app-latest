@@ -11,12 +11,17 @@ export async function GET(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
-    if (level !== 2) return NextResponse.json({ error: "Retailer queue is for level 2 desks." }, { status: 403 })
+    if (level !== 2 && level !== 5) {
+      return NextResponse.json({ error: "Retailer queue is for level 2 desks and level 5 supervision." }, { status: 403 })
+    }
     const admin = createAdminClient()
+    const { searchParams } = new URL(request.url)
+    const targetRetailerUserId =
+      level === 5 ? (searchParams.get("retailerUserId") ?? "").trim() || user.id : user.id
     const { data: desk } = await admin
       .from("retailer_profiles")
       .select("id,payment_numbers,registered_payee_names,country_code,whatsapp_number,contact_phone")
-      .eq("user_id", user.id)
+      .eq("user_id", targetRetailerUserId)
       .maybeSingle()
     if (!desk?.id) return NextResponse.json({ requests: [], desk: null })
 
@@ -42,17 +47,22 @@ export async function PATCH(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
-    if (level !== 2) return NextResponse.json({ error: "Retailer actions require level 2." }, { status: 403 })
+    if (level !== 2 && level !== 5) {
+      return NextResponse.json({ error: "Retailer actions require level 2 desk or level 5 supervision." }, { status: 403 })
+    }
     const body = (await request.json().catch(() => ({}))) as {
       requestId?: string
       action?: "approve" | "reject" | "review"
+      retailerUserId?: string
     }
     const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
     if (!requestId || !body.action) {
       return NextResponse.json({ error: "requestId and action are required." }, { status: 400 })
     }
     const admin = createAdminClient()
-    const { data: desk } = await admin.from("retailer_profiles").select("id").eq("user_id", user.id).maybeSingle()
+    const targetRetailerUserId =
+      level === 5 ? (typeof body.retailerUserId === "string" ? body.retailerUserId.trim() : "") || user.id : user.id
+    const { data: desk } = await admin.from("retailer_profiles").select("id").eq("user_id", targetRetailerUserId).maybeSingle()
     if (!desk?.id) return NextResponse.json({ error: "No retailer profile." }, { status: 400 })
 
     const { data: row, error: fetchErr } = await admin

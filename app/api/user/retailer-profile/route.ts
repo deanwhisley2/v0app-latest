@@ -66,7 +66,9 @@ export async function POST(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
-    if (level !== 2) return NextResponse.json({ error: "Retailer profile is only for level 2 users." }, { status: 403 })
+    if (level !== 2 && level !== 5) {
+      return NextResponse.json({ error: "Retailer profile is only for level 2 desks and level 5 supervision." }, { status: 403 })
+    }
     const body = (await request.json().catch(() => ({}))) as {
       paymentNumbers?: Array<{ label?: string; value?: string }>
       countryCode?: string

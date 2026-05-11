@@ -4,12 +4,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { traderEligibleForFixedTrade } from "@/lib/fix-trade-access"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
-import {
-  computeFixedTradeMainDebitUsd,
-  computeInsuranceFeeUsd,
-  fixInsuranceAndWithdrawFees,
-  roundUsd2,
-} from "@/lib/nexus-financial-policy"
+import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees, roundUsd2 } from "@/lib/nexus-financial-policy"
+import { casOpenFixedTradeDebit } from "@/lib/server/nexus-main-enforcement"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -58,6 +54,12 @@ export async function POST(request: Request) {
     if (pErr) throw new Error(pErr.message)
 
     const tradingLv = Number(profile?.trading_user_level ?? 1)
+    if (tradingLv === 2) {
+      return NextResponse.json(
+        { error: "Retailer accounts are operational liquidity desks and cannot open fixed trades." },
+        { status: 403 }
+      )
+    }
     const userLevel = mapProfileToFixUserLevel(tradingLv)
 
     if (!traderEligibleForFixedTrade(userLevel, riskClass)) {
@@ -72,43 +74,22 @@ export async function POST(request: Request) {
 
     const fees = fixInsuranceAndWithdrawFees(userLevel, riskClass)
     const insuranceFeeUsd = computeInsuranceFeeUsd(principalUsd, fees.insuranceFeeRate)
-    const totalDebit = computeFixedTradeMainDebitUsd(principalUsd, insuranceFeeUsd)
 
-    const { data: row, error: bErr } = await admin
-      .from("user_balances")
-      .select("available_balance, current_stake")
-      .eq("user_id", user.id)
-      .maybeSingle()
-    if (bErr) throw new Error(bErr.message)
-
-    const available = round2(Number(row?.available_balance ?? 0))
-    if (totalDebit > available) {
+    const debited = await casOpenFixedTradeDebit(admin, user.id, principalUsd, insuranceFeeUsd)
+    if (!debited.ok) {
       return NextResponse.json(
         {
-          error: "Insufficient Nexus Main balance — cannot fund principal plus insurance.",
-          required: totalDebit,
-          available_balance: available,
+          error:
+            "Insufficient Nexus Main Account balance — cannot fund principal plus insurance. Retail Balance and other buckets cannot be used for trading.",
+          code: "INSUFFICIENT_NEXUS_MAIN",
+          required: debited.required,
+          available_balance: debited.available_balance,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
-
-    const stakeWas = round2(Number(row?.current_stake ?? 0))
-    const nextAvailable = round2(available - totalDebit)
-    const nextStake = round2(stakeWas + principalUsd)
-
-    const { error: upErr } = await admin
-      .from("user_balances")
-      .upsert(
-        {
-          user_id: user.id,
-          available_balance: nextAvailable,
-          current_stake: nextStake,
-          last_updated: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      )
-    if (upErr) throw new Error(upErr.message)
+    const nextAvailable = debited.available_balance
+    const nextStake = debited.current_stake
 
     const seedKey =
       body.seedKey?.trim() ||
@@ -178,8 +159,8 @@ export async function POST(request: Request) {
         declaredWithdrawalFeeRate: fees.withdrawalFeeRate,
       },
       balances: {
-        available_balance: nextAvailable,
-        current_stake: nextStake,
+        available_balance: round2(nextAvailable),
+        current_stake: round2(nextStake),
       },
     })
   } catch (e) {
