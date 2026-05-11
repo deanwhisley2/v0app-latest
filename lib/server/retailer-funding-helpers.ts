@@ -139,7 +139,79 @@ export async function retailerSpendableLiquidity(
   }
 }
 
-/** Internal transfer retailer → customer Nexus main balances. */
+function rpcMissingError(err: { message?: string; code?: string } | null): boolean {
+  const msg = (err?.message ?? "").toLowerCase()
+  return (
+    err?.code === "42883" ||
+    msg.includes("could not find the function") ||
+    msg.includes("function") && msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  )
+}
+
+/**
+ * Legacy path (before atomic RPC migration): MUST check `{ error }` on every write —
+ * Supabase does not throw on PostgREST failures; silent retailer debit failure previously allowed customer credit only.
+ */
+async function transferRetailCreditToCustomerLegacy(
+  sb: SupabaseClient,
+  opts: {
+    retailerUserId: string
+    customerUserId: string
+    amount: number
+  },
+): Promise<void> {
+  const amt = opts.amount
+
+  const { data: fromRow, error: selFromErr } = await sb
+    .from(TABLE_BALANCES)
+    .select("available_balance, retail_balance")
+    .eq("user_id", opts.retailerUserId)
+    .maybeSingle()
+  if (selFromErr) throw new Error(selFromErr.message)
+
+  const { data: toRow, error: selToErr } = await sb
+    .from(TABLE_BALANCES)
+    .select("available_balance")
+    .eq("user_id", opts.customerUserId)
+    .maybeSingle()
+  if (selToErr) throw new Error(selToErr.message)
+
+  const row = fromRow as { available_balance?: unknown; retail_balance?: unknown } | null
+  const fromRetail = Number(row?.retail_balance ?? 0)
+  const retailerMain = Number(row?.available_balance ?? 0)
+  if (fromRetail < amt) throw new Error("Retail Balance insufficient for this approval.")
+
+  const toAvail = Number(toRow?.available_balance ?? 0)
+  const now = new Date().toISOString()
+
+  const { error: debitErr } = await sb
+    .from(TABLE_BALANCES)
+    .upsert(
+      {
+        user_id: opts.retailerUserId,
+        available_balance: retailerMain,
+        retail_balance: fromRetail - amt,
+        last_updated: now,
+      },
+      { onConflict: "user_id" },
+    )
+  if (debitErr) throw new Error(`Retailer debit failed: ${debitErr.message}`)
+
+  const { error: creditErr } = await sb.from(TABLE_BALANCES).upsert(
+    { user_id: opts.customerUserId, available_balance: toAvail + amt, last_updated: now },
+    { onConflict: "user_id" },
+  )
+  if (creditErr) throw new Error(`Customer credit failed after retailer debit: ${creditErr.message}`)
+
+  console.info("[transferRetailCreditToCustomer] legacy ok", {
+    ...opts,
+    prevRetailBalance: fromRetail,
+    prevCustomerAvailable: toAvail,
+  })
+}
+
+/** Internal transfer retailer → customer Nexus main balances (single DB transaction when RPC is deployed). */
 export async function transferRetailCreditToCustomer(
   sb: SupabaseClient,
   opts: {
@@ -152,48 +224,30 @@ export async function transferRetailCreditToCustomer(
   const amt = opts.amount
   if (!(amt > 0) || Number.isNaN(amt)) throw new Error("Invalid transfer amount.")
 
-  const { data: fromRow } = await sb
-    .from(TABLE_BALANCES)
-    .select("available_balance, retail_balance")
-    .eq("user_id", opts.retailerUserId)
-    .maybeSingle()
-  const { data: toRow } = await sb
-    .from(TABLE_BALANCES)
-    .select("available_balance")
-    .eq("user_id", opts.customerUserId)
-    .maybeSingle()
-
-  const row = fromRow as { available_balance?: unknown; retail_balance?: unknown } | null
-  const fromRetail = Number(row?.retail_balance ?? 0)
-  const retailerMain = Number(row?.available_balance ?? 0)
-  if (fromRetail < amt) throw new Error("Retail Balance insufficient for this approval.")
-
-  const toAvail = Number(toRow?.available_balance ?? 0)
-  const now = new Date().toISOString()
-
-  await sb
-    .from(TABLE_BALANCES)
-    .upsert(
-      {
-        user_id: opts.retailerUserId,
-        available_balance: retailerMain,
-        retail_balance: fromRetail - amt,
-        last_updated: now,
-      },
-      { onConflict: "user_id" },
-    )
-  await sb
-    .from(TABLE_BALANCES)
-    .upsert({ user_id: opts.customerUserId, available_balance: toAvail + amt, last_updated: now }, {
-      onConflict: "user_id",
-    })
-
-  console.info("[transferRetailCreditToCustomer]", {
-    ...opts,
-    prevRetailBalance: fromRetail,
-    prevCustomerAvailable: toAvail,
+  const { data: rpcData, error: rpcErr } = await sb.rpc("transfer_retail_balance_to_customer", {
+    p_retailer_user_id: opts.retailerUserId,
+    p_customer_user_id: opts.customerUserId,
+    p_amount: amt,
   })
 
+  if (!rpcErr && rpcData !== null && rpcData !== undefined) {
+    console.info("[transferRetailCreditToCustomer] rpc ok", { ...opts, rpcData })
+    await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
+    return
+  }
+
+  if (rpcErr && !rpcMissingError(rpcErr)) {
+    const msg = rpcErr.message ?? "Retail transfer failed"
+    if (msg.includes("INSUFFICIENT_RETAIL_BALANCE")) {
+      throw new Error("Retail Balance insufficient for this approval.")
+    }
+    if (msg.includes("RETAILER_USER_BALANCES_MISSING")) {
+      throw new Error("Retailer balance row missing — cannot settle funding.")
+    }
+    throw new Error(msg)
+  }
+
+  await transferRetailCreditToCustomerLegacy(sb, opts)
   await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
 }
 

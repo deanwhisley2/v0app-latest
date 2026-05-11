@@ -8,7 +8,7 @@ import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
-import { AuthJoelinPanel } from "@/components/auth/auth-joelin-panel"
+import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -269,14 +269,14 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <AuthJoelinPanel
+      <AuthAssistantPanel
         scope="login"
         authStep="signin"
         defaultOpen
         initialMessages={[
           {
             role: "assistant",
-            text: "I’m Joelin — ask me about Nexus Main / wallet rules, referrals, Container fixed flows, deposits & withdrawals, or what to tap next after you sign in.",
+            text: "I’m the Nexus assistant — ask me about Nexus Main / wallet rules, referrals, Container fixed flows, deposits & withdrawals, or what to tap next after you sign in.",
           },
         ]}
         chips={LOGIN_JOELIN_CHIPS}

@@ -9,7 +9,7 @@ import { DASHBOARD_TRADE_VIEWS } from "@/lib/dashboard-trade-view"
 
 const STORAGE_KEY = "nexus_dashboard_activity_v2"
 
-const MAIN_TABS = new Set(["trade", "wallstreet", "wallet", "settings"])
+const MAIN_TABS = new Set(["container", "wallstreet", "wallet", "settings"])
 const TRADE_VIEW_SET = new Set<string>(DASHBOARD_TRADE_VIEWS)
 
 export type DashboardActivitySnapshot = {
@@ -44,11 +44,17 @@ function parseSnapshot(raw: string): DashboardActivitySnapshot | null {
   try {
     const j = JSON.parse(raw) as Partial<DashboardActivitySnapshot>
     if (j.v !== 2 || typeof j.userId !== "string") return null
-    const activeTab = typeof j.activeTab === "string" && MAIN_TABS.has(j.activeTab) ? j.activeTab : "trade"
-    const tradeView =
-      typeof j.tradeView === "string" && TRADE_VIEW_SET.has(j.tradeView)
+    const rawTab = typeof j.activeTab === "string" ? j.activeTab : ""
+    const activeTab =
+      rawTab === "trade" || rawTab === "markets"
+        ? "container"
+        : MAIN_TABS.has(rawTab)
+          ? rawTab
+          : "container"
+    const tradeView: DashboardTradeView =
+      typeof j.tradeView === "string" && TRADE_VIEW_SET.has(j.tradeView as DashboardTradeView)
         ? (j.tradeView as DashboardTradeView)
-        : "live-trading"
+        : "overview"
     const selectedCoinSymbol = normalizeSymbol(j.selectedCoinSymbol)
     const showBalance = typeof j.showBalance === "boolean" ? j.showBalance : true
     const liveRaw = j.live
@@ -139,8 +145,8 @@ export function buildActivitySnapshot(
   return {
     v: 2,
     userId,
-    activeTab: MAIN_TABS.has(state.activeTab) ? state.activeTab : "trade",
-    tradeView: TRADE_VIEW_SET.has(state.tradeView) ? state.tradeView : "live-trading",
+    activeTab: MAIN_TABS.has(state.activeTab) ? state.activeTab : "container",
+    tradeView: TRADE_VIEW_SET.has(state.tradeView) ? state.tradeView : "overview",
     selectedCoinSymbol: normalizeSymbol(state.selectedCoinSymbol),
     showBalance: state.showBalance,
     live: {

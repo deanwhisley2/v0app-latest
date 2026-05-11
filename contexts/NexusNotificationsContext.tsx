@@ -33,8 +33,52 @@ export type {
 
 export type UiChromePreferences = OperationalPreferencesV1["uiChrome"]
 
-/** Bump when seed shape changes so dev/demo inbox refreshes without manual clear. */
-const STORAGE_KEY = "nexus_notifications_v2"
+/** Bump when persistence shape changes (v3: server-backed account feed + local overlay). */
+const STORAGE_KEY = "nexus_notifications_v3"
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isServerNotificationId(id: string): boolean {
+  return UUID_RE.test(id)
+}
+
+const KNOWN_NOTIF_TYPES: NexusNotificationType[] = [
+  "price",
+  "trade",
+  "security",
+  "promo",
+  "system",
+  "analysis",
+  "financial",
+]
+
+function mapServerAccountRow(r: {
+  id: string
+  notification_type: string | null
+  title: string
+  body: string
+  nav: unknown
+  read_at: string | null
+  created_at: string
+}): NexusNotificationItem {
+  const raw = (r.notification_type ?? "system").toLowerCase()
+  const type: NexusNotificationType = KNOWN_NOTIF_TYPES.includes(raw as NexusNotificationType)
+    ? (raw as NexusNotificationType)
+    : "system"
+  const nav =
+    r.nav && typeof r.nav === "object" && r.nav !== null && "kind" in (r.nav as object)
+      ? (r.nav as NexusNotificationNav)
+      : ({ kind: "wallet" } satisfies NexusNotificationNav)
+  return {
+    id: r.id,
+    type,
+    title: r.title,
+    message: r.body,
+    timestamp: r.created_at,
+    read: !!r.read_at,
+    nav,
+  }
+}
 
 function iso(d: Date) {
   return d.toISOString()
@@ -170,7 +214,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
   const serverNotifSerializedRef = useRef("")
   const lastPostedJsonRef = useRef("")
   const persistPrefsTimerRef = useRef<number | null>(null)
-  const seenFinancialEventIdsRef = useRef<Set<string>>(new Set())
+  /** When true, account rows load from `/api/user/account-notifications` and skip operational-preferences inbox mirror. */
+  const [accountNotifFeedOn, setAccountNotifFeedOn] = useState(false)
 
   useEffect(() => {
     const persisted = loadPersisted()
@@ -201,6 +246,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     if (!hydrated) return
     if (!user?.id || isGuestSession || isDevLocalOnly()) return
     if (bootLoading) return
+    if (accountNotifFeedOn) return
     const prefs = coerceOperationalPreferences(snapshot?.operationalPreferences ?? null)
     const n = prefs?.notifications
     const count = (n?.inbox?.length ?? 0) + (n?.history?.length ?? 0)
@@ -211,11 +257,12 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     lastPostedJsonRef.current = ser
     setInbox(n.inbox ?? [])
     setHistory(n.history ?? [])
-  }, [hydrated, user?.id, isGuestSession, bootLoading, snapshot?.operationalPreferences])
+  }, [hydrated, user?.id, isGuestSession, bootLoading, snapshot?.operationalPreferences, accountNotifFeedOn])
 
   useEffect(() => {
     if (!hydrated) return
     if (!user?.id || isGuestSession || isDevLocalOnly()) return
+    if (accountNotifFeedOn) return
     const ser = JSON.stringify({ inbox, history })
     const initial = initialSeedSigRef.current
     const unchangedDemo = !hadLocalPersistedRef.current && !!initial && ser === initial
@@ -250,72 +297,77 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     return () => {
       if (persistPrefsTimerRef.current) window.clearTimeout(persistPrefsTimerRef.current)
     }
-  }, [hydrated, inbox, history, user?.id, isGuestSession])
+  }, [hydrated, inbox, history, user?.id, isGuestSession, accountNotifFeedOn])
 
   useEffect(() => {
     if (!hydrated) return
     if (!user?.id || isGuestSession || isDevLocalOnly()) return
     let cancelled = false
 
-    const pullFinancialEvents = async () => {
+    const pullAccountNotifications = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token || cancelled) return
-        const res = await fetch("/api/user/financial-events", {
+        const res = await fetch("/api/user/account-notifications?limit=250", {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         })
         if (!res.ok || cancelled) return
         const out = (await res.json().catch(() => ({}))) as {
-          events?: Array<{
+          items?: Array<{
             id: string
-            event_type: string
-            gross_amount?: number
-            fee_amount?: number
-            summary?: string
+            notification_type: string | null
+            title: string
+            body: string
+            nav: unknown
+            read_at: string | null
             created_at: string
-            transaction_ref?: string
-            status?: string
           }>
         }
-        const events = out.events ?? []
-        if (!events.length) return
+        const rows = out.items ?? []
+        if (cancelled) return
+        setAccountNotifFeedOn(true)
+        const serverItems = rows.map(mapServerAccountRow)
         setInbox((prev) => {
-          const knownIds = new Set(prev.map((n) => n.id))
-          const injected = events
-            .filter((e) => !knownIds.has(`fin-${e.id}`) && !seenFinancialEventIdsRef.current.has(e.id))
-            .slice(0, 25)
-            .map((e) => ({
-              id: `fin-${e.id}`,
-              type: "financial" as const,
-              title: "Financial event",
-              message:
-                e.summary ||
-                `${e.event_type}: ${Number(e.gross_amount ?? 0).toFixed(2)} (fee ${Number(
-                  e.fee_amount ?? 0
-                ).toFixed(2)}), status ${e.status ?? "completed"}`,
-              timestamp: e.created_at,
-              read: false,
-              nav: { kind: "wallet" as const },
-            }))
-          for (const e of events) seenFinancialEventIdsRef.current.add(e.id)
-          return injected.length ? [...injected, ...prev] : prev
+          const locals = prev.filter((p) => !isServerNotificationId(p.id) && !p.id.startsWith("fin-"))
+          const merged = [...serverItems, ...locals].sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )
+          return merged
         })
       } catch {
         /* ignore */
       }
     }
 
-    void pullFinancialEvents()
-    const id = window.setInterval(pullFinancialEvents, 20_000)
+    void pullAccountNotifications()
+    const id = window.setInterval(pullAccountNotifications, 15_000)
     return () => {
       cancelled = true
       window.clearInterval(id)
     }
   }, [hydrated, user?.id, isGuestSession])
+
+  const patchAccountNotification = useCallback(async (body: Record<string, unknown>) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return false
+      const res = await fetch("/api/user/account-notifications", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }, [])
 
   const registerAppNavigator = useCallback((fn: NavigatorFn | null) => {
     navRef.current = fn
@@ -327,45 +379,79 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
 
   const unreadCount = useMemo(() => inbox.filter((n) => !n.read).length, [inbox])
 
-  const markRead = useCallback((id: string) => {
-    setInbox((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
-  }, [])
+  const markRead = useCallback(
+    (id: string) => {
+      if (isServerNotificationId(id)) {
+        void patchAccountNotification({ id, action: "mark_read" }).then((ok) => {
+          if (ok) setInbox((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        })
+        return
+      }
+      setInbox((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    },
+    [patchAccountNotification]
+  )
 
   const markAllRead = useCallback(() => {
-    setInbox((prev) => prev.map((n) => ({ ...n, read: true })))
-  }, [])
+    void patchAccountNotification({ action: "mark_all_read" }).then(() => {
+      setInbox((prev) => prev.map((n) => ({ ...n, read: true })))
+    })
+  }, [patchAccountNotification])
 
-  const deleteFromInbox = useCallback((id: string) => {
-    setInbox((prev) => {
-      const hit = prev.find((n) => n.id === id)
-      const next = prev.filter((n) => n.id !== id)
-      if (hit) {
-        setHistory((h) => [{ ...hit, read: true }, ...h])
+  const deleteFromInbox = useCallback(
+    (id: string) => {
+      if (isServerNotificationId(id)) {
+        void patchAccountNotification({ id, action: "hide" }).then((ok) => {
+          if (ok) setInbox((prev) => prev.filter((n) => n.id !== id))
+        })
+        return
       }
-      return next
-    })
-  }, [])
+      setInbox((prev) => {
+        const hit = prev.find((n) => n.id === id)
+        const next = prev.filter((n) => n.id !== id)
+        if (hit) {
+          setHistory((h) => [{ ...hit, read: true }, ...h])
+        }
+        return next
+      })
+    },
+    [patchAccountNotification]
+  )
 
-  const archiveFromInbox = useCallback((id: string) => {
-    setInbox((prev) => {
-      const hit = prev.find((n) => n.id === id)
-      if (!hit) return prev
-      const archived: NexusNotificationItem = { ...hit, read: true }
-      setHistory((h) => [archived, ...h])
-      return prev.filter((n) => n.id !== id)
-    })
-  }, [])
+  const archiveFromInbox = useCallback(
+    (id: string) => {
+      if (isServerNotificationId(id)) {
+        void patchAccountNotification({ id, action: "mark_read" }).then((ok) => {
+          if (ok) setInbox((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        })
+        return
+      }
+      setInbox((prev) => {
+        const hit = prev.find((n) => n.id === id)
+        if (!hit) return prev
+        const archived: NexusNotificationItem = { ...hit, read: true }
+        setHistory((h) => [archived, ...h])
+        return prev.filter((n) => n.id !== id)
+      })
+    },
+    [patchAccountNotification]
+  )
 
   const clearInbox = useCallback(() => {
-    setInbox((prev) => {
-      setHistory((h) => [...prev.map((n) => ({ ...n, read: true })), ...h])
-      return []
+    void patchAccountNotification({ action: "clear_all" }).then((ok) => {
+      if (!ok) return
+      setInbox((prev) => {
+        const locals = prev.filter((n) => !isServerNotificationId(n.id))
+        setHistory((h) => [...locals.map((n) => ({ ...n, read: true })), ...h])
+        return []
+      })
     })
-  }, [])
+  }, [patchAccountNotification])
 
   const addNotification = useCallback(
     (item: Omit<NexusNotificationItem, "id" | "timestamp" | "read"> & { id?: string; timestamp?: string }) => {
-      const createdId = item.id ?? `n-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const createdId =
+        item.id ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
       const nextItem: NexusNotificationItem = {
         ...item,
         id: createdId,

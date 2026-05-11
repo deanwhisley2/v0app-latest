@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
-import { AuthJoelinPanel } from "@/components/auth/auth-joelin-panel"
+import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
@@ -389,14 +389,14 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <AuthJoelinPanel
+      <AuthAssistantPanel
         scope="register"
         authStep="signup"
         defaultOpen
         initialMessages={[
           {
             role: "assistant",
-            text: "Hi — I’m Joelin. Ask me about verification, referrals, the optional selfie, currency & language, or what to expect after you create your account.",
+            text: "Hi — I’m the Nexus assistant. Ask me about verification, referrals, the optional selfie, currency & language, or what to expect after you create your account.",
           },
         ]}
         chips={REGISTER_JOELIN_CHIPS}

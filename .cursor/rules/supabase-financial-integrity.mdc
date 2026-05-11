@@ -1,0 +1,22 @@
+---
+description: Supabase + financial ledger — migrations, snake_case, no silent DB failures
+alwaysApply: true
+---
+
+# Supabase and money-moving code
+
+When changing **Postgres schema**, **RLS**, **RPC**, or **balances** (`user_balances`, funding, withdrawals, trades):
+
+1. **Skill** — Read and follow `.agents/skills/supabase/SKILL.md` (and postgres skill if tuning queries).
+
+2. **Naming** — In `public`, use **snake_case** for tables, columns, functions, and migration names (e.g. `retailer_fund_requests`, `available_balance`, `transfer_retail_balance_to_customer`). Match existing `user_balances` / `container_balance_events` patterns.
+
+3. **Migrations** — Add SQL only under `supabase/migrations/` using `supabase migration new <snake_case_name>` (no hand-rolled timestamps). For the linked remote project, apply DDL with Supabase MCP **`apply_migration`** (not `execute_sql`). After remote applies, keep local migration SQL aligned with what shipped.
+
+4. **Client writes** — Never `await sb.from(...).upsert/update/insert(...)` without checking **`const { data, error } = ...; if (error) throw ...`**. Supabase JS does not throw on PostgREST errors; silent failures break conservation of liquidity.
+
+5. **RLS** — New tables in exposed schemas: **enable RLS** and add policies (at least least-privilege `SELECT` for `authenticated` where users read own rows). Service role bypasses RLS for server routes; still define policies for direct client access.
+
+6. **Money movement** — Prefer **one transaction** (Postgres function `SECURITY DEFINER` + `GRANT EXECUTE` to `service_role`, or explicit RPC) for debit+credit pairs. Avoid read-then-two-upserts for transfers without error checks or locking.
+
+7. **Verification** — After schema changes, confirm objects exist (`list_tables`, `execute_sql` for `pg_proc` / constraints) and that app code paths use the new names consistently.

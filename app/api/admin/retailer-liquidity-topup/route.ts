@@ -180,11 +180,9 @@ export async function PATCH(request: Request) {
 
     const poolUid = adminRetailPoolUserId()
     const treasuryNote =
-      liquiditySource === "pool"
+        liquiditySource === "pool"
         ? `Company pool debited ${credited.toFixed(2)} (NEXUS_ADMIN_RETAIL_POOL_USER_ID).`
-        : liquiditySource === "approver"
-          ? `Approver Nexus Main debited ${credited.toFixed(2)} (NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL).`
-          : "No treasury debit configured — retailer credited without company-side deduction."
+        : `Approver Nexus Main debited ${credited.toFixed(2)} (NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL).`
 
     await recordFinancialEvent({
       userId: row.retailer_user_id,
@@ -201,7 +199,7 @@ export async function PATCH(request: Request) {
         requestId,
         baseRequested: base,
         commissionRate: rate,
-        companyLiquidityDebitUsd: liquiditySource === "none" ? 0 : credited,
+        companyLiquidityDebitUsd: credited,
         companyLiquidityDebitSource: liquiditySource,
         treasuryPoolUserId: poolUid,
       },

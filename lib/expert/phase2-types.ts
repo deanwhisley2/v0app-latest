@@ -90,47 +90,6 @@ export interface TradeSession {
   config: unknown
 }
 
-export interface JoelinCoin {
-  symbol: string
-  action: "BUY" | "SELL" | "HOLD"
-  confidence: number
-  safetyLevel: "HIGH" | "MEDIUM" | "LOW"
-  tradableLevel: number
-  lastAnalysis: string
-  nextAnalysis: string
-  price: number
-  volume24h: number
-  volatility: number
-  minuteTradeConfirmed?: boolean
-  minuteTradeBlockReason?: string
-  minuteTradeReviewAt?: string
-  focusMember?: boolean
-  supervisionLevel?: "NORMAL" | "HIGH" | "CRITICAL"
-}
-
-export interface FocusCoinInsight {
-  symbol: string
-  action: "BUY" | "SELL" | "HOLD"
-  confidence: number
-  tradableLevel: number
-  profitabilityScore: number
-  expectedEdgeBps: number
-  analyzedAt: string
-  rationale: string[]
-  supervisionLevel?: "NORMAL" | "HIGH" | "CRITICAL"
-  recycledIn?: boolean
-}
-
-export interface JoelinResponse {
-  coins: JoelinCoin[]
-  /** Top picks: BUY/SELL, confidence ≥ 65, safety not LOW — best ranked by tradable score. */
-  tradableNow: JoelinCoin[]
-  focusDaily: FocusCoinInsight[]
-  analyzedProfitableCoins: FocusCoinInsight[]
-  lastUpdated: string
-  nextRefresh: string
-}
-
 export interface ChatMessage {
   id: string
   sessionId: string
@@ -146,28 +105,3 @@ export interface ChatMessage {
   }
 }
 
-export interface Position {
-  symbol: string
-  entryPrice: number
-  quantity: number
-  investedAmount: number
-  currentPrice: number
-  pnl: number
-  pnlPercent: number
-  entryTime: Date
-  status: "active" | "closing" | "closed"
-  strategy: string
-}
-
-export interface AutoTraderConfig {
-  totalBalance: number
-  runtimeMinutes: number
-  stopProfitPercent: number
-  stopLossPercent: number
-  allowedCoins: string[]
-  activePositions: Map<string, Position>
-  usedBalance: number
-  lastEntryTime: Date
-  consecutiveLosses: number
-  dailyLoss: number
-}

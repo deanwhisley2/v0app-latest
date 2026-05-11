@@ -20,7 +20,7 @@ interface BottomNavProps {
 }
 
 const navDefs = [
-  { id: "trade", icon: Home, labelKey: "nav.trade", color: "from-blue-500 to-cyan-500" },
+  { id: "container", icon: Home, labelKey: "nav.container", color: "from-blue-500 to-cyan-500" },
   { id: "wallstreet", icon: TrendingUp, labelKey: "nav.wallstreet", color: "from-purple-500 to-pink-500" },
   { id: "wallet", icon: Wallet, labelKey: "nav.wallet", color: "from-green-500 to-emerald-500" },
   { id: "settings", icon: Settings, labelKey: "nav.settings", color: "from-orange-500 to-amber-500" },

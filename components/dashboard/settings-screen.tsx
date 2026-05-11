@@ -776,20 +776,16 @@ export function SettingsScreen({
         {renderBackButton()}
         <h2 className="text-lg font-semibold">Connected Exchanges</h2>
         <p className="text-sm text-muted-foreground">
-          Connect your exchange accounts to trade directly from Nexus using NEX automation and Joelin when you need guidance.
+          Link exchanges for balance sync and Wallstreet routing labels. Execution is limited to the Container desk and
+          Wallstreet flows in this build.
         </p>
         {(isGuestSession || serverSideUi) && (
           <Card className="border-primary/35 bg-primary/5 p-4 text-sm leading-relaxed">
-            <p className="font-medium text-foreground">Guest / terminal + live spot</p>
+            <p className="font-medium text-foreground">Guest / server-side UI flag</p>
             <p className="mt-2 text-muted-foreground">
-              Orders from scripts or{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">curl</code> to{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/trade/execute</code> use{" "}
-              <strong>server</strong> env <code className="text-xs">BINANCE_API_KEY</code> and{" "}
-              <code className="text-xs">BINANCE_SECRET_KEY</code> on the host running Next.js (plus{" "}
-              <code className="text-xs">NEXUS_REAL_TRADING=1</code> and{" "}
-              <code className="text-xs">NEXUS_REAL_TRADE_SECRET</code>). Keys you paste below stay in this browser for
-              balances and desk UI only.
+              Legacy <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/trade/*</code> automation was removed
+              from this deployment. Keys you configure here stay in this browser for balances and desk UI unless you
+              operate a separate execution stack.
             </p>
             {serverSideUi && (
               <p className="mt-2 text-xs text-muted-foreground">

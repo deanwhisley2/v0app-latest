@@ -132,7 +132,7 @@ export function Header({
   }, [showSearch])
   
   const mainTabs = [
-    { id: "trade", labelKey: "nav.trade" },
+    { id: "container", labelKey: "nav.container" },
     { id: "wallstreet", labelKey: "nav.wallstreet" },
     { id: "wallet", labelKey: "nav.wallet" },
     { id: "settings", labelKey: "nav.settings" },

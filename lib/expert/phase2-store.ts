@@ -1,11 +1,6 @@
 import { randomUUID } from "crypto"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import type {
-  ChatMessage,
-  JoelinCoin,
-  TradeOrder,
-  TradeSession,
-} from "@/lib/expert/phase2-types"
+import type { ChatMessage, TradeOrder, TradeSession } from "@/lib/expert/phase2-types"
 
 type AnalysisRow = {
   id: string
@@ -57,41 +52,7 @@ const g = globalThis as unknown as {
     sessions: Map<string, TradeSession>
     orders: Map<string, TradeOrder[]>
     chats: Map<string, ChatMessage[]>
-    joelin: JoelinCoin[]
   }
-}
-
-/** Liquid USDT spot majors — refreshed live in `/api/joelin/oscillator`. */
-const JOELIN_BASE_SYMBOLS = [
-  "BTCUSDT",
-  "ETHUSDT",
-  "SOLUSDT",
-  "BNBUSDT",
-  "XRPUSDT",
-  "DOGEUSDT",
-  "ADAUSDT",
-  "AVAXUSDT",
-  "LINKUSDT",
-  "DOTUSDT",
-  "TRXUSDT",
-  "LTCUSDT",
-]
-
-function initJoelin(): JoelinCoin[] {
-  const now = Date.now()
-  const next = new Date(now + 300_000).toISOString()
-  return JOELIN_BASE_SYMBOLS.map((symbol, idx) => ({
-    symbol,
-    action: idx % 3 === 0 ? "BUY" : idx % 3 === 1 ? "SELL" : "HOLD",
-    confidence: 62 + idx * 6,
-    safetyLevel: idx % 3 === 0 ? "HIGH" : idx % 3 === 1 ? "MEDIUM" : "LOW",
-    tradableLevel: 55 + idx * 8,
-    lastAnalysis: new Date(now).toISOString(),
-    nextAnalysis: next,
-    price: 100 + idx * 10,
-    volume24h: 1000000 + idx * 250000,
-    volatility: 1.1 + idx * 0.4,
-  }))
 }
 
 /** In-process read cache only — populated after successful DB writes or DB reads. */
@@ -103,7 +64,6 @@ export const phase2Store =
     sessions: new Map<string, TradeSession>(),
     orders: new Map<string, TradeOrder[]>(),
     chats: new Map<string, ChatMessage[]>(),
-    joelin: initJoelin(),
   })
 
 export function makeId(prefix: string): string {

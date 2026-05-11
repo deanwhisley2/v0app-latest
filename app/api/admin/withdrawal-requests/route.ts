@@ -217,17 +217,8 @@ export async function PATCH(request: Request) {
       })
     }
 
-    // approve → recycle liquidity into master operational account, then external payout is manual/off-platform
+    // approve → recycle liquidity into master operational account (pool user or approving operator Nexus Main), then external payout is manual/off-platform
     const recycleTarget = await creditMasterLiquidityFromApprovedWithdrawal(admin, amount, actor.id)
-    if (recycleTarget === "none") {
-      return NextResponse.json(
-        {
-          error:
-            "Withdrawal not approved: treasury recycle is not configured. Set NEXUS_ADMIN_RETAIL_POOL_USER_ID (pool user credit requires a user_balances row — now auto-created on recycle) or NEXUS_WITHDRAWAL_RECYCLE_TO_APPROVER_WITHOUT_POOL=1. Pending withdrawal balance unchanged.",
-        },
-        { status: 409 },
-      )
-    }
     const payoutStatus = "recycled_pending_external"
 
     const { error: upErr } = await admin

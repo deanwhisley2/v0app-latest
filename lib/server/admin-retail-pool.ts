@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-export type FloatLiquidityDebitSource = "pool" | "approver" | "none"
+export type FloatLiquidityDebitSource = "pool" | "approver"
 
 /** Optional treasury user UUID: company Nexus Main liquidity debited when retailers receive admin-approved float. */
 export function adminRetailPoolUserId(): string | null {
@@ -25,7 +25,8 @@ export function maskUserIdForOps(id: string | null | undefined): string | null {
 
 export type TreasurySettlementModeInfo = {
   settlementMode: "dedicated_pool" | "approver_nexus_main" | "none_unconfigured"
-  debitSource: FloatLiquidityDebitSource
+  /** Display-only `"none"` when env is missing (approvals will fail until configured). */
+  debitSource: FloatLiquidityDebitSource | "none"
   poolUserId: string | null
   poolUserIdMasked: string | null
   masterLiquidityStrict: boolean
@@ -35,7 +36,7 @@ export type TreasurySettlementModeInfo = {
 
 /**
  * Explains which liquidity source will be debited on retailer float approval (env-driven).
- * Prefer dedicated pool (NEXUS_ADMIN_RETAIL_POOL_USER_ID); fallback approver debit is explicit opt-in.
+ * Prefer dedicated pool (NEXUS_ADMIN_RETAIL_POOL_USER_ID); otherwise explicit approver debit env.
  */
 export function getTreasurySettlementModeInfo(): TreasurySettlementModeInfo {
   const poolUid = adminRetailPoolUserId()
@@ -71,7 +72,7 @@ export function getTreasurySettlementModeInfo(): TreasurySettlementModeInfo {
     poolUserIdMasked: null,
     masterLiquidityStrict: strict,
     summaryLine:
-      "Treasury settlement is not configured. Retailers can still be credited Retail Balance with no automatic company-side debit — not recommended for production accounting.",
+      "Float approvals require a configured treasury debit (pool or approver Nexus Main). This mode is not ready until environment variables are set.",
     remediationLine: strict
       ? "NEXUS_MASTER_LIQUIDITY_STRICT is on: configure NEXUS_ADMIN_RETAIL_POOL_USER_ID or NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1."
       : "Set NEXUS_ADMIN_RETAIL_POOL_USER_ID to your operational treasury user UUID (recommended), or set NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1 to debit the approving admin.",
@@ -81,10 +82,6 @@ export function getTreasurySettlementModeInfo(): TreasurySettlementModeInfo {
 /** When set, platform credits (float approvals) must debit pool or approver — never silent "none". */
 export function masterLiquidityStrictEnabled(): boolean {
   return process.env.NEXUS_MASTER_LIQUIDITY_STRICT?.trim() === "1"
-}
-
-function recycleWithdrawalToApproverWhenNoPool(): boolean {
-  return process.env.NEXUS_WITHDRAWAL_RECYCLE_TO_APPROVER_WITHOUT_POOL?.trim() === "1"
 }
 
 async function debitUserAvailableBalance(sb: SupabaseClient, userId: string, amount: number, label: string): Promise<void> {
@@ -145,19 +142,16 @@ export async function debitFloatLiquidityOnApproval(
     await debitUserAvailableBalance(sb, approverUserId, amount, "Approver account")
     return "approver"
   }
-  if (masterLiquidityStrictEnabled()) {
-    throw new Error(
-      "NEXUS_MASTER_LIQUIDITY_STRICT requires NEXUS_ADMIN_RETAIL_POOL_USER_ID (master pool) or NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1 for float/settlement debits.",
-    )
-  }
-  return "none"
+  throw new Error(
+    "Treasury debit required for float approval: set NEXUS_ADMIN_RETAIL_POOL_USER_ID (company Nexus Main pool UUID) or NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL=1 to debit the approving Level-5 operator Nexus Main. Credits cannot mint liquidity without a matching company-side debit.",
+  )
 }
 
-export type RecycleTarget = "pool" | "approver" | "none"
+export type RecycleTarget = "pool" | "approver"
 
 /**
- * After L5 approves a withdrawal, recycled USD returns to the operational master (pool user) or
- * (with env) the approving operator — completing the internal loop before external payout rails.
+ * After L5 approves a withdrawal, recycled USD returns to the operational master pool user,
+ * or — when no pool UUID is configured — to the approving operator Nexus Main (closed-loop internal liquidity).
  */
 export async function creditMasterLiquidityFromApprovedWithdrawal(
   sb: SupabaseClient,
@@ -169,14 +163,11 @@ export async function creditMasterLiquidityFromApprovedWithdrawal(
     await creditUserAvailableBalance(sb, poolUid, amount)
     return "pool"
   }
-  if (recycleWithdrawalToApproverWhenNoPool()) {
-    await creditUserAvailableBalance(sb, approverUserId, amount)
-    return "approver"
-  }
-  return "none"
+  await creditUserAvailableBalance(sb, approverUserId, amount)
+  return "approver"
 }
 
-/** Undo debit after failed retailer credit (pool, approver, or no-op). */
+/** Undo debit after failed retailer credit (pool or approver). */
 export async function refundFloatLiquidityDebit(
   sb: SupabaseClient,
   amount: number,
@@ -188,9 +179,7 @@ export async function refundFloatLiquidityDebit(
     await refundAdminRetailPoolIfConfigured(sb, amount)
     return
   }
-  if (source === "approver") {
-    await creditUserAvailableBalance(sb, approverUserId, amount)
-  }
+  await creditUserAvailableBalance(sb, approverUserId, amount)
 }
 
 /**

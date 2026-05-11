@@ -96,6 +96,8 @@ interface ActiveCopyTrade {
   drawdownPct: number
   /** Desk holding through volatility while auto-adjust is on. */
   recoveryHold: boolean
+  /** Server-backed session after Nexus Main debit (POST /api/user/copy-trade/open). */
+  copySessionId?: string
 }
 
 interface ActiveFixTrade {
@@ -551,42 +553,68 @@ export function ContainerMode({
                       activeFixTrades.reduce((sum, t) => sum + t.earned, 0)
 
   const handleActivateCopy = (trader: MasterTrader) => {
-    const raw = parseFloat(copyAmount)
-    const amount = localFiatUnitsToUsd(raw, currency)
-    if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
-    if (amount < 100) {
-      alert("Minimum copy allocation is $100 USD equivalent in your currency.")
-      return
-    }
-    if (!copyRiskAcknowledged) return
-
-    setIsProcessing(true)
-    setTimeout(() => {
-      const newTrade: ActiveCopyTrade = {
-        traderId: trader.id,
-        amount,
-        startTime: new Date(),
-        minEndTime: new Date(Date.now() + COPY_TRADE_CYCLE_MS),
-        earned: 0,
-        isTrading: true,
-        autoAdjust: false,
-        drawdownPct: 0,
-        recoveryHold: false,
+    void (async () => {
+      const raw = parseFloat(copyAmount)
+      const amount = localFiatUnitsToUsd(raw, currency)
+      if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
+      if (amount < 100) {
+        alert("Minimum copy allocation is $100 USD equivalent in your currency.")
+        return
       }
-      copyAutoExitDoneRef.current.delete(trader.id)
-      setActiveCopyTrades((prev) => [...prev, newTrade])
-      notifyCopy(
-        "Copy trade started",
-        `${formatUserMoney(amount)} allocated to ${trader.name}. 24h aggressive cycle — uninsured, separate from fixed insurance.`
-      )
-      notifyCopy(
-        "Recovery-hold possible",
-        "If the desk is underwater, capital may stay in play briefly to avoid unnecessary damage; force pull-out remains available."
-      )
-      setSelectedTrader(null)
-      setCopyRiskAcknowledged(false)
-      setIsProcessing(false)
-    }, 1500)
+      if (!copyRiskAcknowledged) return
+
+      setIsProcessing(true)
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          alert("Sign in to start a copy-trade allocation.")
+          return
+        }
+        const res = await fetch("/api/user/copy-trade/open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ stakeUsd: amount, traderPersonaId: trader.id }),
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          error?: string
+          sessionId?: string
+        }
+        if (!res.ok) {
+          alert(out.error || "Could not reserve copy-trade stake from Nexus Main.")
+          return
+        }
+
+        const newTrade: ActiveCopyTrade = {
+          traderId: trader.id,
+          amount,
+          startTime: new Date(),
+          minEndTime: new Date(Date.now() + COPY_TRADE_CYCLE_MS),
+          earned: 0,
+          isTrading: true,
+          autoAdjust: false,
+          drawdownPct: 0,
+          recoveryHold: false,
+          copySessionId: out.sessionId,
+        }
+        copyAutoExitDoneRef.current.delete(trader.id)
+        setActiveCopyTrades((prev) => [...prev, newTrade])
+        notifyCopy(
+          "Copy trade started",
+          `${formatUserMoney(amount)} allocated from Nexus Main to ${trader.name}. 24h aggressive cycle — uninsured, separate from fixed insurance.`
+        )
+        notifyCopy(
+          "Recovery-hold possible",
+          "If the desk is underwater, capital may stay in play briefly to avoid unnecessary damage; force pull-out remains available."
+        )
+        setSelectedTrader(null)
+        setCopyRiskAcknowledged(false)
+      } finally {
+        setIsProcessing(false)
+      }
+    })()
   }
 
   const toggleCopyAutoAdjust = (traderId: string) => {
@@ -606,82 +634,140 @@ export function ContainerMode({
   }
 
   const handleForcePullOutCopy = (traderId: string) => {
-    const trade = activeCopyTrades.find((t) => t.traderId === traderId)
-    if (!trade) return
+    void (async () => {
+      const trade = activeCopyTrades.find((t) => t.traderId === traderId)
+      if (!trade?.copySessionId) {
+        alert("This copy allocation has no server session — refresh and try again.")
+        return
+      }
 
-    const settlement = estimateCopyForcePulloutUsd({
-      stakeUsd: trade.amount,
-      floatingPnLUsd: trade.earned,
-      coinImpactFraction: trade.drawdownPct,
-    })
+      setIsProcessing(true)
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) throw new Error("Sign in to settle copy-trade.")
 
-    setIsProcessing(true)
-    setTimeout(() => {
-      setActiveCopyTrades((prev) => prev.filter((t) => t.traderId !== traderId))
-      copyAutoExitDoneRef.current.delete(traderId)
-      setShowCancelConfirm(null)
-      setIsProcessing(false)
-      notifyCopy(
-        "Force pull-out completed",
-        `Est. net to Nexus Main ≈ ${formatUserMoney(settlement.netToMainUsd)} after cancel ${(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}%, withdrawal ${(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}%, and modeled coin impact. Final amount confirms at settlement.`
-      )
-      notifyCopy("Fees trace (copy)", `Cancel ≈ ${formatUserMoney(settlement.cancelFeeUsd)}, withdrawal ≈ ${formatUserMoney(settlement.withdrawFeeUsd)}.`)
-    }, 900)
+        const res = await fetch("/api/user/copy-trade/close", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            sessionId: trade.copySessionId,
+            floatingPnLUsd: trade.earned,
+            coinImpactFraction: trade.drawdownPct,
+          }),
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          error?: string
+          settlement?: { netToMainUsd?: number; cancelFeeUsd?: number; withdrawFeeUsd?: number }
+        }
+        if (!res.ok) throw new Error(out.error || "Settlement failed.")
+
+        const net = Number(out.settlement?.netToMainUsd ?? 0)
+        setActiveCopyTrades((prev) => prev.filter((t) => t.traderId !== traderId))
+        copyAutoExitDoneRef.current.delete(traderId)
+        setShowCancelConfirm(null)
+        notifyCopy(
+          "Force pull-out completed",
+          `Net credited to Nexus Main: ${formatUserMoney(net)} (modeled cancel ${(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}%, withdrawal ${(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}%).`
+        )
+        notifyCopy(
+          "Fees trace (copy)",
+          `Cancel ≈ ${formatUserMoney(out.settlement?.cancelFeeUsd ?? 0)}, withdrawal ≈ ${formatUserMoney(out.settlement?.withdrawFeeUsd ?? 0)}.`,
+        )
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Settlement failed.")
+      } finally {
+        setIsProcessing(false)
+      }
+    })()
   }
 
   const handleActivateFix = (trader: MasterTrader) => {
-    const raw = parseFloat(fixAmount)
-    const amount = localFiatUnitsToUsd(raw, currency)
-    if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
-    if (amount < 500) {
-      alert("Minimum fixed stake is $500 USD equivalent in your currency.")
-      return
-    }
-    if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
-
-    setIsProcessing(true)
-    setTimeout(() => {
-      const endDate = new Date()
-      endDate.setMonth(endDate.getMonth() + fixPeriod)
-
-      // Withdrawal percentages based on period
-      const withdrawPercent = fixPeriod === 1 ? 30 : fixPeriod === 3 ? 50 : 70
-      
-      // Random coin for this fix trade
-      const coins = ["BTC", "ETH", "SOL", "AVAX", "BNB"]
-      const coinSymbol = coins[Math.floor(Math.random() * coins.length)]
-      const coinPrices: Record<string, number> = { BTC: 67500, ETH: 3450, SOL: 142, AVAX: 35, BNB: 580 }
-      const startTime = new Date()
-      const seed = `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
-      const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed)
-
-      const newTrade: ActiveFixTrade = {
-        traderId: trader.id,
-        amount,
-        period: fixPeriod,
-        startTime,
-        endTime: endDate,
-        earned: 0,
-        isLocked: true,
-        canWithdrawEarnings: fixPeriod >= 3,
-        lastWithdrawalDate: null,
-        totalWithdrawn: 0,
-        withdrawablePercent: withdrawPercent,
-        dailyWithdrawUsed: 0,
-        coinSymbol,
-        fixedPrice: coinPrices[coinSymbol] || 1000,
-        dailySchedule,
+    void (async () => {
+      const raw = parseFloat(fixAmount)
+      const amount = localFiatUnitsToUsd(raw, currency)
+      if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
+      if (amount < 500) {
+        alert("Minimum fixed stake is $500 USD equivalent in your currency.")
+        return
       }
-      setActiveFixTrades([...activeFixTrades, newTrade])
-      addNotification({
-        type: "system",
-        title: "Fixed trade schedule active",
-        message: `${formatUserMoney(amount)} · ${fixPeriod} month lock. Earnings accrue on the policy daily curve (not spot-intraday hype).`,
-        nav: { kind: "wallet" },
-      })
-      setSelectedTrader(null)
-      setIsProcessing(false)
-    }, 1500)
+      if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
+
+      setIsProcessing(true)
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          alert("Sign in to open a fixed trade.")
+          return
+        }
+        const res = await fetch("/api/user/fixed-trade/open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            principalUsd: amount,
+            riskClass: trader.riskLevel,
+            fixPeriodMonths: fixPeriod,
+            traderPersonaId: trader.id,
+          }),
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          error?: string
+          sessionId?: string
+          seedKey?: string
+        }
+        if (!res.ok) {
+          alert(out.error || "Could not open fixed trade from Nexus Main.")
+          return
+        }
+
+        const endDate = new Date()
+        endDate.setMonth(endDate.getMonth() + fixPeriod)
+
+        const withdrawPercent = fixPeriod === 1 ? 30 : fixPeriod === 3 ? 50 : 70
+
+        const coins = ["BTC", "ETH", "SOL", "AVAX", "BNB"]
+        const coinSymbol = coins[Math.floor(Math.random() * coins.length)]
+        const coinPrices: Record<string, number> = { BTC: 67500, ETH: 3450, SOL: 142, AVAX: 35, BNB: 580 }
+        const startTime = new Date()
+        const seed =
+          out.seedKey ?? `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
+        const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed)
+
+        const newTrade: ActiveFixTrade = {
+          traderId: trader.id,
+          amount,
+          period: fixPeriod,
+          startTime,
+          endTime: endDate,
+          earned: 0,
+          isLocked: true,
+          canWithdrawEarnings: fixPeriod >= 3,
+          lastWithdrawalDate: null,
+          totalWithdrawn: 0,
+          withdrawablePercent: withdrawPercent,
+          dailyWithdrawUsed: 0,
+          coinSymbol,
+          fixedPrice: coinPrices[coinSymbol] || 1000,
+          dailySchedule,
+          serverSessionId: out.sessionId,
+        }
+        setActiveFixTrades((prev) => [...prev, newTrade])
+        addNotification({
+          type: "system",
+          title: "Fixed trade schedule active",
+          message: `${formatUserMoney(amount)} · ${fixPeriod} month lock (funded from Nexus Main). Earnings accrue on the policy daily curve.`,
+          nav: { kind: "wallet" },
+        })
+        setSelectedTrader(null)
+      } finally {
+        setIsProcessing(false)
+      }
+    })()
   }
 
   const handleEarlyExitFixTrade = async (traderId: string) => {

@@ -23,6 +23,18 @@ export async function POST(request: Request) {
     if (body.action !== "credit" && body.action !== "debit") {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
+    const allowSelfCredit =
+      process.env.NEXUS_ALLOW_USER_SELF_CREDIT_MAIN?.trim() === "1" && process.env.NODE_ENV !== "production"
+    if (body.action === "credit" && !allowSelfCredit) {
+      return NextResponse.json(
+        {
+          error:
+            "Crediting Nexus Main from this endpoint is disabled (conservation-of-liquidity). Use regulated funding flows.",
+          code: "NEXUS_SELF_CREDIT_DISABLED",
+        },
+        { status: 403 },
+      )
+    }
     const amount = Number(body.amount ?? 0)
     if (!Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: "Amount must be greater than 0" }, { status: 400 })

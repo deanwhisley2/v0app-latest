@@ -9,6 +9,7 @@ import type { AppLanguage } from "@/lib/user-preferences"
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
   "nav.trade": "Trade",
+  "nav.container": "Container",
   "nav.markets": "Markets",
   "nav.wallstreet": "Wallstreet",
   "nav.wallet": "Wallet",
@@ -35,6 +36,7 @@ const en: Record<string, string> = {
 
 const fr: Partial<Record<string, string>> = {
   "nav.trade": "Trading",
+  "nav.container": "Conteneur",
   "nav.markets": "Marchés",
   "nav.wallstreet": "Wall Street",
   "nav.wallet": "Portefeuille",
@@ -57,6 +59,7 @@ const fr: Partial<Record<string, string>> = {
 
 const sw: Partial<Record<string, string>> = {
   "nav.trade": "Biashara",
+  "nav.container": "Chombo",
   "nav.markets": "Masoko",
   "nav.wallstreet": "Wallstreet",
   "nav.wallet": "Pochi",
@@ -79,6 +82,7 @@ const sw: Partial<Record<string, string>> = {
 
 const ar: Partial<Record<string, string>> = {
   "nav.trade": "تداول",
+  "nav.container": "الحاوية",
   "nav.markets": "الأسواق",
   "nav.wallstreet": "وول ستريت",
   "nav.wallet": "المحفظة",
@@ -100,6 +104,7 @@ const ar: Partial<Record<string, string>> = {
 
 const pt: Partial<Record<string, string>> = {
   "nav.trade": "Negociação",
+  "nav.container": "Contentor",
   "nav.markets": "Mercados",
   "nav.wallstreet": "Wall Street",
   "nav.wallet": "Carteira",
@@ -114,6 +119,7 @@ const pt: Partial<Record<string, string>> = {
 
 const ha: Partial<Record<string, string>> = {
   "nav.trade": "Kasuwanci",
+  "nav.container": "Container",
   "nav.markets": "Kasuwa",
   "nav.wallet": "Jaka",
   "nav.settings": "Saituna",

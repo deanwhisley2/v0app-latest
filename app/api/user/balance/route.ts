@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
+import { currencyEngine } from "@/lib/financial/currency-engine"
+import { treasury } from "@/lib/financial/treasury-authority"
 
 export async function GET(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -41,7 +43,33 @@ export async function GET(request: Request) {
       created_at: data?.created_at ?? null,
     }
 
-    return NextResponse.json(payload)
+    // Backward compatible payload + multi-currency block for new treasury subsystem.
+    try {
+      const userCurrency = await currencyEngine.getUserCurrency(user.id)
+      const mainLocal = await treasury.getUserBalance(user.id, "NEXUS_MAIN", userCurrency)
+      const retailLocal = await treasury.getUserBalance(user.id, "RETAIL", userCurrency)
+      const earningsLocal = await treasury.getUserBalance(user.id, "EARNINGS", userCurrency)
+      return NextResponse.json({
+        ...payload,
+        multi_currency: {
+          currency: userCurrency,
+          main: {
+            amount: mainLocal,
+            formatted: currencyEngine.formatForUser(mainLocal, userCurrency),
+          },
+          earnings: {
+            amount: earningsLocal,
+            formatted: currencyEngine.formatForUser(earningsLocal, userCurrency),
+          },
+          retail: {
+            amount: retailLocal,
+            formatted: currencyEngine.formatForUser(retailLocal, userCurrency),
+          },
+        },
+      })
+    } catch {
+      return NextResponse.json(payload)
+    }
   } catch (e) {
     console.error("/api/user/balance:", e)
     const msg = e instanceof Error ? e.message : "Internal error"

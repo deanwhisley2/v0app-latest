@@ -1,0 +1,14 @@
+---
+description: SQL migration files — idempotent DDL, comments, security
+globs: supabase/migrations/**/*.sql
+alwaysApply: false
+---
+
+# Migration SQL (`supabase/migrations/`)
+
+- **Idempotent**: Prefer `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS` / `CREATE POLICY`, `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`.
+- **Snake_case** names for objects and migration slug from `supabase migration new`.
+- **Comments** on tables/columns that hold money or policy (`COMMENT ON ...`).
+- **RLS**: `ENABLE ROW LEVEL SECURITY` plus explicit policies; do not leave money tables without RLS if `anon`/`authenticated` can reach them.
+- **Grants**: For `SECURITY DEFINER` RPCs, `REVOKE ALL ... FROM PUBLIC` and `GRANT EXECUTE ... TO service_role` unless a narrower role is required.
+- **No data secrets** in migrations: no API keys, no hardcoded user UUIDs for production credits.

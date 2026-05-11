@@ -8,6 +8,7 @@ import {
   Clock,
   History,
   Loader2,
+  MessageCircle,
   Search,
   ShieldCheck,
   Users,
@@ -16,6 +17,7 @@ import {
 import { supabase } from "@/lib/supabaseClient"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AdminSupportChatPanel } from "@/components/dashboard/admin-support-chat-panel"
 
 type TimelineItem = {
   sortAt: string
@@ -519,7 +521,7 @@ function deskRowKey(row: OperationsDeskApiRow): string {
 }
 
 export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
-  const [sub, setSub] = useState<"approval" | "users" | "history">("approval")
+  const [sub, setSub] = useState<"approval" | "users" | "history" | "support">("approval")
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -549,6 +551,9 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
   const [reviewContext, setReviewContext] = useState<"active" | "history">("active")
   const [resolutionDraft, setResolutionDraft] = useState("")
   const [ledgerPreview, setLedgerPreview] = useState<Array<Record<string, unknown>>>([])
+  const [accountNotifPreview, setAccountNotifPreview] = useState<
+    Array<{ id: string; title: string; body: string; created_at: string; user_deleted_at?: string | null; read_at?: string | null }>
+  >([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [actionBusy, setActionBusy] = useState<string | null>(null)
   const [deskSnoozed, setDeskSnoozed] = useState<DeskSnoozeEntry[]>([])
@@ -658,15 +663,36 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     setResolutionDraft(row.resolution_note ?? "")
     setLedgerLoading(true)
     setLedgerPreview([])
+    setAccountNotifPreview([])
     try {
       const qs = new URLSearchParams({
         limit: "40",
         userId: row.subject_user_id,
       })
-      const res = await fetch(`/api/admin/financial-events?${qs.toString()}`, { headers: h, cache: "no-store" })
-      if (!res.ok) return
-      const j = (await res.json()) as { events?: Array<Record<string, unknown>> }
-      setLedgerPreview(j.events ?? [])
+      const [res, nRes] = await Promise.all([
+        fetch(`/api/admin/financial-events?${qs.toString()}`, { headers: h, cache: "no-store" }),
+        fetch(
+          `/api/admin/user-account-notifications?userId=${encodeURIComponent(row.subject_user_id)}&limit=40`,
+          { headers: h, cache: "no-store" }
+        ),
+      ])
+      if (res.ok) {
+        const j = (await res.json()) as { events?: Array<Record<string, unknown>> }
+        setLedgerPreview(j.events ?? [])
+      }
+      if (nRes.ok) {
+        const nj = (await nRes.json()) as {
+          items?: Array<{
+            id: string
+            title: string
+            body: string
+            created_at: string
+            user_deleted_at?: string | null
+            read_at?: string | null
+          }>
+        }
+        setAccountNotifPreview(nj.items ?? [])
+      }
     } finally {
       setLedgerLoading(false)
     }
@@ -885,6 +911,7 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
         {(
           [
             { id: "approval" as const, label: "Approval desk", icon: ShieldCheck },
+            { id: "support" as const, label: "Human support", icon: MessageCircle },
             { id: "users" as const, label: "Users", icon: Users },
             { id: "history" as const, label: "History", icon: History },
           ] as const
@@ -902,6 +929,8 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
           </button>
         ))}
       </div>
+
+      {sub === "support" && <AdminSupportChatPanel />}
 
       {sub === "users" && (
         <Card className="border-border bg-card p-4">
@@ -1428,6 +1457,23 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                           {Number(ev.gross_amount ?? 0).toFixed(0)}
                         </li>
                       ))}
+                    </ul>
+                    <p className="text-muted-foreground">
+                      Account notification log (includes items the user dismissed from their inbox)
+                    </p>
+                    <ul className="max-h-32 space-y-1 overflow-y-auto rounded border border-border bg-background p-2 text-[10px]">
+                      {accountNotifPreview.length ? (
+                        accountNotifPreview.slice(0, 25).map((n) => (
+                          <li key={n.id} className="truncate">
+                            {String(n.created_at ?? "").slice(0, 19)} · {n.user_deleted_at ? "[hidden from user] " : ""}
+                            {n.read_at ? "· read " : "· unread "}
+                            {n.title}: {n.body.slice(0, 120)}
+                            {n.body.length > 120 ? "…" : ""}
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-muted-foreground">No rows loaded.</li>
+                      )}
                     </ul>
                   </div>
                   <div>

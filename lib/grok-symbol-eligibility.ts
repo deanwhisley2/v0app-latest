@@ -8,11 +8,11 @@ export function toUsdtPairKey(symbolRaw: string): string {
 }
 
 /**
- * Symbols allowed to consume Grok API quota (default: focus universe + optional auto-trader list).
+ * Symbols allowed to consume Grok API quota (default: focus universe + optional extra pairs).
  *
  * NEXUS_GROK_QUOTA_SCOPE:
  *   - `focus` (default): only Focus universe (NEXUS_FOCUS_SYMBOLS + defaults + gold if enabled)
- *   - `focus_plus_trader`: focus ∪ bases from AUTO_TRADER_SYMBOLS (same env as auto-trader daemon)
+ *   - `focus_plus_trader`: focus ∪ bases from AUTO_TRADER_SYMBOLS (legacy env name; optional bonus list)
  *   - `all`: any symbol when client requests Grok (high spend — dev / emergency only)
  */
 export function getGrokQuotaScope(): "focus" | "focus_plus_trader" | "all" {

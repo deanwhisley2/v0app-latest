@@ -320,11 +320,12 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
             <ul className="space-y-1.5 text-xs text-muted-foreground">
               <li className="flex items-start gap-2">
                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                Swipe right on a row to delete (moves to history).
+                Swipe right to dismiss from your inbox. Account and transaction alerts stay on the compliance record for
+                administrators even after you clear them here.
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                Swipe left to archive and mark as read.
+                Swipe left to archive local items (moves to history) or mark server-backed items as read.
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary" />

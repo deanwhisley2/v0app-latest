@@ -8,7 +8,7 @@ import { regimeBucketForTradeMemory, resolveAuthoritativeMarketState } from "@/l
  * public Binance REST (depth + funding index). Grok runs only when includeGrok
  * is true. Live xAI calls also require the pipeline live and symbol in the quota pool
  * (`lib/grok-symbol-eligibility.ts`), unless `forceGrok` is set by a trusted caller:
- * same-machine auto-trader must send header `x-nexus-real-trade-secret` matching
+ * same-machine tooling must send header `x-nexus-real-trade-secret` matching
  * `NEXUS_REAL_TRADE_SECRET` (never expose that header publicly).
  */
 export async function POST(request: NextRequest) {

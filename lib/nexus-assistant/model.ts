@@ -43,6 +43,65 @@ function isGreeting(q: string) {
   )
 }
 
+/** L5 wallet desk — local draft before DeepSeek (no customer secrets). */
+function adminDeskCopilotDraft(q: string): string {
+  if (!q) {
+    return [
+      "Paste the user’s message, appeal summary, or what you need to investigate.",
+      "",
+      "I can help with: tone for a humane reply, a checklist for funding/withdrawal disputes, or how to document a resolution note in the desk.",
+    ].join("\n")
+  }
+  if (
+    hasAny(q, [
+      "appeal",
+      "dispute",
+      "wrong amount",
+      "did not receive",
+      "scam",
+      "fraud",
+      "chargeback",
+    ])
+  ) {
+    return [
+      "Appeal / dispute triage (draft checklist for you):",
+      "",
+      "1) Confirm internal IDs (user UUID, request/withdrawal id, timestamps) against the operations desk row and financial-events ledger.",
+      "2) Verify what the user was told on-screen (limits, pending states) vs what the ledger shows.",
+      "3) If evidence is incomplete, ask only for what you already need (e.g. tx hash, receipt id) — not passwords or keys.",
+      "4) Document a short resolution note before approving/rejecting; keep tone factual and kind.",
+      "",
+      "User-facing draft starter (edit before send):",
+      `"Thanks for your patience — we’re reviewing your case with our internal records. We’ll update you as soon as we’ve verified the details on our side."`,
+    ].join("\n")
+  }
+  if (hasAny(q, ["investigation", "look into", "review user", "audit", "evidence"])) {
+    return [
+      "Investigation framing:",
+      "",
+      "- Pull chronological financial events and desk actions; note who acted (system vs admin).",
+      "- Separate facts from user narrative; flag mismatches for follow-up questions.",
+      "- If escalation is needed, state what blockers remain (missing proof, policy edge case).",
+    ].join("\n")
+  }
+  if (hasAny(q, ["reply", "respond", "message user", "email", "whatsapp", "text customer"])) {
+    return [
+      "Humane reply principles:",
+      "",
+      "- Acknowledge emotion without admitting fault prematurely.",
+      "- State what you verified in neutral terms; give a next step and realistic timing window if policy allows.",
+      "- Close with one clear ask (single document or single clarification) to reduce back-and-forth.",
+    ].join("\n")
+  }
+  return [
+    "Ops copilot note:",
+    "",
+    "Tell me whether you want (a) a user-facing reply draft, (b) an internal checklist, or (c) both — and paste any case text you can share here (redact PII if needed).",
+    "",
+    "I won’t invent balances or approvals; use the desk + ledger as source of truth.",
+  ].join("\n")
+}
+
 function refusesSensitive(q: string): string | null {
   if (
     hasAny(q, [
@@ -182,6 +241,8 @@ export function getNexusAssistantWelcome(surface: NexusAssistantSurface, isGuest
       return `I’m Joelin — your ${NEXUS_PRODUCT_NAME} pocket guide for trades, wallet, Container, and settings.`
     case "dashboard_wallstreet_assistant":
       return `I’m Joelin on Wallstreet — desk tools plus ${NEXUS_PRODUCT_NAME} navigation so you never feel lost.`
+    case "admin_desk_support_chat":
+      return "Level-5 support copilot — appeals, investigations, and humane reply drafting. Outputs are drafts for you to review before any outbound message."
     default:
       return `Joelin for ${NEXUS_PRODUCT_NAME} — ask in plain language.`
   }
@@ -195,6 +256,10 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
 
   const block = refusesSensitive(q)
   if (block) return block
+
+  if (surface === "admin_desk_support_chat") {
+    return adminDeskCopilotDraft(q)
+  }
 
   if (!q) {
     return "Type a short question about Nexus PRO — for example: help, wallet, referral, container, withdrawal, funding, exchange, or security."

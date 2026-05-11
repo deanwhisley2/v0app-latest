@@ -11,6 +11,7 @@ const surfaces: [NexusAssistantSurface, ...NexusAssistantSurface[]] = [
   "floating_dashboard",
   "dashboard_wallstreet_assistant",
   "bottom_nav_mini",
+  "admin_desk_support_chat",
 ]
 
 const bodySchema = z.object({
@@ -92,11 +93,11 @@ export async function POST(req: Request) {
       draft
     )
 
-    const joelin = await generateWithDeepSeek(system, input.userMessage)
-    const reply = joelin?.trim() || draft
+    const deepseek = await generateWithDeepSeek(system, input.userMessage)
+    const reply = deepseek?.trim() || draft
     return NextResponse.json({
       reply,
-      source: joelin ? "deepseek" : "local",
+      source: deepseek ? "deepseek" : "local",
     })
   } catch (e) {
     console.error("[api/nexus-assistant]", e)

@@ -1,0 +1,11 @@
+Authoritative full rollback snapshot (this consolidation phase):
+
+  /home/whisley2/Downloads/NEXUS_CHATGPT/
+
+Created with rsync from the project root before further strategic deletions in v0app_latest.
+See NEXUS_CHATGPT/SNAPSHOT_README.txt for timestamp.
+
+An older lowercase mirror may exist at:
+  /home/whisley2/Downloads/nexus-chatgpt
+
+Prefer NEXUS_CHATGPT for rollback per operational policy.
