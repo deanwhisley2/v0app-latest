@@ -60,7 +60,7 @@ Implemented **shared `PreTradeValidator` + `StrategyLearner`** so learned block 
 **Next steps:**  
 - [ ] Persist learner patterns across reloads (DB or JSON file) + optional `initializeSharedState` loader.  
 - [ ] Optional: wire `TradeComparisonSystem` / scripts to `getSharedValidator()` for one global rule set.  
-- [ ] If on Vercel: replace in-memory demo mode with Redis or edge config.  
+- [ ] If deploying serverless/edge: replace in-memory demo mode with Redis or a shared config store.  
 - [ ] Telegram for blocks: small API route that calls `SafetyNotifier` or `TelegramNotifier` server-side only.
 
 ---
