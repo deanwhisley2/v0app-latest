@@ -7,10 +7,11 @@ import {
   assertNoDuplicatePendingUserFunding,
   DuplicatePendingError,
 } from "@/lib/server/funding-duplicate-guard"
+import { attachProfileEmailsToRetailers } from "@/lib/server/retailer-funding-helpers"
 import {
-  attachProfileEmailsToRetailers,
-  retailerSpendableLiquidity,
-} from "@/lib/server/retailer-funding-helpers"
+  assertRetailDeskQualifiesForCorridor,
+  normalizeCorridorNetworkToken,
+} from "@/lib/server/retailer-qualification"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 
 export async function GET(request: Request) {
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
     const requestsRes = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,retailer_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
+        "id,retailer_id,official_corridor_route_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
     }
     const body = (await request.json().catch(() => ({}))) as {
       retailerId?: string
+      officialCorridorRouteId?: string
       amount?: number
       txReference?: string
       note?: string
@@ -80,6 +82,8 @@ export async function POST(request: Request) {
       payerPhone?: string
     }
     const retailerId = typeof body.retailerId === "string" ? body.retailerId.trim() : ""
+    const officialCorridorRouteId =
+      typeof body.officialCorridorRouteId === "string" ? body.officialCorridorRouteId.trim() : ""
     const txReference = typeof body.txReference === "string" ? body.txReference.trim() : ""
     const amount = Number(body.amount ?? 0)
     const note = typeof body.note === "string" ? body.note.trim() : null
@@ -91,8 +95,32 @@ export async function POST(request: Request) {
     const countryUpdate =
       typeof body.fundingCountryCode === "string" ? body.fundingCountryCode.trim().toUpperCase().slice(0, 2) : ""
 
-    if (!retailerId || !txReference || !Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: "retailerId, amount, and txReference are required." }, { status: 400 })
+    if (!txReference || !Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "amount and txReference are required." }, { status: 400 })
+    }
+    if (fundChannel === "legacy_admin") {
+      if (!retailerId) {
+        return NextResponse.json({ error: "retailerId is required for legacy funding." }, { status: 400 })
+      }
+      if (officialCorridorRouteId) {
+        return NextResponse.json({ error: "officialCorridorRouteId is not valid for legacy funding." }, {
+          status: 400,
+        })
+      }
+    }
+    if (fundChannel === "local_mobile") {
+      if (!officialCorridorRouteId && !retailerId) {
+        return NextResponse.json(
+          { error: "Either retailerId (qualified desk) or officialCorridorRouteId (official corridor) is required." },
+          { status: 400 },
+        )
+      }
+      if (officialCorridorRouteId && retailerId) {
+        return NextResponse.json(
+          { error: "Choose either a retailer desk or the official corridor — not both." },
+          { status: 400 },
+        )
+      }
     }
     if (fundChannel === "local_mobile" && (!payerDisplayName || !payerPhone)) {
       return NextResponse.json(
@@ -108,62 +136,77 @@ export async function POST(request: Request) {
     }
 
     let retailerResponseDeadlineAt: string | null = null
+    let insertRetailerId: string | null = null
+    let insertOfficialRouteId: string | null = null
 
     if (fundChannel === "local_mobile") {
-      const { data: desk, error: de } = await admin
-        .from("retailer_profiles")
-        .select("id,user_id,is_country_retailer,country_code,under_review,liquidity_status,estimated_response_minutes")
-        .eq("id", retailerId)
-        .maybeSingle()
-
-      type DeskRow = {
-        user_id?: string
-        is_country_retailer?: boolean
-        under_review?: boolean
-        liquidity_status?: string | null
-        country_code?: string | null
-        estimated_response_minutes?: number | null
-      }
-      const d = desk as DeskRow | null
-      if (de || !d?.user_id) {
-        return NextResponse.json({ error: "Retailer desk not found." }, { status: 400 })
-      }
-      if (!d.is_country_retailer || d.under_review || d.liquidity_status === "offline") {
-        return NextResponse.json({ error: "This retailer is not available for local funding right now." }, {
-          status: 400,
-        })
-      }
-
       const { data: prof } = await admin.from("profiles").select("funding_country_code").eq("id", user.id).maybeSingle()
       const userCountry =
-        countryUpdate ||
+        (countryUpdate.length === 2 ? countryUpdate : "") ||
         String(prof?.funding_country_code ?? "")
           .trim()
           .toUpperCase()
-      const deskCountry = String(d.country_code ?? "").trim().toUpperCase()
-      if (deskCountry.length !== 2) {
-        return NextResponse.json({ error: "Retail desk is missing country configuration." }, { status: 400 })
-      }
-      if (deskCountry && userCountry.length === 2 && deskCountry !== userCountry) {
-        return NextResponse.json({ error: "Country mismatch: pick a retailer in your registered country." }, {
-          status: 400,
-        })
-      }
 
-      const { spendable } = await retailerSpendableLiquidity(admin, d.user_id, retailerId)
-      if (spendable < amount) {
+      if (userCountry.length !== 2) {
         return NextResponse.json(
-          {
-            error:
-              "This retailer cannot cover this amount anymore. Refresh the list or choose another retailer.",
-          },
-          { status: 409 },
+          { error: "Save your 2-letter funding country before submitting a local funding request." },
+          { status: 400 },
         )
       }
 
-      const minsRaw = Number(d.estimated_response_minutes ?? 60)
-      const mins = Math.min(180, Math.max(1, Number.isFinite(minsRaw) ? minsRaw : 60))
-      retailerResponseDeadlineAt = new Date(Date.now() + mins * 60_000).toISOString()
+      if (officialCorridorRouteId) {
+        const { data: route, error: routeErr } = await admin
+          .from("official_corridor_payment_routes")
+          .select("id,country_code,network_token,active")
+          .eq("id", officialCorridorRouteId)
+          .maybeSingle()
+        if (routeErr || !route) {
+          return NextResponse.json({ error: "Official corridor route not found." }, { status: 400 })
+        }
+        if (!(route as { active?: boolean }).active) {
+          return NextResponse.json({ error: "This official corridor route is not active." }, { status: 400 })
+        }
+        const rc = String((route as { country_code?: string }).country_code ?? "")
+          .trim()
+          .toUpperCase()
+          .slice(0, 2)
+        if (userCountry.length !== 2 || rc !== userCountry) {
+          return NextResponse.json({ error: "Country mismatch for official corridor route." }, { status: 400 })
+        }
+        const rn = normalizeCorridorNetworkToken(String((route as { network_token?: string }).network_token ?? ""))
+        const un = normalizeCorridorNetworkToken(mobileNetwork ?? "")
+        if (!rn || !un || rn !== un) {
+          return NextResponse.json({ error: "Network mismatch for official corridor route." }, { status: 400 })
+        }
+        insertRetailerId = null
+        insertOfficialRouteId = officialCorridorRouteId
+      } else if (retailerId) {
+        insertOfficialRouteId = null
+        insertRetailerId = retailerId
+        const qual = await assertRetailDeskQualifiesForCorridor(admin, retailerId, {
+          customerCountry: userCountry.slice(0, 2),
+          mobileNetwork: mobileNetwork ?? "",
+          amountUsd: amount,
+        })
+        if (!qual.ok) {
+          return NextResponse.json({ error: qual.message }, { status: 400 })
+        }
+
+        const { data: desk, error: de } = await admin
+          .from("retailer_profiles")
+          .select("estimated_response_minutes")
+          .eq("id", retailerId)
+          .maybeSingle()
+        if (de || !desk) {
+          return NextResponse.json({ error: "Retailer desk not found." }, { status: 400 })
+        }
+        const minsRaw = Number((desk as { estimated_response_minutes?: number }).estimated_response_minutes ?? 60)
+        const mins = Math.min(180, Math.max(1, Number.isFinite(minsRaw) ? minsRaw : 60))
+        retailerResponseDeadlineAt = new Date(Date.now() + mins * 60_000).toISOString()
+      }
+    } else if (fundChannel === "legacy_admin") {
+      insertRetailerId = retailerId || null
+      insertOfficialRouteId = null
     }
 
     try {
@@ -179,7 +222,8 @@ export async function POST(request: Request) {
       .from("retailer_fund_requests")
       .insert({
         user_id: user.id,
-        retailer_id: retailerId,
+        retailer_id: insertRetailerId,
+        official_corridor_route_id: insertOfficialRouteId,
         amount,
         tx_reference: txReference,
         note,
@@ -189,9 +233,10 @@ export async function POST(request: Request) {
         payer_display_name: payerDisplayName,
         payer_phone: payerPhone,
         retailer_response_deadline_at: retailerResponseDeadlineAt,
+        escalated_to_admin: Boolean(insertOfficialRouteId && fundChannel === "local_mobile"),
       })
       .select(
-        "id,retailer_id,amount,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at"
+        "id,retailer_id,official_corridor_route_id,amount,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at"
       )
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
@@ -208,9 +253,16 @@ export async function POST(request: Request) {
       transactionRef: txReference,
       summary:
         fundChannel === "local_mobile"
-          ? "Local mobile-money funding submitted; awaiting retailer verification."
+          ? insertOfficialRouteId
+            ? "Local funding submitted — official company corridor (Level 5 operations will verify)."
+            : "Local mobile-money funding submitted; awaiting retailer verification."
           : "Retailer funding request submitted (legacy admin channel).",
-      metadata: { retailerId, requestId: data.id, fundChannel },
+      metadata: {
+        retailerId: insertRetailerId,
+        officialCorridorRouteId: insertOfficialRouteId,
+        requestId: data.id,
+        fundChannel,
+      },
     })
     await notifyUserFundingDecision(admin, {
       userId: user.id,

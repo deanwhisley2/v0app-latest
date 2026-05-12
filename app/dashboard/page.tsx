@@ -78,11 +78,25 @@ type RetailerRow = {
   profile_email?: string | null
 }
 
-type QualifiedRetailer = RetailerRow & { spendable_liquidity?: number }
+type QualifiedRetailer = RetailerRow & {
+  spendable_liquidity?: number
+  qualification_verified_desk?: boolean
+}
+
+type OfficialCorridorFallback = {
+  id: string
+  payee_display_name: string
+  payment_numbers?: Array<{ label?: string; value?: string }>
+  whatsapp_number?: string | null
+  contact_phone?: string | null
+  notice?: string
+  source?: string
+}
 
 type RetailerFundingRequest = {
   id: string
-  retailer_id: string
+  retailer_id?: string | null
+  official_corridor_route_id?: string | null
   amount: number
   tx_reference: string
   status: string
@@ -184,6 +198,9 @@ export default function DashboardPage() {
   const [fundingCountryCodeInput, setFundingCountryCodeInput] = useState("")
   const [fundMobileNetwork, setFundMobileNetwork] = useState("")
   const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
+  /** When no desk qualifies, Level-5-configured official company receive line (same country/network). */
+  const [officialCorridorFallback, setOfficialCorridorFallback] = useState<OfficialCorridorFallback | null>(null)
+  const [selectedOfficialRouteId, setSelectedOfficialRouteId] = useState<string | null>(null)
   const [loadingQualifiedRetailers, setLoadingQualifiedRetailers] = useState(false)
   /** True after user ran “See eligible retailers” at least once (enables empty-state message). */
   const [localMmRetailersSearched, setLocalMmRetailersSearched] = useState(false)
@@ -710,6 +727,11 @@ export default function DashboardPage() {
   const localMmSelectedDesk = useMemo(() => {
     return qualifiedRetailers.find((x) => String(x.id) === String(selectedRetailerId))
   }, [qualifiedRetailers, selectedRetailerId])
+
+  const localMmSelectedOfficial = useMemo(() => {
+    if (!selectedOfficialRouteId || !officialCorridorFallback) return null
+    return officialCorridorFallback.id === selectedOfficialRouteId ? officialCorridorFallback : null
+  }, [officialCorridorFallback, selectedOfficialRouteId])
 
   useEffect(() => {
     if (isGuestSession) return
@@ -1530,9 +1552,15 @@ export default function DashboardPage() {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       })
-      const out = (await res.json().catch(() => ({}))) as { error?: string; retailers?: QualifiedRetailer[] }
+      const out = (await res.json().catch(() => ({}))) as {
+        error?: string
+        retailers?: QualifiedRetailer[]
+        official_fallback?: OfficialCorridorFallback | null
+      }
       if (!res.ok) throw new Error(out.error || "Could not load retailers.")
       const retailers = out.retailers ?? []
+      setOfficialCorridorFallback(out.official_fallback ?? null)
+      setSelectedOfficialRouteId(null)
       setQualifiedRetailers(retailers)
       const only = retailers.length === 1 && retailers[0]?.id != null ? String(retailers[0].id) : ""
       /* Single desk: select immediately so payer sees Tx ID + confirm (no extra tap). */
@@ -1551,6 +1579,8 @@ export default function DashboardPage() {
   const handleBackLocalMmWizard = useCallback(() => {
     setLocalMmWizardStep(1)
     setQualifiedRetailers([])
+    setOfficialCorridorFallback(null)
+    setSelectedOfficialRouteId(null)
     setSelectedRetailerId("")
     setLocalMmRetailersSearched(false)
     setFundTxReference("")
@@ -1561,6 +1591,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (l1FundSource !== "local") return
     setQualifiedRetailers([])
+    setOfficialCorridorFallback(null)
+    setSelectedOfficialRouteId(null)
     setSelectedRetailerId("")
     setLocalMmRetailersSearched(false)
     setLocalMmWizardStep(1)
@@ -1568,10 +1600,25 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (l1FundSource !== "local" || localMmWizardStep !== 2) return
-    if (qualifiedRetailers.length !== 1 || selectedRetailerId) return
+    if (qualifiedRetailers.length !== 1 || selectedRetailerId || selectedOfficialRouteId) return
     const rid = qualifiedRetailers[0]?.id
     if (rid != null) setSelectedRetailerId(String(rid))
-  }, [l1FundSource, localMmWizardStep, qualifiedRetailers, selectedRetailerId])
+  }, [l1FundSource, localMmWizardStep, qualifiedRetailers, selectedRetailerId, selectedOfficialRouteId])
+
+  useEffect(() => {
+    if (l1FundSource !== "local" || localMmWizardStep !== 2) return
+    if (qualifiedRetailers.length > 0 || !officialCorridorFallback?.id || selectedOfficialRouteId || selectedRetailerId) {
+      return
+    }
+    setSelectedOfficialRouteId(officialCorridorFallback.id)
+  }, [
+    l1FundSource,
+    localMmWizardStep,
+    qualifiedRetailers.length,
+    officialCorridorFallback,
+    selectedOfficialRouteId,
+    selectedRetailerId,
+  ])
 
   useEffect(() => {
     if (showFundModal !== "add") setLocalMmWizardStep(1)
@@ -1685,8 +1732,10 @@ export default function DashboardPage() {
             throw new Error("Finish retailer matching on step 2 before confirming.")
           }
           if (!(amount > 0)) throw new Error("Enter the amount you funded.")
-          if (!localMmSelectedDesk || !fundTxReference.trim()) {
-            throw new Error("Pick a desk and enter your transaction ID / reference from your receipt.")
+          if ((!localMmSelectedDesk && !selectedOfficialRouteId) || !fundTxReference.trim()) {
+            throw new Error(
+              "Pick an available desk or the official company line, then enter your transaction ID / reference from your receipt.",
+            )
           }
           if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
             throw new Error("Enter your sender name and sending mobile number exactly as shown to the retailer.")
@@ -1703,7 +1752,9 @@ export default function DashboardPage() {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
-              retailerId: localMmSelectedDesk.id,
+              ...(selectedOfficialRouteId
+                ? { officialCorridorRouteId: selectedOfficialRouteId }
+                : { retailerId: localMmSelectedDesk!.id }),
               amount,
               txReference: fundTxReference,
               note: fundNote,
@@ -1717,8 +1768,15 @@ export default function DashboardPage() {
           const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
           if (!res.ok) throw new Error(out.error || "Could not create pending funding.")
           setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
-          showToast("Pending funding created — retailer will verify your mobile-money payment.", "success")
+          showToast(
+            selectedOfficialRouteId
+              ? "Request queued — Level 5 operations will verify payment to the official company line."
+              : "Pending funding created — retailer will verify your mobile-money payment.",
+            "success",
+          )
           setQualifiedRetailers([])
+          setOfficialCorridorFallback(null)
+          setSelectedOfficialRouteId("")
           setSelectedRetailerId("")
           setFundTxReference("")
           setL1FundSource("pick")
@@ -1746,6 +1804,7 @@ export default function DashboardPage() {
     showToast,
     currentUser?.level,
     localMmSelectedDesk,
+    selectedOfficialRouteId,
     fundTxReference,
     fundNote,
     l1FundSource,
@@ -2064,6 +2123,8 @@ export default function DashboardPage() {
                       setL1FundSource("local")
                       setLocalMmWizardStep(1)
                       setQualifiedRetailers([])
+                      setOfficialCorridorFallback(null)
+                      setSelectedOfficialRouteId(null)
                       setSelectedRetailerId("")
                       setLocalMmRetailersSearched(false)
                       setFundTxReference("")
@@ -2210,16 +2271,15 @@ export default function DashboardPage() {
                       </span>
                     </div>
 
-                    {!loadingQualifiedRetailers && localMmRetailersSearched && qualifiedRetailers.length === 0 ? (
-                      <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-100 space-y-1.5">
-                        <p className="font-medium">No desk matched this corridor yet.</p>
+                    {!loadingQualifiedRetailers &&
+                    localMmRetailersSearched &&
+                    qualifiedRetailers.length === 0 &&
+                    !officialCorridorFallback ? (
+                      <div className="space-y-1.5 rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-100">
+                        <p className="font-medium">No desk or official company line is configured for this corridor yet.</p>
                         <p>
-                          Common fixes: try <strong>Network → Other</strong> if the desk uses generic payment labels; lower the
-                          amount; pick MTN vs Airtel to match the line you will pay (Uganda lines are matched by number prefix when
-                          labels say “primary”).
-                        </p>
-                        <p className="text-muted-foreground">
-                          Transaction reference appears after you select an available desk below — none qualify right now.
+                          Try <strong>Network → Other</strong>, adjust the amount, or contact support. Ops must publish either a
+                          solvent retailer desk or an official receive line for this country + network.
                         </p>
                       </div>
                     ) : null}
@@ -2227,11 +2287,15 @@ export default function DashboardPage() {
                     {qualifiedRetailers.length > 0 ? (
                       <div className="space-y-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Available desks
+                          Qualified retailer desks
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Pre-screened: same country, matching network, verified account, active status, and spendable liquidity ≥
+                          your request.
                         </p>
                         <div className="grid max-h-[min(50vh,320px)] gap-2 overflow-y-auto sm:grid-cols-2">
                           {qualifiedRetailers.map((r) => {
-                            const active = selectedRetailerId === r.id
+                            const active = selectedRetailerId === r.id && !selectedOfficialRouteId
                             const nums = (r.payment_numbers ?? [])
                               .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
                               .filter(Boolean)
@@ -2242,13 +2306,21 @@ export default function DashboardPage() {
                               <button
                                 key={r.id}
                                 type="button"
-                                onClick={() => setSelectedRetailerId(r.id)}
+                                onClick={() => {
+                                  setSelectedOfficialRouteId(null)
+                                  setSelectedRetailerId(r.id)
+                                }}
                                 className={`rounded-lg border p-2.5 text-left text-[11px] transition-colors ${
                                   active ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-background hover:bg-muted/50"
                                 }`}
                               >
-                                <p className="font-semibold text-foreground">
+                                <p className="flex flex-wrap items-center gap-1 font-semibold text-foreground">
                                   Desk · {String(r.country_code ?? "").toUpperCase() || "—"}
+                                  {r.qualification_verified_desk ? (
+                                    <span className="rounded bg-emerald-500/20 px-1.5 py-0 text-[9px] font-bold uppercase text-emerald-800 dark:text-emerald-100">
+                                      Verified
+                                    </span>
+                                  ) : null}
                                 </p>
                                 <p className="mt-1 font-mono text-[10px] text-muted-foreground line-clamp-3">
                                   {nums.length ? nums.join(" · ") : "Payment numbers on file"}
@@ -2274,7 +2346,44 @@ export default function DashboardPage() {
                       </div>
                     ) : null}
 
-                    {qualifiedRetailers.length > 0 ? (
+                    {qualifiedRetailers.length === 0 && officialCorridorFallback ? (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-100">
+                          Official company receive line
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          No retailer desk qualified for this amount and corridor. Pay only the institutional line below — Level 5
+                          operations will verify your receipt (not automatic credit).
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedRetailerId("")
+                            setSelectedOfficialRouteId(officialCorridorFallback.id)
+                          }}
+                          className={`w-full rounded-xl border-2 p-3 text-left text-[11px] transition-colors ${
+                            selectedOfficialRouteId === officialCorridorFallback.id
+                              ? "border-sky-600 bg-sky-500/15 ring-2 ring-sky-500/30"
+                              : "border-border bg-background hover:bg-muted/50"
+                          }`}
+                        >
+                          <p className="font-bold text-foreground">{officialCorridorFallback.payee_display_name}</p>
+                          <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                            {(officialCorridorFallback.payment_numbers ?? [])
+                              .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                              .join(" · ") || "Numbers configured by operations"}
+                          </p>
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            WA {officialCorridorFallback.whatsapp_number || "—"} · {officialCorridorFallback.contact_phone || "—"}
+                          </p>
+                          {officialCorridorFallback.notice ? (
+                            <p className="mt-2 text-[10px] leading-snug text-sky-950 dark:text-sky-50">{officialCorridorFallback.notice}</p>
+                          ) : null}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {qualifiedRetailers.length > 0 || officialCorridorFallback ? (
                       <div className="space-y-3 border-t border-border/60 pt-3">
                         {localMmSelectedDesk ? (
                           <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
@@ -2296,9 +2405,28 @@ export default function DashboardPage() {
                               Match names and numbers exactly before sending. Wrong destination voids the request.
                             </p>
                           </div>
+                        ) : localMmSelectedOfficial ? (
+                          <div className="space-y-1 rounded-md border border-sky-600/40 bg-sky-500/10 p-3 text-[11px] sm:text-xs dark:text-sky-50">
+                            <p className="font-semibold text-sky-900 dark:text-sky-100">Official company receive line</p>
+                            <p>
+                              Payee: <strong>{localMmSelectedOfficial.payee_display_name}</strong>
+                            </p>
+                            <p className="font-mono">
+                              {(localMmSelectedOfficial.payment_numbers ?? [])
+                                .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                                .join(" · ")}
+                            </p>
+                            <p>
+                              WhatsApp / call: {localMmSelectedOfficial.whatsapp_number || "—"} ·{" "}
+                              {localMmSelectedOfficial.contact_phone || "—"}
+                            </p>
+                            <p className="font-medium text-foreground">
+                              Operations will match your transaction reference — this is not instant automated approval.
+                            </p>
+                          </div>
                         ) : (
                           <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-50">
-                            Tap one desk card above, then enter your transaction ID.
+                            Tap a qualified desk or the official line above, then enter your transaction ID.
                           </div>
                         )}
                         <div>
@@ -2306,8 +2434,8 @@ export default function DashboardPage() {
                             Transaction ID / reference (required)
                           </label>
                           <p className="mb-1.5 text-[10px] text-muted-foreground">
-                            Pay in your MoMo app first, then paste the receipt or SMS transaction ID here so the retailer can
-                            verify before approving.
+                            Pay in your MoMo app first, then paste the receipt or SMS transaction ID here so{" "}
+                            {selectedOfficialRouteId ? "operations can verify against the official receive line." : "the retailer can verify before approving."}
                           </p>
                           <input
                             type="text"

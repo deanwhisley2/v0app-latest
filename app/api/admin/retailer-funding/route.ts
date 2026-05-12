@@ -82,7 +82,7 @@ export async function PATCH(request: Request) {
 
     const { data: reqRow, error: reqErr } = await admin
       .from("retailer_fund_requests")
-      .select("id,user_id,retailer_id,amount,tx_reference,status,fund_channel,retailer_approved_at")
+      .select("id,user_id,retailer_id,official_corridor_route_id,amount,tx_reference,status,fund_channel,retailer_approved_at")
       .eq("id", body.requestId)
       .maybeSingle()
     if (reqErr) return NextResponse.json({ error: reqErr.message }, { status: 500 })
@@ -137,41 +137,28 @@ export async function PATCH(request: Request) {
             { status: 400 },
           )
         }
-        settledApprovalMode = approvalMode
 
-        const { data: rp } = await admin
-          .from("retailer_profiles")
-          .select("user_id")
-          .eq("id", (reqRow as { retailer_id: string }).retailer_id)
-          .maybeSingle()
-        const retailerUserId = rp?.user_id as string | undefined
-        retailerDeskUserId = retailerUserId
-        if (!retailerUserId) return NextResponse.json({ error: "Retailer desk missing." }, { status: 400 })
+        const officialRouteFk = (reqRow as { official_corridor_route_id?: string | null }).official_corridor_route_id
+        const retailerPid = (reqRow as { retailer_id?: string | null }).retailer_id
+        const isOfficialOnly = Boolean(officialRouteFk && !retailerPid)
+
+        if (isOfficialOnly && approvalMode !== "treasury_pool") {
+          return NextResponse.json(
+            {
+              error:
+                "Official company corridor funding settles from MAIN_TREASURY only — choose treasury_pool (not retailer liquidity).",
+            },
+            { status: 400 },
+          )
+        }
+
+        settledApprovalMode = approvalMode
 
         const amount = Number((reqRow as { amount?: number }).amount ?? 0)
         const custId = (reqRow as { user_id: string }).user_id
 
-        if (approvalMode === "retailer_retail_balance") {
-          const retail = await getUserRetailBalance(admin, retailerUserId)
-          if (retail < amount) {
-            return NextResponse.json(
-              { error: "Retailer Retail Balance is insufficient for this override approval." },
-              { status: 400 },
-            )
-          }
-          try {
-            await transferRetailCreditToCustomer(admin, {
-              retailerUserId,
-              customerUserId: custId,
-              amount,
-              requestId: body.requestId,
-            })
-          } catch (err) {
-            return NextResponse.json({ error: err instanceof Error ? err.message : "Transfer failed." }, {
-              status: 400,
-            })
-          }
-        } else {
+        if (isOfficialOnly) {
+          settledApprovalMode = "treasury_pool"
           const treasuryUsd = await treasury.getTreasuryBalance("MAIN_TREASURY")
           if (treasuryUsd < amount) {
             return NextResponse.json(
@@ -187,13 +174,72 @@ export async function PATCH(request: Request) {
               amountUsd: amount,
               referenceId: `fund_req:${body.requestId}`,
               adminUserId: user.id,
-              reason: `L5 treasury-funded add-funds approval ${body.requestId}`,
+              reason: `L5 treasury settle official corridor funding ${body.requestId}`,
             })
           } catch (err) {
             return NextResponse.json(
               { error: err instanceof Error ? err.message : "Treasury settlement failed." },
               { status: 400 },
             )
+          }
+        } else {
+          if (!retailerPid) {
+            return NextResponse.json({ error: "Retailer desk missing on this request." }, { status: 400 })
+          }
+
+          const { data: rp } = await admin
+            .from("retailer_profiles")
+            .select("user_id")
+            .eq("id", retailerPid)
+            .maybeSingle()
+          const retailerUserId = rp?.user_id as string | undefined
+          retailerDeskUserId = retailerUserId
+          if (!retailerUserId) return NextResponse.json({ error: "Retailer desk missing." }, { status: 400 })
+
+          if (approvalMode === "retailer_retail_balance") {
+            const retail = await getUserRetailBalance(admin, retailerUserId)
+            if (retail < amount) {
+              return NextResponse.json(
+                { error: "Retailer Retail Balance is insufficient for this override approval." },
+                { status: 400 },
+              )
+            }
+            try {
+              await transferRetailCreditToCustomer(admin, {
+                retailerUserId,
+                customerUserId: custId,
+                amount,
+                requestId: body.requestId,
+              })
+            } catch (err) {
+              return NextResponse.json({ error: err instanceof Error ? err.message : "Transfer failed." }, {
+                status: 400,
+              })
+            }
+          } else {
+            const treasuryUsd = await treasury.getTreasuryBalance("MAIN_TREASURY")
+            if (treasuryUsd < amount) {
+              return NextResponse.json(
+                {
+                  error: `Insufficient company treasury liquidity (available $${treasuryUsd.toFixed(2)} USD-equivalent).`,
+                },
+                { status: 400 },
+              )
+            }
+            try {
+              await creditCustomerMainFromTreasuryUsd(admin, {
+                customerUserId: custId,
+                amountUsd: amount,
+                referenceId: `fund_req:${body.requestId}`,
+                adminUserId: user.id,
+                reason: `L5 treasury-funded add-funds approval ${body.requestId}`,
+              })
+            } catch (err) {
+              return NextResponse.json(
+                { error: err instanceof Error ? err.message : "Treasury settlement failed." },
+                { status: 400 },
+              )
+            }
           }
         }
       }

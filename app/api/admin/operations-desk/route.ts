@@ -97,7 +97,8 @@ export async function GET(request: Request) {
     for (const r of topRows) userIds.add((r as { retailer_user_id: string }).retailer_user_id)
     for (const r of fundRows) {
       userIds.add((r as { user_id: string }).user_id)
-      retailerIds.push((r as { retailer_id: string }).retailer_id)
+      const rid = (r as { retailer_id?: string | null }).retailer_id
+      if (rid) retailerIds.push(String(rid))
     }
     for (const r of wdRows) userIds.add(String((r as { user_id: string }).user_id))
 
@@ -260,7 +261,11 @@ export async function GET(request: Request) {
         tx_reference: String(raw.tx_reference ?? ""),
         amount,
         request_type_label:
-          ch === "local_mobile" ? "Customer add funds (local mobile-money)" : "Customer add funds (legacy admin basin)",
+          ch === "local_mobile"
+            ? retailPid
+              ? "Customer add funds (local mobile-money)"
+              : "Customer add funds (official company corridor)"
+            : "Customer add funds (legacy admin basin)",
         fund_channel: ch,
         mobile_network: mob || null,
         created_at,
