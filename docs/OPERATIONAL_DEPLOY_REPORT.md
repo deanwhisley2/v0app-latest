@@ -90,3 +90,57 @@
 3. Smoke: L5 login → Wallet → Human support → thread list.
 4. Smoke: user notification tap → wallet → Support tab opens thread.
 5. Confirm Supabase Dashboard → Realtime → tables published.
+
+---
+
+## 13. L5 dual settlement modes (`l5_funding_settlement_modes`) — 2026-05-12
+
+### Migration (production Supabase)
+
+| Item | Status |
+|------|--------|
+| `retailer_fund_requests`: `l5_settlement_mode`, `l5_override_note`, `approved_by_admin_for_retailer` + check constraint | **PASS** — applied via Supabase MCP `apply_migration` (`l5_funding_settlement_modes`) |
+
+Repo migration file: `supabase/migrations/20260521120000_l5_funding_settlement_modes.sql`.
+
+### Code shipped (this slice)
+
+- `app/api/admin/retailer-funding/route.ts` — `approvalMode` required for `local_mobile` approve: `treasury_pool` vs `retailer_retail_balance`; **no automatic fallback** between rails on failure.
+- `lib/server/l5-funding-settlement.ts`, `lib/server/l5-funding-notify.ts`
+- `lib/formatting/ledger-operational-trace.ts` — settlement mode, funding source, acting authority, debited/credited accounts, book entry line.
+- `components/dashboard/wallet-operational-panel.tsx` — **visually distinct** amber “retailer liquidity” vs sky “company treasury” approve actions.
+- `app/api/user/financial-events/route.ts` — returns `metadata` for end-user ledger trace on dashboard.
+
+### VPS / PM2
+
+| Check | Result |
+|-------|--------|
+| `bash scripts/deploy-vps-git-archive.sh` from this workspace | **NOT RUN** — requires SSH reachability and keys to `REMOTE_HOST` (default in script). After `git push`, operator should deploy and `pm2 restart nexus`. |
+
+### Live domain
+
+| Check | Result |
+|-------|--------|
+| `GET https://nexuspro.it.com/api/health` | **PASS** — HTTP 200 (`{"ok":true}` at time of check) |
+| Runtime includes this commit | **PENDING** until VPS deploy after push |
+| TEST 1 retailer override (live balances + treasury unchanged) | **PENDING** — real accounts |
+| TEST 2 treasury mode (MAIN_TREASURY debit; retailer retail unchanged) | **PENDING** |
+| TEST 3 insufficient retailer retail → 400, no movements | **PENDING** |
+
+### PASS/FAIL matrix (L5 liquidity ownership)
+
+| # | Test | Result |
+|---|------|--------|
+| 1 | Migration applied on production DB | **PASS** |
+| 2 | Retailer override: retail debits; treasury unchanged | **PENDING** (live) |
+| 3 | Treasury mode: MAIN_TREASURY debits; retailer retail unchanged | **PENDING** (live) |
+| 4 | Insufficient retail: override fails; no partial credit; no treasury fallback | **PASS** (code) / **PENDING** (live) |
+| 5 | Ledger rows carry classification + accounts (`metadata`) | **PASS** (API + UI) |
+| 6 | Notifications (customer + retailer on override) | **PASS** (code) / **PENDING** (live inbox) |
+| 7 | Strict explicit rails (no auto fallback) | **PASS** |
+
+### Known risks
+
+1. **Production app revision**: DB migration is live; app **must** be deployed so PATCH accepts `approvalMode` and UI shows dual rails — until then older clients could error or lack buttons.
+2. **Operational mis-click**: mitigated by labeled rails; treasury button uses sky styling + warning copy.
+3. **Financial live tests** were not executed in this environment (no production credentials).

@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const { data, error } = await admin
       .from("container_balance_events")
       .select(
-        "id,event_type,category,gross_amount,net_amount,fee_amount,balance_source,balance_destination,status,transaction_ref,related_session_id,related_trade_id,related_container_id,actor_type,actor_id,summary,created_at"
+        "id,event_type,category,gross_amount,net_amount,fee_amount,balance_source,balance_destination,status,transaction_ref,related_session_id,related_trade_id,related_container_id,actor_type,actor_id,summary,metadata,created_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })

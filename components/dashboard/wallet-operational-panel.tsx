@@ -13,6 +13,9 @@ import {
   ShieldCheck,
   Users,
   XCircle,
+  Building2,
+  Landmark,
+  AlertTriangle,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
@@ -20,6 +23,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AdminSupportChatPanel } from "@/components/dashboard/admin-support-chat-panel"
+import { ledgerOperationalTraceLines } from "@/lib/formatting/ledger-operational-trace"
 
 type TimelineItem = {
   sortAt: string
@@ -793,20 +797,29 @@ export function AdminOperationalAssets({
   )
 
   const executeFundingAction = useCallback(
-    async (action: "approve" | "reject" | "under_review" | "resolve") => {
+    async (
+      action: "approve" | "reject" | "under_review" | "resolve",
+      opts?: { approvalMode?: "treasury_pool" | "retailer_retail_balance" },
+    ) => {
       if (!reviewRow) return
       const h = await authHeaders()
       if (!h) return
-      setActionBusy(action)
+      const busyKey =
+        action === "approve" && opts?.approvalMode ? `approve:${opts.approvalMode}` : action
+      setActionBusy(busyKey)
       try {
+        const payload: Record<string, unknown> = {
+          requestId: reviewRow.id,
+          action,
+          reason: resolutionDraft.trim() || undefined,
+        }
+        if (action === "approve" && opts?.approvalMode) {
+          payload.approvalMode = opts.approvalMode
+        }
         const res = await fetch("/api/admin/retailer-funding", {
           method: "PATCH",
           headers: { ...h, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requestId: reviewRow.id,
-            action,
-            reason: resolutionDraft.trim() || undefined,
-          }),
+          body: JSON.stringify(payload),
         })
         const j = (await res.json().catch(() => ({}))) as { error?: string }
         if (!res.ok) {
@@ -1156,16 +1169,35 @@ export function AdminOperationalAssets({
           {!events.length ? (
             <p className="text-sm text-muted-foreground">{loading ? "Loading…" : "No events loaded."}</p>
           ) : (
-            <div className="max-h-[480px] space-y-1 overflow-y-auto text-xs">
-              {events.slice(0, 200).map((ev) => (
-                <div key={String(ev.id)} className="flex flex-wrap items-baseline gap-2 rounded border border-border/60 px-2 py-1">
-                  <span className="text-muted-foreground">{String(ev.created_at ?? "")}</span>
-                  <span className="font-mono">{String(ev.user_id ?? "").slice(0, 8)}…</span>
-                  <span className="font-semibold">{String(ev.event_type ?? "")}</span>
-                  <span>{String(ev.status ?? "")}</span>
-                  <span className="font-mono">${Number(ev.gross_amount ?? 0).toFixed(2)}</span>
-                </div>
-              ))}
+            <div className="max-h-[480px] space-y-2 overflow-y-auto text-xs">
+              {events.slice(0, 200).map((ev) => {
+                const trace = ledgerOperationalTraceLines({
+                  metadata: ev.metadata,
+                  balance_source: (ev as { balance_source?: string | null }).balance_source,
+                  balance_destination: (ev as { balance_destination?: string | null }).balance_destination,
+                })
+                return (
+                  <div
+                    key={String(ev.id)}
+                    className="rounded border border-border/60 bg-muted/20 px-2 py-1.5 font-mono text-[10px]"
+                  >
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-muted-foreground">{String(ev.created_at ?? "").slice(0, 19)}</span>
+                      <span>{String(ev.user_id ?? "").slice(0, 8)}…</span>
+                      <span className="font-semibold text-foreground">{String(ev.event_type ?? "")}</span>
+                      <span>{String(ev.status ?? "")}</span>
+                      <span>${Number(ev.gross_amount ?? 0).toFixed(2)}</span>
+                    </div>
+                    {trace.length ? (
+                      <ul className="mt-1 space-y-0.5 border-t border-border/40 pt-1 text-[9px] text-muted-foreground">
+                        {trace.map((line, i) => (
+                          <li key={`${String(ev.id)}-t-${i}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
           )}
         </Card>
@@ -1529,13 +1561,27 @@ export function AdminOperationalAssets({
                       User ledger snapshot (recent events for this account)
                       {ledgerLoading ? <Loader2 className="ml-2 inline h-3 w-3 animate-spin" /> : null}
                     </p>
-                    <ul className="max-h-36 space-y-1 overflow-y-auto rounded border border-border bg-background p-2 font-mono text-[10px]">
-                      {ledgerPreview.slice(0, 20).map((ev) => (
-                        <li key={String(ev.id)} className="truncate">
-                          {String(ev.created_at ?? "").slice(0, 19)} · {String(ev.event_type ?? "")} · $
-                          {Number(ev.gross_amount ?? 0).toFixed(0)}
-                        </li>
-                      ))}
+                    <ul className="max-h-48 space-y-2 overflow-y-auto rounded border border-border bg-background p-2 font-mono text-[10px]">
+                      {ledgerPreview.slice(0, 20).map((ev) => {
+                        const trace = ledgerOperationalTraceLines({
+                          metadata: ev.metadata,
+                          balance_source: (ev as { balance_source?: string | null }).balance_source,
+                          balance_destination: (ev as { balance_destination?: string | null }).balance_destination,
+                        })
+                        return (
+                          <li key={String(ev.id)} className="rounded border border-border/50 px-1.5 py-1">
+                            <span className="block truncate">
+                              {String(ev.created_at ?? "").slice(0, 19)} · {String(ev.event_type ?? "")} · $
+                              {Number(ev.gross_amount ?? 0).toFixed(0)}
+                            </span>
+                            {trace.length ? (
+                              <span className="mt-0.5 block whitespace-normal text-[9px] leading-snug text-muted-foreground">
+                                {trace.join(" · ")}
+                              </span>
+                            ) : null}
+                          </li>
+                        )
+                      })}
                     </ul>
                     <p className="text-muted-foreground">
                       Account notification log (includes items the user dismissed from their inbox)
@@ -1638,14 +1684,70 @@ export function AdminOperationalAssets({
                       reviewRow.status === "appealed" ||
                       reviewRow.status === "escalated" ? (
                       <>
-                        <button
-                          type="button"
-                          disabled={!!actionBusy}
-                          onClick={() => void executeFundingAction("approve")}
-                          className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                        >
-                          {actionBusy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
-                        </button>
+                        {reviewRow.kind === "user_add_funds" &&
+                        String(reviewRow.fund_channel ?? "") === "local_mobile" ? (
+                          <div className="flex w-full flex-col gap-3">
+                            <p className="text-[11px] font-medium text-amber-950 dark:text-amber-100">
+                              Two explicit rails — there is <strong>no automatic fallback</strong>. Pick the liquidity that
+                              actually funds this credit.
+                            </p>
+                            <button
+                              type="button"
+                              disabled={!!actionBusy}
+                              onClick={() =>
+                                void executeFundingAction("approve", { approvalMode: "retailer_retail_balance" })
+                              }
+                              className="flex w-full flex-col items-start gap-1 rounded-xl border-2 border-amber-600 bg-amber-500/15 px-4 py-3 text-left shadow-sm transition hover:bg-amber-500/25 disabled:opacity-50 dark:border-amber-500 dark:bg-amber-950/40"
+                            >
+                              <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-amber-950 dark:text-amber-50">
+                                <Building2 className="h-4 w-4 shrink-0" />
+                                Approve via retailer liquidity
+                              </span>
+                              <span className="text-[11px] font-normal text-muted-foreground">
+                                Debits the desk&apos;s <strong>Retail Balance</strong>. Company treasury is not used.
+                              </span>
+                              <span className="font-mono text-[10px] text-amber-900/90 dark:text-amber-200/90">
+                                {actionBusy === "approve:retailer_retail_balance" ? (
+                                  <Loader2 className="inline h-3 w-3 animate-spin" />
+                                ) : (
+                                  "RETAIL_BALANCE → customer Nexus Main"
+                                )}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!actionBusy}
+                              onClick={() => void executeFundingAction("approve", { approvalMode: "treasury_pool" })}
+                              className="flex w-full flex-col items-start gap-1 rounded-xl border-2 border-sky-700 bg-sky-500/10 px-4 py-3 text-left shadow-sm transition hover:bg-sky-500/20 disabled:opacity-50 dark:border-sky-500 dark:bg-sky-950/35"
+                            >
+                              <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-sky-950 dark:text-sky-50">
+                                <Landmark className="h-4 w-4 shrink-0" />
+                                Approve via company treasury
+                              </span>
+                              <span className="flex items-start gap-1.5 text-[11px] font-normal text-muted-foreground">
+                                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                                Debits <strong>MAIN_TREASURY</strong> — intentional company funding. Retailer float stays
+                                untouched.
+                              </span>
+                              <span className="font-mono text-[10px] text-sky-900/90 dark:text-sky-200/90">
+                                {actionBusy === "approve:treasury_pool" ? (
+                                  <Loader2 className="inline h-3 w-3 animate-spin" />
+                                ) : (
+                                  "MAIN_TREASURY → customer Nexus Main"
+                                )}
+                              </span>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!!actionBusy}
+                            onClick={() => void executeFundingAction("approve")}
+                            className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                          >
+                            {actionBusy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={!!actionBusy}

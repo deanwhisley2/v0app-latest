@@ -35,6 +35,7 @@ import {
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
+import { ledgerOperationalTraceLines } from "@/lib/formatting/ledger-operational-trace"
 import {
   convertFromUsd,
   corridorFiatForCountryIso2,
@@ -113,6 +114,9 @@ type ContainerBalanceEvent = {
   transaction_ref?: string
   status?: string
   summary?: string
+  balance_source?: string | null
+  balance_destination?: string | null
+  metadata?: Record<string, unknown> | null
   created_at: string
 }
 
@@ -1967,11 +1971,23 @@ export default function DashboardPage() {
             >
               {isContainerFlowBusy ? "Processing..." : "Transfer To Main Account"}
             </button>
-            <div className="mt-2 max-h-16 space-y-1 overflow-y-auto rounded bg-background/50 p-1.5">
-              {(containerEvents.length ? containerEvents : []).slice(0, 2).map((event) => (
-                <p key={event.id} className="text-[10px] text-muted-foreground">
-                  {event.summary || event.event_type} • {formatUserMoney(Number(event.net_amount ?? 0))}
-                </p>
+            <div className="mt-2 max-h-36 space-y-2 overflow-y-auto rounded bg-background/50 p-1.5">
+              {(containerEvents.length ? containerEvents : []).slice(0, 8).map((event) => (
+                <div key={event.id} className="border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                  <p className="text-[10px] text-muted-foreground">
+                    <span className="font-mono">{String(event.created_at ?? "").slice(0, 16)}</span> ·{" "}
+                    {event.summary || event.event_type} · {formatUserMoney(Number(event.net_amount ?? 0))}
+                  </p>
+                  {ledgerOperationalTraceLines({
+                    metadata: event.metadata ?? undefined,
+                    balance_source: event.balance_source,
+                    balance_destination: event.balance_destination,
+                  }).map((line, li) => (
+                    <p key={`${event.id}-tr-${li}`} className="pl-1 text-[9px] leading-snug text-muted-foreground/90">
+                      {line}
+                    </p>
+                  ))}
+                </div>
               ))}
             </div>
           </div>
