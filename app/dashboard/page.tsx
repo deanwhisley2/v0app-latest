@@ -2255,11 +2255,16 @@ export default function DashboardPage() {
 
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:items-center sm:p-4 sm:pb-4">
-          <div className="flex h-[min(90svh,680px)] max-h-[calc(100svh-1rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] min-h-0 w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-[min(92dvh,700px)] sm:max-h-[min(94dvh,720px)] sm:rounded-2xl sm:p-5">
+        <div
+          className="fixed inset-0 z-[100] flex flex-col bg-black/70 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fund-modal-title"
+        >
+          <div className="flex min-h-0 w-full max-w-md flex-1 flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[min(92dvh,700px)] sm:flex-none sm:rounded-2xl sm:p-5">
             {/* Modal Header */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 pb-2 pt-3 sm:px-0 sm:pb-3 sm:pt-0">
-              <h2 className="text-lg font-bold sm:text-xl">
+              <h2 id="fund-modal-title" className="text-lg font-bold sm:text-xl">
                 {showFundModal === "add" ? "Add Funds" : "Withdraw Funds"}
               </h2>
               <button
@@ -2280,7 +2285,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 scroll-pb-28 overflow-y-auto overscroll-contain px-4 pb-2 sm:px-0 [-webkit-overflow-scrolling:touch]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-28 px-4 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] sm:px-0 sm:pb-2">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
@@ -2472,7 +2477,7 @@ export default function DashboardPage() {
                           Pre-screened: same country, matching network, verified account, active status, and spendable liquidity ≥
                           your request.
                         </p>
-                        <div className="grid max-h-[min(34svh,240px)] min-h-0 gap-2 overflow-y-auto sm:max-h-[min(50vh,320px)] sm:grid-cols-2">
+                        <div className="grid max-sm:grid-cols-1 max-sm:gap-2 sm:max-h-[min(50vh,320px)] sm:grid-cols-2 sm:gap-2 sm:overflow-y-auto">
                           {qualifiedRetailers.map((r) => {
                             const active = selectedRetailerId === r.id && !selectedOfficialRouteId
                             const nums = (r.payment_numbers ?? [])
@@ -2918,14 +2923,14 @@ export default function DashboardPage() {
             customerRetailFunding &&
             l1FundSource === "local" &&
             localMmWizardStep === 1 ? (
-              <div className="shrink-0 border-t border-border/70 bg-card px-4 py-2.5 text-center sm:px-0">
+              <div className="shrink-0 border-t border-border/70 bg-card px-4 py-2.5 text-center max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:border-border max-sm:px-3 max-sm:py-2 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px),16px)] max-sm:shadow-[0_-8px_28px_rgba(0,0,0,0.28)] sm:relative sm:px-0">
                 <p className="text-[10px] text-muted-foreground">
-                  Next: tap <span className="font-semibold text-foreground">Continue · find retailers</span> above — nothing to
-                  confirm here yet.
+                  Next: tap <span className="font-semibold text-foreground">Continue · find retailers</span> in the form
+                  above — nothing to confirm here yet.
                 </p>
               </div>
             ) : (
-            <div className="relative z-20 shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] pt-2.5 shadow-[0_-8px_32px_rgba(0,0,0,0.18)] sm:px-0 sm:pb-3 sm:pt-3">
+            <div className="shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] pt-2.5 shadow-[0_-8px_32px_rgba(0,0,0,0.18)] max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:bg-card max-sm:px-3 max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom,0px),28px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:z-20 sm:rounded-none sm:px-0 sm:pb-3 sm:pt-3">
             {(showFundModal === "withdraw" ||
               retailerCreditDesk ||
               (customerRetailFunding && l1FundSource !== "local")) && (
@@ -2976,8 +2981,8 @@ export default function DashboardPage() {
               l1FundSource === "local" &&
               localMmWizardStep === 2 ? (
                 <p className="text-[10px] text-muted-foreground">
-                  {!localMmSelectedDesk
-                    ? "Select a desk above."
+                  {!localMmSelectedDesk && !selectedOfficialRouteId
+                    ? "Select a qualified desk or the official company line above."
                     : !fundTxReference.trim()
                       ? "Enter your transaction ID / reference from the receipt."
                       : !fundPayerName.trim() || !fundPayerPhone.trim()
@@ -2986,7 +2991,7 @@ export default function DashboardPage() {
                           ? "Country and network must be set (use Edit details if needed)."
                           : !(parseFloat(fundAmount) > 0)
                             ? "Funding amount is missing — use Edit details."
-                            : "Ready — confirm to notify the retailer."}
+                            : "Ready — tap Confirm Payment to notify the desk."}
                 </p>
               ) : null}
               <button
@@ -3002,7 +3007,7 @@ export default function DashboardPage() {
                     customerRetailFunding &&
                     l1FundSource === "local" &&
                     (localMmWizardStep !== 2 ||
-                      !localMmSelectedDesk ||
+                      (!localMmSelectedDesk && !selectedOfficialRouteId) ||
                       !fundTxReference.trim() ||
                       !fundPayerName.trim() ||
                       !fundPayerPhone.trim() ||
@@ -3027,7 +3032,7 @@ export default function DashboardPage() {
                     ? `Withdraw · ${formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale)}`
                     : "Withdraw"
                 ) : customerRetailFunding && l1FundSource === "local" ? (
-                  "Confirm payment sent"
+                  "Confirm Payment"
                 ) : customerRetailFunding ? (
                   "Choose Local path to confirm"
                 ) : (
