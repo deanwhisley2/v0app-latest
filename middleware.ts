@@ -10,7 +10,7 @@ const SINGLE_SB_COOKIE_MAX_CHARS = 8000
 const RETAILER_FORBIDDEN_TRADING_PATHS = ["/trading-workspace", "/war-room", "/analysis", "/race-conditions", "/api-settings"]
 const RETAILER_ONLY_PATHS = ["/retailer/dashboard", "/retailer/approvals", "/retailer/history"]
 const ADMIN_ONLY_PATHS = ["/admin/treasury", "/admin/users", "/admin/retailers"]
-const TRADING_API_PATHS = ["/api/user/fixed-trade", "/api/user/copy-trade", "/api/trades/record"]
+const TRADING_API_PATHS = ["/api/user/fixed-trade", "/api/user/copy-trade", "/api/user/trade-sessions", "/api/trades/record"]
 
 function matchesAnyPath(pathname: string, allowedPrefixes: string[]): boolean {
   return allowedPrefixes.some((p) => pathname.startsWith(p))

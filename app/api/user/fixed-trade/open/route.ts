@@ -6,6 +6,8 @@ import { traderEligibleForFixedTrade } from "@/lib/fix-trade-access"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
 import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees, roundUsd2 } from "@/lib/nexus-financial-policy"
 import { casOpenFixedTradeDebit } from "@/lib/server/nexus-main-enforcement"
+import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
+import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -95,6 +97,8 @@ export async function POST(request: Request) {
       body.seedKey?.trim() ||
       `${user.id}-${body.traderPersonaId ?? "desk"}-${principalUsd}-${fixPeriodMonths}-${Date.now()}`
 
+    const display = displayCoinForFixedSession(seedKey)
+
     const { data: sessionRow, error: sErr } = await admin
       .from("fixed_trade_sessions")
       .insert({
@@ -106,13 +110,21 @@ export async function POST(request: Request) {
         status: "active",
         trader_persona_id: body.traderPersonaId ?? null,
         seed_key: seedKey,
+        metadata: {
+          v: 1,
+          coin_symbol: display.coinSymbol,
+          fixed_price_usd: display.fixedPriceUsd,
+        },
       })
-      .select("id,created_at")
+      .select("id,created_at,seed_key")
       .single()
 
     if (sErr) throw new Error(sErr.message)
 
     const sessionId = sessionRow?.id as string
+    const createdAtIso = sessionRow?.created_at as string
+    const resolvedSeed = (sessionRow?.seed_key as string | null)?.trim() || seedKey
+    const leaseEnd = officialLeaseEndDate(createdAtIso, fixPeriodMonths)
 
     await recordFinancialEvent({
       userId: user.id,
@@ -153,7 +165,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       sessionId,
-      seedKey,
+      seedKey: resolvedSeed,
+      createdAt: createdAtIso,
+      leaseEndAt: leaseEnd.toISOString(),
+      coinSymbol: display.coinSymbol,
+      fixedPriceUsd: display.fixedPriceUsd,
       fees: {
         insuranceFeeUsd: roundUsd2(insuranceFeeUsd),
         declaredWithdrawalFeeRate: fees.withdrawalFeeRate,

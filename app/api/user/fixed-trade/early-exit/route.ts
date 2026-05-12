@@ -5,15 +5,10 @@ import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { buildContainerDailySchedule, scheduledEarnedUsd } from "@/lib/container-earnings-schedule"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { computeEarlyExitSettlementUsd } from "@/lib/nexus-financial-policy"
+import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
-}
-
-function officialLeaseEnd(createdAt: string, fixPeriodMonths: number): Date {
-  const d = new Date(createdAt)
-  d.setMonth(d.getMonth() + fixPeriodMonths)
-  return d
 }
 
 export async function POST(request: Request) {
@@ -46,7 +41,7 @@ export async function POST(request: Request) {
     const openingInsuranceUsd = round2(Number(session.insurance_fee_amount ?? 0))
     const months = Number(session.fix_period_months) as FixPeriodMonths
     const createdAt = session.created_at as string
-    const leaseEnd = officialLeaseEnd(createdAt, months)
+    const leaseEnd = officialLeaseEndDate(createdAt, months)
     const now = new Date()
 
     if (now.getTime() >= leaseEnd.getTime()) {

@@ -54,6 +54,7 @@ export async function POST(request: Request) {
         trader_persona_id: traderPersonaId,
         stake_amount: roundUsd2(stakeUsd),
         status: "active",
+        metadata: { v: 1, ui: { autoAdjust: false } },
       })
       .select("id,created_at")
       .single()
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       sessionId: sessionRow?.id as string,
+      createdAt: sessionRow?.created_at as string,
       balances: { available_balance: reserved.available_balance },
     })
   } catch (e) {

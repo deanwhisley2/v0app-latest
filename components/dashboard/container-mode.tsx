@@ -410,6 +410,120 @@ export function ContainerMode({
 
   const copyAutoExitDoneRef = useRef<Set<string>>(new Set())
 
+  // Server-authoritative recovery: active copy/fixed sessions after login, refresh, device change, or runtime restart.
+  useEffect(() => {
+    let cancelled = false
+
+    const hydrate = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          if (!cancelled) {
+            setActiveCopyTrades([])
+            setActiveFixTrades([])
+          }
+          return
+        }
+        const res = await fetch("/api/user/trade-sessions/active", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          copySessions?: Array<{
+            kind: "copy"
+            sessionId: string
+            traderPersonaId: string
+            stakeUsd: number
+            createdAt: string
+            autoAdjust: boolean
+          }>
+          fixedSessions?: Array<{
+            kind: "fixed"
+            sessionId: string
+            traderPersonaId: string | null
+            principalUsd: number
+            fixPeriodMonths: FixPeriod
+            seedKey: string
+            createdAt: string
+            leaseEndAt: string
+            coinSymbol: string
+            fixedPriceUsd: number
+            earnedUsd: number
+            totalWithdrawnUsd: number
+            lastWithdrawalAt: string | null
+            withdrawablePercent: number
+          }>
+        }
+        if (cancelled || !res.ok || !out.ok) return
+
+        const copyList = out.copySessions ?? []
+        const fixList = out.fixedSessions ?? []
+
+        const copy: ActiveCopyTrade[] = copyList.map((row) => {
+          const startMs = new Date(row.createdAt).getTime()
+          return {
+            traderId: row.traderPersonaId,
+            amount: row.stakeUsd,
+            startTime: new Date(row.createdAt),
+            minEndTime: new Date(startMs + COPY_TRADE_CYCLE_MS),
+            earned: 0,
+            isTrading: true,
+            autoAdjust: row.autoAdjust,
+            drawdownPct: 0,
+            recoveryHold: false,
+            copySessionId: row.sessionId,
+          }
+        })
+
+        const fix: ActiveFixTrade[] = fixList.map((row) => ({
+          traderId: row.traderPersonaId ?? "desk-unknown",
+          amount: row.principalUsd,
+          period: row.fixPeriodMonths,
+          startTime: new Date(row.createdAt),
+          endTime: new Date(row.leaseEndAt),
+          earned: row.earnedUsd,
+          isLocked: true,
+          canWithdrawEarnings: row.fixPeriodMonths >= 3,
+          lastWithdrawalDate: row.lastWithdrawalAt ? new Date(row.lastWithdrawalAt) : null,
+          totalWithdrawn: row.totalWithdrawnUsd,
+          withdrawablePercent: row.withdrawablePercent,
+          dailyWithdrawUsed: 0,
+          coinSymbol: row.coinSymbol,
+          fixedPrice: row.fixedPriceUsd,
+          dailySchedule: buildContainerDailySchedule(row.principalUsd, row.fixPeriodMonths as FixPeriodMonths, row.seedKey),
+          serverSessionId: row.sessionId,
+        }))
+
+        setActiveCopyTrades(copy)
+        setActiveFixTrades(fix)
+        copyAutoExitDoneRef.current = new Set()
+      } catch {
+        /* ignore */
+      }
+    }
+
+    void hydrate()
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (cancelled) return
+      if (sess?.access_token) void hydrate()
+      else {
+        setActiveCopyTrades([])
+        setActiveFixTrades([])
+      }
+    })
+
+    return () => {
+      cancelled = true
+      sub.subscription.unsubscribe()
+    }
+  }, [])
+
   const [joinNotifMessage, setJoinNotifMessage] = useState("")
   const [showJoinNotif, setShowJoinNotif] = useState(false)
 
@@ -581,17 +695,19 @@ export function ContainerMode({
         const out = (await res.json().catch(() => ({}))) as {
           error?: string
           sessionId?: string
+          createdAt?: string
         }
         if (!res.ok) {
           alert(out.error || "Could not reserve copy-trade stake from Nexus Main.")
           return
         }
 
+        const startMs = out.createdAt ? new Date(out.createdAt).getTime() : Date.now()
         const newTrade: ActiveCopyTrade = {
           traderId: trader.id,
           amount,
-          startTime: new Date(),
-          minEndTime: new Date(Date.now() + COPY_TRADE_CYCLE_MS),
+          startTime: new Date(startMs),
+          minEndTime: new Date(startMs + COPY_TRADE_CYCLE_MS),
           earned: 0,
           isTrading: true,
           autoAdjust: false,
@@ -618,19 +734,50 @@ export function ContainerMode({
   }
 
   const toggleCopyAutoAdjust = (traderId: string) => {
-    setActiveCopyTrades((prev) =>
-      prev.map((t) => {
-        if (t.traderId !== traderId) return t
-        const next = !t.autoAdjust
-        notifyCopy(
-          next ? "Auto-adjust enabled" : "Auto-adjust disabled",
-          next
-            ? "Desk may hold through drawdowns toward a modeled +5% exit (then withdrawal fee). Not insured."
-            : "You disabled recovery continuation toward the auto target."
-        )
-        return { ...t, autoAdjust: next }
-      })
-    )
+    void (async () => {
+      const target = activeCopyTrades.find((t) => t.traderId === traderId)
+      if (!target) return
+      const next = !target.autoAdjust
+
+      if (target.copySessionId) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+          const token = session?.access_token
+          if (!token) {
+            notifyCopy("Sign in required", "Sign in to sync copy-trade preferences to your account.")
+            return
+          }
+          const res = await fetch("/api/user/copy-trade/session-metadata", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ sessionId: target.copySessionId, autoAdjust: next }),
+          })
+          if (!res.ok) {
+            const j = (await res.json().catch(() => ({}))) as { error?: string }
+            notifyCopy("Could not sync", j.error || "Server rejected metadata update.")
+            return
+          }
+        } catch (e) {
+          notifyCopy("Could not sync", e instanceof Error ? e.message : "Network error.")
+          return
+        }
+      }
+
+      setActiveCopyTrades((prev) =>
+        prev.map((t) => {
+          if (t.traderId !== traderId) return t
+          notifyCopy(
+            next ? "Auto-adjust enabled" : "Auto-adjust disabled",
+            next
+              ? "Desk may hold through drawdowns toward a modeled +5% exit (then withdrawal fee). Not insured."
+              : "You disabled recovery continuation toward the auto target."
+          )
+          return { ...t, autoAdjust: next }
+        })
+      )
+    })()
   }
 
   const handleForcePullOutCopy = (traderId: string) => {
@@ -719,32 +866,40 @@ export function ContainerMode({
           error?: string
           sessionId?: string
           seedKey?: string
+          createdAt?: string
+          leaseEndAt?: string
+          coinSymbol?: string
+          fixedPriceUsd?: number
         }
         if (!res.ok) {
           alert(out.error || "Could not open fixed trade from Nexus Main.")
           return
         }
 
-        const endDate = new Date()
-        endDate.setMonth(endDate.getMonth() + fixPeriod)
-
         const withdrawPercent = fixPeriod === 1 ? 30 : fixPeriod === 3 ? 50 : 70
 
-        const coins = ["BTC", "ETH", "SOL", "AVAX", "BNB"]
-        const coinSymbol = coins[Math.floor(Math.random() * coins.length)]
-        const coinPrices: Record<string, number> = { BTC: 67500, ETH: 3450, SOL: 142, AVAX: 35, BNB: 580 }
-        const startTime = new Date()
-        const seed =
-          out.seedKey ?? `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
+        const startTime = out.createdAt ? new Date(out.createdAt) : new Date()
+        const endTime = out.leaseEndAt
+          ? new Date(out.leaseEndAt)
+          : (() => {
+              const e = new Date(startTime)
+              e.setMonth(e.getMonth() + fixPeriod)
+              return e
+            })()
+
+        const seed = out.seedKey ?? `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
         const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed)
+
+        const coinSymbol = out.coinSymbol ?? "BTC"
+        const fixedPrice = typeof out.fixedPriceUsd === "number" ? out.fixedPriceUsd : 67_500
 
         const newTrade: ActiveFixTrade = {
           traderId: trader.id,
           amount,
           period: fixPeriod,
           startTime,
-          endTime: endDate,
-          earned: 0,
+          endTime,
+          earned: scheduledEarnedUsd(dailySchedule, startTime, new Date()),
           isLocked: true,
           canWithdrawEarnings: fixPeriod >= 3,
           lastWithdrawalDate: null,
@@ -752,7 +907,7 @@ export function ContainerMode({
           withdrawablePercent: withdrawPercent,
           dailyWithdrawUsed: 0,
           coinSymbol,
-          fixedPrice: coinPrices[coinSymbol] || 1000,
+          fixedPrice,
           dailySchedule,
           serverSessionId: out.sessionId,
         }
