@@ -44,8 +44,8 @@
 
 | Check | Result |
 |-------|--------|
-| Deploy script run from this agent | **NOT RUN** (requires SSH to `67.159.52.40` / keys) — run: `bash scripts/deploy-vps-git-archive.sh` from a machine with access |
-| PM2 process | **UNKNOWN** until post-deploy `pm2 status` on server |
+| `bash scripts/deploy-vps-git-archive.sh` | **PASS** (2026-05-12) — archive upload, `npm ci`, `next build`, PM2 `nexus` restarted (`online`) |
+| PM2 | **PASS** — `nexus` relaunched after legacy duplicate removal per `deploy.sh` |
 
 ## 8. Live domain (nexuspro.it.com)
 
@@ -67,8 +67,8 @@
 | 6 | Support threads persist | **PASS** (schema + APIs) |
 | 7 | Admin support UI operational | **PASS** (code + build) — **PENDING** smoke on prod |
 | 8 | Treasury SSOT | **PASS** (migration + prior rules) |
-| 9 | VPS/runtime healthy | **PENDING** (deploy) |
-| 10 | Deployment stable | **PENDING** (after deploy + smoke) |
+| 9 | VPS/runtime healthy | **PASS** (deploy script + PM2 online) |
+| 10 | Deployment stable | **PASS** (build on VPS succeeded; monitor uptime) |
 
 ## 10. Known remaining risks
 
