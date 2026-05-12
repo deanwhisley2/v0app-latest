@@ -14,6 +14,8 @@ import {
   Users,
   XCircle,
 } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
+import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
 import { supabase } from "@/lib/supabaseClient"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -110,12 +112,24 @@ export function RetailerOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     void refresh()
   }, [isGuest, refresh])
 
-  /** Near-realtime queue refresh (server APIs; complements future Supabase Realtime when RLS allows). */
+  const { user: authUser } = useAuth()
+  useOperationalRealtime({
+    enabled: !isGuest && Boolean(authUser?.id) && Boolean(desk?.id),
+    role: "retailer_desk",
+    userId: authUser?.id ?? null,
+    retailerProfileId: desk?.id ?? null,
+    onRetailerFundRequests: refresh,
+    onSupportThreads: refresh,
+    onSupportMessages: refresh,
+    onAccountNotifications: refresh,
+  })
+
+  /** Fallback polling if Realtime disconnects (e.g. network tab sleep). */
   useEffect(() => {
     if (isGuest) return
     const id = window.setInterval(() => {
       void refresh()
-    }, 12_000)
+    }, 45_000)
     return () => window.clearInterval(id)
   }, [isGuest, refresh])
 
@@ -530,6 +544,7 @@ function deskRowKey(row: OperationsDeskApiRow): string {
 }
 
 export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
+  const { user: authUser } = useAuth()
   const [sub, setSub] = useState<"approval" | "users" | "history" | "support">("approval")
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
@@ -663,6 +678,25 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
       setLoading(false)
     }
   }, [])
+
+  const bumpAdminQueues = useCallback(() => {
+    void refreshApproval()
+    void refreshHistory()
+  }, [refreshApproval, refreshHistory])
+
+  useOperationalRealtime({
+    enabled: !isGuest && Boolean(authUser?.id),
+    role: "admin",
+    userId: authUser?.id ?? null,
+    onRetailerFundRequests: bumpAdminQueues,
+    onWithdrawals: bumpAdminQueues,
+    onTreasury: bumpAdminQueues,
+    onContainerEvents: bumpAdminQueues,
+    onRetailerApplications: bumpAdminQueues,
+    onSupportThreads: bumpAdminQueues,
+    onSupportMessages: bumpAdminQueues,
+    onAccountNotifications: bumpAdminQueues,
+  })
 
   const openReview = useCallback(async (row: OperationsDeskApiRow, ctx: "active" | "history") => {
     const h = await authHeaders()
@@ -808,7 +842,7 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     const id = window.setInterval(() => {
       void refreshApproval()
       if (sub === "history") void refreshHistory()
-    }, 12_000)
+    }, 45_000)
     return () => window.clearInterval(id)
   }, [isGuest, sub, refreshApproval, refreshHistory])
 

@@ -27,6 +27,10 @@ type AtomicBalanceResult =
   | { success: true; old_balance: number; new_balance: number; transaction_id: string }
   | { success: false; error: string; current_balance?: number }
 
+/**
+ * Treasury USD pools — **SSOT** is `public.treasury_balances` (see `update_treasury_usd` RPC).
+ * Do not read `admin_treasury_pool`; legacy rows were merged into MAIN_TREASURY via migration.
+ */
 class TreasuryAuthority {
   async getTreasuryBalance(walletType: "MAIN_TREASURY" | "OPERATIONAL" | "RESERVE" = "MAIN_TREASURY"): Promise<number> {
     const admin = createAdminClient()
