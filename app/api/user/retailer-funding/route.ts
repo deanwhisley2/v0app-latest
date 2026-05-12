@@ -13,6 +13,24 @@ import {
   normalizeCorridorNetworkToken,
 } from "@/lib/server/retailer-qualification"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
+import {
+  corridorFiatForCountryIso2,
+  isSupportedFiat,
+  localFiatUnitsToUsd,
+  USD_TO_FX,
+  type FiatCurrencyCode,
+} from "@/lib/currency-display"
+
+const CLIENT_USD_TOLERANCE = 0.05
+
+function clientUsdMatchesServerLedger(clientUsd: number, serverUsd: number): boolean {
+  return Math.abs(clientUsd - serverUsd) <= CLIENT_USD_TOLERANCE
+}
+
+function fxSnapshotLocalPerUsd(currency: string): number | null {
+  if (!isSupportedFiat(currency)) return null
+  return USD_TO_FX[currency as FiatCurrencyCode]
+}
 
 export async function GET(request: Request) {
   try {
@@ -25,7 +43,7 @@ export async function GET(request: Request) {
     const requestsRes = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,retailer_id,official_corridor_route_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
+        "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -73,6 +91,8 @@ export async function POST(request: Request) {
       retailerId?: string
       officialCorridorRouteId?: string
       amount?: number
+      amountInputLocal?: number
+      inputCurrency?: string
       txReference?: string
       note?: string
       mobileNetwork?: string
@@ -85,7 +105,7 @@ export async function POST(request: Request) {
     const officialCorridorRouteId =
       typeof body.officialCorridorRouteId === "string" ? body.officialCorridorRouteId.trim() : ""
     const txReference = typeof body.txReference === "string" ? body.txReference.trim() : ""
-    const amount = Number(body.amount ?? 0)
+    const clientLedgerUsd = Number(body.amount ?? 0)
     const note = typeof body.note === "string" ? body.note.trim() : null
     const mobileNetwork = typeof body.mobileNetwork === "string" ? body.mobileNetwork.trim().slice(0, 48) : null
     const payerDisplayName =
@@ -95,7 +115,7 @@ export async function POST(request: Request) {
     const countryUpdate =
       typeof body.fundingCountryCode === "string" ? body.fundingCountryCode.trim().toUpperCase().slice(0, 2) : ""
 
-    if (!txReference || !Number.isFinite(amount) || amount <= 0) {
+    if (!txReference || !Number.isFinite(clientLedgerUsd) || clientLedgerUsd <= 0) {
       return NextResponse.json({ error: "amount and txReference are required." }, { status: 400 })
     }
     if (fundChannel === "legacy_admin") {
@@ -135,6 +155,12 @@ export async function POST(request: Request) {
       await admin.from("profiles").update({ funding_country_code: countryUpdate }).eq("id", user.id)
     }
 
+    let amountUsdLocked = clientLedgerUsd
+    let amountInputLocalNum: number | null = null
+    let inputCurrencyStr: string | null = null
+    let fxRateSnapshotNum: number | null = null
+    const fxQuoteExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+
     let retailerResponseDeadlineAt: string | null = null
     let insertRetailerId: string | null = null
     let insertOfficialRouteId: string | null = null
@@ -150,6 +176,42 @@ export async function POST(request: Request) {
       if (userCountry.length !== 2) {
         return NextResponse.json(
           { error: "Save your 2-letter funding country before submitting a local funding request." },
+          { status: 400 },
+        )
+      }
+
+      const cc2 = userCountry.slice(0, 2)
+      const corridorFiat = corridorFiatForCountryIso2(cc2)
+      const explicitLocal = body.amountInputLocal
+      const explicitCur = typeof body.inputCurrency === "string" ? body.inputCurrency.trim().toUpperCase() : ""
+      const hasExplicitFx =
+        explicitLocal !== undefined &&
+        explicitLocal !== null &&
+        Number.isFinite(Number(explicitLocal)) &&
+        explicitCur.length > 0 &&
+        isSupportedFiat(explicitCur)
+
+      if (hasExplicitFx) {
+        amountInputLocalNum = Number(explicitLocal)
+        inputCurrencyStr = explicitCur
+        amountUsdLocked = localFiatUnitsToUsd(amountInputLocalNum, inputCurrencyStr)
+        fxRateSnapshotNum = fxSnapshotLocalPerUsd(inputCurrencyStr)
+      } else if (corridorFiat) {
+        inputCurrencyStr = corridorFiat
+        fxRateSnapshotNum = fxSnapshotLocalPerUsd(corridorFiat)
+        const rawLocal = explicitLocal !== undefined && explicitLocal !== null ? Number(explicitLocal) : NaN
+        if (Number.isFinite(rawLocal) && rawLocal > 0) {
+          amountInputLocalNum = rawLocal
+          amountUsdLocked = localFiatUnitsToUsd(rawLocal, corridorFiat)
+        }
+      }
+
+      if (!clientUsdMatchesServerLedger(clientLedgerUsd, amountUsdLocked)) {
+        return NextResponse.json(
+          {
+            error:
+              "Ledger USD does not match server FX conversion — refresh the page and re-enter your local funding amount.",
+          },
           { status: 400 },
         )
       }
@@ -186,7 +248,7 @@ export async function POST(request: Request) {
         const qual = await assertRetailDeskQualifiesForCorridor(admin, retailerId, {
           customerCountry: userCountry.slice(0, 2),
           mobileNetwork: mobileNetwork ?? "",
-          amountUsd: amount,
+          amountUsd: amountUsdLocked,
         })
         if (!qual.ok) {
           return NextResponse.json({ error: qual.message }, { status: 400 })
@@ -210,7 +272,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await assertNoDuplicatePendingUserFunding(admin, user.id, amount, fundChannel, mobileNetwork)
+      await assertNoDuplicatePendingUserFunding(admin, user.id, amountUsdLocked, fundChannel, mobileNetwork)
     } catch (err) {
       if (err instanceof DuplicatePendingError) {
         return NextResponse.json({ error: err.message, code: "DUPLICATE_PENDING" }, { status: 409 })
@@ -218,33 +280,90 @@ export async function POST(request: Request) {
       throw err
     }
 
-    const { data, error } = await admin
-      .from("retailer_fund_requests")
-      .insert({
-        user_id: user.id,
-        retailer_id: insertRetailerId,
-        official_corridor_route_id: insertOfficialRouteId,
-        amount,
-        tx_reference: txReference,
-        note,
-        status: "pending",
-        fund_channel: fundChannel,
-        mobile_network: mobileNetwork,
-        payer_display_name: payerDisplayName,
-        payer_phone: payerPhone,
-        retailer_response_deadline_at: retailerResponseDeadlineAt,
-        escalated_to_admin: Boolean(insertOfficialRouteId && fundChannel === "local_mobile"),
+    const fxLockedAtIso = new Date().toISOString()
+    const amountRoundedDisplay = Math.round(amountUsdLocked * 100) / 100
+
+    let data: Record<string, unknown>
+    if (fundChannel === "local_mobile" && insertRetailerId && !insertOfficialRouteId) {
+      const { data: rpcData, error: rpcErr } = await admin.rpc("create_retailer_desk_fund_request_with_reserve", {
+        p_user_id: user.id,
+        p_retailer_profile_id: insertRetailerId,
+        p_amount_usd_locked: amountUsdLocked,
+        p_amount_input_local: amountInputLocalNum,
+        p_input_currency: inputCurrencyStr ?? "",
+        p_fx_rate_snapshot: fxRateSnapshotNum,
+        p_tx_reference: txReference,
+        p_note: note ?? "",
+        p_fund_channel: "local_mobile",
+        p_mobile_network: mobileNetwork ?? "",
+        p_payer_display_name: payerDisplayName ?? "",
+        p_payer_phone: payerPhone ?? "",
+        p_retailer_response_deadline_at: retailerResponseDeadlineAt,
+        p_escalated_to_admin: false,
+        p_fx_quote_expires_at: fxQuoteExpiresAt,
       })
-      .select(
-        "id,retailer_id,official_corridor_route_id,amount,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at"
-      )
-      .single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      if (rpcErr) {
+        const msg = rpcErr.message ?? ""
+        if (msg.includes("INSUFFICIENT_RETAIL_LIQUIDITY_AFTER_RESERVATIONS")) {
+          return NextResponse.json(
+            {
+              error:
+                "Retailer liquidity was just reserved by another request — pick another desk or a smaller amount.",
+            },
+            { status: 409 },
+          )
+        }
+        return NextResponse.json({ error: rpcErr.message }, { status: 400 })
+      }
+      const payload = rpcData as { request_id?: string } | null
+      const newId = payload?.request_id
+      if (!newId) return NextResponse.json({ error: "Fund request creation failed." }, { status: 500 })
+      const { data: row, error: fetchErr } = await admin
+        .from("retailer_fund_requests")
+        .select(
+          "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at",
+        )
+        .eq("id", newId)
+        .single()
+      if (fetchErr || !row) return NextResponse.json({ error: fetchErr?.message ?? "Fetch failed" }, { status: 500 })
+      data = row as Record<string, unknown>
+    } else {
+      const { data: ins, error } = await admin
+        .from("retailer_fund_requests")
+        .insert({
+          user_id: user.id,
+          retailer_id: insertRetailerId,
+          official_corridor_route_id: insertOfficialRouteId,
+          amount: amountRoundedDisplay,
+          amount_usd_locked: amountUsdLocked,
+          amount_input_local: amountInputLocalNum,
+          input_currency: inputCurrencyStr,
+          fx_rate_snapshot: fxRateSnapshotNum,
+          fx_locked_at: fxLockedAtIso,
+          fx_quote_expires_at: fxQuoteExpiresAt,
+          tx_reference: txReference,
+          note,
+          status: "pending",
+          fund_channel: fundChannel,
+          mobile_network: mobileNetwork,
+          payer_display_name: payerDisplayName,
+          payer_phone: payerPhone,
+          retailer_response_deadline_at: retailerResponseDeadlineAt,
+          escalated_to_admin: Boolean(insertOfficialRouteId && fundChannel === "local_mobile"),
+        })
+        .select(
+          "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at",
+        )
+        .single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      data = ins as Record<string, unknown>
+    }
+
     await recordFinancialEvent({
       userId: user.id,
       eventType: "funding_request_created",
       category: "funding",
-      amount,
+      amount: amountUsdLocked,
       balanceSource: "external_funding",
       balanceDestination: "nexus_main_pending",
       status: "pending",
@@ -262,6 +381,8 @@ export async function POST(request: Request) {
         officialCorridorRouteId: insertOfficialRouteId,
         requestId: data.id,
         fundChannel,
+        amountUsdLocked,
+        inputCurrency: inputCurrencyStr,
       },
     })
     await notifyUserFundingDecision(admin, {

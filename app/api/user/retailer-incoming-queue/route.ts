@@ -3,7 +3,13 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { getUserRetailBalance, transferRetailCreditToCustomer } from "@/lib/server/retailer-funding-helpers"
+import {
+  finalizeRetailerLiquidityReservation,
+  getUserRetailBalance,
+  isFundingFxQuoteExpired,
+  settlementUsdFromFundRequestRow,
+  transferRetailCreditToCustomer,
+} from "@/lib/server/retailer-funding-helpers"
 
 export async function GET(request: Request) {
   try {
@@ -67,7 +73,9 @@ export async function PATCH(request: Request) {
 
     const { data: row, error: fetchErr } = await admin
       .from("retailer_fund_requests")
-      .select("id,user_id,retailer_id,amount,tx_reference,status,fund_channel")
+      .select(
+        "id,user_id,retailer_id,amount,amount_usd_locked,fx_quote_expires_at,tx_reference,status,fund_channel",
+      )
       .eq("id", requestId)
       .eq("retailer_id", desk.id)
       .maybeSingle()
@@ -87,7 +95,7 @@ export async function PATCH(request: Request) {
     }
 
     const now = new Date().toISOString()
-    const amt = Number(row.amount ?? 0)
+    const amt = settlementUsdFromFundRequestRow(row as { amount_usd_locked?: unknown; amount?: unknown })
 
     if (body.action === "review") {
       if (row.status === "under_review") {
@@ -102,6 +110,14 @@ export async function PATCH(request: Request) {
     }
 
     if (body.action === "reject") {
+      try {
+        await finalizeRetailerLiquidityReservation(admin, requestId, "released", "retailer_rejected")
+      } catch (relErr) {
+        return NextResponse.json(
+          { error: relErr instanceof Error ? relErr.message : "Could not release liquidity reservation." },
+          { status: 500 },
+        )
+      }
       const { error: up } = await admin
         .from("retailer_fund_requests")
         .update({
@@ -126,6 +142,13 @@ export async function PATCH(request: Request) {
         metadata: { retailerProfileId: desk.id, requestId },
       })
       return NextResponse.json({ ok: true })
+    }
+
+    if (isFundingFxQuoteExpired(row as { fx_quote_expires_at?: string | null })) {
+      return NextResponse.json(
+        { error: "This funding quote has expired — ask the customer to submit a new request." },
+        { status: 400 },
+      )
     }
 
     const bal = await getUserRetailBalance(admin, user.id)

@@ -3,19 +3,82 @@ import { tryCreditReferrerFirstDepositBonus } from "@/lib/server/referral-first-
 
 const TABLE_REQUESTS = "retailer_fund_requests"
 const TABLE_BALANCES = "user_balances"
+const TABLE_RESERVATIONS = "retailer_liquidity_reservations"
+
+/** Settlement basis: immutable locked USD after migration; falls back to legacy `amount`. */
+export function settlementUsdFromFundRequestRow(row: {
+  amount_usd_locked?: unknown
+  amount?: unknown
+}): number {
+  const locked = Number((row as { amount_usd_locked?: unknown }).amount_usd_locked ?? 0)
+  if (Number.isFinite(locked) && locked > 0) return locked
+  return Number(row.amount ?? 0)
+}
+
+/** True when fx_quote_expires_at is in the past (staleness policy). */
+export function isFundingFxQuoteExpired(row: { fx_quote_expires_at?: string | null }): boolean {
+  const raw = row.fx_quote_expires_at
+  if (!raw) return false
+  const t = new Date(raw).getTime()
+  return Number.isFinite(t) && Date.now() > t
+}
+
+export async function finalizeRetailerLiquidityReservation(
+  sb: SupabaseClient,
+  fundRequestId: string,
+  outcome: "released" | "consumed",
+  releaseReason?: string | null,
+): Promise<void> {
+  const { error } = await sb.rpc("finalize_retailer_liquidity_reservation", {
+    p_fund_request_id: fundRequestId,
+    p_outcome: outcome,
+    p_release_reason: releaseReason ?? null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Active local_mobile desk reservations (H1). */
+export async function sumActiveReservationsUsdForRetailer(
+  sb: SupabaseClient,
+  retailerProfileId: string,
+): Promise<number> {
+  const { data, error } = await sb
+    .from(TABLE_RESERVATIONS)
+    .select("amount_usd")
+    .eq("retailer_profile_id", retailerProfileId)
+    .eq("state", "active")
+
+  if (error) return 0
+  if (!data?.length) return 0
+  return data.reduce((s: number, r: { amount_usd?: string | number | null }) => s + Number(r.amount_usd ?? 0), 0)
+}
+
+/** Legacy basin-channel pending totals still tracked on requests (no row reservation). */
+export async function sumLegacyAdminPendingUsdForRetailer(
+  sb: SupabaseClient,
+  retailerProfileId: string,
+): Promise<number> {
+  const { data, error } = await sb
+    .from(TABLE_REQUESTS)
+    .select("amount_usd_locked")
+    .eq("retailer_id", retailerProfileId)
+    .eq("fund_channel", "legacy_admin")
+    .in("status", ["pending", "under_review", "appealed", "escalated"])
+
+  if (error) return 0
+  if (!data?.length) return 0
+  return data.reduce((s: number, r: { amount_usd_locked?: string | number | null }) => s + Number(r.amount_usd_locked ?? 0), 0)
+}
 
 export async function sumPendingIncomingForRetailer(
   sb: SupabaseClient,
   retailerProfileId: string,
 ): Promise<number> {
-  const { data } = await sb
-    .from(TABLE_REQUESTS)
-    .select("amount")
-    .eq("retailer_id", retailerProfileId)
-    .in("status", ["pending", "under_review", "appealed", "escalated"])
-
-  if (!data?.length) return 0
-  return data.reduce((s: number, r: { amount: string | number | null }) => s + Number(r.amount ?? 0), 0)
+  const [reserved, legacy] = await Promise.all([
+    sumActiveReservationsUsdForRetailer(sb, retailerProfileId),
+    sumLegacyAdminPendingUsdForRetailer(sb, retailerProfileId),
+  ])
+  return reserved + legacy
 }
 
 export async function getUserAvailableBalance(sb: SupabaseClient, userId: string): Promise<number> {
@@ -122,20 +185,22 @@ export async function countOpenInboundRequestsForRetailer(
   return count ?? 0
 }
 
-/** Retail operational float minus reserved pending inbound mobile-money totals. */
+/** Retail operational float minus active desk reservations and legacy admin-channel encumbrances. */
 export async function retailerSpendableLiquidity(
   sb: SupabaseClient,
   retailerUserId: string,
   retailerProfileId: string,
 ): Promise<{ balance: number; pendingInbound: number; spendable: number }> {
-  const [balance, pendingInbound] = await Promise.all([
+  const [balance, reserved, legacyPending] = await Promise.all([
     getUserRetailBalance(sb, retailerUserId),
-    sumPendingIncomingForRetailer(sb, retailerProfileId),
+    sumActiveReservationsUsdForRetailer(sb, retailerProfileId),
+    sumLegacyAdminPendingUsdForRetailer(sb, retailerProfileId),
   ])
+  const encumbered = reserved + legacyPending
   return {
     balance,
-    pendingInbound,
-    spendable: Math.max(0, balance - pendingInbound),
+    pendingInbound: encumbered,
+    spendable: Math.max(0, balance - encumbered),
   }
 }
 
@@ -223,6 +288,42 @@ export async function transferRetailCreditToCustomer(
 ): Promise<void> {
   const amt = opts.amount
   if (!(amt > 0) || Number.isNaN(amt)) throw new Error("Invalid transfer amount.")
+
+  if (opts.requestId) {
+    const { data: resData, error: resErr } = await sb.rpc("transfer_retail_balance_to_customer_with_reservation", {
+      p_retailer_user_id: opts.retailerUserId,
+      p_customer_user_id: opts.customerUserId,
+      p_amount: amt,
+      p_fund_request_id: opts.requestId,
+    })
+
+    if (!resErr && resData !== null && resData !== undefined) {
+      console.info("[transferRetailCreditToCustomer] rpc with reservation ok", { ...opts, resData })
+      await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
+      return
+    }
+
+    const resMsg = (resErr?.message ?? "").toUpperCase()
+    const reservationRpcMissing = resErr && rpcMissingError(resErr)
+    const noActiveReservation = resMsg.includes("ACTIVE_RESERVATION_MISSING")
+    if (
+      resErr &&
+      !reservationRpcMissing &&
+      !noActiveReservation
+    ) {
+      if (resMsg.includes("INSUFFICIENT_RETAIL_BALANCE")) {
+        throw new Error("Retail Balance insufficient for this approval.")
+      }
+      if (resMsg.includes("RETAILER_USER_BALANCES_MISSING")) {
+        throw new Error("Retailer balance row missing — cannot settle funding.")
+      }
+      if (resMsg.includes("RESERVATION_AMOUNT_MISMATCH")) {
+        throw new Error("Reservation does not match locked settlement amount.")
+      }
+      throw new Error(resErr.message ?? "Retail transfer failed")
+    }
+    /* Missing RPC or legacy row without reservation: fall through to plain transfer. */
+  }
 
   const { data: rpcData, error: rpcErr } = await sb.rpc("transfer_retail_balance_to_customer", {
     p_retailer_user_id: opts.retailerUserId,

@@ -1756,6 +1756,8 @@ export default function DashboardPage() {
                 ? { officialCorridorRouteId: selectedOfficialRouteId }
                 : { retailerId: localMmSelectedDesk!.id }),
               amount,
+              amountInputLocal: amountRaw,
+              inputCurrency: localFundingFiat,
               txReference: fundTxReference,
               note: fundNote,
               mobileNetwork: fundMobileNetwork || null,

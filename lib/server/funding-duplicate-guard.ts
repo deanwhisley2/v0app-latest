@@ -56,14 +56,20 @@ export async function assertNoDuplicatePendingUserFunding(
 
   const { data, error } = await sb
     .from("retailer_fund_requests")
-    .select("id,amount,fund_channel,mobile_network,status")
+    .select("id,amount,amount_usd_locked,fund_channel,mobile_network,status")
     .eq("user_id", userId)
     .in("status", ["pending", "under_review", "appealed"])
 
   if (error) throw new Error(error.message)
 
-  const dup = (data ?? []).some((row: { amount?: unknown; fund_channel?: string | null; mobile_network?: string | null }) => {
-    const amt = roundFundingAmount(Number(row.amount ?? 0))
+  const dup = (data ?? []).some((row: {
+    amount?: unknown
+    amount_usd_locked?: unknown
+    fund_channel?: string | null
+    mobile_network?: string | null
+  }) => {
+    const ledgerUsd = Number(row.amount_usd_locked ?? row.amount ?? 0)
+    const amt = roundFundingAmount(ledgerUsd)
     const ch = String(row.fund_channel ?? "local_mobile")
     const mob = String(row.mobile_network ?? "").trim()
     return amt === target && ch === channel && mob === netKey

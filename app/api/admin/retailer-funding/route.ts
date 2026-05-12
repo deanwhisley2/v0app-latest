@@ -9,7 +9,10 @@ import { creditCustomerMainFromTreasuryUsd } from "@/lib/server/l5-funding-settl
 import { notifyCustomerFundingOperational, notifyRetailerOverrideDebit } from "@/lib/server/l5-funding-notify"
 import {
   attachProfileEmailsToRetailers,
+  finalizeRetailerLiquidityReservation,
   getUserRetailBalance,
+  isFundingFxQuoteExpired,
+  settlementUsdFromFundRequestRow,
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
@@ -82,7 +85,9 @@ export async function PATCH(request: Request) {
 
     const { data: reqRow, error: reqErr } = await admin
       .from("retailer_fund_requests")
-      .select("id,user_id,retailer_id,official_corridor_route_id,amount,tx_reference,status,fund_channel,retailer_approved_at")
+      .select(
+        "id,user_id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,fx_quote_expires_at,tx_reference,status,fund_channel,retailer_approved_at",
+      )
       .eq("id", body.requestId)
       .maybeSingle()
     if (reqErr) return NextResponse.json({ error: reqErr.message }, { status: 500 })
@@ -122,7 +127,16 @@ export async function PATCH(request: Request) {
         ? body.overrideNote.trim().slice(0, 1200)
         : null
 
+      const settlementUsd = settlementUsdFromFundRequestRow(reqRow as { amount_usd_locked?: unknown; amount?: unknown })
+      const fxRow = reqRow as { fx_quote_expires_at?: string | null }
+
       if (body.action === "approve") {
+        if (isFundingFxQuoteExpired(fxRow)) {
+          return NextResponse.json(
+            { error: "This funding quote has expired under policy — reject or resolve so the customer can submit a fresh request." },
+            { status: 400 },
+          )
+        }
         if ((reqRow as { retailer_approved_at?: string }).retailer_approved_at) {
           return NextResponse.json({ error: "Already processed by retailer." }, { status: 400 })
         }
@@ -154,13 +168,12 @@ export async function PATCH(request: Request) {
 
         settledApprovalMode = approvalMode
 
-        const amount = Number((reqRow as { amount?: number }).amount ?? 0)
         const custId = (reqRow as { user_id: string }).user_id
 
         if (isOfficialOnly) {
           settledApprovalMode = "treasury_pool"
           const treasuryUsd = await treasury.getTreasuryBalance("MAIN_TREASURY")
-          if (treasuryUsd < amount) {
+          if (treasuryUsd < settlementUsd) {
             return NextResponse.json(
               {
                 error: `Insufficient company treasury liquidity (available $${treasuryUsd.toFixed(2)} USD-equivalent).`,
@@ -171,7 +184,7 @@ export async function PATCH(request: Request) {
           try {
             await creditCustomerMainFromTreasuryUsd(admin, {
               customerUserId: custId,
-              amountUsd: amount,
+              amountUsd: settlementUsd,
               referenceId: `fund_req:${body.requestId}`,
               adminUserId: user.id,
               reason: `L5 treasury settle official corridor funding ${body.requestId}`,
@@ -198,7 +211,7 @@ export async function PATCH(request: Request) {
 
           if (approvalMode === "retailer_retail_balance") {
             const retail = await getUserRetailBalance(admin, retailerUserId)
-            if (retail < amount) {
+            if (retail < settlementUsd) {
               return NextResponse.json(
                 { error: "Retailer Retail Balance is insufficient for this override approval." },
                 { status: 400 },
@@ -208,7 +221,7 @@ export async function PATCH(request: Request) {
               await transferRetailCreditToCustomer(admin, {
                 retailerUserId,
                 customerUserId: custId,
-                amount,
+                amount: settlementUsd,
                 requestId: body.requestId,
               })
             } catch (err) {
@@ -218,7 +231,7 @@ export async function PATCH(request: Request) {
             }
           } else {
             const treasuryUsd = await treasury.getTreasuryBalance("MAIN_TREASURY")
-            if (treasuryUsd < amount) {
+            if (treasuryUsd < settlementUsd) {
               return NextResponse.json(
                 {
                   error: `Insufficient company treasury liquidity (available $${treasuryUsd.toFixed(2)} USD-equivalent).`,
@@ -229,7 +242,7 @@ export async function PATCH(request: Request) {
             try {
               await creditCustomerMainFromTreasuryUsd(admin, {
                 customerUserId: custId,
-                amountUsd: amount,
+                amountUsd: settlementUsd,
                 referenceId: `fund_req:${body.requestId}`,
                 adminUserId: user.id,
                 reason: `L5 treasury-funded add-funds approval ${body.requestId}`,
@@ -240,7 +253,39 @@ export async function PATCH(request: Request) {
                 { status: 400 },
               )
             }
+            try {
+              await finalizeRetailerLiquidityReservation(
+                admin,
+                body.requestId!,
+                "released",
+                "l5_treasury_pool_settlement",
+              )
+            } catch (relErr) {
+              return NextResponse.json(
+                { error: relErr instanceof Error ? relErr.message : "Could not release retailer liquidity reservation." },
+                { status: 500 },
+              )
+            }
           }
+        }
+      }
+
+      if (
+        (body.action === "reject" || body.action === "resolve") &&
+        (reqRow as { retailer_id?: string | null }).retailer_id
+      ) {
+        try {
+          await finalizeRetailerLiquidityReservation(
+            admin,
+            body.requestId!,
+            "released",
+            body.action === "reject" ? "admin_rejected" : "admin_resolved",
+          )
+        } catch (relErr) {
+          return NextResponse.json(
+            { error: relErr instanceof Error ? relErr.message : "Could not release retailer liquidity reservation." },
+            { status: 500 },
+          )
         }
       }
 
@@ -284,6 +329,7 @@ export async function PATCH(request: Request) {
         id: string
         retailer_id: string
         amount?: number
+        amount_usd_locked?: number
         tx_reference?: string
       }
 
@@ -294,7 +340,7 @@ export async function PATCH(request: Request) {
           userId: custIdSafe(reqRow),
           eventType: `funding_request_admin_${nextStatus}`,
           category: "admin",
-          amount: Number(reqMeta.amount ?? 0),
+          amount: settlementUsdFromFundRequestRow(reqMeta),
           balanceSource: isTreasury ? "main_treasury_pool" : "retail_balance",
           balanceDestination: "nexus_main_available",
           status: "approved",
@@ -328,7 +374,7 @@ export async function PATCH(request: Request) {
           await notifyRetailerOverrideDebit(admin, {
             retailerUserId: retailerDeskUserId,
             requestId: body.requestId!,
-            amountUsd: Number(reqMeta.amount ?? 0),
+            amountUsd: settlementUsdFromFundRequestRow(reqMeta),
           })
         }
       } else {
