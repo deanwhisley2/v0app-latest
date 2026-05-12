@@ -142,4 +142,99 @@ Repo migration file: `supabase/migrations/20260521120000_l5_funding_settlement_m
 ### Known risks
 
 1. **Financial live tests (TEST 1–3)** were not executed with signed-in production accounts in this session — operator should run balance-before/after checks on retailer, customer, and `treasury_balances` (MAIN_TREASURY).
-2. **Operational mis-click**: mitigated by labeled rails; treasury button uses sky styling + warning copy.
+2. **Operational mis-click**: mitigated by labeled rails, warning copy, and a **browser confirm** on treasury approval (debiting MAIN_TREASURY).
+
+---
+
+## 14. Live financial verification loop (operator-run — institutional proof)
+
+**Rule:** Every production financial test records **before balances**, **action**, **after balances**, **ledger row(s)**, **notifications**, and **settlement mode** on the fund request. Paste evidence into the tables below when TEST 1–3 are complete.
+
+### TEST 1 — Retailer override rail (`retailer_retail_balance`)
+
+| Field | Evidence |
+|-------|----------|
+| Request ID | |
+| BEFORE — retailer `user_balances.retail_balance` | |
+| BEFORE — customer `user_balances.available_balance` | |
+| BEFORE — `treasury_balances.amount` where `wallet_type = MAIN_TREASURY` | |
+| ACTION | Admin → Approve **via retailer liquidity** |
+| AFTER — retailer retail_balance (must decrease by request amount) | |
+| AFTER — customer available (must increase by amount) | |
+| AFTER — MAIN_TREASURY (must match BEFORE) | |
+| Row `l5_settlement_mode` | Expected: `retailer_retail_balance` |
+| Ledger `metadata.approvalClassification` | Expected: `RETAILER_OVERRIDE_APPROVAL` |
+| Notifications | Customer inbox + retailer inbox (override debit) |
+| Result | **PASS / FAIL** |
+
+### TEST 2 — Treasury rail (`treasury_pool`)
+
+| Field | Evidence |
+|-------|----------|
+| Request ID | |
+| BEFORE — MAIN_TREASURY | |
+| BEFORE — retailer retail_balance | |
+| BEFORE — customer available | |
+| ACTION | Admin → Approve **via company treasury** (after confirm dialog) |
+| AFTER — MAIN_TREASURY (must decrease) | |
+| AFTER — retailer retail (must match BEFORE) | |
+| AFTER — customer available (must increase) | |
+| Ledger `metadata.approvalClassification` | Expected: `TREASURY_FUNDED_APPROVAL` |
+| Result | **PASS / FAIL** |
+
+### TEST 3 — Insufficient retailer liquidity (safety)
+
+| Field | Evidence |
+|-------|----------|
+| Setup | Retail `retail_balance` **&lt;** request amount |
+| ACTION | Approve **via retailer liquidity** |
+| HTTP status | Expected: **400** |
+| Retailer / customer / treasury balances | Expected: **unchanged** from BEFORE |
+| Result | **PASS / FAIL** |
+
+### PASS/FAIL matrix (production evidence — fill when complete)
+
+| # | Test | Production result |
+|---|------|-------------------|
+| 1 | Retailer rail — balances + treasury untouched | **TBD** |
+| 2 | Treasury rail — MAIN_TREASURY debit only | **TBD** |
+| 3 | Insufficient retail — hard fail, no mutations | **TBD** |
+
+### Ledger integrity checks (SQL — run in Supabase SQL editor or MCP)
+
+Duplicate / anomaly scans (adjust time window):
+
+```sql
+-- Recent L5 funding admin events for one user (replace :uid)
+select id, created_at, event_type, gross_amount, balance_source, balance_destination,
+       metadata->>'approvalClassification' as classification,
+       metadata->>'approvalMode' as mode,
+       transaction_ref
+from public.container_balance_events
+where user_id = ':uid'
+  and event_type like 'funding_request_admin_%'
+  and created_at > now() - interval '7 days'
+order by created_at desc;
+```
+
+```sql
+-- Duplicate-looking refs (same transaction_ref, multiple rows)
+select transaction_ref, count(*) as n
+from public.container_balance_events
+where created_at > now() - interval '30 days'
+  and transaction_ref is not null
+group by transaction_ref
+having count(*) > 1
+order by n desc;
+```
+
+```sql
+-- Fund requests: settlement mode vs approval flag consistency (recent)
+select id, status, l5_settlement_mode, approved_by_admin_for_retailer, amount, updated_at
+from public.retailer_fund_requests
+where l5_settlement_mode is not null
+  and updated_at > now() - interval '30 days'
+order by updated_at desc;
+```
+
+Treasury pool SSOT: compare **`treasury_balances`** (`MAIN_TREASURY`) before/after TEST 2; unified ledger lines (if used in your deployment) should align with `update_treasury_usd` audit expectations — reconcile any unexpected MAIN_TREASURY movement outside documented treasury approvals.

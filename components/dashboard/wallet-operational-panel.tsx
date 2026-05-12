@@ -1717,7 +1717,22 @@ export function AdminOperationalAssets({
                             <button
                               type="button"
                               disabled={!!actionBusy}
-                              onClick={() => void executeFundingAction("approve", { approvalMode: "treasury_pool" })}
+                              onClick={() => {
+                                const ok = window.confirm(
+                                  [
+                                    "WARNING: Company treasury settlement",
+                                    "",
+                                    "This operation DEBITS MAIN_TREASURY (company pool).",
+                                    "Retailer Retail Balance will NOT be used.",
+                                    "",
+                                    "Only continue if the company intentionally funds this credit.",
+                                    "",
+                                    "OK = proceed with treasury approval · Cancel = choose retailer rail or hold.",
+                                  ].join("\n"),
+                                )
+                                if (!ok) return
+                                void executeFundingAction("approve", { approvalMode: "treasury_pool" })
+                              }}
                               className="flex w-full flex-col items-start gap-1 rounded-xl border-2 border-sky-700 bg-sky-500/10 px-4 py-3 text-left shadow-sm transition hover:bg-sky-500/20 disabled:opacity-50 dark:border-sky-500 dark:bg-sky-950/35"
                             >
                               <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-sky-950 dark:text-sky-50">
