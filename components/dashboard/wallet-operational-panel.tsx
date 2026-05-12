@@ -110,6 +110,15 @@ export function RetailerOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     void refresh()
   }, [isGuest, refresh])
 
+  /** Near-realtime queue refresh (server APIs; complements future Supabase Realtime when RLS allows). */
+  useEffect(() => {
+    if (isGuest) return
+    const id = window.setInterval(() => {
+      void refresh()
+    }, 12_000)
+    return () => window.clearInterval(id)
+  }, [isGuest, refresh])
+
   const deskNumbersDisplay = useMemo(() => {
     const nums = desk?.payment_numbers ?? []
     if (!nums.length) return "(configure payment numbers in Settings / desk)"
@@ -793,6 +802,15 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     if (sub === "history") void refreshHistory()
     if (sub === "approval") void refreshApproval()
   }, [isGuest, sub, refreshHistory, refreshApproval])
+
+  useEffect(() => {
+    if (isGuest) return
+    const id = window.setInterval(() => {
+      void refreshApproval()
+      if (sub === "history") void refreshHistory()
+    }, 12_000)
+    return () => window.clearInterval(id)
+  }, [isGuest, sub, refreshApproval, refreshHistory])
 
   const runUserAction = async (userId: string, action: AdminUserRowActions) => {
     const h = await authHeaders()

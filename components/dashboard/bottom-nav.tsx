@@ -17,6 +17,8 @@ interface BottomNavProps {
   activeTab: string
   onTabChange: (tab: string) => void
   isGuestSession?: boolean
+  /** Liquidity admin / retailer desk — only Wallet + Settings. */
+  operationalWorkspace?: boolean
 }
 
 const navDefs = [
@@ -28,7 +30,12 @@ const navDefs = [
 
 type MiniMsg = { id: string; role: "user" | "assistant"; content: string }
 
-export function BottomNav({ activeTab, onTabChange, isGuestSession = false }: BottomNavProps) {
+export function BottomNav({
+  activeTab,
+  onTabChange,
+  isGuestSession = false,
+  operationalWorkspace = false,
+}: BottomNavProps) {
   const { t } = useUserPreferences()
   const [showJoelinPanel, setShowJoelinPanel] = useState(false)
   const [miniMessages, setMiniMessages] = useState<MiniMsg[]>(() => [
@@ -62,23 +69,27 @@ export function BottomNav({ activeTab, onTabChange, isGuestSession = false }: Bo
     }
   }, [miniInput, miniBusy, isGuestSession])
 
-  const navItems = useMemo(
-    () => navDefs.map((d) => ({ ...d, label: t(d.labelKey) })),
-    [t]
-  )
+  const navItems = useMemo(() => {
+    const defs = operationalWorkspace
+      ? navDefs.filter((d) => d.id === "wallet" || d.id === "settings")
+      : navDefs
+    return defs.map((d) => ({ ...d, label: t(d.labelKey) }))
+  }, [t, operationalWorkspace])
 
   return (
     <>
-      {/* Joelin floating entry */}
+      {/* Joelin floating entry — hidden for operational finance roles */}
+      {!operationalWorkspace && (
       <button
         onClick={() => setShowJoelinPanel(!showJoelinPanel)}
         className="fixed bottom-20 right-4 z-50 md:hidden flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-lg active:scale-95"
       >
         <Zap className="h-5 w-5 text-white" />
       </button>
+      )}
 
       {/* Joelin mini panel */}
-      {showJoelinPanel && (
+      {!operationalWorkspace && showJoelinPanel && (
         <div className="fixed bottom-36 right-4 z-50 w-72 rounded-2xl border border-border bg-card p-4 shadow-2xl md:hidden">
           <div className="flex items-center gap-2 mb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent">

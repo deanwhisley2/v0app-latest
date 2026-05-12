@@ -35,6 +35,8 @@ interface HeaderProps {
   currentUser?: { email: string; username: string; fullName: string; level: number }
   /** Level 2 retailer credit desk — combined with level for badge label. */
   retailerCreditDesk?: boolean
+  /** Level 5 or retailer credit desk — only Assets + Settings in primary nav. */
+  operationalWorkspace?: boolean
   /** Populated from GET /api/user/referral — share link + counts */
   referral?: { referralCode: string; referralLink: string; refereeCount: number } | null
   onLogout?: () => void | Promise<void>
@@ -48,6 +50,7 @@ export function Header({
   referral = null,
   onLogout,
   retailerCreditDesk = false,
+  operationalWorkspace = false,
 }: HeaderProps) {
   const { t } = useUserPreferences()
   const { unreadCount } = useNexusNotifications()
@@ -131,12 +134,18 @@ export function Header({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [showSearch])
   
-  const mainTabs = [
+  const mainTabsAll = [
     { id: "container", labelKey: "nav.container" },
     { id: "wallstreet", labelKey: "nav.wallstreet" },
     { id: "wallet", labelKey: "nav.wallet" },
     { id: "settings", labelKey: "nav.settings" },
   ] as const
+  const mainTabs = operationalWorkspace
+    ? ([
+        { id: "wallet", labelKey: "nav.wallet" },
+        { id: "settings", labelKey: "nav.settings" },
+      ] as const)
+    : mainTabsAll
 
   return (
     <>

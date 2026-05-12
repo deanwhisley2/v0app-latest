@@ -6,7 +6,8 @@ import { createServerClient } from "@supabase/ssr"
 const COOKIE_HEADER_WARN_BYTES = 24 * 1024
 /** Supabase chunks JWT across cookies; any single sb-* chunk over this is suspiciously large. */
 const SINGLE_SB_COOKIE_MAX_CHARS = 8000
-const USER_ONLY_PATHS = ["/dashboard", "/trading-workspace", "/war-room", "/analysis", "/race-conditions", "/api-settings"]
+/** Level-2 retailers must not use trading/exchange UIs; they are redirected to the main app (Assets/ops). */
+const RETAILER_FORBIDDEN_TRADING_PATHS = ["/trading-workspace", "/war-room", "/analysis", "/race-conditions", "/api-settings"]
 const RETAILER_ONLY_PATHS = ["/retailer/dashboard", "/retailer/approvals", "/retailer/history"]
 const ADMIN_ONLY_PATHS = ["/admin/treasury", "/admin/users", "/admin/retailers"]
 const TRADING_API_PATHS = ["/api/user/fixed-trade", "/api/user/copy-trade", "/api/trades/record"]
@@ -109,17 +110,14 @@ export async function middleware(request: NextRequest) {
       // Keep request flowing as USER on read failures.
     }
 
-    if (userRole === "RETAILER" && matchesAnyPath(pathname, USER_ONLY_PATHS)) {
-      return NextResponse.redirect(new URL("/retailer/dashboard", request.url))
+    if (userRole === "RETAILER" && matchesAnyPath(pathname, RETAILER_FORBIDDEN_TRADING_PATHS)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
     }
     if (userRole === "RETAILER" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
       return NextResponse.json(
         { error: "Retailer accounts are operational liquidity desks and cannot access trading APIs." },
         { status: 403, headers: { "Cache-Control": "no-store" } },
       )
-    }
-    if (userRole === "ADMIN" && pathname.startsWith("/dashboard")) {
-      return NextResponse.redirect(new URL("/admin/treasury", request.url))
     }
     if (userRole === "ADMIN" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
       return NextResponse.json(

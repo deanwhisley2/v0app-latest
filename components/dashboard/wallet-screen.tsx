@@ -43,6 +43,8 @@ interface WalletScreenProps {
   tradingUserLevel?: number
   retailerCreditDesk?: boolean
   isGuestSession?: boolean
+  /** Hide demo portfolio/earn; show only Assets operational panels (admin L5 / retailer desk). */
+  operationalMode?: boolean
 }
 
 type WalletTab = "portfolio" | "assets" | "earn"
@@ -54,6 +56,7 @@ export function WalletScreen({
   tradingUserLevel = 1,
   retailerCreditDesk = false,
   isGuestSession = false,
+  operationalMode = false,
 }: WalletScreenProps) {
   const [activeTab, setActiveTab] = useState<WalletTab>("portfolio")
   const [assetSubTab, setAssetSubTab] = useState<AssetSubTab>("send")
@@ -73,10 +76,10 @@ export function WalletScreen({
 
   /** Liquidity admins and retail desks: land on Assets (operational panels), not demo portfolio. */
   useEffect(() => {
-    if (tradingUserLevel === 5 || retailerCreditDesk) {
+    if (operationalMode || tradingUserLevel === 5 || retailerCreditDesk) {
       setActiveTab("assets")
     }
-  }, [tradingUserLevel, retailerCreditDesk])
+  }, [operationalMode, tradingUserLevel, retailerCreditDesk])
 
   // Generate holdings with random balances
   const holdings = useMemo(() => 
@@ -173,15 +176,18 @@ export function WalletScreen({
     { id: "wallet" as const, name: "Crypto Wallet", icon: Wallet, color: "#8B5CF6", description: "Network fees apply" },
   ]
 
-  const tabs: { id: WalletTab; label: string; icon: React.ElementType }[] = [
-    { id: "portfolio", label: "Portfolio", icon: PieChart },
-    { id: "assets", label: "Assets", icon: Wallet },
-    { id: "earn", label: "Earn", icon: Percent },
-  ]
+  const tabs: { id: WalletTab; label: string; icon: React.ElementType }[] = operationalMode
+    ? [{ id: "assets", label: "Assets", icon: Wallet }]
+    : [
+        { id: "portfolio", label: "Portfolio", icon: PieChart },
+        { id: "assets", label: "Assets", icon: Wallet },
+        { id: "earn", label: "Earn", icon: Percent },
+      ]
 
   return (
     <div className="space-y-4">
       {/* Tab Navigation */}
+      {!operationalMode && (
       <div className="flex gap-2 rounded-xl border border-border bg-card p-1.5">
         {tabs.map((tab) => (
           <button
@@ -198,9 +204,15 @@ export function WalletScreen({
           </button>
         ))}
       </div>
+      )}
+      {operationalMode && (
+        <p className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
+          Operational workspace — live queues and treasury controls below. Demo portfolio and earn products are hidden for your role.
+        </p>
+      )}
 
       {/* Portfolio Tab */}
-      {activeTab === "portfolio" && (
+      {activeTab === "portfolio" && !operationalMode && (
         <div className="space-y-4">
           {/* Portfolio Summary */}
           <Card className="border-border bg-card p-6">
@@ -810,7 +822,7 @@ export function WalletScreen({
       )}
 
       {/* Earn Tab */}
-      {activeTab === "earn" && (
+      {activeTab === "earn" && !operationalMode && (
         <div className="space-y-4">
           {/* Header */}
           <Card className="border-border bg-card p-6">

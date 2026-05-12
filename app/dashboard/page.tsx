@@ -133,6 +133,11 @@ export default function DashboardPage() {
   const { registerAppNavigator } = useNexusNotifications()
   const { user, isLoading: authLoading, signOut, isGuestSession } = useAuth()
   const op = useOperationalBootstrap()
+  /** Level-5 liquidity admin or designated Level-2 retailer credit desk — Assets-only operational workspace (no trading Wallstreet/Container). */
+  const operationalWorkspace = useMemo(() => {
+    const lvl = op.snapshot?.profile?.tradingUserLevel ?? 1
+    return lvl === 5 || (lvl === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller))
+  }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
   const activityUserId = user?.id ?? "guest"
   const { formatUserMoney, currency, locale } = useUserPreferences()
   const testimonialNotif = useDashboardTestimonialNotifs({
@@ -456,6 +461,10 @@ export default function DashboardPage() {
   // Authoritative Postgres workspace replaces tab-local snapshot when bootstrap delivers it.
   useEffect(() => {
     if (!user?.id || isGuestSession || op.isLoading || !activityHydratedRef.current) return
+    if (operationalWorkspace) {
+      setActiveTab("wallet")
+      return
+    }
     const raw = op.snapshot?.workspaceSnapshot
     if (!raw || typeof raw !== "object") return
     const ser = JSON.stringify(raw)
@@ -494,6 +503,7 @@ export default function DashboardPage() {
   }, [
     user?.id,
     isGuestSession,
+    operationalWorkspace,
     op.snapshot?.workspaceSnapshot,
     op.isLoading,
     activityUserId,
@@ -586,18 +596,18 @@ export default function DashboardPage() {
     return level === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller)
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
 
-  // Enforce hard UI isolation: Level-2 retailer desks must use retailer workspace only.
+  const opsWorkspaceBootedRef = useRef(false)
   useEffect(() => {
-    if (authLoading || !user || isGuestSession) return
-    if (retailerCreditDesk) {
-      router.replace("/retailer/dashboard")
-      return
+    opsWorkspaceBootedRef.current = false
+  }, [user?.id])
+  /** Land operational roles on Wallet → Assets (command center), not static /admin/treasury or /retailer/dashboard. */
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession || !operationalWorkspace) return
+    if (!opsWorkspaceBootedRef.current) {
+      opsWorkspaceBootedRef.current = true
+      setActiveTab("wallet")
     }
-    const lvl = op.snapshot?.profile?.tradingUserLevel ?? 1
-    if (lvl === 5) {
-      router.replace("/admin/treasury")
-    }
-  }, [authLoading, user, isGuestSession, retailerCreditDesk, router, op.snapshot?.profile?.tradingUserLevel])
+  }, [authLoading, user, isGuestSession, operationalWorkspace])
 
   const applyRetailerProfileFromApi = useCallback(
     (payload: {
@@ -1147,10 +1157,17 @@ export default function DashboardPage() {
     setSelectedCoinSymbol(symbol)
   }, [])
 
-  const handleHeaderTabChange = useCallback((tab: string) => {
-    setActiveTab(tab)
-    setSettingsRequestedView(null)
-  }, [])
+  const handleHeaderTabChange = useCallback(
+    (tab: string) => {
+      if (operationalWorkspace && (tab === "container" || tab === "wallstreet")) {
+        showToast("Trading and execution views are disabled for your operational role. Use Assets or Settings.", "error")
+        return
+      }
+      setActiveTab(tab)
+      setSettingsRequestedView(null)
+    },
+    [operationalWorkspace, showToast],
+  )
 
   const handleSettingsRequestConsumed = useCallback(() => {
     setSettingsRequestedView(null)
@@ -1754,9 +1771,10 @@ export default function DashboardPage() {
     )
   }
 
-  const sidebarPanel = (
-    <Sidebar coins={tradeCatalog.slice(0, 16)} portfolioTotal={mainBalance} portfolioChange={12.4} />
-  )
+  const sidebarPanel =
+    operationalWorkspace ? null : (
+      <Sidebar coins={tradeCatalog.slice(0, 16)} portfolioTotal={mainBalance} portfolioChange={12.4} />
+    )
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
@@ -1769,16 +1787,18 @@ export default function DashboardPage() {
         referral={referralInfo}
         onLogout={handleLogout}
         retailerCreditDesk={retailerCreditDesk}
+        operationalWorkspace={operationalWorkspace}
       />
 
-      <LiveMarketFeedBar
-        status={marketFeed.status}
-        updatedAt={marketFeed.updatedAt}
-        errorMessage={marketFeed.error}
-      />
+      {!operationalWorkspace && (
+        <LiveMarketFeedBar
+          status={marketFeed.status}
+          updatedAt={marketFeed.updatedAt}
+          errorMessage={marketFeed.error}
+        />
+      )}
 
-      {/* Ticker — live catalog when market feed is active */}
-      <Ticker coins={tickerCoins} />
+      {!operationalWorkspace && <Ticker coins={tickerCoins} />}
 
       {/* Main Balance Card */}
       <div className="mx-auto max-w-[1600px] px-4 pt-4">
@@ -1823,20 +1843,24 @@ export default function DashboardPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveTab("wallstreet")}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-              >
-                Wallstreet
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("container")}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-              >
-                Container
-              </button>
+              {!operationalWorkspace && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("wallstreet")}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                  >
+                    Wallstreet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("container")}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                  >
+                    Container
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => {
                   setShowFundModal("add")
@@ -2679,7 +2703,9 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-[1600px] px-4 pb-24 md:pb-4">
         {activeTab === "container" && (
           <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            {sidebarPanel ? (
+              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            ) : null}
             <main className="min-w-0 flex-1">
               <ContainerMode
                 userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
@@ -2692,7 +2718,9 @@ export default function DashboardPage() {
 
         {activeTab === "wallstreet" && (
           <div className="relative flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            {sidebarPanel ? (
+              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            ) : null}
             <main className="relative min-w-0 flex-1">
               <AIPanel
                 coins={tradeCatalog}
@@ -2740,13 +2768,16 @@ export default function DashboardPage() {
 
         {activeTab === "wallet" && (
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            {sidebarPanel ? (
+              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            ) : null}
             <main className="min-w-0 flex-1">
               <WalletScreen
                 coins={tradeCatalog.slice(0, 24)}
                 tradingUserLevel={currentUser?.level ?? 1}
                 retailerCreditDesk={retailerCreditDesk}
                 isGuestSession={isGuestSession}
+                operationalMode={operationalWorkspace}
               />
             </main>
           </div>
@@ -2754,7 +2785,9 @@ export default function DashboardPage() {
 
         {activeTab === "settings" && (
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            {sidebarPanel ? (
+              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            ) : null}
             <main className="min-w-0 flex-1">
               <SettingsScreen
                 onLogout={handleLogout}
@@ -2776,7 +2809,12 @@ export default function DashboardPage() {
       )}
 
       {/* Mobile Bottom Nav */}
-      <BottomNav activeTab={activeTab} onTabChange={handleHeaderTabChange} isGuestSession={isGuestSession} />
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={handleHeaderTabChange}
+        isGuestSession={isGuestSession}
+        operationalWorkspace={operationalWorkspace}
+      />
 
       {/* Toast */}
       <ToastNotification
@@ -2786,11 +2824,13 @@ export default function DashboardPage() {
         onClose={hideToast}
       />
 
-      <DashboardTestimonialStrip
-        visible={testimonialNotif.visible}
-        text={testimonialNotif.text}
-        onDismiss={testimonialNotif.dismiss}
-      />
+      {!operationalWorkspace && (
+        <DashboardTestimonialStrip
+          visible={testimonialNotif.visible}
+          text={testimonialNotif.text}
+          onDismiss={testimonialNotif.dismiss}
+        />
+      )}
     </div>
   )
 }
