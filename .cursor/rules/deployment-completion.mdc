@@ -11,7 +11,35 @@ When this repo is open and the agent (or contributor) has **normal access** to G
 
 If there are **no** Postgres changes, still run the **full app deploy** when the slice changes **runtime or UI** (Next.js routes, components, API handlers, env-dependent behavior). Docs-only or comment-only edits may skip VPS if agreed, but default is: **push + deploy** so `.deploy-revision` and the live bundle stay aligned with `main`.
 
-## Closure checklist (copy into slice report)
+## Bounded domains (never one mega-patch)
+
+Keep these in **separate** slices and PRs — they drive liabilities, treasury, fraud surface, and user trust:
+
+- Referral validity  
+- Earnings lifecycle (ledger-aware only)  
+- Settlement accounting  
+- Persistent trade continuity  
+- Copy-trade economics  
+- Level progression  
+- Treasury payout logic  
+
+Do not combine them with unrelated UI or refactors.
+
+## Mandatory slice report fields (every slice)
+
+1. **Exact scope** — inclusions and explicit exclusions.  
+2. **DB impact** — tables, RLS, RPC, migrations (or N/A).  
+3. **Runtime impact** — routes, jobs, env, PM2-relevant behavior.  
+4. **Treasury / liability impact** — who owes what; conservation risks.  
+5. **Rollback plan** — migration down / feature flag / redeploy prior SHA.  
+6. **PASS/FAIL tests** — automated, scripted, or documented manual checks.  
+7. **Production deployment** — commit on `main`, archive deploy, PM2 healthy.  
+8. **Production verification** — URLs, API checks, spot behavior on live domain.  
+9. **Operational report** — short narrative: what shipped, risks, follow-ups.
+
+Then attach the **closure checklist** below for deploy mechanics.
+
+## Closure checklist (deploy mechanics; copy into slice report)
 
 1. Migration check (new migration applied, or **explicit N/A**).
 2. `git commit` + `git push` to authoritative branch.
@@ -20,13 +48,13 @@ If there are **no** Postgres changes, still run the **full app deploy** when the
 5. `GET https://nexuspro.it.com/api/health` (or project URL) → 200 after brief warm-up if needed.
 6. Slice-specific production verification when relevant.
 7. Mobile / device QA if UI or touch targets changed; otherwise state **pending**.
-8. PASS/FAIL matrix, rollback (`DEPLOY_REF=<sha> bash scripts/deploy-vps-git-archive.sh`), remaining risks.
+8. PASS/FAIL matrix, rollback command (`DEPLOY_REF=<sha> bash scripts/deploy-vps-git-archive.sh`), remaining risks.
 
 ## Financial / persistence slices
 
 For work touching **balances, trades, payouts, referrals, treasury**, **settlement**, **recovery continuity**, or **new durability guarantees**:
 
-- Keep slices **small and ordered** (e.g. persistent trade storage before earnings “lifecycle” UX; do not merge accounting with unrelated UI).
-- In the slice report, state explicitly: **scope boundaries**, **DB impact**, **runtime impact**, **treasury / liability exposure**, **persistence / audit trail** (immutable or append-only where appropriate), **rollback path**, **PASS/FAIL**, plus the **closure checklist** above.
+- Keep slices **small and ordered** (e.g. **Priority 1**: persistent trade storage + recovery continuity before earnings lifecycle UX; do not merge accounting with unrelated UI).
+- Use the **Mandatory slice report fields** above plus **closure checklist**; emphasize **immutable / append-only** ledger patterns, **duplicate prevention**, and **no silent client mutations** where money moves.
 - **Earnings lifecycle** or any **perceived P/L** progression must be **ledger-aware** (balances, withdrawals, settlement truth) — not a frontend-only animation. Prefer server-sourced state and migrations/RPC that preserve conservation of liquidity.
 - Follow `supabase-financial-integrity.mdc` and `.agents/skills/supabase/SKILL.md`. Do not mix unrelated UI refactors into the same patch as money movement.
