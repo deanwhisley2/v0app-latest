@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
+import { getPublicSiteOrigin } from "@/lib/site-public-url"
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
@@ -174,7 +175,7 @@ export async function PATCH(request: Request) {
       if (error || !u.user?.email) {
         return NextResponse.json({ error: "User not found or missing email." }, { status: 404 })
       }
-      const siteBase = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "")
+      const siteBase = getPublicSiteOrigin(request.url)
       const redirectTo = `${siteBase}/auth/reset-password`
       const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
         type: "recovery",

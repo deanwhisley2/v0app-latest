@@ -6,6 +6,7 @@ import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
+import { getPublicSiteOrigin } from "@/lib/site-public-url"
 
 type RegisterBody = {
   email?: string
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createRouteHandlerSupabaseClient()
-  const origin = process.env.NEXT_PUBLIC_SITE_URL?.trim() || new URL(request.url).origin
+  const origin = getPublicSiteOrigin(request.url)
   const emailRedirectTo = `${origin}/auth/verify`
 
   const nowIso = new Date().toISOString()

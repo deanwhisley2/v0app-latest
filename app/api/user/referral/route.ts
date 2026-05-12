@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { buildRegisterReferralLink, referralCodeForUserId } from "@/lib/referral-code"
+import { getPublicSiteOrigin } from "@/lib/site-public-url"
 
 /**
  * Returns stable referral code + share link + referee counts.
@@ -44,8 +45,7 @@ export async function GET(request: Request) {
 
     if (!code) code = referralCodeForUserId(user.id)
 
-    const origin =
-      process.env.NEXT_PUBLIC_SITE_URL?.trim() || new URL(request.url).origin.replace(/\/$/, "")
+    const origin = getPublicSiteOrigin(request.url)
     const referralLink = buildRegisterReferralLink(origin, code)
 
     const { count, error: cErr } = await admin

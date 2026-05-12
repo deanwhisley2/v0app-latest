@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { sendPasswordRecoveryEmail } from "@/lib/brevo"
+import { getPublicSiteOrigin } from "@/lib/site-public-url"
 
 type Body = { identifier?: string }
 
@@ -38,10 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    const siteBase = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(
-      /\/$/,
-      ""
-    )
+    const siteBase = getPublicSiteOrigin(request.url)
     const redirectTo = `${siteBase}/auth/reset-password`
 
     const supabase = await createRouteHandlerSupabaseClient()

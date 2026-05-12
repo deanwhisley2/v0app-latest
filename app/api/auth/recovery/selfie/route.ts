@@ -5,6 +5,7 @@ import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
 import { compareFaceTemplateV1 } from "@/lib/server/face-template"
 import { comprefaceRecognizeSubject, isCompreFaceConfigured } from "@/lib/server/compreface"
+import { getPublicSiteOrigin } from "@/lib/site-public-url"
 
 type Body = {
   identifier?: string
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const siteBase = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "")
+    const siteBase = getPublicSiteOrigin(request.url)
     const redirectTo = `${siteBase}/auth/reset-password`
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: "recovery",

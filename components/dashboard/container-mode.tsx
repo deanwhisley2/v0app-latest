@@ -1675,26 +1675,46 @@ export function ContainerMode({
 
       {/* ============ TRADER SELECTION MODAL ============ */}
       {selectedTrader && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <Card className="w-full max-w-lg border-border bg-card p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div 
-                  className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold text-white"
-                  style={{ backgroundColor: selectedTrader.riskLevel === "Low" ? "#22C55E" : selectedTrader.riskLevel === "Medium" ? "#EAB308" : "#EF4444" }}
+        <div
+          className="fixed inset-0 z-[100] flex flex-col bg-black/70 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="container-trader-modal-title"
+        >
+          <Card className="flex min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden rounded-t-2xl border-border bg-card p-0 shadow-2xl sm:max-h-[min(92dvh,760px)] sm:flex-none sm:rounded-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 pb-3 pt-4 sm:px-6 sm:pt-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white"
+                  style={{
+                    backgroundColor:
+                      selectedTrader.riskLevel === "Low"
+                        ? "#22C55E"
+                        : selectedTrader.riskLevel === "Medium"
+                          ? "#EAB308"
+                          : "#EF4444",
+                  }}
                 >
                   {selectedTrader.avatar}
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold">{selectedTrader.name}</h3>
+                <div className="min-w-0">
+                  <h3 id="container-trader-modal-title" className="text-lg font-semibold">
+                    {selectedTrader.name}
+                  </h3>
                   <p className="text-sm text-muted-foreground">{selectedTrader.speciality}</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedTrader(null)} className="text-muted-foreground hover:text-foreground">
+              <button
+                type="button"
+                onClick={() => setSelectedTrader(null)}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label="Close"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pb-4">
             <p className="text-sm text-muted-foreground mb-4">{selectedTrader.description}</p>
 
             {/* Stats Grid */}
@@ -1871,30 +1891,38 @@ export function ContainerMode({
                 </>
               )}
             </div>
+            </div>
 
-            <div className="flex gap-3 mt-6">
-              <Button variant="outline" className="flex-1" onClick={() => setSelectedTrader(null)}>
+            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-lg max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:px-6 sm:pb-6 sm:pt-3">
+              <div className="flex gap-3">
+              <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setSelectedTrader(null)}>
                 Cancel
               </Button>
-              <Button 
-                className={`flex-1 ${activeTab === "fix" ? "bg-warning text-warning-foreground hover:bg-warning/90" : ""}`}
-                onClick={() => activeTab === "copy" ? handleActivateCopy(selectedTrader) : handleActivateFix(selectedTrader)}
+              <Button
+                className={`min-h-[48px] flex-1 ${activeTab === "fix" ? "bg-warning text-warning-foreground hover:bg-warning/90" : ""}`}
+                onClick={() => (activeTab === "copy" ? handleActivateCopy(selectedTrader) : handleActivateFix(selectedTrader))}
                 disabled={
                   isProcessing ||
                   (activeTab === "copy" && !copyRiskAcknowledged) ||
                   (activeTab === "fix" &&
-                    (!traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel) ||
-                      fixLiquidityGate))
+                    (!traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel) || fixLiquidityGate))
                 }
               >
                 {isProcessing ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</>
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...
+                  </>
                 ) : activeTab === "copy" ? (
-                  <><Play className="h-4 w-4 mr-2" /> Start Copying</>
+                  <>
+                    <Play className="h-4 w-4 mr-2" /> Start Copying
+                  </>
                 ) : (
-                  <><Lock className="h-4 w-4 mr-2" /> Lock & Fix</>
+                  <>
+                    <Lock className="h-4 w-4 mr-2" /> Lock & Fix
+                  </>
                 )}
               </Button>
+              </div>
             </div>
           </Card>
         </div>
@@ -1902,13 +1930,21 @@ export function ContainerMode({
 
       {/* ============ CANCEL CONFIRMATION MODAL ============ */}
       {showCancelConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <Card className="w-full max-w-md border-destructive/30 bg-card p-6">
+        <div
+          className="fixed inset-0 z-[100] flex flex-col bg-black/70 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="container-copy-cancel-title"
+        >
+          <Card className="flex min-h-0 w-full max-w-md flex-1 flex-col overflow-hidden rounded-t-2xl border-destructive/30 bg-card p-0 shadow-2xl sm:max-h-[min(88dvh,560px)] sm:flex-none sm:rounded-2xl">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-2 pt-5 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pb-4 sm:pt-6">
             <div className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
                 <AlertCircle className="h-8 w-8 text-destructive" />
               </div>
-              <h3 className="text-lg font-semibold">Force pull out?</h3>
+              <h3 id="container-copy-cancel-title" className="text-lg font-semibold">
+                Force pull out?
+              </h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 Applies {(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}% cancel +{" "}
                 {(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal + modeled coin impact. Final amount confirms
@@ -1923,7 +1959,7 @@ export function ContainerMode({
                   coinImpactFraction: trade.drawdownPct,
                 })
                 return (
-                  <div className="mt-4 rounded-lg bg-muted p-3 text-sm space-y-1">
+                  <div className="mt-4 rounded-lg bg-muted p-3 text-sm space-y-1 text-left">
                     <div className="flex justify-between">
                       <span>Stake</span>
                       <span>{formatUserMoney(trade.amount)}</span>
@@ -1948,18 +1984,21 @@ export function ContainerMode({
                 )
               })()}
             </div>
-            <div className="flex gap-3 mt-6">
-              <Button variant="outline" className="flex-1" onClick={() => setShowCancelConfirm(null)}>
-                Keep Trading
-              </Button>
-              <Button 
-                variant="destructive" 
-                className="flex-1"
-                onClick={() => handleForcePullOutCopy(showCancelConfirm)}
-                disabled={isProcessing}
-              >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm pull out"}
-              </Button>
+            </div>
+            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:px-6 sm:pb-6 sm:pt-3">
+              <div className="flex gap-3">
+                <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setShowCancelConfirm(null)}>
+                  Keep Trading
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="min-h-[48px] flex-1"
+                  onClick={() => handleForcePullOutCopy(showCancelConfirm)}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm pull out"}
+                </Button>
+              </div>
             </div>
           </Card>
         </div>
