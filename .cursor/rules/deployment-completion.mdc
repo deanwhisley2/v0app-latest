@@ -24,4 +24,9 @@ If there are **no** Postgres changes, still run the **full app deploy** when the
 
 ## Financial / persistence slices
 
-For work touching **balances, trades, payouts, referrals, treasury**, or **new durability guarantees**: keep slices **small**, document **DB impact**, **payout impact**, and **rollback** in the report; follow `supabase-financial-integrity.mdc` and `.agents/skills/supabase/SKILL.md`. Do not mix unrelated UI refactors into the same patch.
+For work touching **balances, trades, payouts, referrals, treasury**, **settlement**, **recovery continuity**, or **new durability guarantees**:
+
+- Keep slices **small and ordered** (e.g. persistent trade storage before earnings “lifecycle” UX; do not merge accounting with unrelated UI).
+- In the slice report, state explicitly: **scope boundaries**, **DB impact**, **runtime impact**, **treasury / liability exposure**, **persistence / audit trail** (immutable or append-only where appropriate), **rollback path**, **PASS/FAIL**, plus the **closure checklist** above.
+- **Earnings lifecycle** or any **perceived P/L** progression must be **ledger-aware** (balances, withdrawals, settlement truth) — not a frontend-only animation. Prefer server-sourced state and migrations/RPC that preserve conservation of liquidity.
+- Follow `supabase-financial-integrity.mdc` and `.agents/skills/supabase/SKILL.md`. Do not mix unrelated UI refactors into the same patch as money movement.
