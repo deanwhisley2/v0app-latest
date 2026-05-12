@@ -1,0 +1,27 @@
+---
+description: Full deploy closure — Git, VPS archive, PM2, health; no "code only" stops when access exists
+alwaysApply: true
+---
+
+# Deployment completion discipline
+
+When this repo is open and the agent (or contributor) has **normal access** to Git push, VPS SSH, and `scripts/deploy-vps-git-archive.sh`, treat **implementation as incomplete** until production is synchronized — unless a **real blocker** is reported (permissions, build failure, migration conflict, unhealthy runtime).
+
+## No schema ≠ no deploy
+
+If there are **no** Postgres changes, still run the **full app deploy** when the slice changes **runtime or UI** (Next.js routes, components, API handlers, env-dependent behavior). Docs-only or comment-only edits may skip VPS if agreed, but default is: **push + deploy** so `.deploy-revision` and the live bundle stay aligned with `main`.
+
+## Closure checklist (copy into slice report)
+
+1. Migration check (new migration applied, or **explicit N/A**).
+2. `git commit` + `git push` to authoritative branch.
+3. `bash scripts/deploy-vps-git-archive.sh` from a git clone (sets `.deploy-revision` on server).
+4. PM2 / process health after `scripts/deploy.sh`.
+5. `GET https://nexuspro.it.com/api/health` (or project URL) → 200 after brief warm-up if needed.
+6. Slice-specific production verification when relevant.
+7. Mobile / device QA if UI or touch targets changed; otherwise state **pending**.
+8. PASS/FAIL matrix, rollback (`DEPLOY_REF=<sha> bash scripts/deploy-vps-git-archive.sh`), remaining risks.
+
+## Financial / persistence slices
+
+For work touching **balances, trades, payouts, referrals, treasury**, or **new durability guarantees**: keep slices **small**, document **DB impact**, **payout impact**, and **rollback** in the report; follow `supabase-financial-integrity.mdc` and `.agents/skills/supabase/SKILL.md`. Do not mix unrelated UI refactors into the same patch.
