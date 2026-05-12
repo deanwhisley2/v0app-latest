@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import {
@@ -83,6 +83,58 @@ const formatTimeAgo = (iso: string) => {
   return `${Math.floor(hours / 24)}d ago`
 }
 
+const INBOX_ROW_EST = 96
+const INBOX_WINDOW_OVERSCAN = 8
+
+type InboxRowProps = {
+  notification: NexusNotificationItem
+  onActivate: (n: NexusNotificationItem) => void
+  onSwipeRight: () => void
+  onSwipeLeft: () => void
+}
+
+const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight, onSwipeLeft }: InboxRowProps) {
+  return (
+    <NotificationSwipeRow className="mb-2" onSwipeRight={onSwipeRight} onSwipeLeft={onSwipeLeft}>
+      <button
+        type="button"
+        onClick={() => onActivate(notification)}
+        className={cn(
+          "group relative min-h-[88px] w-full rounded-xl border-l-4 bg-muted/30 p-3 text-left transition-colors hover:bg-muted/50 [content-visibility:auto] [contain-intrinsic-size:88px_1px]",
+          getTypeColor(notification.type),
+          !notification.read && "bg-primary/5",
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+            {getTypeIcon(notification.type)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <p
+                className={cn(
+                  "text-sm font-semibold",
+                  !notification.read ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {notification.title}
+              </p>
+              {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+            </div>
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground/70">
+              {formatTimeAgo(notification.timestamp)}
+              {notification.nav && notification.nav.kind !== "detail" && (
+                <span className="ml-2 text-primary/90">· Open</span>
+              )}
+            </p>
+          </div>
+        </div>
+      </button>
+    </NotificationSwipeRow>
+  )
+})
+
 export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const {
     inbox,
@@ -112,18 +164,14 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
   useEffect(() => {
     if (!isOpen) return
-    const originalOverflow = document.body.style.overflow
-    const scrollY = window.scrollY
+    const html = document.documentElement
+    const prevHtml = html.style.overflow
+    const prevBody = document.body.style.overflow
+    html.style.overflow = "hidden"
     document.body.style.overflow = "hidden"
-    document.body.style.position = "fixed"
-    document.body.style.top = `-${scrollY}px`
-    document.body.style.width = "100%"
     return () => {
-      document.body.style.overflow = originalOverflow
-      document.body.style.position = ""
-      document.body.style.top = ""
-      document.body.style.width = ""
-      window.scrollTo(0, scrollY)
+      html.style.overflow = prevHtml
+      document.body.style.overflow = prevBody
     }
   }, [isOpen])
 
@@ -164,12 +212,59 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     [markRead, onClose, runAppNavigation]
   )
 
+  const scrollRaf = useRef<number | null>(null)
+  const [vWindow, setVWindow] = useState({ start: 0, end: 60 })
+
+  const recomputeWindow = useCallback(() => {
+    const el = listRef.current
+    const n = inbox.length
+    if (!el || n <= 48) {
+      setVWindow((w) => (w.start !== 0 || w.end !== n ? { start: 0, end: n } : w))
+      return
+    }
+    const top = el.scrollTop
+    const vh = el.clientHeight
+    const start = Math.max(0, Math.floor(top / INBOX_ROW_EST) - INBOX_WINDOW_OVERSCAN)
+    const end = Math.min(n, Math.ceil((top + vh) / INBOX_ROW_EST) + INBOX_WINDOW_OVERSCAN)
+    setVWindow((w) => (w.start !== start || w.end !== end ? { start, end } : w))
+  }, [inbox.length])
+
+  useLayoutEffect(() => {
+    if (!isOpen || showSettings) return
+    recomputeWindow()
+  }, [isOpen, showSettings, inbox.length, recomputeWindow])
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el || !isOpen || showSettings) return
+    const onScroll = () => {
+      if (scrollRaf.current != null) cancelAnimationFrame(scrollRaf.current)
+      scrollRaf.current = requestAnimationFrame(() => {
+        scrollRaf.current = null
+        recomputeWindow()
+      })
+    }
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      el.removeEventListener("scroll", onScroll)
+      if (scrollRaf.current != null) cancelAnimationFrame(scrollRaf.current)
+    }
+  }, [isOpen, showSettings, recomputeWindow])
+
+  const visibleInbox = useMemo(
+    () => (inbox.length <= 48 ? inbox : inbox.slice(vWindow.start, vWindow.end)),
+    [inbox, vWindow.end, vWindow.start]
+  )
+
+  const topPad = inbox.length <= 48 ? 0 : vWindow.start * INBOX_ROW_EST
+  const bottomPad = inbox.length <= 48 ? 0 : Math.max(0, inbox.length - vWindow.end) * INBOX_ROW_EST
+
   if (!isOpen || !mounted) return null
 
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed bottom-4 left-4 right-4 z-[100] flex max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-5 slide-in-from-right-5 duration-300 sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
+      className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
     >
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2">
@@ -215,7 +310,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
       </div>
 
       {showSettings ? (
-        <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth overscroll-y-contain p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
           <h4 className="mb-4 text-sm font-semibold text-muted-foreground">SETTINGS</h4>
           <div className="mb-4 rounded-xl border border-border bg-muted/30 p-4">
             <div className="flex items-center justify-between">
@@ -338,7 +433,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
         <>
           <div
             ref={listRef}
-            className="nexus-scroll-isolated min-h-0 flex-1 scroll-smooth touch-pan-y pr-0.5 [scrollbar-gutter:stable]"
+            className="nexus-scroll-isolated min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-0.5 [scrollbar-gutter:stable]"
           >
             <div className="p-2 pb-1">
               {inbox.length === 0 ? (
@@ -357,50 +452,19 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
                   </Link>
                 </div>
               ) : (
-                inbox.map((notification) => (
-                  <NotificationSwipeRow
-                    key={notification.id}
-                    className="mb-2"
-                    onSwipeRight={() => deleteFromInbox(notification.id)}
-                    onSwipeLeft={() => archiveFromInbox(notification.id)}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onItemActivate(notification)}
-                      className={cn(
-                        "group relative w-full rounded-xl border-l-4 bg-muted/30 p-3 text-left transition-all hover:bg-muted/50",
-                        getTypeColor(notification.type),
-                        !notification.read && "bg-primary/5"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                          {getTypeIcon(notification.type)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p
-                              className={cn(
-                                "text-sm font-semibold",
-                                !notification.read ? "text-foreground" : "text-muted-foreground"
-                              )}
-                            >
-                              {notification.title}
-                            </p>
-                            {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                          </div>
-                          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground/70">
-                            {formatTimeAgo(notification.timestamp)}
-                            {notification.nav && notification.nav.kind !== "detail" && (
-                              <span className="ml-2 text-primary/90">· Open</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  </NotificationSwipeRow>
-                ))
+                <>
+                  {topPad > 0 ? <div className="w-full" style={{ height: topPad }} aria-hidden /> : null}
+                  {visibleInbox.map((notification) => (
+                    <InboxRow
+                      key={notification.id}
+                      notification={notification}
+                      onActivate={onItemActivate}
+                      onSwipeRight={() => deleteFromInbox(notification.id)}
+                      onSwipeLeft={() => archiveFromInbox(notification.id)}
+                    />
+                  ))}
+                  {bottomPad > 0 ? <div className="w-full" style={{ height: bottomPad }} aria-hidden /> : null}
+                </>
               )}
             </div>
           </div>

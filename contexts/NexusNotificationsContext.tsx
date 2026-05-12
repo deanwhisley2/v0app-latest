@@ -24,6 +24,12 @@ import {
   type OperationalPreferencesV1,
 } from "@/lib/operational-preferences-types"
 import { supabase } from "@/lib/supabaseClient"
+import {
+  isServerNotificationId,
+  mergeServerAccountWithLocals,
+  sameInboxSignature,
+  upsertServerNotificationRows,
+} from "@/lib/nexus-notifications-merge"
 
 export type {
   NexusNotificationType,
@@ -35,12 +41,6 @@ export type UiChromePreferences = OperationalPreferencesV1["uiChrome"]
 
 /** Bump when persistence shape changes (v3: server-backed account feed + local overlay). */
 const STORAGE_KEY = "nexus_notifications_v3"
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
-function isServerNotificationId(id: string): boolean {
-  return UUID_RE.test(id)
-}
 
 const KNOWN_NOTIF_TYPES: NexusNotificationType[] = [
   "price",
@@ -87,7 +87,7 @@ function iso(d: Date) {
 function seedInbox(): NexusNotificationItem[] {
   const types: NexusNotificationType[] = ["price", "trade", "security", "promo", "system"]
   const symbols = ["BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX", "LINK", "DOT", "MATIC"]
-  const count = 22
+  const count = 8
   const items: NexusNotificationItem[] = []
 
   for (let i = 0; i < count; i++) {
@@ -214,6 +214,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
   const serverNotifSerializedRef = useRef("")
   const lastPostedJsonRef = useRef("")
   const persistPrefsTimerRef = useRef<number | null>(null)
+  const persistLocalTimerRef = useRef<number | null>(null)
   /** When true, account rows load from `/api/user/account-notifications` and skip operational-preferences inbox mirror. */
   const [accountNotifFeedOn, setAccountNotifFeedOn] = useState(false)
 
@@ -232,7 +233,14 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
 
   useEffect(() => {
     if (!hydrated) return
-    savePersisted(inbox, history)
+    if (persistLocalTimerRef.current) window.clearTimeout(persistLocalTimerRef.current)
+    persistLocalTimerRef.current = window.setTimeout(() => {
+      savePersisted(inbox, history)
+      persistLocalTimerRef.current = null
+    }, 1400)
+    return () => {
+      if (persistLocalTimerRef.current) window.clearTimeout(persistLocalTimerRef.current)
+    }
   }, [inbox, history, hydrated])
 
   useEffect(() => {
@@ -332,10 +340,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         setAccountNotifFeedOn(true)
         const serverItems = rows.map(mapServerAccountRow)
         setInbox((prev) => {
-          const locals = prev.filter((p) => !isServerNotificationId(p.id) && !p.id.startsWith("fin-"))
-          const merged = [...serverItems, ...locals].sort(
-            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          )
+          const merged = mergeServerAccountWithLocals(prev, serverItems)
+          if (sameInboxSignature(prev, merged)) return prev
           return merged
         })
       } catch {
@@ -344,10 +350,72 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     }
 
     void pullAccountNotifications()
-    const id = window.setInterval(pullAccountNotifications, 15_000)
+    const id = window.setInterval(pullAccountNotifications, 90_000)
     return () => {
       cancelled = true
       window.clearInterval(id)
+    }
+  }, [hydrated, user?.id, isGuestSession])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (!user?.id || isGuestSession || isDevLocalOnly()) return
+    const uid = user.id
+
+    const mapRow = (raw: Record<string, unknown>): NexusNotificationItem | null => {
+      const id = typeof raw.id === "string" ? raw.id : null
+      const title = typeof raw.title === "string" ? raw.title : null
+      const body = typeof raw.body === "string" ? raw.body : null
+      const created_at = typeof raw.created_at === "string" ? raw.created_at : null
+      if (!id || !title || !body || !created_at) return null
+      if (raw.user_deleted_at) return null
+      return mapServerAccountRow({
+        id,
+        notification_type: typeof raw.notification_type === "string" ? raw.notification_type : null,
+        title,
+        body,
+        nav: raw.nav,
+        read_at: typeof raw.read_at === "string" ? raw.read_at : null,
+        created_at,
+      })
+    }
+
+    const channel = supabase
+      .channel(`acct-notif:${uid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_account_notifications",
+          filter: `user_id=eq.${uid}`,
+        },
+        (payload) => {
+          setAccountNotifFeedOn(true)
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: string } | undefined)?.id
+            if (oldId) setInbox((prev) => prev.filter((n) => n.id !== oldId))
+            return
+          }
+          const raw = (payload.new ?? {}) as Record<string, unknown>
+          if (raw.user_deleted_at) {
+            const hid = typeof raw.id === "string" ? raw.id : null
+            if (hid) setInbox((prev) => prev.filter((n) => n.id !== hid))
+            return
+          }
+          const item = mapRow(raw)
+          if (!item) return
+          setInbox((prev) => {
+            const merged = upsertServerNotificationRows(prev, [item])
+            if (sameInboxSignature(prev, merged)) return prev
+            return merged
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
     }
   }, [hydrated, user?.id, isGuestSession])
 

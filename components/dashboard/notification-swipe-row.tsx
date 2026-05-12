@@ -47,7 +47,7 @@ export function NotificationSwipeRow({
 
   return (
     <div
-      className={cn("relative touch-pan-y overflow-hidden rounded-xl", className)}
+      className={cn("relative overflow-hidden rounded-xl touch-manipulation", className)}
       onTouchStart={(e) => {
         if (disabled || e.touches.length !== 1) return
         dragging.current = true

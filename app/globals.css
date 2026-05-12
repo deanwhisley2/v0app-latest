@@ -247,7 +247,6 @@ html {
   position: relative;
   scrollbar-width: thin;
   scrollbar-color: oklch(0.30 0.02 250) transparent;
-  transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 /* Hover/focus glow indicator for scrollable areas */
@@ -290,12 +289,6 @@ html {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
-}
-
-/* Prevent scroll chaining on nested scrollable areas */
-.nexus-scroll-isolated *,
-.nexus-scroll-isolated-x * {
-  overscroll-behavior: contain;
 }
 
 /* Toast notification container - bottom-left */

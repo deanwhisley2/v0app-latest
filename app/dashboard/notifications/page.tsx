@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Bell, Compass, Gift, Info, Landmark, Shield, TrendingUp, Zap, Trash2 } from "lucide-react"
@@ -73,6 +73,8 @@ export default function NotificationsHistoryPage() {
     return [...map.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
   }, [inbox, history])
 
+  const visibleMerged = useMemo(() => merged.slice(0, listLimit), [merged, listLimit])
+
   const openLinked = (n: NexusNotificationItem) => {
     markRead(n.id)
     if (!n.nav || n.nav.kind === "detail") return
@@ -109,7 +111,10 @@ export default function NotificationsHistoryPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Notification history</h1>
-            <p className="text-sm text-muted-foreground">Inbox and archived items on this device ({merged.length} total)</p>
+            <p className="text-sm text-muted-foreground">
+              Inbox and archived items on this device ({merged.length} total
+              {merged.length > visibleMerged.length ? `, showing ${visibleMerged.length}` : ""})
+            </p>
           </div>
           <button
             type="button"
@@ -125,11 +130,12 @@ export default function NotificationsHistoryPage() {
           {merged.length === 0 ? (
             <div className="p-12 text-center text-sm text-muted-foreground">No notifications yet.</div>
           ) : (
-            merged.map((n) => (
+            <>
+              {visibleMerged.map((n) => (
               <div
                 key={n.id}
                 className={cn(
-                  "flex w-full gap-3 border-l-4 p-4 text-left transition-colors hover:bg-muted/40",
+                  "flex w-full gap-3 border-l-4 p-4 text-left transition-colors hover:bg-muted/40 [content-visibility:auto] [contain-intrinsic-size:120px_1px]",
                   border(n.type),
                   !n.read && "bg-primary/[0.04]"
                 )}
@@ -170,7 +176,19 @@ export default function NotificationsHistoryPage() {
                   <Trash2 className="mx-auto h-4 w-4" />
                 </button>
               </div>
-            ))
+            ))}
+              {merged.length > visibleMerged.length ? (
+                <div className="p-4 text-center">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-primary hover:bg-muted/50"
+                    onClick={() => setListLimit((x) => x + 100)}
+                  >
+                    Load more ({merged.length - visibleMerged.length} remaining)
+                  </button>
+                </div>
+              ) : null}
+            </>
           )}
         </Card>
       </div>
