@@ -7,6 +7,7 @@
 
 import type { AppLanguage } from "@/lib/user-preferences"
 import { resolveUiString } from "@/lib/i18n/resolver"
+import { fundingWithdrawalEn, fundingWithdrawalOverlays } from "@/lib/i18n/funding-withdrawal-copy"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -41,6 +42,7 @@ const en: Record<string, string> = {
   "settings.regionApplySuggestion": "Apply suggested language & display currency",
   "settings.regionSaved": "Country saved for funding match.",
   "common.missingTranslation": "This label is not translated yet — switch to English or contact support.",
+  ...fundingWithdrawalEn,
 }
 
 const fr: Partial<Record<string, string>> = {
@@ -70,6 +72,7 @@ const fr: Partial<Record<string, string>> = {
     "Utilisé pour les corridors de financement et les valeurs par défaut régionales. La comptabilité interne reste en USD.",
   "settings.regionApplySuggestion": "Appliquer la langue et la devise suggérées",
   "settings.regionSaved": "Pays enregistré pour la correspondance de financement.",
+  ...(fundingWithdrawalOverlays.fr ?? {}),
 }
 
 const sw: Partial<Record<string, string>> = {
@@ -99,6 +102,7 @@ const sw: Partial<Record<string, string>> = {
     "Inatumika kwa njia za fedha za ndani na mapendekezo ya kikanda. Hesabu ya ndani bado iko kwa USD.",
   "settings.regionApplySuggestion": "Tumia lugha na sarafu zilizopendekezwa",
   "settings.regionSaved": "Nchi imehifadhiwa kwa ulinganifu wa fedha.",
+  ...(fundingWithdrawalOverlays.sw ?? {}),
 }
 
 const ar: Partial<Record<string, string>> = {
@@ -127,6 +131,7 @@ const ar: Partial<Record<string, string>> = {
     "تُستخدم لممرات التمويل المحلية والإعدادات الإقليمية. المحاسبة الداخلية تبقى بالدولار الأمريكي.",
   "settings.regionApplySuggestion": "تطبيق اللغة وعملة العرض المقترحة",
   "settings.regionSaved": "تم حفظ البلد لمطابقة التمويل.",
+  ...(fundingWithdrawalOverlays.ar ?? {}),
 }
 
 const pt: Partial<Record<string, string>> = {
@@ -159,6 +164,7 @@ const ha: Partial<Record<string, string>> = {
   "settings.regionHint": "Don hanyoyin biyan kuɗi na gida da saitunan yanki. Lissafi na ciki har yanzu USD ne.",
   "settings.regionApplySuggestion": "Yi amfani da harshe da kuɗin da aka ba da shawara",
   "settings.regionSaved": "An adana ƙasar don dacewa da biyan kuɗi.",
+  ...(fundingWithdrawalOverlays.ha ?? {}),
 }
 
 const am: Partial<Record<string, string>> = {

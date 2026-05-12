@@ -42,6 +42,7 @@ import {
   formatLocalFiatAmount,
   localFiatUnitsToUsd,
 } from "@/lib/currency-display"
+import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
 
 interface CurrentUser {
   email: string
@@ -157,7 +158,7 @@ export default function DashboardPage() {
     return lvl === 5 || (lvl === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller))
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
   const activityUserId = user?.id ?? "guest"
-  const { formatUserMoney, currency, locale } = useUserPreferences()
+  const { formatUserMoney, currency, locale, t } = useUserPreferences()
   const testimonialNotif = useDashboardTestimonialNotifs({
     enabled: Boolean(user) && !isGuestSession,
     userId: user?.id,
@@ -1712,7 +1713,7 @@ export default function DashboardPage() {
       if (showFundModal === "add" && retailerCreditDesk) return
       if (showFundModal === "add" && level === 5) return
       if (showFundModal === "add" && customerRetailFunding && l1FundSource === "local") {
-        showToast("Enter a valid funding amount on step 1.", "error")
+        showToast(t("funding.error.validAmountStep1"), "error")
         return
       }
       return
@@ -1725,15 +1726,13 @@ export default function DashboardPage() {
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
-        if (!token) throw new Error("Session expired.")
+        if (!token) throw new Error(t("withdrawal.error.sessionExpired"))
 
         if (showFundModal === "withdraw") {
-          if (!(amount > 0)) throw new Error("Enter an amount.")
-          if (amount > mainBalance) throw new Error("Insufficient balance")
+          if (!(amount > 0)) throw new Error(t("withdrawal.error.enterAmount"))
+          if (amount > mainBalance) throw new Error(t("withdrawal.error.insufficientBalance"))
           if (retailerCreditDesk && retailerOpsBlocked) {
-            throw new Error(
-              "You have pending local funding approvals. Clear or approve those requests before withdrawing Nexus balance.",
-            )
+            throw new Error(t("withdrawal.error.retailerPendingBlocksWithdraw"))
           }
           const res = await fetch("/api/user/withdrawal/request", {
             method: "POST",
@@ -1747,11 +1746,11 @@ export default function DashboardPage() {
             error?: string
             balances?: { available_balance?: number; withdrawal_pending_balance?: number }
           }
-          if (!res.ok) throw new Error(out.error || "Withdrawal failed")
+          if (!res.ok) throw new Error(localizeFundingWithdrawalApiMessage(out.error, t))
           setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
           setWithdrawalPendingBalance(Number(out.balances?.withdrawal_pending_balance ?? withdrawalPendingBalance))
           showToast(
-            `${formatUserMoney(amount)} submitted — deducted from Nexus Main; pending Level 5 approval.`,
+            `${t("withdrawal.toast.successPrefix").replace("{{amount}}", formatUserMoney(amount))} ${t("withdrawal.toast.successSuffix")}`,
             "success",
           )
           setShowFundModal(null)
@@ -1765,24 +1764,22 @@ export default function DashboardPage() {
           if (!customerRetailFunding) {
             throw new Error(
               retailerCreditDesk
-                ? "Use “Save retailer desk”, incoming queue actions, or “Submit crypto top-up” in this dialog."
-                : "Use admin queue buttons for approvals — direct balance credit here is disabled.",
+                ? t("funding.error.useDeskOrAdminQueue")
+                : t("funding.error.useAdminQueue"),
             )
           }
           if (l1FundSource !== "local") {
-            throw new Error("Open “Local mobile money”, complete payment off-app, then use Confirm.")
+            throw new Error(t("funding.error.openLocalMobileFirst"))
           }
           if (localMmWizardStep !== 2) {
-            throw new Error("Finish retailer matching on step 2 before confirming.")
+            throw new Error(t("funding.error.finishStep2"))
           }
-          if (!(amount > 0)) throw new Error("Enter the amount you funded.")
+          if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
           if ((!localMmSelectedDesk && !selectedOfficialRouteId) || !fundTxReference.trim()) {
-            throw new Error(
-              "Pick an available desk or the official company line, then enter your transaction ID / reference from your receipt.",
-            )
+            throw new Error(t("funding.error.pickDeskAndTxRef"))
           }
           if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
-            throw new Error("Enter your sender name and sending mobile number exactly as shown to the retailer.")
+            throw new Error(t("funding.error.senderIdentity"))
           }
           const ccSave = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
           if (ccSave.length === 2) {
@@ -1812,12 +1809,10 @@ export default function DashboardPage() {
             }),
           })
           const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
-          if (!res.ok) throw new Error(out.error || "Could not create pending funding.")
+          if (!res.ok) throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
           setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
           showToast(
-            selectedOfficialRouteId
-              ? "Request queued — Level 5 operations will verify payment to the official company line."
-              : "Pending funding created — retailer will verify your mobile-money payment.",
+            selectedOfficialRouteId ? t("funding.toast.officialQueued") : t("funding.toast.retailerPending"),
             "success",
           )
           setQualifiedRetailers([])
@@ -1836,9 +1831,9 @@ export default function DashboardPage() {
           return
         }
 
-        throw new Error("Unsupported fund action.")
+        throw new Error(t("funding.error.unsupportedAction"))
       } catch (e) {
-        showToast(e instanceof Error ? e.message : "Fund action failed", "error")
+        showToast(e instanceof Error ? e.message : t("funding.error.fundActionFailed"), "error")
       } finally {
         setIsFundProcessing(false)
       }
@@ -1865,6 +1860,7 @@ export default function DashboardPage() {
     withdrawalPendingBalance,
     currency,
     localMmWizardStep,
+    t,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -2029,7 +2025,7 @@ export default function DashboardPage() {
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    Add Funds
+                    {t("funding.button.addFunds")}
                   </button>
                   <button
                     type="button"
@@ -2043,7 +2039,7 @@ export default function DashboardPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
                     </svg>
-                    Withdraw
+                    {t("funding.button.withdraw")}
                   </button>
                   <button
                     type="button"
@@ -2057,10 +2053,10 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
               <p>
-                <span className="font-medium text-foreground">Deposit timing:</span> {PROCESSING_COPY.deposits}
+                <span className="font-medium text-foreground">{t("deposit.timingLabel")}</span> {PROCESSING_COPY.deposits}
               </p>
               <p className="mt-1">
-                <span className="font-medium text-foreground">Withdrawal timing:</span> {PROCESSING_COPY.withdrawals}
+                <span className="font-medium text-foreground">{t("withdrawal.timingLabel")}</span> {PROCESSING_COPY.withdrawals}
               </p>
             </div>
           </>
@@ -2142,7 +2138,7 @@ export default function DashboardPage() {
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    Add Funds
+                    {t("funding.button.addFunds")}
                   </button>
                   <button
                     onClick={() => {
@@ -2155,7 +2151,7 @@ export default function DashboardPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
                     </svg>
-                    Withdraw
+                    {t("funding.button.withdraw")}
                   </button>
                 </div>
               </div>
@@ -2170,15 +2166,11 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-muted-foreground">Cashout and new container funding source.</p>
               </div>
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending withdrawal (frozen)</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("withdrawal.card.frozenTitle")}</p>
                 <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
                   {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Funds deducted from your Nexus Main Account at withdrawal request and temporarily held for automated
-                  processing. Funds are either released to your withdrawal destination upon approval or refunded back to your
-                  Nexus account if processing fails.
-                </p>
+                <p className="text-[11px] text-muted-foreground">{t("withdrawal.card.frozenBody")}</p>
               </div>
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Container Earnings</p>
@@ -2243,10 +2235,10 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
               <p>
-                <span className="font-medium text-foreground">Deposit timing:</span> {PROCESSING_COPY.deposits}
+                <span className="font-medium text-foreground">{t("deposit.timingLabel")}</span> {PROCESSING_COPY.deposits}
               </p>
               <p className="mt-1">
-                <span className="font-medium text-foreground">Withdrawal timing:</span> {PROCESSING_COPY.withdrawals}
+                <span className="font-medium text-foreground">{t("withdrawal.timingLabel")}</span> {PROCESSING_COPY.withdrawals}
               </p>
             </div>
           </>
@@ -2265,7 +2257,7 @@ export default function DashboardPage() {
             {/* Modal Header */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 pb-2 pt-3 sm:px-0 sm:pb-3 sm:pt-0">
               <h2 id="fund-modal-title" className="text-lg font-bold sm:text-xl">
-                {showFundModal === "add" ? "Add Funds" : "Withdraw Funds"}
+                {showFundModal === "add" ? t("funding.modal.titleAdd") : t("funding.modal.titleWithdraw")}
               </h2>
               <button
                 onClick={() => setShowFundModal(null)}
@@ -2279,9 +2271,7 @@ export default function DashboardPage() {
 
             {showFundModal === "withdraw" ? null : retailerCreditDesk && retailerOpsBlocked ? (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[11px] text-muted-foreground">
-                You have pending local funding requests from customers. Withdrawals from Nexus main balance are blocked
-                until pending requests are cleared. You can still update your desk, approve queue items, or request liquidity
-                from Admin.
+                {t("funding.retailerOpsBlockedWithdraw")}
               </div>
             ) : null}
 
@@ -2299,7 +2289,7 @@ export default function DashboardPage() {
                       l1FundSource === "crypto" ? "border-primary" : "border-border"
                     }`}
                   >
-                    A — Crypto
+                    {t("funding.optionCrypto")}
                   </button>
                   <button
                     type="button"
@@ -2318,26 +2308,25 @@ export default function DashboardPage() {
                       l1FundSource === "local" ? "border-primary" : "border-border"
                     }`}
                   >
-                    B — Local MM
+                    {t("funding.optionLocal")}
                   </button>
                 </div>
 
                 {l1FundSource === "pick" && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Choose Option A (international crypto to the company wallet) or Option B (local mobile money through a
-                    verified in-country desk).
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t("funding.pickHint")}</p>
                 )}
 
                 {l1FundSource === "crypto" && (
                   <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
-                    <p className="font-semibold text-foreground">Company receive wallet</p>
+                    <p className="font-semibold text-foreground">{t("funding.crypto.companyWallet")}</p>
                     <p className="text-muted-foreground">
-                      Send only on the advertised network ({cryptoFundingMeta?.companyCryptoNetwork ?? "configure NEXUS_COMPANY_CRYPTO_* in env"})
-                      .
+                      {t("funding.crypto.networkHint").replace(
+                        "{{network}}",
+                        cryptoFundingMeta?.companyCryptoNetwork ?? "configure NEXUS_COMPANY_CRYPTO_* in env",
+                      )}
                     </p>
                     <p className="break-all rounded bg-background p-2 font-mono text-[11px]">
-                      {cryptoFundingMeta?.companyCryptoWallet ?? "Ask support for today’s treasury address."}
+                      {cryptoFundingMeta?.companyCryptoWallet ?? t("funding.crypto.askSupport")}
                     </p>
                   </div>
                 )}
@@ -2345,17 +2334,17 @@ export default function DashboardPage() {
                 {l1FundSource === "local" && localMmWizardStep === 1 ? (
                   <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3 sm:p-4">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">Local MM · Step 1 of 2</p>
+                      <p className="text-xs font-semibold text-foreground">{t("funding.local.step1Title")}</p>
                       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
-                        Qualify
+                        {t("funding.local.badgeQualify")}
                       </span>
                     </div>
-                    <p className="text-[11px] leading-snug text-muted-foreground">
-                      Enter your country, network, amount, and sender details. Retailers are matched on the next screen.
-                    </p>
+                    <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.local.step1Body")}</p>
                     <div className="space-y-2.5">
                       <div>
-                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">Country</label>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                          {t("funding.field.country")}
+                        </label>
                         <input
                           type="text"
                           maxLength={2}
@@ -2367,13 +2356,15 @@ export default function DashboardPage() {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">Network</label>
+                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                          {t("funding.field.network")}
+                        </label>
                         <select
                           value={fundMobileNetwork}
                           onChange={(e) => setFundMobileNetwork(e.target.value)}
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         >
-                          <option value="">Select network…</option>
+                          <option value="">{t("funding.network.select")}</option>
                           <option value="MTN">MTN</option>
                           <option value="Airtel">Airtel</option>
                           <option value="MPesa">M-Pesa</option>
@@ -2383,7 +2374,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                          Funding amount ({fundingAmountLabelCurrency})
+                          {t("funding.field.fundingAmount").replace("{{currency}}", fundingAmountLabelCurrency)}
                         </label>
                         <input
                           type="number"
@@ -2397,26 +2388,26 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                          Sender mobile number
+                          {t("funding.field.senderPhone")}
                         </label>
                         <input
                           type="tel"
                           value={fundPayerPhone}
                           onChange={(e) => setFundPayerPhone(e.target.value)}
-                          placeholder="+256…"
+                          placeholder={t("funding.placeholder.phoneExample")}
                           autoComplete="tel"
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         />
                       </div>
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                          Sender name (as on MoMo)
+                          {t("funding.field.senderName")}
                         </label>
                         <input
                           type="text"
                           value={fundPayerName}
                           onChange={(e) => setFundPayerName(e.target.value)}
-                          placeholder="Full name"
+                          placeholder={t("funding.placeholder.fullName")}
                           autoComplete="name"
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         />
@@ -2428,7 +2419,7 @@ export default function DashboardPage() {
                       onClick={() => void handleLoadQualifiedRetailers()}
                       className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
                     >
-                      {loadingQualifiedRetailers ? "Finding retailers…" : "Continue · find retailers"}
+                      {loadingQualifiedRetailers ? t("funding.findingRetailers") : t("funding.continueFindRetailers")}
                     </button>
                   </div>
                 ) : null}
@@ -2441,9 +2432,9 @@ export default function DashboardPage() {
                         onClick={() => handleBackLocalMmWizard()}
                         className="rounded-md border border-border bg-background px-3 py-1.5 text-[11px] font-semibold hover:bg-muted"
                       >
-                        ← Edit details
+                        {t("funding.local.step2Back")}
                       </button>
-                      <span className="text-[11px] font-semibold text-foreground">Step 2 of 2 · Choose desk</span>
+                      <span className="text-[11px] font-semibold text-foreground">{t("funding.local.step2Title")}</span>
                     </div>
                     <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                       <span className="rounded-md bg-background px-2 py-1 font-mono">
@@ -2460,23 +2451,17 @@ export default function DashboardPage() {
                     qualifiedRetailers.length === 0 &&
                     !officialCorridorFallback ? (
                       <div className="space-y-1.5 rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-100">
-                        <p className="font-medium">No desk or official company line is configured for this corridor yet.</p>
-                        <p>
-                          Try <strong>Network → Other</strong>, adjust the amount, or contact support. Ops must publish either a
-                          solvent retailer desk or an official receive line for this country + network.
-                        </p>
+                        <p className="font-medium">{t("funding.noDeskCorridorTitle")}</p>
+                        <p>{t("funding.noDeskCorridorBody")}</p>
                       </div>
                     ) : null}
 
                     {qualifiedRetailers.length > 0 ? (
                       <div className="space-y-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Qualified retailer desks
+                          {t("funding.qualifiedDesksTitle")}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Pre-screened: same country, matching network, verified account, active status, and spendable liquidity ≥
-                          your request.
-                        </p>
+                        <p className="text-[10px] text-muted-foreground">{t("funding.qualifiedDesksHint")}</p>
                         <div className="grid max-sm:grid-cols-1 max-sm:gap-2 sm:max-h-[min(50vh,320px)] sm:grid-cols-2 sm:gap-2 sm:overflow-y-auto">
                           {qualifiedRetailers.map((r) => {
                             const active = selectedRetailerId === r.id && !selectedOfficialRouteId
@@ -2499,23 +2484,28 @@ export default function DashboardPage() {
                                 }`}
                               >
                                 <p className="flex flex-wrap items-center gap-1 font-semibold text-foreground">
-                                  Desk · {String(r.country_code ?? "").toUpperCase() || "—"}
+                                  {t("funding.deskPrefix")}
+                                  {String(r.country_code ?? "").toUpperCase() || "—"}
                                   {r.qualification_verified_desk ? (
                                     <span className="rounded bg-emerald-500/20 px-1.5 py-0 text-[9px] font-bold uppercase text-emerald-800 dark:text-emerald-100">
-                                      Verified
+                                      {t("funding.badge.verified")}
                                     </span>
                                   ) : null}
                                 </p>
                                 <p className="mt-1 font-mono text-[10px] text-muted-foreground line-clamp-3">
-                                  {nums.length ? nums.join(" · ") : "Payment numbers on file"}
+                                  {nums.length ? nums.join(" · ") : t("funding.paymentNumbersOnFile")}
                                 </p>
                                 {payee ? (
-                                  <p className="mt-1 line-clamp-2 text-[10px] text-foreground/90">Payee: {payee}</p>
+                                  <p className="mt-1 line-clamp-2 text-[10px] text-foreground/90">
+                                    {t("funding.payeeLabel")} {payee}
+                                  </p>
                                 ) : null}
                                 <p className="mt-1 text-[10px]">
                                   <span className="rounded bg-muted px-1 py-0.5 uppercase">{statusLabel}</span>
                                   {" · "}
-                                  <span className="text-muted-foreground">Avail ~${spend}</span>
+                                  <span className="text-muted-foreground">
+                                    {t("funding.availApprox").replace("{{amount}}", spend)}
+                                  </span>
                                   {typeof r.estimated_response_minutes === "number" ? (
                                     <span className="text-muted-foreground"> · ~{r.estimated_response_minutes} min</span>
                                   ) : null}
@@ -2533,12 +2523,9 @@ export default function DashboardPage() {
                     {qualifiedRetailers.length === 0 && officialCorridorFallback ? (
                       <div className="space-y-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-100">
-                          Official company receive line
+                          {t("funding.officialLineTitle")}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          No retailer desk qualified for this amount and corridor. Pay only the institutional line below — Level 5
-                          operations will verify your receipt (not automatic credit).
-                        </p>
+                        <p className="text-[10px] text-muted-foreground">{t("funding.officialLineBody")}</p>
                         <button
                           type="button"
                           onClick={() => {
@@ -2555,7 +2542,7 @@ export default function DashboardPage() {
                           <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                             {(officialCorridorFallback.payment_numbers ?? [])
                               .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                              .join(" · ") || "Numbers configured by operations"}
+                              .join(" · ") || t("funding.numbersConfigured")}
                           </p>
                           <p className="mt-1 text-[10px] text-muted-foreground">
                             WA {officialCorridorFallback.whatsapp_number || "—"} · {officialCorridorFallback.contact_phone || "—"}
@@ -2571,29 +2558,28 @@ export default function DashboardPage() {
                       <div className="space-y-3 border-t border-border/60 pt-3">
                         {localMmSelectedDesk ? (
                           <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
-                            <p className="font-semibold text-warning">Pay this desk only</p>
+                            <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
                             <p>
-                              Numbers:{" "}
+                              {t("funding.numbersLabel")}{" "}
                               {(localMmSelectedDesk.payment_numbers ?? [])
                                 .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                                .join(" · ") || "(none)"}
+                                .join(" · ") || t("funding.noneInParens")}
                             </p>
                             <p>
-                              Registered payee name(s): {localMmSelectedDesk.registered_payee_names || "Confirm with desk"}
+                              {t("funding.registeredPayeeNames")}{" "}
+                              {localMmSelectedDesk.registered_payee_names || t("funding.confirmWithDesk")}
                             </p>
                             <p>
-                              WhatsApp / call: {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
+                              {t("funding.whatsappCall")} {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
                               {localMmSelectedDesk.contact_phone || "—"}
                             </p>
-                            <p className="font-medium text-destructive">
-                              Match names and numbers exactly before sending. Wrong destination voids the request.
-                            </p>
+                            <p className="font-medium text-destructive">{t("funding.wrongDestinationWarning")}</p>
                           </div>
                         ) : localMmSelectedOfficial ? (
                           <div className="space-y-1 rounded-md border border-sky-600/40 bg-sky-500/10 p-3 text-[11px] sm:text-xs dark:text-sky-50">
-                            <p className="font-semibold text-sky-900 dark:text-sky-100">Official company receive line</p>
+                            <p className="font-semibold text-sky-900 dark:text-sky-100">{t("funding.officialReceiveTitle")}</p>
                             <p>
-                              Payee: <strong>{localMmSelectedOfficial.payee_display_name}</strong>
+                              {t("funding.officialPayee")} <strong>{localMmSelectedOfficial.payee_display_name}</strong>
                             </p>
                             <p className="font-mono">
                               {(localMmSelectedOfficial.payment_numbers ?? [])
@@ -2601,25 +2587,22 @@ export default function DashboardPage() {
                                 .join(" · ")}
                             </p>
                             <p>
-                              WhatsApp / call: {localMmSelectedOfficial.whatsapp_number || "—"} ·{" "}
+                              {t("funding.whatsappCall")} {localMmSelectedOfficial.whatsapp_number || "—"} ·{" "}
                               {localMmSelectedOfficial.contact_phone || "—"}
                             </p>
-                            <p className="font-medium text-foreground">
-                              Operations will match your transaction reference — this is not instant automated approval.
-                            </p>
+                            <p className="font-medium text-foreground">{t("funding.officialOpsNote")}</p>
                           </div>
                         ) : (
                           <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-950 dark:text-amber-50">
-                            Tap a qualified desk or the official line above, then enter your transaction ID.
+                            {t("funding.tapDeskOrOfficial")}
                           </div>
                         )}
                         <div>
                           <label className="mb-1 block text-[10px] font-medium text-foreground">
-                            Transaction ID / reference (required)
+                            {t("funding.txRefLabel")}
                           </label>
                           <p className="mb-1.5 text-[10px] text-muted-foreground">
-                            Pay in your MoMo app first, then paste the receipt or SMS transaction ID here so{" "}
-                            {selectedOfficialRouteId ? "operations can verify against the official receive line." : "the retailer can verify before approving."}
+                            {selectedOfficialRouteId ? t("funding.txRefHintOfficial") : t("funding.txRefHintRetailer")}
                           </p>
                           <input
                             type="text"
@@ -2628,17 +2611,19 @@ export default function DashboardPage() {
                             name="momo-tx-id"
                             value={fundTxReference}
                             onChange={(e) => setFundTxReference(e.target.value)}
-                            placeholder="Paste transaction ID from receipt or SMS"
+                            placeholder={t("funding.txRefPlaceholder")}
                             className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2.5 font-mono text-base outline-none focus:border-primary"
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-[10px] font-medium text-muted-foreground">Optional memo</label>
+                          <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                            {t("funding.optionalMemo")}
+                          </label>
                           <input
                             type="text"
                             value={fundNote}
                             onChange={(e) => setFundNote(e.target.value)}
-                            placeholder="Note to retailer"
+                            placeholder={t("funding.memoPlaceholder")}
                             className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                           />
                         </div>
@@ -2652,7 +2637,7 @@ export default function DashboardPage() {
                 !(l1FundSource === "local" && localMmWizardStep === 1) ? (
                   <details className="mt-2 rounded-lg border border-border/60 bg-muted/30 [&_summary::-webkit-details-marker]:hidden">
                     <summary className="cursor-pointer select-none px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Recent funding requests — tap to expand
+                      {t("funding.recentRequestsExpand")}
                     </summary>
                     <div className="max-h-32 space-y-1 overflow-y-auto border-t border-border/50 px-2 pb-2 pt-1 sm:max-h-36">
                       {fundRequests.slice(0, 6).map((r) => (
@@ -2663,7 +2648,7 @@ export default function DashboardPage() {
                               type="button"
                               className="ml-2 text-primary underline"
                               onClick={async () => {
-                                const appealNote = window.prompt("Briefly explain the issue (never share PINs/passwords)")
+                                const appealNote = window.prompt(t("funding.appealPrompt"))
                                 if (!appealNote?.trim()) return
                                 const { data: s } = await supabase.auth.getSession()
                                 const token = s.session?.access_token
@@ -2681,7 +2666,7 @@ export default function DashboardPage() {
                                 )
                               }}
                             >
-                              Appeal
+                              {t("funding.appeal")}
                             </button>
                           )}
                         </div>
@@ -2850,9 +2835,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="max-h-36 space-y-2 overflow-y-auto rounded border border-border bg-background p-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Incoming local funds</p>
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">{t("funding.incomingLocalTitle")}</p>
                   {retailerIncoming.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">No pending approvals.</p>
+                    <p className="text-[11px] text-muted-foreground">{t("funding.noPendingApprovals")}</p>
                   ) : (
                     retailerIncoming.map((r) => (
                       <div key={r.id} className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
@@ -2865,14 +2850,14 @@ export default function DashboardPage() {
                             className="rounded bg-emerald-600 px-2 py-0.5 text-white"
                             onClick={() => void handleRetailerIncomingAction(r.id, "approve")}
                           >
-                            Approve
+                            {t("funding.approve")}
                           </button>
                           <button
                             type="button"
                             className="rounded bg-rose-700 px-2 py-0.5 text-white"
                             onClick={() => void handleRetailerIncomingAction(r.id, "reject")}
                           >
-                            Reject
+                            {t("funding.reject")}
                           </button>
                         </span>
                       </div>
@@ -2925,8 +2910,9 @@ export default function DashboardPage() {
             localMmWizardStep === 1 ? (
               <div className="shrink-0 border-t border-border/70 bg-card px-4 py-2.5 text-center max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:border-border max-sm:px-3 max-sm:py-2 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px),16px)] max-sm:shadow-[0_-8px_28px_rgba(0,0,0,0.28)] sm:relative sm:px-0">
                 <p className="text-[10px] text-muted-foreground">
-                  Next: tap <span className="font-semibold text-foreground">Continue · find retailers</span> in the form
-                  above — nothing to confirm here yet.
+                  {t("funding.footerNextLead")}{" "}
+                  <span className="font-semibold text-foreground">{t("funding.continueFindRetailers")}</span>{" "}
+                  {t("funding.footerNextTail")}
                 </p>
               </div>
             ) : (
@@ -2937,10 +2923,10 @@ export default function DashboardPage() {
               <div className="mb-0">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground sm:text-sm">
                   {showFundModal === "withdraw"
-                    ? `Withdraw amount (${currency})`
+                    ? t("withdrawal.amountLabel").replace("{{currency}}", currency)
                     : retailerCreditDesk
-                      ? `Requested admin top-up (${currency})`
-                      : `Funding amount in ${currency} (match what you send)`}
+                      ? t("funding.amount.retailerTopup").replace("{{currency}}", currency)
+                      : t("funding.amount.matchSend").replace("{{currency}}", currency)}
                 </label>
                 <input
                   type="number"
@@ -2950,11 +2936,11 @@ export default function DashboardPage() {
                   className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"
                 />
                 <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground sm:text-[11px]">
-                  Amounts convert to ledger USD internally ({currency}).
+                  {t("funding.amount.ledgerNote").replace("{{currency}}", currency)}
                 </p>
                 {showFundModal === "withdraw" && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Available:{" "}
+                    {t("withdrawal.availableLabel")}{" "}
                     {showBalance ? formatUserMoney(mainBalance) : "••••"}
                   </p>
                 )}
@@ -2982,16 +2968,16 @@ export default function DashboardPage() {
               localMmWizardStep === 2 ? (
                 <p className="text-[10px] text-muted-foreground">
                   {!localMmSelectedDesk && !selectedOfficialRouteId
-                    ? "Select a qualified desk or the official company line above."
+                    ? t("withdrawal.status.selectDesk")
                     : !fundTxReference.trim()
-                      ? "Enter your transaction ID / reference from the receipt."
+                      ? t("withdrawal.status.enterTxRef")
                       : !fundPayerName.trim() || !fundPayerPhone.trim()
-                        ? "Sender name and phone are required (step 1)."
+                        ? t("withdrawal.status.senderRequired")
                         : !fundMobileNetwork.trim() || fundingCountryCodeInput.trim().length !== 2
-                          ? "Country and network must be set (use Edit details if needed)."
+                          ? t("withdrawal.status.countryNetwork")
                           : !(parseFloat(fundAmount) > 0)
-                            ? "Funding amount is missing — use Edit details."
-                            : "Ready — tap Confirm Payment to notify the desk."}
+                            ? t("withdrawal.status.amountMissing")
+                            : t("withdrawal.status.readyConfirm")}
                 </p>
               ) : null}
               <button
@@ -3025,18 +3011,21 @@ export default function DashboardPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Processing...
+                    {t("funding.cta.processing")}
                   </>
                 ) : showFundModal === "withdraw" ? (
                   fundAmount.trim()
-                    ? `Withdraw · ${formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale)}`
-                    : "Withdraw"
+                    ? t("withdrawal.cta.withdrawWithAmount").replace(
+                        "{{amount}}",
+                        formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale),
+                      )
+                    : t("withdrawal.cta.withdraw")
                 ) : customerRetailFunding && l1FundSource === "local" ? (
-                  "Confirm Payment"
+                  t("funding.cta.confirmPayment")
                 ) : customerRetailFunding ? (
-                  "Choose Local path to confirm"
+                  t("funding.cta.chooseLocalPath")
                 ) : (
-                  "Add Funds"
+                  t("funding.cta.addFunds")
                 )}
               </button>
               {showFundModal === "add" && customerRetailFunding && l1FundSource === "crypto" ? (
@@ -3045,7 +3034,7 @@ export default function DashboardPage() {
                   className="w-full rounded-lg border border-border py-2 text-sm font-medium"
                   onClick={() => setShowFundModal(null)}
                 >
-                  Close
+                  {t("funding.button.close")}
                 </button>
               ) : null}
             </div>
