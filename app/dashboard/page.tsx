@@ -2255,8 +2255,8 @@ export default function DashboardPage() {
 
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-          <div className="flex h-[min(88dvh,680px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-2xl sm:h-[min(92dvh,700px)] sm:rounded-2xl sm:p-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:items-center sm:p-4 sm:pb-4">
+          <div className="flex h-[min(90svh,680px)] max-h-[calc(100svh-1rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] min-h-0 w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-[min(92dvh,700px)] sm:max-h-[min(94dvh,720px)] sm:rounded-2xl sm:p-5">
             {/* Modal Header */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 pb-2 pt-3 sm:px-0 sm:pb-3 sm:pt-0">
               <h2 className="text-lg font-bold sm:text-xl">
@@ -2280,7 +2280,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-0 [-webkit-overflow-scrolling:touch]">
+            <div className="min-h-0 flex-1 scroll-pb-28 overflow-y-auto overscroll-contain px-4 pb-2 sm:px-0 [-webkit-overflow-scrolling:touch]">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
@@ -2429,7 +2429,7 @@ export default function DashboardPage() {
                 ) : null}
 
                 {l1FundSource === "local" && localMmWizardStep === 2 ? (
-                  <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-2 sm:p-3">
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-2 sm:space-y-3 sm:p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -2472,7 +2472,7 @@ export default function DashboardPage() {
                           Pre-screened: same country, matching network, verified account, active status, and spendable liquidity ≥
                           your request.
                         </p>
-                        <div className="grid max-h-[min(50vh,320px)] gap-2 overflow-y-auto sm:grid-cols-2">
+                        <div className="grid max-h-[min(34svh,240px)] min-h-0 gap-2 overflow-y-auto sm:max-h-[min(50vh,320px)] sm:grid-cols-2">
                           {qualifiedRetailers.map((r) => {
                             const active = selectedRetailerId === r.id && !selectedOfficialRouteId
                             const nums = (r.payment_numbers ?? [])
@@ -2645,40 +2645,44 @@ export default function DashboardPage() {
                 {customerRetailFunding &&
                 showFundModal === "add" &&
                 !(l1FundSource === "local" && localMmWizardStep === 1) ? (
-                <div className="max-h-24 space-y-1 overflow-y-auto rounded bg-muted/40 p-2 sm:max-h-28">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Recent requests</p>
-                  {fundRequests.slice(0, 6).map((r) => (
-                    <div key={r.id} className="text-[11px]">
-                      {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} • {r.status}
-                      {(r.status === "rejected" || r.status === "under_review" || r.status === "pending") && (
-                        <button
-                          type="button"
-                          className="ml-2 text-primary underline"
-                          onClick={async () => {
-                            const appealNote = window.prompt("Briefly explain the issue (never share PINs/passwords)")
-                            if (!appealNote?.trim()) return
-                            const { data: s } = await supabase.auth.getSession()
-                            const token = s.session?.access_token
-                            if (!token) return
-                            const res = await fetch("/api/user/retailer-funding", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                              body: JSON.stringify({ requestId: r.id, appealNote: appealNote.trim() }),
-                            })
-                            if (!res.ok) return
-                            setFundRequests((prev) =>
-                              prev.map((x) =>
-                                x.id === r.id ? { ...x, status: "appealed", appeal_note: appealNote } : x
-                              )
-                            )
-                          }}
-                        >
-                          Appeal
-                        </button>
-                      )}
+                  <details className="mt-2 rounded-lg border border-border/60 bg-muted/30 [&_summary::-webkit-details-marker]:hidden">
+                    <summary className="cursor-pointer select-none px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Recent funding requests — tap to expand
+                    </summary>
+                    <div className="max-h-32 space-y-1 overflow-y-auto border-t border-border/50 px-2 pb-2 pt-1 sm:max-h-36">
+                      {fundRequests.slice(0, 6).map((r) => (
+                        <div key={r.id} className="text-[11px]">
+                          {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} • {r.status}
+                          {(r.status === "rejected" || r.status === "under_review" || r.status === "pending") && (
+                            <button
+                              type="button"
+                              className="ml-2 text-primary underline"
+                              onClick={async () => {
+                                const appealNote = window.prompt("Briefly explain the issue (never share PINs/passwords)")
+                                if (!appealNote?.trim()) return
+                                const { data: s } = await supabase.auth.getSession()
+                                const token = s.session?.access_token
+                                if (!token) return
+                                const res = await fetch("/api/user/retailer-funding", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ requestId: r.id, appealNote: appealNote.trim() }),
+                                })
+                                if (!res.ok) return
+                                setFundRequests((prev) =>
+                                  prev.map((x) =>
+                                    x.id === r.id ? { ...x, status: "appealed", appeal_note: appealNote } : x
+                                  )
+                                )
+                              }}
+                            >
+                              Appeal
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </details>
                 ) : null}
               </div>
             ) : null}
@@ -2921,7 +2925,7 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-            <div className="sticky bottom-0 z-10 shrink-0 space-y-2 border-t border-border/70 bg-card/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm sm:px-0 sm:pb-3 sm:pt-3">
+            <div className="relative z-20 shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] pt-2.5 shadow-[0_-8px_32px_rgba(0,0,0,0.18)] sm:px-0 sm:pb-3 sm:pt-3">
             {(showFundModal === "withdraw" ||
               retailerCreditDesk ||
               (customerRetailFunding && l1FundSource !== "local")) && (
@@ -3006,7 +3010,7 @@ export default function DashboardPage() {
                       fundingCountryCodeInput.trim().length !== 2 ||
                       !(parseFloat(fundAmount) > 0)))
                 }
-                className={`flex w-full items-center justify-center gap-2 rounded-lg py-3 font-semibold text-white transition-colors disabled:opacity-50 ${
+                className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold text-white transition-colors disabled:opacity-50 ${
                   showFundModal === "add" ? "bg-success hover:bg-success/90" : "bg-primary hover:bg-primary/90"
                 }`}
               >

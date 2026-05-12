@@ -23,6 +23,14 @@ const spaceMono = Space_Mono({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  /** Notch / home indicator — enables `env(safe-area-inset-*)` in CSS */
+  viewportFit: 'cover',
+  /**
+   * When the virtual keyboard opens (MoMo receipt / transaction ID fields),
+   * resize the layout viewport so fixed modals shrink and bottom actions stay reachable.
+   * Without this, Android/Chrome often leaves the primary button under the keyboard.
+   */
+  interactiveWidget: 'resizes-content',
 }
 
 export const metadata: Metadata = {
