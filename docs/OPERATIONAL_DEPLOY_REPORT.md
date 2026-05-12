@@ -115,14 +115,14 @@ Repo migration file: `supabase/migrations/20260521120000_l5_funding_settlement_m
 
 | Check | Result |
 |-------|--------|
-| `bash scripts/deploy-vps-git-archive.sh` from this workspace | **NOT RUN** — requires SSH reachability and keys to `REMOTE_HOST` (default in script). After `git push`, operator should deploy and `pm2 restart nexus`. |
+| `bash scripts/deploy-vps-git-archive.sh` (after commit `d61dd73`) | **PASS** — `npm ci`, `next build`, PM2 `nexus` restarted **online** on default `REMOTE_HOST` |
 
 ### Live domain
 
 | Check | Result |
 |-------|--------|
 | `GET https://nexuspro.it.com/api/health` | **PASS** — HTTP 200 (`{"ok":true}` at time of check) |
-| Runtime includes this commit | **PENDING** until VPS deploy after push |
+| Runtime includes L5 settlement commit | **PASS** — deploy script ran after push |
 | TEST 1 retailer override (live balances + treasury unchanged) | **PENDING** — real accounts |
 | TEST 2 treasury mode (MAIN_TREASURY debit; retailer retail unchanged) | **PENDING** |
 | TEST 3 insufficient retailer retail → 400, no movements | **PENDING** |
@@ -141,6 +141,5 @@ Repo migration file: `supabase/migrations/20260521120000_l5_funding_settlement_m
 
 ### Known risks
 
-1. **Production app revision**: DB migration is live; app **must** be deployed so PATCH accepts `approvalMode` and UI shows dual rails — until then older clients could error or lack buttons.
+1. **Financial live tests (TEST 1–3)** were not executed with signed-in production accounts in this session — operator should run balance-before/after checks on retailer, customer, and `treasury_balances` (MAIN_TREASURY).
 2. **Operational mis-click**: mitigated by labeled rails; treasury button uses sky styling + warning copy.
-3. **Financial live tests** were not executed in this environment (no production credentials).
