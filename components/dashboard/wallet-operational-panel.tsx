@@ -543,9 +543,19 @@ function deskRowKey(row: OperationsDeskApiRow): string {
   return `${row.kind}:${row.id}`
 }
 
-export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
+export function AdminOperationalAssets({
+  isGuest,
+  focusSupportThreadId,
+  onFocusSupportThreadConsumed,
+}: {
+  isGuest?: boolean
+  focusSupportThreadId?: string | null
+  onFocusSupportThreadConsumed?: () => void
+}) {
   const { user: authUser } = useAuth()
   const [sub, setSub] = useState<"approval" | "users" | "history" | "support">("approval")
+  const [supportFeedTick, setSupportFeedTick] = useState(0)
+  const bumpSupportFeed = useCallback(() => setSupportFeedTick((n) => n + 1), [])
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -684,6 +694,11 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     void refreshHistory()
   }, [refreshApproval, refreshHistory])
 
+  useEffect(() => {
+    const id = focusSupportThreadId?.trim()
+    if (id) setSub("support")
+  }, [focusSupportThreadId])
+
   useOperationalRealtime({
     enabled: !isGuest && Boolean(authUser?.id),
     role: "admin",
@@ -693,8 +708,14 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
     onTreasury: bumpAdminQueues,
     onContainerEvents: bumpAdminQueues,
     onRetailerApplications: bumpAdminQueues,
-    onSupportThreads: bumpAdminQueues,
-    onSupportMessages: bumpAdminQueues,
+    onSupportThreads: () => {
+      bumpAdminQueues()
+      bumpSupportFeed()
+    },
+    onSupportMessages: () => {
+      bumpAdminQueues()
+      bumpSupportFeed()
+    },
     onAccountNotifications: bumpAdminQueues,
   })
 
@@ -982,7 +1003,13 @@ export function AdminOperationalAssets({ isGuest }: { isGuest?: boolean }) {
         ))}
       </div>
 
-      {sub === "support" && <AdminSupportChatPanel />}
+      {sub === "support" && (
+        <AdminSupportChatPanel
+          initialThreadId={focusSupportThreadId}
+          onInitialThreadConsumed={onFocusSupportThreadConsumed}
+          refreshTick={supportFeedTick}
+        />
+      )}
 
       {sub === "users" && (
         <Card className="border-border bg-card p-4">

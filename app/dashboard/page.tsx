@@ -148,6 +148,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("container")
   const tradeView: DashboardTradeView = "overview"
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
+  /** Deep-link / notification → operational support thread (wallet Assets). */
+  const [supportThreadFocusId, setSupportThreadFocusId] = useState<string | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
@@ -1190,6 +1192,10 @@ export default function DashboardPage() {
         case "orders":
           setActiveTab("wallet")
           break
+        case "support_thread":
+          setActiveTab("wallet")
+          setSupportThreadFocusId(nav.threadId)
+          break
         case "expert-analysis":
           setActiveTab("wallstreet")
           showToast("Open Wallstreet for analysis — expert execution routes were retired.", "success")
@@ -1200,6 +1206,24 @@ export default function DashboardPage() {
     },
     [router, showToast]
   )
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const u = new URL(window.location.href)
+      const raw = u.searchParams.get("supportThread")
+      if (!raw?.trim()) return
+      const tid = raw.trim()
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) return
+      setSupportThreadFocusId(tid)
+      setActiveTab("wallet")
+      u.searchParams.delete("supportThread")
+      const qs = u.searchParams.toString()
+      window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   useEffect(() => {
     registerAppNavigator(handleNotificationNav)
@@ -2778,6 +2802,8 @@ export default function DashboardPage() {
                 retailerCreditDesk={retailerCreditDesk}
                 isGuestSession={isGuestSession}
                 operationalMode={operationalWorkspace}
+                focusSupportThreadId={supportThreadFocusId}
+                onFocusSupportThreadConsumed={() => setSupportThreadFocusId(null)}
               />
             </main>
           </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { notifyLiquidityAdminsSupportQueue } from "@/lib/support-thread-notifications"
 
 /** User lists / creates operational support threads (appeals). */
 export async function GET(request: Request) {
@@ -82,6 +83,16 @@ export async function POST(request: Request) {
     })
     if (mErr) {
       return NextResponse.json({ error: mErr.message }, { status: 500 })
+    }
+
+    try {
+      await notifyLiquidityAdminsSupportQueue(admin, {
+        threadId: thread.id,
+        title: "New support / appeal",
+        body: text.slice(0, 400),
+      })
+    } catch (ne) {
+      console.error("[support] notify admins failed:", ne)
     }
 
     return NextResponse.json({ threadId: thread.id })

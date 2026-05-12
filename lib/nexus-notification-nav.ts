@@ -6,3 +6,5 @@ export type NexusNotificationNav =
   | { kind: "orders" }
   | { kind: "expert-analysis"; analysisId: string }
   | { kind: "detail" }
+  /** Operational support / appeals thread (wallet → Assets → Support). */
+  | { kind: "support_thread"; threadId: string }

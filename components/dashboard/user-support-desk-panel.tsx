@@ -1,18 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Headphones, Loader2, Send } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Headphones, Loader2, Plus, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { useAuth } from "@/contexts/AuthContext"
+import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
 import { supabase } from "@/lib/supabaseClient"
 
 type ThreadRow = {
   id: string
-  user_id: string
   category: string
   status: string
-  unread_for_admin: boolean
+  unread_for_user: boolean
   last_message_at: string
   created_at: string
 }
@@ -24,19 +25,22 @@ type MsgRow = {
   created_at: string
 }
 
-export function AdminSupportChatPanel(props: {
+export function UserSupportDeskPanel(props: {
   initialThreadId?: string | null
   onInitialThreadConsumed?: () => void
-  refreshTick?: number
 }) {
+  const { user } = useAuth()
   const [threads, setThreads] = useState<ThreadRow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<MsgRow[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [loadingThread, setLoadingThread] = useState(false)
   const [reply, setReply] = useState("")
+  const [compose, setCompose] = useState("")
+  const [creating, setCreating] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
   const endRef = useRef<HTMLDivElement>(null)
   const consumedInitial = useRef<string | null>(null)
 
@@ -55,7 +59,7 @@ export function AdminSupportChatPanel(props: {
     setLoadingList(true)
     setError(null)
     try {
-      const res = await fetch("/api/admin/support-threads", { headers: h, cache: "no-store" })
+      const res = await fetch("/api/user/support-threads", { headers: h, cache: "no-store" })
       const j = (await res.json()) as { threads?: ThreadRow[]; error?: string }
       if (!res.ok) {
         setError(j.error ?? "Failed to load threads")
@@ -73,22 +77,29 @@ export function AdminSupportChatPanel(props: {
     setLoadingThread(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/support-threads/${tid}`, { headers: h, cache: "no-store" })
+      const res = await fetch(`/api/user/support-threads/${tid}`, { headers: h, cache: "no-store" })
       const j = (await res.json()) as { messages?: MsgRow[]; error?: string }
       if (!res.ok) {
         setError(j.error ?? "Failed to load thread")
         return
       }
       setMessages(j.messages ?? [])
-      await fetch(`/api/admin/support-threads/${tid}/read`, { method: "PATCH", headers: h })
     } finally {
       setLoadingThread(false)
     }
   }, [])
 
+  useOperationalRealtime({
+    enabled: Boolean(user?.id),
+    role: "trading_user",
+    userId: user?.id ?? null,
+    onSupportThreads: () => setTick((n) => n + 1),
+    onSupportMessages: () => setTick((n) => n + 1),
+  })
+
   useEffect(() => {
     void loadThreads()
-  }, [loadThreads, props.refreshTick])
+  }, [loadThreads, tick])
 
   useEffect(() => {
     const id = props.initialThreadId?.trim()
@@ -104,11 +115,37 @@ export function AdminSupportChatPanel(props: {
 
   useEffect(() => {
     if (selectedId) void loadMessages(selectedId)
-  }, [selectedId, loadMessages, props.refreshTick])
+  }, [selectedId, loadMessages, tick])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, loadingThread])
+  }, [messages])
+
+  const createThread = async () => {
+    const text = compose.trim()
+    if (!text || creating) return
+    const h = await authHeaders()
+    if (!h) return
+    setCreating(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/user/support-threads", {
+        method: "POST",
+        headers: { ...h, "Content-Type": "application/json" },
+        body: JSON.stringify({ body: text, category: "appeal" }),
+      })
+      const j = (await res.json()) as { threadId?: string; error?: string }
+      if (!res.ok || !j.threadId) {
+        setError(j.error ?? "Could not create thread")
+        return
+      }
+      setCompose("")
+      await loadThreads()
+      setSelectedId(j.threadId)
+    } finally {
+      setCreating(false)
+    }
+  }
 
   const sendReply = async () => {
     const tid = selectedId
@@ -119,7 +156,7 @@ export function AdminSupportChatPanel(props: {
     setSending(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/support-threads/${tid}/reply`, {
+      const res = await fetch(`/api/user/support-threads/${tid}/reply`, {
         method: "POST",
         headers: { ...h, "Content-Type": "application/json" },
         body: JSON.stringify({ body: text }),
@@ -131,72 +168,73 @@ export function AdminSupportChatPanel(props: {
       }
       setReply("")
       await loadMessages(tid)
+      await loadThreads()
     } finally {
       setSending(false)
     }
   }
 
-  const selected = useMemo(() => threads.find((t) => t.id === selectedId), [threads, selectedId])
-
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_1fr]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,260px)_1fr]">
       <Card className="border-border bg-card p-3">
         <div className="mb-2 flex items-center gap-2">
           <Headphones className="h-4 w-4 text-primary" />
-          <h4 className="font-semibold">Appeals &amp; support</h4>
+          <h4 className="font-semibold">Support</h4>
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">
-          Live list (Realtime refresh). Select a thread to view history and reply. Notifications deep-link here.
-        </p>
+        <p className="mb-3 text-[11px] text-muted-foreground">Appeals and account disputes. Replies notify you in-app.</p>
+        <div className="mb-3 space-y-2">
+          <textarea
+            value={compose}
+            onChange={(e) => setCompose(e.target.value)}
+            placeholder="Describe your issue…"
+            rows={3}
+            className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+          <Button type="button" size="sm" className="w-full gap-2" onClick={() => void createThread()} disabled={creating || !compose.trim()}>
+            <Plus className="h-4 w-4" />
+            Open thread
+          </Button>
+        </div>
         {loadingList ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : (
-          <ul className="max-h-[min(420px,55vh)] space-y-1 overflow-y-auto text-sm">
-            {threads.length === 0 ? (
-              <li className="text-xs text-muted-foreground">No threads yet.</li>
-            ) : (
-              threads.map((t) => (
-                <li key={t.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(t.id)}
-                    className={`w-full rounded-lg border px-2 py-2 text-left transition-colors ${
-                      selectedId === t.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-[10px] text-muted-foreground">{t.id.slice(0, 8)}…</span>
-                      {t.unread_for_admin ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
-                    </div>
-                    <p className="truncate text-xs capitalize text-muted-foreground">{t.category.replace(/_/g, " ")}</p>
-                  </button>
-                </li>
-              ))
-            )}
+          <ul className="max-h-[min(280px,40vh)] space-y-1 overflow-y-auto text-sm">
+            {threads.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(t.id)}
+                  className={`w-full rounded-lg border px-2 py-2 text-left transition-colors ${
+                    selectedId === t.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[10px] text-muted-foreground">{t.id.slice(0, 8)}…</span>
+                    {t.unread_for_user ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
+                  </div>
+                  <p className="truncate text-xs capitalize text-muted-foreground">{t.category.replace(/_/g, " ")}</p>
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </Card>
 
       <Card className="border-border bg-card p-4">
         {!selectedId ? (
-          <p className="text-sm text-muted-foreground">Select a thread to view history and reply.</p>
+          <p className="text-sm text-muted-foreground">Select a thread or open a new one.</p>
         ) : (
           <>
-            <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-border pb-2">
-              <span className="break-all text-xs font-mono text-muted-foreground">{selectedId}</span>
-              {selected ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase">{selected.status}</span>
-              ) : null}
-            </div>
-            <div className="mb-4 max-h-[min(380px,50vh)] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3">
+            <div className="mb-3 border-b border-border pb-2 font-mono text-[10px] text-muted-foreground break-all">{selectedId}</div>
+            <div className="mb-4 max-h-[min(320px,45vh)] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3">
               {loadingThread ? (
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (
                 messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === "admin" ? "justify-end" : "justify-start"}`}>
+                  <div key={m.id} className={`flex ${m.sender_role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[92%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${
-                        m.sender_role === "admin"
+                        m.sender_role === "user"
                           ? "bg-primary text-primary-foreground"
                           : "bg-card text-foreground ring-1 ring-border"
                       }`}
@@ -213,7 +251,7 @@ export function AdminSupportChatPanel(props: {
               <Input
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
-                placeholder="Reply to customer…"
+                placeholder="Reply…"
                 disabled={sending}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -222,7 +260,7 @@ export function AdminSupportChatPanel(props: {
                   }
                 }}
               />
-              <Button type="button" size="icon" onClick={() => void sendReply()} disabled={sending || !reply.trim()} aria-label="Send reply">
+              <Button type="button" size="icon" onClick={() => void sendReply()} disabled={sending || !reply.trim()} aria-label="Send">
                 <Send className="h-4 w-4" />
               </Button>
             </div>

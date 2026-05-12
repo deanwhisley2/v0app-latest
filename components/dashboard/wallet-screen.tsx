@@ -28,9 +28,11 @@ import {
   Loader2,
   Plus,
   Minus,
+  Headphones,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { AdminOperationalAssets, RetailerOperationalAssets } from "@/components/dashboard/wallet-operational-panel"
+import { UserSupportDeskPanel } from "@/components/dashboard/user-support-desk-panel"
 
 interface WalletScreenProps {
   coins: Array<{
@@ -45,10 +47,13 @@ interface WalletScreenProps {
   isGuestSession?: boolean
   /** Hide demo portfolio/earn; show only Assets operational panels (admin L5 / retailer desk). */
   operationalMode?: boolean
+  /** Notification / ?supportThread= deep-link → open this thread in Support. */
+  focusSupportThreadId?: string | null
+  onFocusSupportThreadConsumed?: () => void
 }
 
 type WalletTab = "portfolio" | "assets" | "earn"
-type AssetSubTab = "send" | "receive" | "history" | "approval" | "deposit" | "withdraw"
+type AssetSubTab = "send" | "receive" | "history" | "approval" | "deposit" | "withdraw" | "support"
 type PaymentMethod = "mtn" | "airtel" | "bank" | "wallet"
 
 export function WalletScreen({
@@ -57,6 +62,8 @@ export function WalletScreen({
   retailerCreditDesk = false,
   isGuestSession = false,
   operationalMode = false,
+  focusSupportThreadId = null,
+  onFocusSupportThreadConsumed,
 }: WalletScreenProps) {
   const [activeTab, setActiveTab] = useState<WalletTab>("portfolio")
   const [assetSubTab, setAssetSubTab] = useState<AssetSubTab>("send")
@@ -80,6 +87,18 @@ export function WalletScreen({
       setActiveTab("assets")
     }
   }, [operationalMode, tradingUserLevel, retailerCreditDesk])
+
+  /** Deep-link to support thread (standard users). */
+  useEffect(() => {
+    if (
+      focusSupportThreadId &&
+      !isGuestSession &&
+      tradingUserLevel !== 5 &&
+      !retailerCreditDesk
+    ) {
+      setAssetSubTab("support")
+    }
+  }, [focusSupportThreadId, isGuestSession, tradingUserLevel, retailerCreditDesk])
 
   // Generate holdings with random balances
   const holdings = useMemo(() => 
@@ -294,7 +313,11 @@ export function WalletScreen({
       {activeTab === "assets" && (
         <div className="space-y-4">
           {tradingUserLevel === 5 && !isGuestSession ? (
-            <AdminOperationalAssets isGuest={isGuestSession} />
+            <AdminOperationalAssets
+              isGuest={isGuestSession}
+              focusSupportThreadId={focusSupportThreadId}
+              onFocusSupportThreadConsumed={onFocusSupportThreadConsumed}
+            />
           ) : retailerCreditDesk && !isGuestSession ? (
             <RetailerOperationalAssets isGuest={isGuestSession} />
           ) : (
@@ -306,6 +329,7 @@ export function WalletScreen({
                   { id: "receive" as const, label: "Receive", icon: Download },
                   { id: "history" as const, label: "History", icon: History },
                   { id: "approval" as const, label: "Approval", icon: ShieldCheck },
+                  ...(!isGuestSession ? ([{ id: "support" as const, label: "Support", icon: Headphones }] as const) : []),
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -321,6 +345,13 @@ export function WalletScreen({
                   </button>
                 ))}
               </div>
+
+              {assetSubTab === "support" && !isGuestSession ? (
+                <UserSupportDeskPanel
+                  initialThreadId={focusSupportThreadId}
+                  onInitialThreadConsumed={onFocusSupportThreadConsumed}
+                />
+              ) : null}
 
           {/* Deposit */}
           {assetSubTab === "deposit" && (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getUserFromBearer } from "@/lib/auth-api"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
+import { notifyUserSupportReply } from "@/lib/support-thread-notifications"
 
 export async function POST(request: Request, ctx: { params: Promise<{ threadId: string }> }) {
   try {
@@ -18,18 +19,26 @@ export async function POST(request: Request, ctx: { params: Promise<{ threadId: 
     }
 
     const admin = createAdminClient()
-    const { data: thread, error: te } = await admin.from("operational_support_threads").select("id").eq("id", tid).maybeSingle()
+    const { data: thread, error: te } = await admin
+      .from("operational_support_threads")
+      .select("id,user_id")
+      .eq("id", tid)
+      .maybeSingle()
     if (te) return NextResponse.json({ error: te.message }, { status: 500 })
-    if (!thread) return NextResponse.json({ error: "Not found." }, { status: 404 })
+    if (!thread?.user_id) return NextResponse.json({ error: "Not found." }, { status: 404 })
 
     const now = new Date().toISOString()
-    const { error: me } = await admin.from("operational_support_messages").insert({
-      thread_id: tid,
-      sender_user_id: actor.id,
-      sender_role: "admin",
-      body: text,
-    })
-    if (me) return NextResponse.json({ error: me.message }, { status: 500 })
+    const { data: inserted, error: me } = await admin
+      .from("operational_support_messages")
+      .insert({
+        thread_id: tid,
+        sender_user_id: actor.id,
+        sender_role: "admin",
+        body: text,
+      })
+      .select("id")
+      .single()
+    if (me || !inserted?.id) return NextResponse.json({ error: me?.message ?? "Insert failed." }, { status: 500 })
 
     const { error: ue } = await admin
       .from("operational_support_threads")
@@ -43,6 +52,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ threadId: 
       })
       .eq("id", tid)
     if (ue) return NextResponse.json({ error: ue.message }, { status: 500 })
+
+    try {
+      await notifyUserSupportReply(admin, {
+        userId: thread.user_id,
+        threadId: tid,
+        preview: text,
+        messageId: inserted.id,
+      })
+    } catch (ne) {
+      console.error("[support] notify user failed:", ne)
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e) {
