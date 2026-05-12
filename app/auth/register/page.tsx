@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +30,16 @@ import {
   optimizeSelfieUpload,
   validateSelfieQuality,
 } from "@/lib/selfie-hash"
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? ""
+
+function turnstileLanguageFor(lang: AppLanguage): string {
+  if (lang === "fr") return "fr"
+  if (lang === "ar") return "ar"
+  if (lang === "sw") return "sw"
+  if (lang === "pt") return "pt"
+  return "en"
+}
 
 const REGISTER_JOELIN_CHIPS = [
   { label: "Registration steps", prompt: "What happens step by step after I submit this registration form?" },
@@ -63,6 +74,8 @@ export default function RegisterPage() {
   const [operatingCountry, setOperatingCountry] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance | null>(null)
 
   useEffect(() => {
     setLanguage(ctxLang)
@@ -110,6 +123,10 @@ export default function RegisterPage() {
       setError("Passwords do not match.")
       return
     }
+    if (TURNSTILE_SITE_KEY && !turnstileToken?.trim()) {
+      setError(reg.captchaRequired)
+      return
+    }
     setIsSubmitting(true)
     setPreferences({
       language,
@@ -127,6 +144,7 @@ export default function RegisterPage() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          turnstile_token: turnstileToken?.trim() ?? "",
           email: trimmedEmail,
           password,
           full_name: trimmedName,
@@ -150,10 +168,14 @@ export default function RegisterPage() {
         const json = (await res.json().catch(() => ({}))) as { error?: string }
         if (!res.ok) {
           setError(json.error || "Registration failed")
+          turnstileRef.current?.reset()
+          setTurnstileToken(null)
           return
         }
       } else if (!res.ok) {
         setError("Registration failed")
+        turnstileRef.current?.reset()
+        setTurnstileToken(null)
         return
       }
 
@@ -166,6 +188,8 @@ export default function RegisterPage() {
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
+      turnstileRef.current?.reset()
+      setTurnstileToken(null)
     } finally {
       setIsSubmitting(false)
     }
@@ -395,6 +419,39 @@ export default function RegisterPage() {
               disabled={isSubmitting}
             />
           </div>
+
+          {TURNSTILE_SITE_KEY ? (
+            <div className="space-y-2">
+              <Label>{reg.captchaLabel}</Label>
+              <p className="text-xs text-muted-foreground">{reg.captchaHint}</p>
+              <div className="flex w-full justify-center overflow-x-auto" dir="ltr">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={TURNSTILE_SITE_KEY}
+                  options={{
+                    theme: "auto",
+                    size: "flexible",
+                    language: turnstileLanguageFor(language),
+                  }}
+                  onSuccess={(token) => setTurnstileToken(token)}
+                  onExpire={() => {
+                    setTurnstileToken(null)
+                    turnstileRef.current?.reset()
+                  }}
+                  onError={() => {
+                    setTurnstileToken(null)
+                  }}
+                />
+              </div>
+            </div>
+          ) : process.env.NODE_ENV === "production" ? (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+              Sign-up security is not fully configured (missing NEXT_PUBLIC_TURNSTILE_SITE_KEY). Registration may fail
+              until both Turnstile keys are set on the server.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">{reg.captchaDevSkip}</p>
+          )}
 
           {error ? (
             <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
