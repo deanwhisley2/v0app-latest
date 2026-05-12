@@ -2,7 +2,7 @@
 
 ## Goal
 
-Restore Next.js app on VPS after crash; PM2 `nexus`, app dir `/var/www/nexus`, nginx → `127.0.0.1:3000`.
+Restore Next.js app on VPS after crash; PM2 `nexus`, app dir **`/opt/nexus-pro`** (production: **`ssh vpsuser@67.159.52.40`**), nginx → `127.0.0.1:3000`.
 
 ## Session log
 
@@ -13,14 +13,14 @@ Restore Next.js app on VPS after crash; PM2 `nexus`, app dir `/var/www/nexus`, n
 
 ### Pitfall logged
 
-- Do **not** run `ssh root@173.214.164.179 ...` **from inside the VPS** (SSH-to-self). You are already on the server; use commands directly. Nested SSH triggers host-key prompts and is useless.
+- Do **not** SSH from **inside** the VPS **to the same host** (SSH-to-self). You are already on the server; use commands directly. Nested SSH triggers host-key prompts and is useless. Production SSH user/host: **`vpsuser@67.159.52.40`** (not any unrelated IP from old drafts).
 
 ### Step 1 command (minimal baseline)
 
-On the VPS as `root`:
+On the VPS as `vpsuser` (or root if that is how you manage the box):
 
 ```bash
-echo "=== paths ===" && ls -la /var/www/nexus/.env.local /var/www/nexus/ecosystem.config.js /var/www/nexus/package.json 2>&1
+echo "=== paths ===" && ls -la /opt/nexus-pro/.env.local /opt/nexus-pro/ecosystem.config.js /opt/nexus-pro/package.json 2>&1
 echo "=== pm2 ===" && pm2 list
 echo "=== port 3000 ===" && ss -tlnp | grep -E ':3000\b' || echo "(nothing listening on 3000)"
 ```

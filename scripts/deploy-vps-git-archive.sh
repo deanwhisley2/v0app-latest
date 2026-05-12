@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build a tarball from the current Git tree (tracked files only), upload to VPS, extract, run deploy.sh.
+# Canonical production target: vpsuser@67.159.52.40 → REMOTE_APP_DIR=/opt/nexus-pro (defaults below).
 # Must be run from a machine that has this repo as a git clone (with .git).
 #
 # Usage (from anywhere):

@@ -1,12 +1,12 @@
 /**
- * Legacy server path preset. Prefer repo `ecosystem.config.js`:
- * `npm run start:with-recovery` runs reconciliation before `next start`.
+ * Legacy alternate PM2 name (`nexus-pro`). Prefer repo `ecosystem.config.js` (`nexus`).
+ * `cwd` follows this file so deploy works at /opt/nexus-pro or any clone path.
  */
 module.exports = {
   apps: [
     {
       name: "nexus-pro",
-      cwd: "/var/www/nexus-pro",
+      cwd: __dirname,
       script: "npm",
       args: "run start:with-recovery",
       instances: 1,
