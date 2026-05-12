@@ -10,6 +10,8 @@ type Reg = {
   passwordHint: string
   language: string
   currency: string
+  /** Operating country (ISO2) — optional at signup */
+  operatingCountry?: string
   /** Optional referrer code from link or pasted id */
   referralCodeOptional?: string
   submit: string
@@ -29,6 +31,7 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "At least 6 characters (use a strong password).",
     language: "Language",
     currency: "Display currency",
+    operatingCountry: "Operating country (optional)",
     referralCodeOptional: "Referral ID (optional)",
     submit: "Register",
     submitting: "Creating account…",

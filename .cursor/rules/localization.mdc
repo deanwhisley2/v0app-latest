@@ -1,0 +1,12 @@
+---
+description: UI localization only — English canonical packs; no translated money logic
+alwaysApply: true
+---
+
+# Localization (institutional)
+
+- **Separation:** User-facing copy (UI, onboarding hints, assistant *wording* templates) may be localized. **Database fields, ledger rows, API identifiers, treasury math, settlement keys, and audit logs** stay English / machine-canonical in code. Never branch financial decisions on `t('…')` output.
+- **Source of truth:** `lib/i18n/app-messages.ts` — flat keys with **English** full pack; other languages are partial overlays. Resolution: `lib/i18n/resolver.ts` (overlay → English → `common.missingTranslation` → humanized key). Constants: `lib/i18n/constants.ts` (`CANONICAL_UI_LANGUAGE`).
+- **Preferences:** `lib/user-preferences.ts` + `UserPreferencesContext` — `language`, `currency`, optional `country` (ISO2). Regional **suggestions** (not accounting): `lib/i18n/region-defaults.ts`. `document.documentElement.lang` + `dir` for RTL (`ar`).
+- **Persistence:** Auth `user_metadata` preferred language/currency; `profiles.funding_country_code` for operating country (API + hydration). Do not stuff ledger payloads into translation files.
+- **Phased work:** Phase 1 = engine + keys + country pairing. Later phases extend dictionaries and AI/notification hooks — still **no** translated core logic.

@@ -21,6 +21,7 @@ import {
   LogOut,
   Link2,
   ArrowDownUp,
+  MapPin,
 } from "lucide-react"
 import { ExchangeBinding } from "./exchange-binding"
 import { SecurityCenter } from "./security-center"
@@ -37,6 +38,7 @@ import {
 } from "@/lib/selfie-hash"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
+import { OPERATING_COUNTRY_OPTIONS, suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
@@ -70,6 +72,7 @@ export type SettingsView =
   | "nexus-learner"
   | "currency"
   | "language"
+  | "region"
   | "theme"
   | "wire-currency"
   | "payment-methods"
@@ -105,8 +108,9 @@ export function SettingsScreen({
   tradingUserLevel = 1,
   retailerCreditDesk = false,
 }: SettingsScreenProps) {
-  const { t, language: appLanguage, currency: appCurrency, setPreferences } = useUserPreferences()
+  const { t, language: appLanguage, currency: appCurrency, country: appCountry, setPreferences } = useUserPreferences()
   const [currentView, setCurrentView] = useState<SettingsView>("main")
+  const [regionMessage, setRegionMessage] = useState<string | null>(null)
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark")
   const [wireCurrency, setWireCurrency] = useState("USD")
   const [securityLevel, setSecurityLevel] = useState<1 | 2 | 3>(1)
@@ -379,6 +383,24 @@ export function SettingsScreen({
 
   const languageLabel = LANGUAGE_OPTIONS.find((o) => o.code === appLanguage)?.label ?? appLanguage
   const currencyLabel = CURRENCY_OPTIONS.find((o) => o.code === appCurrency)?.label ?? appCurrency
+  const countryLabel = appCountry
+    ? OPERATING_COUNTRY_OPTIONS.find((o) => o.code === appCountry)?.label ?? appCountry
+    : "—"
+
+  async function persistFundingCountry(code: string) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) throw new Error("Session expired. Please sign in again.")
+    const res = await fetch("/api/user/funding-country", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ code }),
+    })
+    const out = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) throw new Error(out.error || "Could not save country")
+  }
 
   const settingsItems: SettingItem[] = [
     { key: "exchanges", icon: <Link2 className="h-5 w-5" />, label: "Connected Exchanges", description: "Binance, Bybit, Bitget, etc.", badge: "New" },
@@ -397,6 +419,12 @@ export function SettingsScreen({
       icon: <Globe className="h-5 w-5" />,
       label: t("settings.item.language"),
       description: languageLabel,
+    },
+    {
+      key: "region",
+      icon: <MapPin className="h-5 w-5" />,
+      label: t("settings.item.region"),
+      description: countryLabel,
     },
     { key: "theme", icon: <Palette className="h-5 w-5" />, label: "Theme", description: theme.charAt(0).toUpperCase() + theme.slice(1) },
     { key: "wire-currency", icon: <Banknote className="h-5 w-5" />, label: "Direct Wire Currency", description: wireCurrency },
@@ -874,6 +902,53 @@ export function SettingsScreen({
               </button>
             ))}
           </div>
+        </Card>
+      </div>
+    )
+  }
+
+  if (currentView === "region") {
+    return (
+      <div className="space-y-4">
+        {renderBackButton()}
+        <Card className="border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold">{t("settings.regionTitle")}</h3>
+          <p className="mb-4 text-sm text-muted-foreground">{t("settings.regionHint")}</p>
+          {regionMessage ? (
+            <p
+              className={`mb-4 text-sm ${regionMessage.includes("Could not") || regionMessage.includes("expired") ? "text-destructive" : "text-success"}`}
+            >
+              {regionMessage}
+            </p>
+          ) : null}
+          <div className="mb-4 grid gap-2 sm:grid-cols-2">
+            {OPERATING_COUNTRY_OPTIONS.map((opt) => (
+              <button
+                key={opt.code}
+                type="button"
+                onClick={() => {
+                  void (async () => {
+                    setRegionMessage(null)
+                    try {
+                      await persistFundingCountry(opt.code)
+                      const suggested = suggestPreferencesForCountry(opt.code)
+                      setPreferences({ country: opt.code, ...suggested })
+                      setRegionMessage(t("settings.regionSaved"))
+                    } catch (e) {
+                      setRegionMessage(e instanceof Error ? e.message : "Could not save")
+                    }
+                  })()
+                }}
+                className={`flex min-h-[48px] items-center justify-between rounded-lg px-4 py-3 text-left transition-colors ${
+                  appCountry === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
+                }`}
+              >
+                <span className="font-medium">{opt.label}</span>
+                {appCountry === opt.code ? <Check className="h-5 w-5 shrink-0" /> : null}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings.regionApplySuggestion")}</p>
         </Card>
       </div>
     )

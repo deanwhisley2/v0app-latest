@@ -21,6 +21,7 @@ import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
+import { OPERATING_COUNTRY_OPTIONS } from "@/lib/i18n/region-defaults"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
 import {
   imageDataUrlToFaceTemplate,
@@ -59,6 +60,7 @@ export default function RegisterPage() {
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
   const [referralCode, setReferralCode] = useState("")
+  const [operatingCountry, setOperatingCountry] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -109,7 +111,11 @@ export default function RegisterPage() {
       return
     }
     setIsSubmitting(true)
-    setPreferences({ language, currency })
+    setPreferences({
+      language,
+      currency,
+      ...(operatingCountry ? { country: operatingCountry } : {}),
+    })
     try {
       const trimmedEmail = email.trim()
       const trimmedName = fullName.trim()
@@ -127,6 +133,7 @@ export default function RegisterPage() {
           phone: trimmedPhone,
           preferred_language: language,
           preferred_currency: currency,
+          ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
           ...(referralCode.trim() ? { referral_code: referralCode.trim() } : {}),
           ...(selfieDataUrl && selfieTemplate && selfieHash
             ? {
@@ -248,6 +255,29 @@ export default function RegisterPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{reg.operatingCountry ?? "Operating country (optional)"}</Label>
+            <Select
+              value={operatingCountry || "none"}
+              onValueChange={(v) => setOperatingCountry(v === "none" ? "" : v)}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {OPERATING_COUNTRY_OPTIONS.map((o) => (
+                  <SelectItem key={o.code} value={o.code}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used for local funding corridors. You can change this later in Settings.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="register-full-name">{reg.fullName}</Label>

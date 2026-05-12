@@ -15,6 +15,8 @@ type RegisterBody = {
   phone?: string
   preferred_language?: string
   preferred_currency?: string
+  /** ISO 3166-1 alpha-2 — persisted to profiles.funding_country_code when valid */
+  funding_country_code?: string
   referral_code?: string
   selfie_image?: string
   selfie_template?: string
@@ -44,6 +46,9 @@ export async function POST(request: Request) {
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
   const preferred_currency =
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
+  const funding_country_raw =
+    typeof body.funding_country_code === "string" ? body.funding_country_code.trim().toUpperCase().slice(0, 2) : ""
+  const funding_country_code = /^[A-Z]{2}$/.test(funding_country_raw) ? funding_country_raw : ""
   const referralInvite = normalizeReferralCodeInput(
     typeof body.referral_code === "string" ? body.referral_code : ""
   )
@@ -140,6 +145,16 @@ export async function POST(request: Request) {
         if (!msg.includes("unique") && !msg.includes("duplicate")) {
           console.warn("[register] referral profile update:", refErr.message)
           break
+        }
+      }
+
+      if (funding_country_code) {
+        const { error: fcErr } = await admin
+          .from("profiles")
+          .update({ funding_country_code, updated_at: nowIso })
+          .eq("id", newUserId)
+        if (fcErr) {
+          console.warn("[register] funding_country_code profile update:", fcErr.message)
         }
       }
 

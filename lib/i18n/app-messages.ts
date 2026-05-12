@@ -1,10 +1,12 @@
 /**
  * App-wide UI strings by language code.
  * Add keys here, then use `useUserPreferences().t('key')` in client components.
- * Missing keys fall back to English; unknown languages fall back to English pack.
+ * Resolution order: overlay → English canonical pack → `common.missingTranslation` → humanized key.
+ * **Never** put financial rules, amounts, or ledger logic in these strings — UI copy only.
  */
 
 import type { AppLanguage } from "@/lib/user-preferences"
+import { resolveUiString } from "@/lib/i18n/resolver"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -32,6 +34,13 @@ const en: Record<string, string> = {
   "settings.currencyTitle": "Display currency",
   "settings.item.language": "Language",
   "settings.item.currency": "Display currency",
+  "settings.item.region": "Operating country",
+  "settings.regionTitle": "Operating country",
+  "settings.regionHint":
+    "Used for local funding corridors and regional defaults. Does not change ledger currency (USD-normalized internally).",
+  "settings.regionApplySuggestion": "Apply suggested language & display currency",
+  "settings.regionSaved": "Country saved for funding match.",
+  "common.missingTranslation": "This label is not translated yet — switch to English or contact support.",
 }
 
 const fr: Partial<Record<string, string>> = {
@@ -55,6 +64,12 @@ const fr: Partial<Record<string, string>> = {
   "settings.currencyTitle": "Devise d’affichage",
   "settings.item.language": "Langue",
   "settings.item.currency": "Devise d’affichage",
+  "settings.item.region": "Pays d’opération",
+  "settings.regionTitle": "Pays d’opération",
+  "settings.regionHint":
+    "Utilisé pour les corridors de financement et les valeurs par défaut régionales. La comptabilité interne reste en USD.",
+  "settings.regionApplySuggestion": "Appliquer la langue et la devise suggérées",
+  "settings.regionSaved": "Pays enregistré pour la correspondance de financement.",
 }
 
 const sw: Partial<Record<string, string>> = {
@@ -78,6 +93,12 @@ const sw: Partial<Record<string, string>> = {
   "settings.currencyTitle": "Sarafu ya kuonyesha",
   "settings.item.language": "Lugha",
   "settings.item.currency": "Sarafu ya kuonyesha",
+  "settings.item.region": "Nchi ya uendeshaji",
+  "settings.regionTitle": "Nchi ya uendeshaji",
+  "settings.regionHint":
+    "Inatumika kwa njia za fedha za ndani na mapendekezo ya kikanda. Hesabu ya ndani bado iko kwa USD.",
+  "settings.regionApplySuggestion": "Tumia lugha na sarafu zilizopendekezwa",
+  "settings.regionSaved": "Nchi imehifadhiwa kwa ulinganifu wa fedha.",
 }
 
 const ar: Partial<Record<string, string>> = {
@@ -100,6 +121,12 @@ const ar: Partial<Record<string, string>> = {
   "settings.currencyTitle": "عملة العرض",
   "settings.item.language": "اللغة",
   "settings.item.currency": "عملة العرض",
+  "settings.item.region": "دولة التشغيل",
+  "settings.regionTitle": "دولة التشغيل",
+  "settings.regionHint":
+    "تُستخدم لممرات التمويل المحلية والإعدادات الإقليمية. المحاسبة الداخلية تبقى بالدولار الأمريكي.",
+  "settings.regionApplySuggestion": "تطبيق اللغة وعملة العرض المقترحة",
+  "settings.regionSaved": "تم حفظ البلد لمطابقة التمويل.",
 }
 
 const pt: Partial<Record<string, string>> = {
@@ -127,6 +154,11 @@ const ha: Partial<Record<string, string>> = {
   "header.searchHint": "Bincika",
   "settings.back": "Komawa zuwa saituna",
   "settings.languageTitle": "Harshe",
+  "settings.item.region": "Ƙasar aiki",
+  "settings.regionTitle": "Ƙasar aiki",
+  "settings.regionHint": "Don hanyoyin biyan kuɗi na gida da saitunan yanki. Lissafi na ciki har yanzu USD ne.",
+  "settings.regionApplySuggestion": "Yi amfani da harshe da kuɗin da aka ba da shawara",
+  "settings.regionSaved": "An adana ƙasar don dacewa da biyan kuɗi.",
 }
 
 const am: Partial<Record<string, string>> = {
@@ -175,6 +207,5 @@ const overlays: Record<AppLanguage, Partial<Record<string, string>> | undefined>
 
 export function translateApp(lang: AppLanguage, key: string): string {
   const o = overlays[lang]
-  if (o && o[key] != null) return o[key]!
-  return en[key] ?? key
+  return resolveUiString(en, o, lang, key)
 }

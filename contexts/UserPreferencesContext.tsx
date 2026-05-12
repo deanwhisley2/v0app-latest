@@ -22,10 +22,13 @@ import {
 } from "@/lib/user-preferences"
 import { formatMoneyAmount } from "@/lib/currency-display"
 import { translateApp } from "@/lib/i18n/app-messages"
+import { supabase } from "@/lib/supabaseClient"
 
 type UserPreferencesContextValue = {
   language: AppLanguage
   currency: string
+  /** ISO2 operating country when set (funding corridors, regional pairing). */
+  country: string | null
   locale: string
   setPreferences: (p: Partial<UserPreferences>) => void
   /** Ledger/API balances are **USD-normalized**; this converts to the user’s display fiat only. Never pass raw local input here. */
@@ -55,6 +58,37 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     })
     setPrefs(merged)
   }, [user?.id, user?.user_metadata])
+
+  /** When the user has not set a country in local preferences, mirror `profiles.funding_country_code` for regional UX. */
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    ;(async () => {
+      const stored = readPreferencesFromStorage()
+      const storedCountry =
+        stored && typeof stored.country === "string" ? stored.country.trim().toUpperCase() : ""
+      if (storedCountry.length === 2) return
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("funding_country_code")
+        .eq("id", user.id)
+        .maybeSingle()
+      if (cancelled || error) return
+      const raw = (data as { funding_country_code?: string | null })?.funding_country_code?.trim().toUpperCase()
+      if (!raw || raw.length !== 2) return
+
+      setPrefs((prev) => {
+        if (prev.country === raw) return prev
+        const next = parsePreferences({ ...prev, country: raw })
+        writePreferencesToStorage(next)
+        return next
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const setPreferences = useCallback((partial: Partial<UserPreferences>) => {
     setPrefs((prev) => {
@@ -87,6 +121,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
                       ? "wo"
                       : "en"
     document.documentElement.lang = htmlLang
+    document.documentElement.dir = prefs.language === "ar" ? "rtl" : "ltr"
   }, [prefs.language])
 
   const formatUserMoney = useCallback(
@@ -103,12 +138,13 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     () => ({
       language: prefs.language,
       currency: prefs.currency,
+      country: prefs.country ?? null,
       locale,
       setPreferences,
       formatUserMoney,
       t,
     }),
-    [prefs.language, prefs.currency, locale, setPreferences, formatUserMoney, t]
+    [prefs.language, prefs.currency, prefs.country, locale, setPreferences, formatUserMoney, t]
   )
 
   return <UserPreferencesContext.Provider value={value}>{children}</UserPreferencesContext.Provider>

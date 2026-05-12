@@ -16,6 +16,8 @@ export type AppLanguage =
 export interface UserPreferences {
   language: AppLanguage
   currency: FiatCurrencyCode | string
+  /** ISO 3166-1 alpha-2 operating country (funding corridors, regional UX). Optional. */
+  country?: string
 }
 
 export const LANGUAGE_OPTIONS: { code: AppLanguage; label: string }[] = [
@@ -51,6 +53,7 @@ export const CURRENCY_OPTIONS: { code: FiatCurrencyCode; label: string }[] = [
 export const DEFAULT_PREFERENCES: UserPreferences = {
   language: "en",
   currency: "USD",
+  country: undefined,
 }
 
 export function parsePreferences(raw: unknown): UserPreferences {
@@ -58,11 +61,14 @@ export function parsePreferences(raw: unknown): UserPreferences {
   const o = raw as Record<string, unknown>
   const language = typeof o.language === "string" ? (o.language as AppLanguage) : DEFAULT_PREFERENCES.language
   const currency = typeof o.currency === "string" ? o.currency : DEFAULT_PREFERENCES.currency
+  const countryRaw = typeof o.country === "string" ? o.country.trim().toUpperCase() : ""
+  const country = countryRaw.length === 2 && /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : undefined
   const langOk = LANGUAGE_OPTIONS.some((l) => l.code === language)
   const curOk = CURRENCY_OPTIONS.some((c) => c.code === currency)
   return {
     language: langOk ? language : DEFAULT_PREFERENCES.language,
     currency: curOk ? (currency as FiatCurrencyCode) : DEFAULT_PREFERENCES.currency,
+    ...(country ? { country } : {}),
   }
 }
 
