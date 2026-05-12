@@ -25,11 +25,13 @@ REMOTE_USER="${REMOTE_USER:-vpsuser}"
 REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/nexus-pro}"
 
 REF="${DEPLOY_REF:-HEAD}"
+COMMIT="$(git rev-parse "${REF}^{commit}")"
 ARCHIVE="$(mktemp /tmp/nexus-deploy-XXXXXX.tgz)"
 
 cleanup() { rm -f "${ARCHIVE}"; }
 trap cleanup EXIT
 
+echo "==> deploy commit: ${COMMIT} (ref ${REF})"
 echo "==> git archive ${REF} → ${ARCHIVE}"
 git archive --format=tar.gz -o "${ARCHIVE}" "${REF}"
 
@@ -49,6 +51,8 @@ set -euo pipefail
 cd "${REMOTE_APP_DIR}"
 tar xzf /tmp/nexus-deploy.tgz
 rm -f /tmp/nexus-deploy.tgz
+# Runtime proof of which tree was extracted (VPS has no .git here).
+printf '%s\\n' "${COMMIT}" > .deploy-revision
 chmod +x scripts/deploy.sh
 exec bash scripts/deploy.sh
 EOF
