@@ -206,7 +206,8 @@ export function RetailerOperationalAssets({ isGuest }: { isGuest?: boolean }) {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Retailer operations</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Retail Balance is isolated operational float for user funding approvals. Nexus Main remains for trading.
+              Retail Balance is isolated operational float for user funding approvals. Nexus Main funds transfers and corridor
+              settlement.
             </p>
             <div className="mt-3 flex flex-wrap gap-4">
               <div>
@@ -1261,51 +1262,57 @@ export function AdminOperationalAssets({
                 ) : null}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Treasury pool (Nexus Main)</p>
-                  <p className="text-lg font-bold tabular-nums">
-                    ${Number(treasuryMeta?.pool_available_usd ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {treasuryMeta?.operational_pool_env_configured ? "Available to fund approvals" : "— set pool UUID env"}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Approved float credits (historical)</p>
-                  <p className="text-lg font-bold tabular-nums">
-                    $
-                    {Number(treasuryMeta?.approved_float_topups_total_usd ?? 0).toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">Sum of amount_credited (incl. commission)</p>
-                </div>
-                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Pending retailer float requests</p>
-                  <p className="text-lg font-bold tabular-nums">
-                    {Number(treasuryMeta?.pending_float_topup_count ?? 0)}{" "}
-                    <span className="text-sm font-normal text-muted-foreground">req</span>
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    Requested base total ~ $
-                    {Number(treasuryMeta?.pending_float_topup_amount_requested_usd ?? 0).toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })}{" "}
-                    (approval debits base + commission)
-                  </p>
-                </div>
-                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Retail float on desks</p>
-                  <p className="text-lg font-bold tabular-nums">
-                    $
-                    {Number(treasuryMeta?.retailer_desk_retail_balance_total_usd ?? 0).toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">Σ retail_balance (retailer_profiles)</p>
-                </div>
+              <div className="rounded-md border border-border bg-muted/30 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Nexus Treasury Pool</p>
+                <p className="text-2xl font-bold tabular-nums">
+                  ${Number(treasuryMeta?.pool_available_usd ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {treasuryMeta?.operational_pool_env_configured
+                    ? "Authoritative balance for approvals and settlement debits"
+                    : "— configure operational pool (env) for debit-backed approvals"}
+                </p>
               </div>
+              <details className="group mt-3 rounded-md border border-border/70 bg-muted/15 px-3 py-2">
+                <summary className="cursor-pointer text-xs font-semibold text-muted-foreground marker:text-muted-foreground">
+                  Supporting treasury metrics
+                </summary>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-md border border-border bg-background/50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Approved float credits (historical)</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      $
+                      {Number(treasuryMeta?.approved_float_topups_total_usd ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Sum of amount_credited (incl. commission)</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Pending retailer float requests</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      {Number(treasuryMeta?.pending_float_topup_count ?? 0)}{" "}
+                      <span className="text-sm font-normal text-muted-foreground">req</span>
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Requested base ~ $
+                      {Number(treasuryMeta?.pending_float_topup_amount_requested_usd ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Retail float on desks</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      $
+                      {Number(treasuryMeta?.retailer_desk_retail_balance_total_usd ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Σ retail_balance (retailer_profiles)</p>
+                  </div>
+                </div>
+              </details>
               {treasuryMeta?.stats_available === false && treasuryMeta?.stats_error ? (
                 <p className="text-[11px] text-destructive">
                   Aggregate stats unavailable ({treasuryMeta.stats_error}). Apply migration{" "}

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isEnvListedAdminContact } from "@/lib/server/security-authz"
 import { tryCreditReferrerFirstDepositBonus } from "@/lib/server/referral-first-deposit"
 
 const TABLE_REQUESTS = "retailer_fund_requests"
@@ -429,11 +430,17 @@ export async function transferRetailPoolInternal(
 export async function attachProfileEmailsToRetailers<T extends { user_id: string }>(
   sb: SupabaseClient,
   rows: T[],
+  opts?: { redactAdminContacts?: boolean },
 ): Promise<Array<T & { profile_email: string | null }>> {
   if (!rows.length) return []
   const ids = [...new Set(rows.map((r) => r.user_id))]
   const { data } = await sb.from("profiles").select("id,email").in("id", ids)
   const rows_raw = (data ?? []) as { id: string; email: string | null }[]
   const map = new Map<string, string | null>(rows_raw.map((p) => [p.id, p.email ?? null]))
-  return rows.map((r) => ({ ...r, profile_email: map.get(r.user_id) ?? null }))
+  return rows.map((r) => {
+    const email = map.get(r.user_id) ?? null
+    const profile_email =
+      opts?.redactAdminContacts && isEnvListedAdminContact(r.user_id, email) ? null : email
+    return { ...r, profile_email }
+  })
 }

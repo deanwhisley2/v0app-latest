@@ -62,7 +62,9 @@ export async function GET(request: Request) {
               .order("updated_at", { ascending: false })
           ).data ?? []
         : []
-    const retailers = await attachProfileEmailsToRetailers(admin, rawRetailers)
+    const retailers = await attachProfileEmailsToRetailers(admin, rawRetailers, {
+      redactAdminContacts: true,
+    })
 
     return NextResponse.json({
       userLevel: level,

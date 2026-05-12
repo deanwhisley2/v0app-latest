@@ -13,6 +13,15 @@ function readAdminIdentitySet(): Set<string> {
   return new Set([...ids, ...emails])
 }
 
+/** True when this identity matches env-listed Level-5 / ops admin IDs or emails (directory redaction, receipts). */
+export function isEnvListedAdminContact(userId: string, email: string | null | undefined): boolean {
+  const adminSet = readAdminIdentitySet()
+  if (adminSet.size === 0) return false
+  if (adminSet.has(userId)) return true
+  const em = (email ?? "").trim().toLowerCase()
+  return em ? adminSet.has(em) : false
+}
+
 export function isConfiguredAdminUser(user: User): boolean {
   const adminSet = readAdminIdentitySet()
   if (adminSet.size === 0) return false

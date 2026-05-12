@@ -171,6 +171,9 @@ export default function DashboardPage() {
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
+  const [retailBalance, setRetailBalance] = useState(0)
+  const [treasuryPoolUsd, setTreasuryPoolUsd] = useState<number | null>(null)
+  const [treasuryPoolFormatted, setTreasuryPoolFormatted] = useState("")
   const [withdrawalPendingBalance, setWithdrawalPendingBalance] = useState(0)
   const [referralInfo, setReferralInfo] = useState<{
     referralCode: string
@@ -619,6 +622,12 @@ export default function DashboardPage() {
     return level === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller)
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
 
+  const tradingLevel = op.snapshot?.profile?.tradingUserLevel ?? 1
+  /** Institutional treasury workspace: no trader/container/exchange surfaces in the balance header. */
+  const level5Operational = operationalWorkspace && tradingLevel === 5
+  /** Regional liquidity desk: only Nexus Main + Retail Balance in the dashboard balance header. */
+  const retailerOperationalHeader = operationalWorkspace && retailerCreditDesk
+
   const opsWorkspaceBootedRef = useRef(false)
   useEffect(() => {
     opsWorkspaceBootedRef.current = false
@@ -771,6 +780,7 @@ export default function DashboardPage() {
 
       const json = (await res.json()) as {
         available_balance?: number
+        retail_balance?: number
         withdrawal_pending_balance?: number
         total_earnings?: number
         active_container_earnings?: number
@@ -778,6 +788,7 @@ export default function DashboardPage() {
         lifetime_container_fees?: number
       }
       setMainBalance(Number(json.available_balance ?? 0))
+      setRetailBalance(Number(json.retail_balance ?? 0))
       setWithdrawalPendingBalance(Number(json.withdrawal_pending_balance ?? 0))
       setTotalEarnings(Number(json.total_earnings ?? 0))
       setActiveContainerEarnings(Number(json.active_container_earnings ?? 0))
@@ -785,6 +796,39 @@ export default function DashboardPage() {
       setContainerFeesPaid(Number(json.lifetime_container_fees ?? 0))
     })()
   }, [authLoading, user, isGuestSession])
+
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession || !level5Operational) return
+    let cancelled = false
+    const loadTreasury = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const res = await fetch("/api/admin/treasury", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (!res.ok || cancelled) return
+        const j = (await res.json()) as {
+          treasury?: { usd?: number; usdFormatted?: string }
+        }
+        const usd = Number(j.treasury?.usd ?? 0)
+        setTreasuryPoolUsd(Number.isFinite(usd) ? usd : 0)
+        setTreasuryPoolFormatted(String(j.treasury?.usdFormatted ?? "").trim())
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadTreasury()
+    const id = window.setInterval(loadTreasury, 60_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [authLoading, user, isGuestSession, level5Operational])
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession) return
@@ -1891,197 +1935,330 @@ export default function DashboardPage() {
 
       {/* Main Balance Card */}
       <div className="mx-auto max-w-[1600px] px-4 pt-4">
-        <div className="mb-4 rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Balance Info */}
-            <div className="flex flex-1 items-center gap-4 min-w-0">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
+        {level5Operational ? (
+          <>
+            <div className="mb-4 rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-1 items-center gap-4 min-w-0">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">Nexus Treasury Pool</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowBalance(!showBalance)}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        title={showBalance ? "Hide balance" : "Show balance"}
+                      >
+                        {showBalance ? (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <p className="font-mono text-2xl font-bold text-foreground">
+                      {showBalance
+                        ? treasuryPoolFormatted ||
+                          (treasuryPoolUsd != null && Number.isFinite(treasuryPoolUsd)
+                            ? new Intl.NumberFormat(locale || "en-US", { style: "currency", currency: "USD" }).format(
+                                treasuryPoolUsd,
+                              )
+                            : "…")
+                        : "••••••••"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Single treasury authority · approvals, retailer top-ups, settlement, reconciliation (USD).
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm text-muted-foreground">Available balance</p>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Bot earnings (total):{" "}
-                    {showBalance ? formatUserMoney(totalEarnings) : "••••"}
-                  </span>
+            </div>
+            <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Settlement timing:</span> {PROCESSING_COPY.deposits}{" "}
+                Institutional queues run from the Approval desk.
+              </p>
+            </div>
+          </>
+        ) : retailerOperationalHeader ? (
+          <>
+            <div className="mb-4 rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                  <div className="rounded-lg border border-border bg-background/60 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Nexus Main Account</p>
+                    <p className="mt-1 font-mono text-xl font-bold">
+                      {showBalance ? formatUserMoney(mainBalance) : "••••"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">Company-side corridor and transfers.</p>
+                  </div>
+                  <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Retailer Balance</p>
+                    <p className="mt-1 font-mono text-xl font-bold text-primary">
+                      {showBalance ? formatUserMoney(retailBalance) : "••••"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">Regional float for customer funding approvals.</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
-                    onClick={() => setShowBalance(!showBalance)}
-                    className="text-muted-foreground transition-colors hover:text-foreground"
-                    title={showBalance ? "Hide balance" : "Show balance"}
+                    type="button"
+                    onClick={() => {
+                      setShowFundModal("add")
+                      setFundAmount("")
+                      setL1FundSource("pick")
+                      setQualifiedRetailers([])
+                      setSelectedRetailerId("")
+                      setFundTxReference("")
+                      setFundNote("")
+                      setFundMobileNetwork("")
+                      setCryptoFundingMeta(null)
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90 sm:flex-none"
                   >
-                    {showBalance ? (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Funds
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFundModal("withdraw")
+                      setFundAmount("")
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 sm:flex-none"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
+                    </svg>
+                    Withdraw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBalance(!showBalance)}
+                    className="rounded-lg border border-border px-3 py-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                  >
+                    {showBalance ? "Hide" : "Show"}
                   </button>
                 </div>
-                <p className="font-mono text-2xl font-bold text-foreground">
-                  {showBalance ? formatUserMoney(mainBalance) : "••••••••"}
+              </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Deposit timing:</span> {PROCESSING_COPY.deposits}
+              </p>
+              <p className="mt-1">
+                <span className="font-medium text-foreground">Withdrawal timing:</span> {PROCESSING_COPY.withdrawals}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-4 rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Balance Info */}
+                <div className="flex flex-1 items-center gap-4 min-w-0">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-muted-foreground">Available balance</p>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Bot earnings (total):{" "}
+                        {showBalance ? formatUserMoney(totalEarnings) : "••••"}
+                      </span>
+                      <button
+                        onClick={() => setShowBalance(!showBalance)}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        title={showBalance ? "Hide balance" : "Show balance"}
+                      >
+                        {showBalance ? (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <p className="font-mono text-2xl font-bold text-foreground">
+                      {showBalance ? formatUserMoney(mainBalance) : "••••••••"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {!operationalWorkspace && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("wallstreet")}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                      >
+                        Wallstreet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("container")}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                      >
+                        Container
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowFundModal("add")
+                      setFundAmount("")
+                      setL1FundSource("pick")
+                      setQualifiedRetailers([])
+                      setSelectedRetailerId("")
+                      setFundTxReference("")
+                      setFundNote("")
+                      setFundMobileNetwork("")
+                      setCryptoFundingMeta(null)
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Funds
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowFundModal("withdraw")
+                      setFundAmount("")
+                    }}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
+                    </svg>
+                    Withdraw
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-xl border border-border bg-background/60 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Nexus Main Balance</p>
+                <p className="mt-1 font-mono text-lg font-bold">
+                  {showBalance ? formatUserMoney(mainBalance) : "••••"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Cashout and new container funding source.</p>
+              </div>
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending withdrawal (frozen)</p>
+                <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
+                  {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Funds deducted from your Nexus Main Account at withdrawal request and temporarily held for automated
+                  processing. Funds are either released to your withdrawal destination upon approval or refunded back to your
+                  Nexus account if processing fails.
+                </p>
+              </div>
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Container Earnings</p>
+                <p className="mt-1 font-mono text-lg font-bold">
+                  {showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void runContainerFlowAction("extract")}
+                  disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
+                  className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {isContainerFlowBusy ? "Processing..." : "Extract Earnings (auto 25%)"}
+                </button>
+              </div>
+              <div className="rounded-xl border border-success/30 bg-success/10 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Container Withdrawable Earnings</p>
+                <p className="mt-1 font-mono text-lg font-bold">
+                  {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void runContainerFlowAction("transfer_to_main")}
+                  disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
+                  className="mt-2 w-full rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {isContainerFlowBusy ? "Processing..." : "Transfer To Main Account"}
+                </button>
+                <div className="mt-2 max-h-36 space-y-2 overflow-y-auto rounded bg-background/50 p-1.5">
+                  {(containerEvents.length ? containerEvents : []).slice(0, 8).map((event) => (
+                    <div key={event.id} className="border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                      <p className="text-[10px] text-muted-foreground">
+                        <span className="font-mono">{String(event.created_at ?? "").slice(0, 16)}</span> ·{" "}
+                        {event.summary || event.event_type} · {formatUserMoney(Number(event.net_amount ?? 0))}
+                      </p>
+                      {ledgerOperationalTraceLines({
+                        metadata: event.metadata ?? undefined,
+                        balance_source: event.balance_source,
+                        balance_destination: event.balance_destination,
+                      }).map((line, li) => (
+                        <p key={`${event.id}-tr-${li}`} className="pl-1 text-[9px] leading-snug text-muted-foreground/90">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Exchange Balances</p>
+                <p className="mt-1 font-mono text-lg font-bold">
+                  {showBalance
+                    ? formatUserMoney(
+                        connectedExchanges.reduce((sum, ex) => sum + Number(ex.balance ?? 0), 0),
+                      )
+                    : "••••"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Separate from Nexus wallet. Fees paid: {showBalance ? formatUserMoney(containerFeesPaid) : "••••"}
                 </p>
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 shrink-0">
-              {!operationalWorkspace && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("wallstreet")}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-                  >
-                    Wallstreet
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("container")}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-                  >
-                    Container
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => {
-                  setShowFundModal("add")
-                  setFundAmount("")
-          setL1FundSource("pick")
-                  setQualifiedRetailers([])
-                  setSelectedRetailerId("")
-                  setFundTxReference("")
-                  setFundNote("")
-                  setFundMobileNetwork("")
-                  setCryptoFundingMeta(null)
-                }}
-                className="flex items-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Funds
-              </button>
-              <button
-                onClick={() => {
-                  setShowFundModal("withdraw")
-                  setFundAmount("")
-                }}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
-                </svg>
-                Withdraw
-              </button>
+            <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Deposit timing:</span> {PROCESSING_COPY.deposits}
+              </p>
+              <p className="mt-1">
+                <span className="font-medium text-foreground">Withdrawal timing:</span> {PROCESSING_COPY.withdrawals}
+              </p>
             </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-xl border border-border bg-background/60 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Nexus Main Balance</p>
-            <p className="mt-1 font-mono text-lg font-bold">
-              {showBalance ? formatUserMoney(mainBalance) : "••••"}
-            </p>
-            <p className="text-[11px] text-muted-foreground">Cashout and new container funding source.</p>
-          </div>
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending withdrawal (frozen)</p>
-            <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
-              {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Funds deducted from your Nexus Main Account at withdrawal request and temporarily held for automated
-              processing. Funds are either released to your withdrawal destination upon approval or refunded back to your
-              Nexus account if processing fails.
-            </p>
-          </div>
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Container Earnings</p>
-            <p className="mt-1 font-mono text-lg font-bold">
-              {showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
-            </p>
-            <button
-              type="button"
-              onClick={() => void runContainerFlowAction("extract")}
-              disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
-              className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              {isContainerFlowBusy ? "Processing..." : "Extract Earnings (auto 25%)"}
-            </button>
-          </div>
-          <div className="rounded-xl border border-success/30 bg-success/10 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Container Withdrawable Earnings</p>
-            <p className="mt-1 font-mono text-lg font-bold">
-              {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
-            </p>
-            <button
-              type="button"
-              onClick={() => void runContainerFlowAction("transfer_to_main")}
-              disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
-              className="mt-2 w-full rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-            >
-              {isContainerFlowBusy ? "Processing..." : "Transfer To Main Account"}
-            </button>
-            <div className="mt-2 max-h-36 space-y-2 overflow-y-auto rounded bg-background/50 p-1.5">
-              {(containerEvents.length ? containerEvents : []).slice(0, 8).map((event) => (
-                <div key={event.id} className="border-b border-border/40 pb-2 last:border-0 last:pb-0">
-                  <p className="text-[10px] text-muted-foreground">
-                    <span className="font-mono">{String(event.created_at ?? "").slice(0, 16)}</span> ·{" "}
-                    {event.summary || event.event_type} · {formatUserMoney(Number(event.net_amount ?? 0))}
-                  </p>
-                  {ledgerOperationalTraceLines({
-                    metadata: event.metadata ?? undefined,
-                    balance_source: event.balance_source,
-                    balance_destination: event.balance_destination,
-                  }).map((line, li) => (
-                    <p key={`${event.id}-tr-${li}`} className="pl-1 text-[9px] leading-snug text-muted-foreground/90">
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-background/60 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Exchange Balances</p>
-            <p className="mt-1 font-mono text-lg font-bold">
-              {showBalance
-                ? formatUserMoney(
-                    connectedExchanges.reduce((sum, ex) => sum + Number(ex.balance ?? 0), 0)
-                  )
-                : "••••"}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Separate from Nexus wallet. Fees paid: {showBalance ? formatUserMoney(containerFeesPaid) : "••••"}
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Deposit timing:</span> {PROCESSING_COPY.deposits}
-          </p>
-          <p className="mt-1">
-            <span className="font-medium text-foreground">Withdrawal timing:</span> {PROCESSING_COPY.withdrawals}
-          </p>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-          <div className="flex h-[min(92dvh,700px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl sm:p-5">
+          <div className="flex h-[min(88dvh,680px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-2xl sm:h-[min(92dvh,700px)] sm:rounded-2xl sm:p-5">
             {/* Modal Header */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 pb-3 pt-4 sm:px-0 sm:pt-0 sm:pb-3">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 pb-2 pt-3 sm:px-0 sm:pb-3 sm:pt-0">
               <h2 className="text-lg font-bold sm:text-xl">
                 {showFundModal === "add" ? "Add Funds" : "Withdraw Funds"}
               </h2>
@@ -2649,7 +2826,7 @@ export default function DashboardPage() {
                           className="flex flex-col gap-0.5 border-b border-border/50 py-1 last:border-0 md:flex-row md:items-center md:justify-between"
                         >
                           <span className="font-medium">
-                            {row.profile_email ?? `${row.user_id.slice(0, 8)}…`}
+                            {row.profile_email ?? `Desk · ${row.user_id.slice(0, 8)}…`}
                             {row.user_id === user?.id ? (
                               <span className="ml-1 rounded bg-primary/15 px-1 text-[10px] text-primary">you</span>
                             ) : null}
@@ -2744,7 +2921,7 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-            <div className="shrink-0 space-y-2 border-t border-border/70 bg-card px-4 pb-3 pt-3 sm:px-0">
+            <div className="sticky bottom-0 z-10 shrink-0 space-y-2 border-t border-border/70 bg-card/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm sm:px-0 sm:pb-3 sm:pt-3">
             {(showFundModal === "withdraw" ||
               retailerCreditDesk ||
               (customerRetailFunding && l1FundSource !== "local")) && (
