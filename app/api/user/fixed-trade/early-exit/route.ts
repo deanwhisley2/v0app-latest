@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       (session.seed_key as string | null)?.trim() ||
       `${session.id}-${principalUsd}-${months}-${createdAt}`
 
-    const schedule = buildContainerDailySchedule(principalUsd, months, seedKey)
+    const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, openingInsuranceUsd)
     const cap = totalScheduleTargetUsd(schedule)
     const sessionEarnedUsd = round2(
       Math.min(cap, scheduledEarnedUsdSmooth(schedule, new Date(createdAt), now))

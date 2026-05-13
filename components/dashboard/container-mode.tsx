@@ -19,6 +19,7 @@ import {
   estimateCopyForcePulloutUsd,
 } from "@/lib/copy-trade-policy"
 import { fixedTradeScheduleProjection } from "@/lib/fixed-trade-projection"
+import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees } from "@/lib/nexus-financial-policy"
 import { localFiatUnitsToUsd } from "@/lib/currency-display"
 import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
@@ -410,8 +411,10 @@ export function ContainerMode({
     const principalUsd = localFiatUnitsToUsd(parseFloat(fixAmount) || 0, currency)
     if (principalUsd <= 0) return null
     const seed = `${selectedTrader.id}-${fixPeriod}-${principalUsd}`
-    return fixedTradeScheduleProjection(principalUsd, fixPeriod as FixPeriodMonths, seed)
-  }, [activeTab, selectedTrader, fixAmount, fixPeriod, currency])
+    const fees = fixInsuranceAndWithdrawFees(userLevel, selectedTrader.riskLevel)
+    const insuranceUsd = computeInsuranceFeeUsd(principalUsd, fees.insuranceFeeRate)
+    return fixedTradeScheduleProjection(principalUsd, fixPeriod as FixPeriodMonths, seed, insuranceUsd)
+  }, [activeTab, selectedTrader, fixAmount, fixPeriod, currency, userLevel])
 
   const joinNotificationLines = useMemo(() => {
     const m = (usd: number) => formatUserMoney(usd)
@@ -471,6 +474,7 @@ export function ContainerMode({
             coinSymbol: string
             fixedPriceUsd: number
             earnedUsd: number
+            insuranceFeeUsd?: number
             totalWithdrawnUsd: number
             lastWithdrawalAt: string | null
             withdrawablePercent: number
@@ -512,7 +516,12 @@ export function ContainerMode({
           dailyWithdrawUsed: 0,
           coinSymbol: row.coinSymbol,
           fixedPrice: row.fixedPriceUsd,
-          dailySchedule: buildContainerDailySchedule(row.principalUsd, row.fixPeriodMonths as FixPeriodMonths, row.seedKey),
+          dailySchedule: buildContainerDailySchedule(
+            row.principalUsd,
+            row.fixPeriodMonths as FixPeriodMonths,
+            row.seedKey,
+            typeof row.insuranceFeeUsd === "number" ? row.insuranceFeeUsd : 0
+          ),
           serverSessionId: row.sessionId,
         }))
 
@@ -901,6 +910,7 @@ export function ContainerMode({
           leaseEndAt?: string
           coinSymbol?: string
           fixedPriceUsd?: number
+          fees?: { insuranceFeeUsd?: number }
         }
         if (!res.ok) {
           alert(out.error || "Could not open fixed trade from Nexus Main.")
@@ -919,7 +929,8 @@ export function ContainerMode({
             })()
 
         const seed = out.seedKey ?? `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
-        const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed)
+        const insuranceOpen = typeof out.fees?.insuranceFeeUsd === "number" ? out.fees.insuranceFeeUsd : 0
+        const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed, insuranceOpen)
 
         const coinSymbol = out.coinSymbol ?? "BTC"
         let fixedPrice: number

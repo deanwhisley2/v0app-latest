@@ -17,6 +17,8 @@ type Props = {
   chips: AuthAssistantChip[]
   /** When true, panel opens on load (users can close with X). */
   defaultOpen?: boolean
+  /** When true, FAB pulses briefly once per browser session (dashboard-style nudge). Off on auth by default. */
+  fabHintPulse?: boolean
 }
 
 export function AuthAssistantPanel({
@@ -24,7 +26,8 @@ export function AuthAssistantPanel({
   scope,
   initialMessages,
   chips,
-  defaultOpen = true,
+  defaultOpen = false,
+  fabHintPulse = false,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen)
   const [input, setInput] = useState("")
@@ -38,6 +41,7 @@ export function AuthAssistantPanel({
   }, [messages, busy])
 
   useEffect(() => {
+    if (!fabHintPulse) return
     try {
       const k = `nexus_auth_assistant_fab_hint_${scope}_v1`
       if (sessionStorage.getItem(k)) return
@@ -54,7 +58,7 @@ export function AuthAssistantPanel({
     } catch {
       return undefined
     }
-  }, [scope])
+  }, [scope, fabHintPulse])
 
   const ask = useCallback(
     async (seed?: string) => {

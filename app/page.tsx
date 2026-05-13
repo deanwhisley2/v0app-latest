@@ -67,23 +67,17 @@ export default function HomePage() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background">
       <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <Link href="/" className="flex items-center outline-offset-4 hover:opacity-95">
-            <NexusProLogo variant="default" className="h-8 w-auto sm:h-9" aria-label="NEXUS PRO home" />
+        <div className="relative mx-auto flex h-14 max-w-5xl items-center justify-center px-4">
+          <Link href="/" className="flex items-center outline-offset-4 hover:opacity-95" aria-label="NEXUS PRO home">
+            <NexusProLogo variant="default" className="h-8 w-auto sm:h-9" />
           </Link>
-          <div className="flex items-center gap-2">
-            {isGuestSession && (
-              <Button variant="secondary" asChild>
+          {isGuestSession ? (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <Button variant="secondary" size="sm" asChild>
                 <Link href="/dashboard">Open dashboard</Link>
               </Button>
-            )}
-            <Button variant="ghost" asChild>
-              <Link href="/auth/login">Log in</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/auth/register">Register</Link>
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </div>
       </header>
 

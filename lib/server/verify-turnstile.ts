@@ -40,7 +40,9 @@ export async function verifyTurnstileForRegister(
     if (process.env.NODE_ENV === "production") {
       return {
         ok: false,
-        error: "Registration verification is not configured. Contact support.",
+        error:
+          "Registration verification is not configured on the server (missing TURNSTILE_SECRET_KEY). " +
+          "Set TURNSTILE_SECRET_KEY and a site key (TURNSTILE_SITE_KEY or NEXT_PUBLIC_TURNSTILE_SITE_KEY), then restart PM2.",
         status: 503,
       }
     }
