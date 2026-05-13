@@ -13,10 +13,23 @@ function mapBrevoApiErrorMessage(detail: string): string {
   if (/key\s*not\s*found/i.test(detail)) {
     return (
       "Transactional email (Brevo) rejected the API key. Create a v3 API key under Brevo → SMTP & API → API keys " +
-      "(not the SMTP password), set BREVO_API_KEY on the server with no quotes or trailing spaces, then restart PM2."
+      "(prefix is usually xkeysib — not xsmtpsib/SMTP relay), set BREVO_API_KEY on the server with no quotes or trailing spaces, then restart PM2."
     )
   }
   return detail
+}
+
+/**
+ * REST transactional endpoints require an **API v3** key (`xkeysib-…`).
+ * The SMTP relay key (`xsmtpsib-…`) is a different credential — using it here yields "key not found".
+ */
+function assertTransactionalBrevoApiKey(apiKey: string): void {
+  const p = apiKey.toLowerCase()
+  if (p.startsWith("xsmtpsib")) {
+    throw new Error(
+      "BREVO_API_KEY looks like an SMTP relay key (xsmtpsib…). Use a REST API v3 key from Brevo → SMTP & API → API keys (usually xkeysib…), not the SMTP relay password."
+    )
+  }
 }
 
 /**
@@ -32,6 +45,7 @@ export async function sendVerificationEmail(
   if (!apiKey) {
     throw new Error("Missing BREVO_API_KEY")
   }
+  assertTransactionalBrevoApiKey(apiKey)
 
   const senderEmail =
     (process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com").trim()
@@ -98,6 +112,7 @@ export async function sendPasswordRecoveryEmail(
   if (!apiKey) {
     throw new Error("Missing BREVO_API_KEY")
   }
+  assertTransactionalBrevoApiKey(apiKey)
 
   const senderEmail =
     (process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com").trim()
