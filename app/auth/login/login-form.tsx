@@ -1,9 +1,8 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
@@ -15,7 +14,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
-import type { AppLanguage } from "@/lib/user-preferences"
 
 const LOGIN_JOELIN_CHIPS = [
   { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
@@ -27,22 +25,10 @@ const LOGIN_JOELIN_CHIPS = [
   { label: "Forgot password flow", prompt: "How does password recovery work if I lose access?" },
 ]
 
-function turnstileLanguageFor(lang: AppLanguage): string {
-  if (lang === "fr") return "fr"
-  if (lang === "ar") return "ar"
-  if (lang === "sw") return "sw"
-  if (lang === "pt") return "pt"
-  return "en"
-}
-
-export type LoginFormProps = {
-  turnstileSiteKey: string
-}
-
-export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
+export default function LoginPage() {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
-  const { formatUserMoney, language } = useUserPreferences()
+  const { formatUserMoney } = useUserPreferences()
   const testimonialNotif = useAuthTestimonialNotifs({
     enabled: true,
     pageKey: "login",
@@ -53,8 +39,6 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
-  const turnstileRef = useRef<TurnstileInstance | null>(null)
   const resetSuccess =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("reset") === "success"
 
@@ -88,10 +72,6 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
       setError(configIssue)
       return
     }
-    if (turnstileSiteKey && !turnstileToken?.trim()) {
-      setError("Please complete the security verification before signing in.")
-      return
-    }
     setIsSubmitting(true)
     try {
       const rawIdentifier = identifier.trim()
@@ -118,16 +98,12 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
         emailForAuth = resolveData.email
       }
 
-      const captchaTok = turnstileToken?.trim()
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: emailForAuth.trim(),
         password,
-        ...(captchaTok ? { options: { captchaToken: captchaTok } } : {}),
       })
       if (signInError) {
         setError(signInError.message)
-        turnstileRef.current?.reset()
-        setTurnstileToken(null)
         return
       }
       if (!data.session || !data.user) {
@@ -169,8 +145,6 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong")
       }
-      turnstileRef.current?.reset()
-      setTurnstileToken(null)
     } finally {
       setIsSubmitting(false)
     }
@@ -229,30 +203,6 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
               </button>
             </div>
           </div>
-
-          {turnstileSiteKey && !isDevLocalOnly() ? (
-            <div className="space-y-2">
-              <Label>Human verification</Label>
-              <p className="text-xs text-muted-foreground">Complete the check to help prevent automated sign-in attempts.</p>
-              <div className="flex w-full justify-center overflow-x-auto py-1" dir="ltr">
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={turnstileSiteKey}
-                  options={{
-                    theme: "auto",
-                    size: "flexible",
-                    language: turnstileLanguageFor(language),
-                  }}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onExpire={() => {
-                    setTurnstileToken(null)
-                    turnstileRef.current?.reset()
-                  }}
-                  onError={() => setTurnstileToken(null)}
-                />
-              </div>
-            </div>
-          ) : null}
 
           {sessionCleared ? (
             <p className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100" role="status">
