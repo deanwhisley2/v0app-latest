@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { buildContainerDailySchedule, scheduledEarnedUsd } from "@/lib/container-earnings-schedule"
+import { buildContainerDailySchedule, scheduledEarnedUsdSmooth, totalScheduleTargetUsd } from "@/lib/container-earnings-schedule"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { computeEarlyExitSettlementUsd } from "@/lib/nexus-financial-policy"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
@@ -56,7 +56,10 @@ export async function POST(request: Request) {
       `${session.id}-${principalUsd}-${months}-${createdAt}`
 
     const schedule = buildContainerDailySchedule(principalUsd, months, seedKey)
-    const sessionEarnedUsd = round2(scheduledEarnedUsd(schedule, new Date(createdAt), now))
+    const cap = totalScheduleTargetUsd(schedule)
+    const sessionEarnedUsd = round2(
+      Math.min(cap, scheduledEarnedUsdSmooth(schedule, new Date(createdAt), now))
+    )
 
     const settlement = computeEarlyExitSettlementUsd(principalUsd, openingInsuranceUsd, sessionEarnedUsd)
 
