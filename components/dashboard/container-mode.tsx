@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabaseClient"
 import {
   buildContainerDailySchedule,
   completedFixDaysSince,
-  CONTAINER_PERIOD_RETURN_MONTHLY_PCT,
   fixPeriodDayCount,
   scheduledEarnedUsd,
   type FixPeriodMonths,
@@ -81,6 +80,47 @@ interface MasterTrader {
   maxDrawdown: number
   description: string
   strategies: string[]
+  locked?: boolean
+  lockReason?: string
+  legacyIds?: string[]
+}
+
+type ApiContainerDesk = {
+  id: string
+  name: string
+  avatar: string
+  winRate: number
+  riskLevel: string
+  speciality: string
+  description: string
+  strategies: string[]
+  monthlyReturn: number
+  locked?: boolean
+  lockReason?: string
+  legacyIds?: string[]
+}
+
+function mapApiDesk(row: ApiContainerDesk): MasterTrader {
+  return {
+    id: row.id,
+    name: row.name,
+    avatar: row.avatar,
+    winRate: row.winRate,
+    totalProfit: 0,
+    followers: 0,
+    totalTrades: 0,
+    riskLevel: row.riskLevel as MasterTrader["riskLevel"],
+    speciality: row.speciality,
+    minLevel: 1,
+    status: "active",
+    monthlyReturn: row.monthlyReturn,
+    maxDrawdown: 0,
+    description: row.description,
+    strategies: row.strategies,
+    locked: row.locked,
+    lockReason: row.lockReason,
+    legacyIds: row.legacyIds,
+  }
 }
 
 interface ActiveCopyTrade {
@@ -160,179 +200,7 @@ function FixEarnedDisplay({
   return <span className="font-mono font-bold text-success">+{formatUserMoney(display)}</span>
 }
 
-// Master traders (automation personas with human names)
-const masterTraders: MasterTrader[] = [
-  {
-    id: "tr_001",
-    name: "Marcus Chen",
-    avatar: "MC",
-    winRate: 78.5,
-    totalProfit: 245000,
-    followers: 12453,
-    totalTrades: 3421,
-    riskLevel: "Low",
-    speciality: "BTC/ETH Long-term",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 12.4,
-    maxDrawdown: 8.2,
-    description: "Conservative trader focused on major pairs with strong fundamentals. Known for consistent returns with minimal risk.",
-    strategies: ["DOW Theory", "Supply & Demand", "Weekly Structure"]
-  },
-  {
-    id: "tr_002",
-    name: "Sarah Williams",
-    avatar: "SW",
-    winRate: 82.1,
-    totalProfit: 518000,
-    followers: 28901,
-    totalTrades: 5672,
-    riskLevel: "Medium",
-    speciality: "Scalping Expert",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 18.7,
-    maxDrawdown: 12.5,
-    description: "High-frequency trader specializing in quick scalps. Uses advanced momentum strategies for rapid gains.",
-    strategies: ["FVG", "Liquidity Sweep", "8AM Range"]
-  },
-  {
-    id: "tr_003",
-    name: "James Rodriguez",
-    avatar: "JR",
-    winRate: 71.3,
-    totalProfit: 892000,
-    followers: 45231,
-    totalTrades: 8934,
-    riskLevel: "High",
-    speciality: "Altcoin Hunter",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 34.2,
-    maxDrawdown: 22.1,
-    description: "Aggressive altcoin trader who finds gems before they pump. Higher risk but exceptional rewards.",
-    strategies: ["AMD Strategy", "Smart Money Following", "Breakout Plays"]
-  },
-  {
-    id: "tr_004",
-    name: "Elena Volkov",
-    avatar: "EV",
-    winRate: 85.7,
-    totalProfit: 1250000,
-    followers: 67892,
-    totalTrades: 4521,
-    riskLevel: "Low",
-    speciality: "Swing Trading",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 15.3,
-    maxDrawdown: 6.8,
-    description: "Elite swing trader with institutional-grade analysis. Holds positions for days to weeks for optimal entries.",
-    strategies: ["Weekly Sweep CHoCH", "Direction Location Risk", "Order Blocks"]
-  },
-  {
-    id: "tr_005",
-    name: "David Kim",
-    avatar: "DK",
-    winRate: 76.9,
-    totalProfit: 678000,
-    followers: 34521,
-    totalTrades: 6789,
-    riskLevel: "Medium",
-    speciality: "DeFi Expert",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 21.8,
-    maxDrawdown: 15.3,
-    description: "DeFi specialist who navigates yield farming and DEX trades. Deep understanding of on-chain dynamics.",
-    strategies: ["Value Area", "Liquidity Analysis", "On-chain Signals"]
-  },
-  {
-    id: "tr_006",
-    name: "Olivia Thompson",
-    avatar: "OT",
-    winRate: 88.2,
-    totalProfit: 1890000,
-    followers: 89234,
-    totalTrades: 3245,
-    riskLevel: "Low",
-    speciality: "Index Trading",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 14.1,
-    maxDrawdown: 5.2,
-    description: "Former Wall Street quant now trading crypto. Mathematical precision with risk-adjusted returns.",
-    strategies: ["Statistical Arbitrage", "Mean Reversion", "Correlation Trading"]
-  },
-  {
-    id: "tr_007",
-    name: "Alex Nakamoto",
-    avatar: "AN",
-    winRate: 79.4,
-    totalProfit: 2340000,
-    followers: 112453,
-    totalTrades: 12456,
-    riskLevel: "Medium",
-    speciality: "News Trading",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 28.9,
-    maxDrawdown: 18.7,
-    description: "Lightning-fast news trader who capitalizes on market-moving events. 24/7 monitoring of global crypto news.",
-    strategies: ["Event-Driven", "Sentiment Analysis", "Volume Spikes"]
-  },
-  {
-    id: "tr_008",
-    name: "Isabella Santos",
-    avatar: "IS",
-    winRate: 91.3,
-    totalProfit: 3120000,
-    followers: 156789,
-    totalTrades: 2134,
-    riskLevel: "Low",
-    speciality: "Whale Tracking",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 19.6,
-    maxDrawdown: 4.1,
-    description: "Tracks institutional wallets and whale movements. Follows the smart money for reliable entries.",
-    strategies: ["Whale Alert", "Institutional Flow", "Accumulation Detection"]
-  },
-  {
-    id: "tr_009",
-    name: "Victor Petrov",
-    avatar: "VP",
-    winRate: 74.8,
-    totalProfit: 4560000,
-    followers: 201234,
-    totalTrades: 18923,
-    riskLevel: "High",
-    speciality: "Leverage Master",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 45.2,
-    maxDrawdown: 28.4,
-    description: "Elite leverage trader using up to 50x. Extremely high risk but legendary returns for experienced users.",
-    strategies: ["High Leverage", "Liquidation Hunting", "Funding Rate Arbitrage"]
-  },
-  {
-    id: "tr_010",
-    name: "Grace Liu",
-    avatar: "GL",
-    winRate: 93.7,
-    totalProfit: 5890000,
-    followers: 287654,
-    totalTrades: 1567,
-    riskLevel: "Low",
-    speciality: "Joelin-assisted",
-    minLevel: 1,
-    status: "active",
-    monthlyReturn: 22.3,
-    maxDrawdown: 3.2,
-    description: "Uses proprietary multi-strategy engines combining 16+ models. Advanced desk-grade execution.",
-    strategies: ["Multi-strategy stack", "Deep learning layer", "Adaptive risk"]
-  },
-]
+/** Trader personas load from GET /api/user/container-context (Supabase-backed catalog). */
 
 const levelRequirements = {
   1: { name: "Starter", minDeposit: 100, minTrades: 0, badge: "bronze", color: "#CD7F32" },
@@ -375,6 +243,49 @@ export function ContainerMode({
 
   // Countdown timer effect
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
+
+  const [copyDeskCatalog, setCopyDeskCatalog] = useState<MasterTrader[]>([])
+  const [fixDeskCatalog, setFixDeskCatalog] = useState<MasterTrader[]>([])
+  const [copyMinUsdPolicy, setCopyMinUsdPolicy] = useState(7)
+  const [fixMinUsdPolicy, setFixMinUsdPolicy] = useState(5)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadCatalog = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/container-context", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          traders?: { copy?: ApiContainerDesk[]; fix?: ApiContainerDesk[] }
+          copyMinUsd?: number
+          fixMinUsd?: number
+        }
+        if (cancelled || !res.ok || !out.ok || !out.traders) return
+        setCopyDeskCatalog((out.traders.copy ?? []).map(mapApiDesk))
+        setFixDeskCatalog((out.traders.fix ?? []).map(mapApiDesk))
+        if (typeof out.copyMinUsd === "number") setCopyMinUsdPolicy(out.copyMinUsd)
+        if (typeof out.fixMinUsd === "number") setFixMinUsdPolicy(out.fixMinUsd)
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadCatalog()
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void loadCatalog()
+    })
+    return () => {
+      cancelled = true
+      sub.subscription.unsubscribe()
+    }
+  }, [])
 
   /** Illustrative counts only; `totalEarned` is USD-normalized aggregate for display via formatUserMoney (not raw points). */
   const liveStats = useMemo(
@@ -650,15 +561,15 @@ export function ContainerMode({
     }
   }, [joinNotificationLines])
 
-  const availableTraders = masterTraders.filter((t) => t.minLevel <= userLevel)
-  const lockedTraders = masterTraders.filter((t) => t.minLevel > userLevel)
+  const availableTraders = copyDeskCatalog.filter((t) => !t.locked)
+  const lockedTraders = copyDeskCatalog.filter((t) => t.locked)
 
   const fixLiquidityGate = userLevel === 2 && retailerLiquidityOpsBlocked
-  const fixAvailableTraders = masterTraders.filter(
-    (t) => t.minLevel <= userLevel && traderEligibleForFixedTrade(userLevel, t.riskLevel)
+  const fixAvailableTraders = fixDeskCatalog.filter(
+    (t) => !t.locked && traderEligibleForFixedTrade(userLevel, t.riskLevel),
   )
-  const fixTierLockedTraders = masterTraders.filter(
-    (t) => t.minLevel <= userLevel && !traderEligibleForFixedTrade(userLevel, t.riskLevel)
+  const fixTierLockedTraders = fixDeskCatalog.filter(
+    (t) => t.locked || !traderEligibleForFixedTrade(userLevel, t.riskLevel),
   )
 
   const totalStaked = activeCopyTrades.reduce((sum, t) => sum + t.amount, 0) + 
@@ -671,8 +582,8 @@ export function ContainerMode({
       const raw = parseFloat(copyAmount)
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
-      if (amount < 100) {
-        alert("Minimum copy allocation is $100 USD equivalent in your currency.")
+      if (amount < copyMinUsdPolicy) {
+        alert(`Minimum copy allocation is $${copyMinUsdPolicy} USD equivalent in your currency.`)
         return
       }
       if (!copyRiskAcknowledged) return
@@ -836,8 +747,8 @@ export function ContainerMode({
       const raw = parseFloat(fixAmount)
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
-      if (amount < 500) {
-        alert("Minimum fixed stake is $500 USD equivalent in your currency.")
+      if (amount < fixMinUsdPolicy) {
+        alert(`Minimum fixed stake is $${fixMinUsdPolicy} USD equivalent in your currency.`)
         return
       }
       if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
@@ -1035,7 +946,18 @@ export function ContainerMode({
     }
   }
 
-  const getTraderById = (id: string) => masterTraders.find(t => t.id === id)
+  const getTraderById = (id: string) => {
+    const pool = [...copyDeskCatalog, ...fixDeskCatalog]
+    const direct = pool.find((t) => t.id === id)
+    if (direct) return direct
+    return pool.find((t) => (t.legacyIds ?? []).some((l) => l === id))
+  }
+
+  function sessionMatchesDesk(sessionTraderId: string | null | undefined, desk: MasterTrader): boolean {
+    if (!sessionTraderId) return false
+    if (sessionTraderId === desk.id) return true
+    return (desk.legacyIds ?? []).includes(sessionTraderId)
+  }
 
   return (
     <div className="space-y-4">
@@ -1575,7 +1497,7 @@ export function ContainerMode({
             </h3>
             
             {availableTraders.map((trader) => {
-              const isActive = activeCopyTrades.some(t => t.traderId === trader.id)
+              const isActive = activeCopyTrades.some((t) => sessionMatchesDesk(t.traderId, trader))
               
               return (
                 <Card 
@@ -1651,7 +1573,7 @@ export function ContainerMode({
                 <Lock className="h-4 w-4" />
                 Locked Traders ({lockedTraders.length})
               </h3>
-              {lockedTraders.slice(0, 2).map((trader) => (
+              {lockedTraders.slice(0, 4).map((trader) => (
                 <Card key={trader.id} className="border-border bg-card/50 p-4 opacity-60">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -1660,7 +1582,9 @@ export function ContainerMode({
                       </div>
                       <div>
                         <p className="font-semibold">{trader.name}</p>
-                        <p className="text-xs text-muted-foreground">Level {trader.minLevel} Required</p>
+                        <p className="text-xs text-muted-foreground">
+                          {trader.lockReason ?? "Desk locked by operational policy."}
+                        </p>
                       </div>
                     </div>
                     <p className="font-mono text-lg text-muted-foreground">+{trader.monthlyReturn}%</p>
@@ -1716,7 +1640,7 @@ export function ContainerMode({
             </h3>
             
             {fixAvailableTraders.map((trader) => {
-              const isActive = activeFixTrades.some(t => t.traderId === trader.id)
+              const isActive = activeFixTrades.some((t) => sessionMatchesDesk(t.traderId, trader))
               
               return (
                 <Card 
@@ -1753,7 +1677,7 @@ export function ContainerMode({
                     </div>
                     <div className="text-right">
                       <p className="font-mono text-sm font-bold text-success">
-                        ~{CONTAINER_PERIOD_RETURN_MONTHLY_PCT}% / mo curve
+                        ~{trader.monthlyReturn}% / mo curve
                       </p>
                       <p className="text-xs text-muted-foreground">Scheduled earnings on stake (policy)</p>
                     </div>
@@ -1808,11 +1732,13 @@ export function ContainerMode({
                             {trader.riskLevel}
                           </span>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {userLevel <= 1
-                              ? "Level 1 — Low-risk fixed traders only."
-                              : userLevel === 2 && trader.riskLevel === "High"
-                                ? "Level 2 — High-risk fixed profiles require a higher account tier."
-                                : "Not available for fixed trade at your current tier."}
+                            {trader.locked && trader.lockReason
+                              ? trader.lockReason
+                              : userLevel <= 1
+                                ? "Level 1 — Low-risk fixed traders only."
+                                : userLevel === 2 && trader.riskLevel === "High"
+                                  ? "Level 2 — High-risk fixed profiles require a higher account tier."
+                                  : "Not available for fixed trade at your current tier."}
                           </p>
                         </div>
                       </div>
@@ -1903,9 +1829,11 @@ export function ContainerMode({
                       value={copyAmount}
                       onChange={(e) => setCopyAmount(e.target.value)}
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
-                      min="100"
+                      min={copyMinUsdPolicy}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">Minimum: {formatUserMoney(100)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Minimum: {formatUserMoney(copyMinUsdPolicy)}
+                    </p>
                   </div>
                   <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm space-y-2">
                     <p className="font-medium text-destructive">Acknowledge copy-trading risk</p>
@@ -1915,7 +1843,7 @@ export function ContainerMode({
                       <li>
                         Force pull-out: {(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}% cancel +{" "}
                         {(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal + market impact
-                        {localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency) >= 100
+                        {localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency) >= copyMinUsdPolicy
                           ? ` (illustrative net ≈ ${formatUserMoney(
                               estimateCopyForcePulloutUsd({
                                 stakeUsd: localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency),
@@ -1946,9 +1874,11 @@ export function ContainerMode({
                       value={fixAmount}
                       onChange={(e) => setFixAmount(e.target.value)}
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
-                      min="500"
+                      min={fixMinUsdPolicy}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">Minimum: {formatUserMoney(500)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Minimum: {formatUserMoney(fixMinUsdPolicy)}
+                    </p>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">Fix Period</label>

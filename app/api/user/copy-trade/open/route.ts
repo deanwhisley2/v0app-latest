@@ -4,18 +4,33 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { casCreditNexusMainOnly, casReserveCopyTradeStake } from "@/lib/server/nexus-main-enforcement"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import {
+  assertCopyStakeUsd,
+  resolvePersonaId,
+} from "@/lib/server/container-governance"
 
 export async function POST(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const level = await getTradingUserLevel(user.id)
-    if (level === 2 || level === 5) {
+
+    const admin = createAdminClient()
+    const { data: profile, error: profErr } = await admin
+      .from("profiles")
+      .select("trading_user_level, retailer_credit_seller")
+      .eq("id", user.id)
+      .maybeSingle()
+    if (profErr) throw new Error(profErr.message)
+    const tradingLv = Number(profile?.trading_user_level ?? 1)
+    const retailerDesk = tradingLv === 2 && Boolean(profile?.retailer_credit_seller)
+    if (tradingLv === 5 || retailerDesk) {
       return NextResponse.json(
-        { error: "Retailer and Level-5 admin accounts are operational/supervisory and cannot open copy-trade sessions." },
-        { status: 403 }
+        {
+          error:
+            "Designated retailer desks and Level-5 accounts cannot open copy-trade sessions.",
+        },
+        { status: 403 },
       )
     }
 
@@ -24,15 +39,27 @@ export async function POST(request: Request) {
       traderPersonaId?: string
     }
     const stakeUsd = Number(body.stakeUsd ?? 0)
-    const traderPersonaId = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
+    const traderPersonaIdRaw = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
     if (!Number.isFinite(stakeUsd) || !(stakeUsd > 0)) {
       return NextResponse.json({ error: "stakeUsd must be > 0" }, { status: 400 })
     }
-    if (!traderPersonaId) {
+    if (!traderPersonaIdRaw) {
       return NextResponse.json({ error: "traderPersonaId required" }, { status: 400 })
     }
 
-    const admin = createAdminClient()
+    const minStake = assertCopyStakeUsd(stakeUsd)
+    if (!minStake.ok) {
+      return NextResponse.json({ error: minStake.message }, { status: 400 })
+    }
+
+    const persona = await resolvePersonaId(admin, traderPersonaIdRaw, "copy")
+    if (!persona) {
+      return NextResponse.json(
+        { error: "Unknown or inactive copy-trade desk — refresh Container Mode." },
+        { status: 400 },
+      )
+    }
+
     const reserved = await casReserveCopyTradeStake(admin, user.id, stakeUsd)
     if (!reserved.ok) {
       return NextResponse.json(
@@ -51,10 +78,10 @@ export async function POST(request: Request) {
       .from("copy_trade_sessions")
       .insert({
         user_id: user.id,
-        trader_persona_id: traderPersonaId,
+        trader_persona_id: persona.id,
         stake_amount: roundUsd2(stakeUsd),
         status: "active",
-        metadata: { v: 1, ui: { autoAdjust: false } },
+        metadata: { v: 1, ui: { autoAdjust: false }, canonicalPersonaId: persona.id },
       })
       .select("id,created_at")
       .single()
@@ -86,7 +113,7 @@ export async function POST(request: Request) {
       actorType: "user",
       actorId: user.id,
       summary: `Copy-trade stake reserved from Nexus Main (${roundUsd2(stakeUsd)} USD).`,
-      metadata: { traderPersonaId, sessionId: sessionRow?.id },
+      metadata: { traderPersonaId: persona.id, sessionId: sessionRow?.id },
     })
 
     return NextResponse.json({

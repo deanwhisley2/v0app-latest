@@ -8,6 +8,12 @@ import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees, roundUsd2 } from "
 import { casOpenFixedTradeDebit } from "@/lib/server/nexus-main-enforcement"
 import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
+import {
+  assertFixPrincipalUsd,
+  buildUnlockContext,
+  personaUnlocked,
+  resolvePersonaId,
+} from "@/lib/server/container-governance"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -36,9 +42,14 @@ export async function POST(request: Request) {
     const principalUsd = Number(body.principalUsd ?? 0)
     const riskClass = body.riskClass
     const fixPeriodMonths = body.fixPeriodMonths
+    const traderPersonaIdRaw = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
 
     if (!Number.isFinite(principalUsd) || principalUsd <= 0) {
       return NextResponse.json({ error: "principalUsd must be > 0" }, { status: 400 })
+    }
+    const minP = assertFixPrincipalUsd(principalUsd)
+    if (!minP.ok) {
+      return NextResponse.json({ error: minP.message }, { status: 400 })
     }
     if (riskClass !== "Low" && riskClass !== "Medium" && riskClass !== "High") {
       return NextResponse.json({ error: "invalid riskClass" }, { status: 400 })
@@ -46,29 +57,56 @@ export async function POST(request: Request) {
     if (fixPeriodMonths !== 1 && fixPeriodMonths !== 3 && fixPeriodMonths !== 6) {
       return NextResponse.json({ error: "fixPeriodMonths must be 1, 3, or 6" }, { status: 400 })
     }
+    if (!traderPersonaIdRaw) {
+      return NextResponse.json({ error: "traderPersonaId required" }, { status: 400 })
+    }
 
     const admin = createAdminClient()
     const { data: profile, error: pErr } = await admin
       .from("profiles")
-      .select("trading_user_level")
+      .select("trading_user_level, retailer_credit_seller")
       .eq("id", user.id)
       .maybeSingle()
     if (pErr) throw new Error(pErr.message)
 
     const tradingLv = Number(profile?.trading_user_level ?? 1)
-    if (tradingLv === 2 || tradingLv === 5) {
+    const retailerDesk = tradingLv === 2 && Boolean(profile?.retailer_credit_seller)
+    if (tradingLv === 5 || retailerDesk) {
       return NextResponse.json(
-        { error: "Retailer and Level-5 admin accounts are operational/supervisory and cannot open fixed trades." },
+        {
+          error:
+            "Designated retailer desks and Level-5 accounts cannot open fixed trades.",
+        },
         { status: 403 }
       )
     }
     const userLevel = mapProfileToFixUserLevel(tradingLv)
 
+    const persona = await resolvePersonaId(admin, traderPersonaIdRaw, "fix")
+    if (!persona || !persona.risk_class) {
+      return NextResponse.json(
+        { error: "Unknown or inactive fixed-trade desk — refresh Container Mode." },
+        { status: 400 },
+      )
+    }
+    if (persona.risk_class !== riskClass) {
+      return NextResponse.json(
+        { error: "riskClass does not match selected desk — refresh and retry." },
+        { status: 400 },
+      )
+    }
+
+    const unlockCtx = await buildUnlockContext(admin, user.id, { minPrincipalUsd: 100, minDaysActive: 30 })
+    const gate = personaUnlocked(persona, unlockCtx)
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason ?? "Desk locked." }, { status: 403 })
+    }
+
     if (!traderEligibleForFixedTrade(userLevel, riskClass)) {
       return NextResponse.json(
         {
           error:
-            "Your level cannot open fixed trades with this trader risk tier. Upgrade or pick a lower-risk desk.",
+            "Your account tier cannot open fixed trades with this desk risk class.",
         },
         { status: 403 }
       )
@@ -95,7 +133,7 @@ export async function POST(request: Request) {
 
     const seedKey =
       body.seedKey?.trim() ||
-      `${user.id}-${body.traderPersonaId ?? "desk"}-${principalUsd}-${fixPeriodMonths}-${Date.now()}`
+      `${user.id}-${persona.id}-${principalUsd}-${fixPeriodMonths}-${Date.now()}`
 
     const display = displayCoinForFixedSession(seedKey)
 
@@ -108,7 +146,7 @@ export async function POST(request: Request) {
         risk_class: riskClass,
         fix_period_months: fixPeriodMonths,
         status: "active",
-        trader_persona_id: body.traderPersonaId ?? null,
+        trader_persona_id: persona.id,
         seed_key: seedKey,
         metadata: {
           v: 1,
