@@ -17,6 +17,8 @@
     "build:strict": "NEXT_IGNORE_BUILD_TS=0 next build",
     "build:with-types": "npm run typecheck && npm run build:strict",
     "verify:ci": "npm run typecheck && npm run build:strict",
+    "parity:deploy": "bash scripts/check-deploy-parity.sh",
+    "parity:supabase": "bash scripts/check-supabase-parity.sh",
     "verify:launch": "node -e \"const u=(process.env.LAUNCH_URL||'http://127.0.0.1:3000')+'/api/health/launch';fetch(u).then(r=>r.json()).then(j=>{console.log(JSON.stringify(j,null,2));process.exit(j.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})\"",
     "test-safety": "npx tsx scripts/test-safety-system.ts",
     "test:multi-currency": "npx tsx scripts/test-multi-currency.ts",
