@@ -71,7 +71,12 @@ echo "==> Dependencies"
 npm ci
 
 echo "==> Build (production)"
-NODE_ENV=production npm run build
+if [[ "${STRICT_BUILD:-0}" == "1" ]]; then
+  echo "==> STRICT_BUILD=1: enforcing full TypeScript validation during build"
+  NODE_ENV=production NEXT_IGNORE_BUILD_TS=0 npm run verify:ci
+else
+  NODE_ENV=production npm run build
+fi
 
 echo "==> Verify build output"
 if [[ ! -f .next/server/middleware-manifest.json ]]; then

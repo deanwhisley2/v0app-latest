@@ -54,6 +54,7 @@ rm -f /tmp/nexus-deploy.tgz
 # Runtime proof of which tree was extracted (VPS has no .git here).
 printf '%s\\n' "${COMMIT}" > .deploy-revision
 chmod +x scripts/deploy.sh
+export STRICT_BUILD="${STRICT_BUILD:-0}"
 exec bash scripts/deploy.sh
 EOF
 
