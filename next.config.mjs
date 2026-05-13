@@ -8,7 +8,10 @@ const extraDevOrigins =
  */
 const nextConfig = {
   typescript: {
-    ignoreBuildErrors: true,
+    // Default: tolerate TS errors during `next build` (legacy escape hatch).
+    // Set NEXT_IGNORE_BUILD_TS=0 (see `npm run build:strict` / `verify:ci`) to enforce Next's type pass.
+    // Phase C: replace this with `ignoreBuildErrors: false` when production parity is proven stable.
+    ignoreBuildErrors: process.env.NEXT_IGNORE_BUILD_TS !== "0",
   },
   experimental: {
     serverActions: {
