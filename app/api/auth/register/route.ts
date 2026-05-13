@@ -7,6 +7,17 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
+import { findAuthUserIdByEmail } from "@/lib/auth-users"
+
+/** Supabase rejects a second signUp for the same email even if the first account never completed in-app verification. */
+function isAuthDuplicateSignupError(err: { message?: string | null; code?: string | null }): boolean {
+  const raw = `${err.code ?? ""} ${err.message ?? ""}`.toLowerCase()
+  if (raw.includes("user_already_exists")) return true
+  if (raw.includes("already registered")) return true
+  if (raw.includes("already been registered")) return true
+  if (raw.includes("email address") && raw.includes("already")) return true
+  return false
+}
 
 type RegisterBody = {
   email?: string
@@ -111,7 +122,42 @@ export async function POST(request: Request) {
   })
 
   if (signUpError) {
-    return NextResponse.json({ error: signUpError.message }, { status: 400 })
+    if (!isAuthDuplicateSignupError(signUpError)) {
+      return NextResponse.json({ error: signUpError.message }, { status: 400 })
+    }
+    try {
+      const admin = createAdminClient()
+      const existingId = await findAuthUserIdByEmail(admin, email)
+      if (!existingId) {
+        return NextResponse.json({ error: signUpError.message }, { status: 400 })
+      }
+      const { data: profRow } = await admin
+        .from("profiles")
+        .select("is_verified")
+        .eq("id", existingId)
+        .maybeSingle()
+      if (profRow?.is_verified === true) {
+        return NextResponse.json(
+          {
+            error:
+              "This email is already registered. Sign in with your password, or use Forgot password if you need a reset.",
+          },
+          { status: 400 }
+        )
+      }
+      const issued = await issueEmailVerificationCode(email)
+      if (!issued.ok) {
+        return NextResponse.json(
+          { error: issued.error },
+          { status: issued.status ?? 400 }
+        )
+      }
+      await supabase.auth.signOut()
+      return NextResponse.json({ ok: true })
+    } catch (e) {
+      console.warn("[register] duplicate-email resend path:", e instanceof Error ? e.message : String(e))
+      return NextResponse.json({ error: signUpError.message }, { status: 400 })
+    }
   }
 
   const newUserId = signUpData.user?.id
