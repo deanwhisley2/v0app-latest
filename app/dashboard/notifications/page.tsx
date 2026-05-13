@@ -67,6 +67,8 @@ export default function NotificationsHistoryPage() {
     }
   }, [authLoading, user, isGuestSession, router])
 
+  const [listLimit, setListLimit] = useState(100)
+
   const merged = useMemo(() => {
     const map = new Map<string, NexusNotificationItem>()
     for (const n of [...inbox, ...history]) map.set(n.id, n)
@@ -182,7 +184,7 @@ export default function NotificationsHistoryPage() {
                   <button
                     type="button"
                     className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-primary hover:bg-muted/50"
-                    onClick={() => setListLimit((x) => x + 100)}
+                    onClick={() => setListLimit((x: number) => x + 100)}
                   >
                     Load more ({merged.length - visibleMerged.length} remaining)
                   </button>

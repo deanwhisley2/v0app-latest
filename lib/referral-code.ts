@@ -14,8 +14,8 @@ export function normalizeReferralCodeInput(raw: string): string {
  */
 export function referralCodeForUserId(userId: string): string {
   const h = createHash("sha256").update(userId).digest()
-  let n = 0n
-  for (let i = 0; i < 6; i++) n = (n << 8n) | BigInt(h[i] ?? 0)
+  let n = BigInt(0)
+  for (let i = 0; i < 6; i++) n = (n << BigInt(8)) | BigInt(h[i] ?? 0)
   const base36 = n.toString(36).toUpperCase().replace(/[^A-Z0-9]/g, "")
   const tail = (base36 + "00000000").slice(0, 8)
   return `NX${tail}`

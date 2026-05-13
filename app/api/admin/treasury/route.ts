@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const currencies = ["UGX", "KES", "NGN"]
     const localEquivalents: Record<string, string> = {}
     for (const c of currencies) {
-      const localAmount = await currencyEngine.fromUSD(treasuryUsd, c)
+      const localAmount = await currencyEngine.toLocal(treasuryUsd, c)
       localEquivalents[c] = currencyEngine.formatForUser(localAmount, c)
     }
 
