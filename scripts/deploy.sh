@@ -67,6 +67,11 @@ fi
 echo "==> Clean previous Next.js build"
 rm -rf .next
 
+if compgen -G "b_*" > /dev/null; then
+  echo "==> Remove stale extracted bundles (b_*)"
+  rm -rf b_*
+fi
+
 echo "==> Dependencies"
 npm ci
 
