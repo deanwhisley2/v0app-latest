@@ -8,6 +8,17 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;")
 }
 
+/** Brevo returns e.g. `key not found` when `api-key` is wrong, revoked, or not a v3 API key. */
+function mapBrevoApiErrorMessage(detail: string): string {
+  if (/key\s*not\s*found/i.test(detail)) {
+    return (
+      "Transactional email (Brevo) rejected the API key. Create a v3 API key under Brevo → SMTP & API → API keys " +
+      "(not the SMTP password), set BREVO_API_KEY on the server with no quotes or trailing spaces, then restart PM2."
+    )
+  }
+  return detail
+}
+
 /**
  * Transactional signup verification via Brevo HTTP API (no axios — uses fetch).
  * Env: BREVO_API_KEY (required), BREVO_SENDER_EMAIL, BREVO_SENDER_NAME (optional).
@@ -17,14 +28,14 @@ export async function sendVerificationEmail(
   code: string,
   fullName: string = "Valued Customer"
 ): Promise<string> {
-  const apiKey = process.env.BREVO_API_KEY
+  const apiKey = process.env.BREVO_API_KEY?.trim()
   if (!apiKey) {
     throw new Error("Missing BREVO_API_KEY")
   }
 
   const senderEmail =
-    process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com"
-  const senderName = process.env.BREVO_SENDER_NAME ?? "Nexus Pro"
+    (process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com").trim()
+  const senderName = (process.env.BREVO_SENDER_NAME ?? "Nexus Pro").trim()
   const safeName = escapeHtml(fullName.trim() || "Valued Customer")
   const safeCode = escapeHtml(code)
 
@@ -72,7 +83,7 @@ export async function sendVerificationEmail(
     } catch {
       /* ignore */
     }
-    throw new Error(detail || `Brevo API error (${res.status})`)
+    throw new Error(mapBrevoApiErrorMessage(detail) || `Brevo API error (${res.status})`)
   }
   const body = (await res.json().catch(() => ({}))) as { messageId?: string }
   return body.messageId || ""
@@ -83,14 +94,14 @@ export async function sendPasswordRecoveryEmail(
   recoveryUrl: string,
   fullName: string = "Valued Customer"
 ): Promise<string> {
-  const apiKey = process.env.BREVO_API_KEY
+  const apiKey = process.env.BREVO_API_KEY?.trim()
   if (!apiKey) {
     throw new Error("Missing BREVO_API_KEY")
   }
 
   const senderEmail =
-    process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com"
-  const senderName = process.env.BREVO_SENDER_NAME ?? "Nexus Pro"
+    (process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com").trim()
+  const senderName = (process.env.BREVO_SENDER_NAME ?? "Nexus Pro").trim()
   const safeName = escapeHtml(fullName.trim() || "Valued Customer")
   const safeUrl = escapeHtml(recoveryUrl.trim())
 
@@ -138,7 +149,7 @@ export async function sendPasswordRecoveryEmail(
     } catch {
       /* ignore */
     }
-    throw new Error(detail || `Brevo API error (${res.status})`)
+    throw new Error(mapBrevoApiErrorMessage(detail) || `Brevo API error (${res.status})`)
   }
   const body = (await res.json().catch(() => ({}))) as { messageId?: string }
   return body.messageId || ""
@@ -147,7 +158,7 @@ export async function sendPasswordRecoveryEmail(
 export async function getBrevoMessageEvent(
   messageId: string
 ): Promise<{ event?: string; reason?: string } | null> {
-  const apiKey = process.env.BREVO_API_KEY
+  const apiKey = process.env.BREVO_API_KEY?.trim()
   if (!apiKey || !messageId) return null
   const url = `https://api.brevo.com/v3/smtp/statistics/events?messageId=${encodeURIComponent(
     messageId
