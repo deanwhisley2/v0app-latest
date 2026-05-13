@@ -7,7 +7,8 @@ import {
   buildContainerDailySchedule,
   completedFixDaysSince,
   fixPeriodDayCount,
-  scheduledEarnedUsd,
+  scheduledEarnedUsdSmooth,
+  totalScheduleTargetUsd,
   type FixPeriodMonths,
 } from "@/lib/container-earnings-schedule"
 import {
@@ -164,6 +165,28 @@ interface ActiveFixTrade {
   serverSessionId?: string
 }
 
+/** Cumulative policy gross (remaining earned + already withdrawn) — same units as server `earnedUsd` + withdrawals. */
+function fixEarningsGrossUsd(trade: ActiveFixTrade): number {
+  return Math.round((trade.earned + (trade.totalWithdrawn ?? 0)) * 100) / 100
+}
+
+/**
+ * Gross accrual shown on policy: min(schedule cap, max(confirmed gross, smooth intra-day schedule)).
+ * Deterministic from `buildContainerDailySchedule` — not RNG.
+ */
+function fixPolicyDisplayedGrossUsd(trade: ActiveFixTrade, now = new Date()): number {
+  if (!trade.dailySchedule?.length) return fixEarningsGrossUsd(trade)
+  const cap = totalScheduleTargetUsd(trade.dailySchedule)
+  const smooth = scheduledEarnedUsdSmooth(trade.dailySchedule, trade.startTime, now)
+  const gross = fixEarningsGrossUsd(trade)
+  return Math.min(cap, Math.max(gross, smooth))
+}
+
+function fixPolicyDisplayedRemainingUsd(trade: ActiveFixTrade, now = new Date()): number {
+  const w = trade.totalWithdrawn ?? 0
+  return Math.max(0, Math.round((fixPolicyDisplayedGrossUsd(trade, now) - w) * 100) / 100)
+}
+
 function FixEarnedDisplay({
   amountUsd,
   formatUserMoney,
@@ -261,6 +284,9 @@ export function ContainerMode({
   const [activeCopyTrades, setActiveCopyTrades] = useState<ActiveCopyTrade[]>([])
 
   const [activeFixTrades, setActiveFixTrades] = useState<ActiveFixTrade[]>([])
+
+  /** Re-render fixed-trade policy accrual between server hydrates (smooth schedule is time-based). */
+  const [earnDisplayTick, setEarnDisplayTick] = useState(0)
 
   // Countdown timer effect
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
@@ -391,7 +417,7 @@ export function ContainerMode({
     const m = (usd: number) => formatUserMoney(usd)
     return [
       () => `Member opened a fixed-term allocation (~${m(420)})`,
-      () => `Trader desk activity: modest scheduled accrual on a ${m(210)} stake`,
+      () => `Trader desk activity: modest scheduled accrual on a ${m(210)} managed allocation`,
       () => `New follower joined copy rotation (${m(350)}, 24h cycle)`,
       () => `Scheduled earnings milestone on a ${m(180)} fixed lock`,
       () => `Member reviewed Container wallet — withdrawal queue steady`,
@@ -606,21 +632,26 @@ export function ContainerMode({
     return () => window.clearInterval(id)
   }, [activeCopyTrades.length, formatUserMoney, notifyCopy])
 
-  // Keep fixed-trade earnings aligned with the locked-period daily curve (container / platform deposit).
+  useEffect(() => {
+    const id = window.setInterval(() => setEarnDisplayTick((n) => n + 1), 10_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  // Fixed-trade: keep `earned` aligned with intra-day schedule accrual (bounded, ledger-style gross − withdrawals).
   useEffect(() => {
     const sync = () => {
       setActiveFixTrades((trades) =>
         trades.map((trade) => {
           if (!trade.dailySchedule?.length) return trade
-          const next = scheduledEarnedUsd(trade.dailySchedule, trade.startTime)
-          return next !== trade.earned ? { ...trade, earned: next } : trade
+          const nextEarned = fixPolicyDisplayedRemainingUsd(trade)
+          return Math.abs(nextEarned - trade.earned) > 0.005 ? { ...trade, earned: nextEarned } : trade
         })
       )
     }
     sync()
-    const id = window.setInterval(sync, 30_000)
+    const id = window.setInterval(sync, 15_000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [activeFixTrades.length])
 
   // Small bottom join notifications (amounts in user currency)
   useEffect(() => {
@@ -652,10 +683,19 @@ export function ContainerMode({
     (t) => t.locked || !traderEligibleForFixedTrade(userLevel, t.riskLevel),
   )
 
-  const totalStaked = activeCopyTrades.reduce((sum, t) => sum + t.amount, 0) + 
-                      activeFixTrades.reduce((sum, t) => sum + t.amount, 0)
-  const totalEarned = activeCopyTrades.reduce((sum, t) => sum + t.earned, 0) + 
-                      activeFixTrades.reduce((sum, t) => sum + t.earned, 0)
+  const totalCryptoAllocationUsd = useMemo(
+    () =>
+      activeCopyTrades.reduce((sum, t) => sum + t.amount, 0) +
+      activeFixTrades.reduce((sum, t) => sum + t.amount, 0),
+    [activeCopyTrades, activeFixTrades]
+  )
+
+  const totalEarnedDisplayUsd = useMemo(() => {
+    void earnDisplayTick
+    const copySum = activeCopyTrades.reduce((sum, t) => sum + t.earned, 0)
+    const fixSum = activeFixTrades.reduce((sum, t) => sum + fixPolicyDisplayedRemainingUsd(t), 0)
+    return copySum + fixSum
+  }, [activeCopyTrades, activeFixTrades, earnDisplayTick])
 
   const handleActivateCopy = (trader: MasterTrader) => {
     void (async () => {
@@ -689,7 +729,7 @@ export function ContainerMode({
           createdAt?: string
         }
         if (!res.ok) {
-          alert(out.error || "Could not reserve copy-trade stake from Nexus Main.")
+          alert(out.error || "Could not reserve copy-trade allocation from Nexus Main.")
           return
         }
 
@@ -828,7 +868,7 @@ export function ContainerMode({
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
       if (amount < fixMinUsdPolicy) {
-        alert(`Minimum fixed stake is $${fixMinUsdPolicy} USD equivalent in your currency.`)
+        alert(`Minimum fixed allocation is $${fixMinUsdPolicy} USD equivalent in your currency.`)
         return
       }
       if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
@@ -900,13 +940,18 @@ export function ContainerMode({
           return
         }
 
+        const nowOpen = new Date()
+        const capOpen = totalScheduleTargetUsd(dailySchedule)
+        const smoothOpen = scheduledEarnedUsdSmooth(dailySchedule, startTime, nowOpen)
+        const initialEarned = Math.max(0, Math.round(Math.min(capOpen, smoothOpen) * 100) / 100)
+
         const newTrade: ActiveFixTrade = {
           traderId: trader.id,
           amount,
           period: fixPeriod,
           startTime,
           endTime,
-          earned: scheduledEarnedUsd(dailySchedule, startTime, new Date()),
+          earned: initialEarned,
           isLocked: true,
           canWithdrawEarnings: fixPeriod >= 3,
           lastWithdrawalDate: null,
@@ -1311,12 +1356,12 @@ export function ContainerMode({
             <h3 className="mb-4 text-lg font-semibold">Container Balance</h3>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-xl bg-background/50 p-4 text-center">
-                <p className="text-sm text-muted-foreground">Total Staked</p>
-                <p className="mt-1 font-mono text-2xl font-bold">{formatUserMoney(totalStaked)}</p>
+                <p className="text-sm text-muted-foreground">Total crypto allocation</p>
+                <p className="mt-1 font-mono text-2xl font-bold">{formatUserMoney(totalCryptoAllocationUsd)}</p>
               </div>
               <div className="rounded-xl bg-success/10 p-4 text-center">
                 <p className="text-sm text-muted-foreground">Total Earned</p>
-                <p className="mt-1 font-mono text-2xl font-bold text-success">+{formatUserMoney(totalEarned)}</p>
+                <p className="mt-1 font-mono text-2xl font-bold text-success">+{formatUserMoney(totalEarnedDisplayUsd)}</p>
               </div>
               <div className="rounded-xl bg-primary/10 p-4 text-center">
                 <p className="text-sm text-muted-foreground">Active Trades</p>
@@ -1392,7 +1437,7 @@ export function ContainerMode({
 
                       <div className="grid grid-cols-3 gap-2 mb-3 text-center text-sm">
                         <div className="rounded bg-background p-2">
-                          <p className="text-xs text-muted-foreground">Staked</p>
+                          <p className="text-xs text-muted-foreground">Allocated (active)</p>
                           <p className="font-mono font-medium">{formatUserMoney(trade.amount)}</p>
                         </div>
                         <div className="rounded bg-background p-2">
@@ -1479,19 +1524,49 @@ export function ContainerMode({
                         </div>
                         <div className="text-right">
                           <div className="font-mono text-lg">
-                            <FixEarnedDisplay amountUsd={trade.earned} formatUserMoney={formatUserMoney} />
+                            <FixEarnedDisplay
+                              amountUsd={fixPolicyDisplayedRemainingUsd(trade)}
+                              formatUserMoney={formatUserMoney}
+                            />
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {trade.dailySchedule?.length
-                              ? `Day ${Math.min(completedFixDaysSince(trade.startTime), fixPeriodDayCount(trade.period))} / ${fixPeriodDayCount(trade.period)} · curve`
+                              ? `Day ${Math.min(completedFixDaysSince(trade.startTime), fixPeriodDayCount(trade.period))} / ${fixPeriodDayCount(trade.period)} · policy accrual`
                               : "Earnings"}
                           </p>
+                          {trade.dailySchedule?.length ? (
+                            <>
+                              <div className="mt-2 h-1.5 w-full max-w-[220px] ml-auto overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-success transition-[width] duration-1000 ease-out"
+                                  style={{
+                                    width: `${Math.min(
+                                      100,
+                                      (fixPolicyDisplayedGrossUsd(trade) /
+                                        Math.max(1e-9, totalScheduleTargetUsd(trade.dailySchedule))) *
+                                        100
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                              {btcSpotRef.status === "live" ? (
+                                <p
+                                  className={`mt-1 text-[10px] ${
+                                    btcSpotRef.change24hPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                                  }`}
+                                >
+                                  Reference tone (BTC 24h): {btcSpotRef.change24hPct >= 0 ? "risk-on" : "risk-off"} — lock
+                                  curve unchanged.
+                                </p>
+                              ) : null}
+                            </>
+                          ) : null}
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-center text-sm">
                         <div className="rounded bg-background p-2">
-                          <p className="text-xs text-muted-foreground">Staked (Frozen)</p>
+                          <p className="text-xs text-muted-foreground">Locked crypto allocation</p>
                           <p className="font-mono font-medium">{formatUserMoney(trade.amount)}</p>
                         </div>
                         <div className="rounded bg-background p-2">
@@ -1543,7 +1618,11 @@ export function ContainerMode({
                       <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
                         <p className="flex items-center gap-1">
                           <Shield className="h-3 w-3 text-primary" />
-                          <span>Your stake is frozen as <strong className="text-primary">{trade.coinSymbol}</strong> share holding, keeping the coin supported.</span>
+                          <span>
+                            Your <strong className="text-primary">locked crypto allocation</strong> is held as{" "}
+                            <strong className="text-primary">{trade.coinSymbol}</strong> reference exposure, keeping the
+                            pair supported per desk policy.
+                          </span>
                         </p>
                         <p className="mt-1 text-xs leading-relaxed">
                           Commission accrues per policy when <strong className="text-foreground">{trade.coinSymbol}</strong>{" "}
@@ -1581,7 +1660,7 @@ export function ContainerMode({
                           </Button>
                         ) : (
                           <p className="flex-1 text-center text-xs text-muted-foreground py-2">
-                            No earnings yet - generating based on {trade.coinSymbol} movement
+                            Confirmed earnings pool is still ramping — policy accrual above updates continuously.
                           </p>
                         )}
                         {trade.serverSessionId ? (
@@ -1593,7 +1672,7 @@ export function ContainerMode({
                             onClick={() => {
                               if (
                                 confirm(
-                                  "Early pullout before lease end? You pay 10% agreement default + insurance (from stake only). Session earnings are credited in full to Nexus Main.",
+                                  "Early pullout before lease end? You pay 10% agreement default + insurance (from protected allocation only). Session earnings are credited in full to Nexus Main.",
                                 )
                               ) {
                                 void handleEarlyExitFixTrade(trade.traderId)
@@ -1610,7 +1689,7 @@ export function ContainerMode({
                         ) : (
                           <Button variant="outline" size="sm" disabled className="text-muted-foreground">
                             <Lock className="h-3 w-3 mr-1" />
-                            Stake Frozen
+                            Allocation locked
                           </Button>
                         )}
                       </div>
@@ -1792,10 +1871,10 @@ export function ContainerMode({
                   {fixedTradeTierHint(userLevel)}
                 </div>
                 <div className="mt-3 pt-2 border-t border-warning/20 space-y-1 text-xs">
-                  <p>- Your stake is <strong>FROZEN</strong> as share holding for the traded coin</p>
+                  <p>- Your <strong>locked crypto allocation</strong> is held as share-style reference for the traded coin</p>
                   <p>- Your funds keep the coin alive during market dips</p>
                   <p>
-                    - When the staked coin clears the <strong className="text-foreground">reference lock level</strong>{" "}
+                    - When the allocated pair clears the <strong className="text-foreground">reference lock level</strong>{" "}
                     on your card, commission accrues per policy. For BTC, compare that level to the{" "}
                     <strong className="text-foreground">live Binance spot strip</strong> above — display only, not a
                     settlement oracle.
@@ -1853,7 +1932,7 @@ export function ContainerMode({
                       <p className="font-mono text-sm font-bold text-success">
                         ~{trader.monthlyReturn}% / mo curve
                       </p>
-                      <p className="text-xs text-muted-foreground">Scheduled earnings on stake (policy)</p>
+                      <p className="text-xs text-muted-foreground">Scheduled earnings on allocation (policy)</p>
                     </div>
                   </div>
                   
@@ -2048,7 +2127,7 @@ export function ContainerMode({
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Stake amount</label>
+                    <label className="text-sm font-medium mb-2 block">Lock amount (managed allocation)</label>
                     <input
                       type="number"
                       value={fixAmount}
@@ -2110,7 +2189,7 @@ export function ContainerMode({
                         </p>
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Enter a stake amount to preview the schedule.</p>
+                      <p className="text-sm text-muted-foreground">Enter an allocation amount to preview the schedule.</p>
                     )}
                   </div>
 
@@ -2131,8 +2210,8 @@ export function ContainerMode({
                     <p className="font-medium text-warning">Fixed Trade Terms:</p>
                     <ul className="text-muted-foreground space-y-1">
                       <li>
-                        - Stake <strong>FROZEN</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""}. Early pullout (funded
-                        sessions): 10% agreement default + insurance from stake only;{" "}
+                        - <strong>Locked crypto allocation</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""}. Early pullout (funded
+                        sessions): 10% agreement default + insurance from protected allocation only;{" "}
                         <strong>full session earnings</strong> credited to Nexus Main with net principal.
                       </li>
                       <li>- Earnings Withdrawal: <strong className="text-success">
@@ -2143,7 +2222,7 @@ export function ContainerMode({
                     </ul>
                     <div className="pt-2 border-t border-warning/30 text-xs">
                       <p className="text-muted-foreground">
-                        <strong>How it works:</strong> Your stake is fixed with the coin so the trader can defend
+                        <strong>How it works:</strong> Your managed allocation is paired with the coin so the desk can defend
                         positions through quieter periods and still be ready when momentum returns. What you earn
                         reflects their activity and skill over the lock — you&apos;ll see it build on your Container
                         screen with day‑by‑day movement rather than a single headline number.
@@ -2226,7 +2305,7 @@ export function ContainerMode({
                 return (
                   <div className="mt-4 rounded-lg bg-muted p-3 text-sm space-y-1 text-left">
                     <div className="flex justify-between">
-                      <span>Stake</span>
+                      <span>Allocated principal</span>
                       <span>{formatUserMoney(trade.amount)}</span>
                     </div>
                     <div className="flex justify-between">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { buildContainerDailySchedule, scheduledEarnedUsd } from "@/lib/container-earnings-schedule"
+import { buildContainerDailySchedule, scheduledEarnedUsdSmooth, totalScheduleTargetUsd } from "@/lib/container-earnings-schedule"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
@@ -87,7 +87,10 @@ export async function GET(request: Request) {
           ? md.fixed_price_usd
           : fallback.fixedPriceUsd
       const schedule = buildContainerDailySchedule(principalUsd, months, seedKey)
-      const earnedUsd = roundUsd2(scheduledEarnedUsd(schedule, new Date(r.created_at), now))
+      const startAt = new Date(r.created_at)
+      const smoothGross = scheduledEarnedUsdSmooth(schedule, startAt, now)
+      const cap = totalScheduleTargetUsd(schedule)
+      const earnedUsd = roundUsd2(Math.min(cap, smoothGross))
       const leaseEnd = officialLeaseEndDate(r.created_at, months)
       const withdrawPercent = months === 1 ? 30 : months === 3 ? 50 : 70
 

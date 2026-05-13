@@ -73,3 +73,32 @@ export function scheduledEarnedUsd(
   const days = completedFixDaysSince(startTime, now)
   return cumulativeThroughDay(schedule, days)
 }
+
+/** Sum of daily policy buckets (full-period target accrual in USD). */
+export function totalScheduleTargetUsd(schedule: readonly number[] | undefined): number {
+  if (!schedule?.length) return 0
+  return Math.round(schedule.reduce((a, b) => a + b, 0) * 100) / 100
+}
+
+const MS_PER_DAY = 86_400_000
+
+/**
+ * Intra-day linear accrual on top of the deterministic daily schedule (same buckets as `buildContainerDailySchedule`).
+ * Bounded by schedule total — not random; suitable for live UI that should move on Day 1 without changing settlement rules.
+ */
+export function scheduledEarnedUsdSmooth(
+  schedule: readonly number[] | undefined,
+  startTime: Date,
+  now = new Date()
+): number {
+  if (!schedule?.length) return 0
+  const cap = totalScheduleTargetUsd(schedule)
+  const elapsed = now.getTime() - startTime.getTime()
+  if (elapsed <= 0) return 0
+  const fullDays = Math.floor(elapsed / MS_PER_DAY)
+  const partial = (elapsed % MS_PER_DAY) / MS_PER_DAY
+  if (fullDays >= schedule.length) return cap
+  const base = cumulativeThroughDay(schedule, fullDays)
+  const dayBucket = schedule[fullDays] ?? 0
+  return Math.round(Math.min(cap, base + dayBucket * partial) * 100) / 100
+}
