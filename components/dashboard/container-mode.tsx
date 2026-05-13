@@ -19,6 +19,7 @@ import {
 } from "@/lib/copy-trade-policy"
 import { fixedTradeScheduleProjection } from "@/lib/fixed-trade-projection"
 import { localFiatUnitsToUsd } from "@/lib/currency-display"
+import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
@@ -154,7 +155,9 @@ interface ActiveFixTrade {
   withdrawablePercent: number // Based on period: 1m=30%, 3m=50%, 6m=70%
   dailyWithdrawUsed: number // For 6-month users 10% daily option
   coinSymbol: string // The coin this trade is fixed on
-  fixedPrice: number // Price at which it was fixed
+  fixedPrice: number // Lock reference level (USD); may mirror live spot at open when server omits snapshot
+  /** When true, fixedPrice was filled from Binance spot reference at open (server omitted fixedPriceUsd). */
+  fixedPriceFromLiveFeed?: boolean
   /** Platform-deposit container: random positive daily buckets that sum to an internal schedule target (server-side). */
   dailySchedule?: number[]
   /** When set, early pullout is processed via POST /api/user/fixed-trade/early-exit (funded server session). */
@@ -202,6 +205,24 @@ function FixEarnedDisplay({
 
 /** Trader personas load from GET /api/user/container-context (Supabase-backed catalog). */
 
+const LIVE_BTC_REFRESH_MS = 45_000
+
+type BtcSpotRefState =
+  | { status: "idle" | "loading" }
+  | { status: "live"; priceUsd: number; change24hPct: number; updatedAt: number; source: string }
+  | { status: "error"; message: string }
+
+function btcFromLiveMarketCatalog(catalog: unknown): Coin | null {
+  if (!Array.isArray(catalog)) return null
+  for (const row of catalog) {
+    const c = row as Partial<Coin>
+    if (c?.symbol === "BTC" && typeof c.price === "number" && Number.isFinite(c.price)) {
+      return c as Coin
+    }
+  }
+  return null
+}
+
 const levelRequirements = {
   1: { name: "Starter", minDeposit: 100, minTrades: 0, badge: "bronze", color: "#CD7F32" },
   2: { name: "Trader", minDeposit: 1000, minTrades: 10, badge: "silver", color: "#C0C0C0" },
@@ -248,6 +269,65 @@ export function ContainerMode({
   const [fixDeskCatalog, setFixDeskCatalog] = useState<MasterTrader[]>([])
   const [copyMinUsdPolicy, setCopyMinUsdPolicy] = useState(7)
   const [fixMinUsdPolicy, setFixMinUsdPolicy] = useState(5)
+
+  /** Binance spot BTC/USDT — reference display only (same feed as dashboard live-market). */
+  const [btcSpotRef, setBtcSpotRef] = useState<BtcSpotRefState>({ status: "idle" })
+
+  useEffect(() => {
+    let cancelled = false
+    const loadBtc = async () => {
+      setBtcSpotRef((prev) => {
+        if (prev.status === "live") return prev
+        return { status: "loading" }
+      })
+      try {
+        const res = await fetch("/api/binance/live-market", { cache: "no-store" })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          catalog?: unknown
+          source?: string
+          error?: string
+        }
+        if (cancelled) return
+        if (!res.ok || !data.ok) {
+          setBtcSpotRef((prev) =>
+            prev.status === "live"
+              ? prev
+              : { status: "error", message: data.error || `HTTP ${res.status}` }
+          )
+          return
+        }
+        const btc = btcFromLiveMarketCatalog(data.catalog)
+        if (!btc) {
+          setBtcSpotRef((prev) =>
+            prev.status === "live" ? prev : { status: "error", message: "BTC not in catalog" }
+          )
+          return
+        }
+        setBtcSpotRef({
+          status: "live",
+          priceUsd: btc.price,
+          change24hPct: btc.change24h,
+          updatedAt: Date.now(),
+          source: data.source ?? "binance-spot-usdt",
+        })
+      } catch (e) {
+        if (!cancelled) {
+          setBtcSpotRef((prev) =>
+            prev.status === "live"
+              ? prev
+              : { status: "error", message: e instanceof Error ? e.message : "Network error" }
+          )
+        }
+      }
+    }
+    void loadBtc()
+    const id = window.setInterval(loadBtc, LIVE_BTC_REFRESH_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -802,7 +882,23 @@ export function ContainerMode({
         const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed)
 
         const coinSymbol = out.coinSymbol ?? "BTC"
-        const fixedPrice = typeof out.fixedPriceUsd === "number" ? out.fixedPriceUsd : 67_500
+        let fixedPrice: number
+        let fixedPriceFromLiveFeed = false
+        if (typeof out.fixedPriceUsd === "number" && Number.isFinite(out.fixedPriceUsd)) {
+          fixedPrice = out.fixedPriceUsd
+        } else if (coinSymbol === "BTC") {
+          if (btcSpotRef.status !== "live") {
+            alert(
+              "Live BTC market reference is still loading. Wait a few seconds and try again — we no longer use placeholder prices."
+            )
+            return
+          }
+          fixedPrice = Math.round(btcSpotRef.priceUsd)
+          fixedPriceFromLiveFeed = true
+        } else {
+          alert("Desk did not return a lock reference price for this coin. Try again or contact support.")
+          return
+        }
 
         const newTrade: ActiveFixTrade = {
           traderId: trader.id,
@@ -819,6 +915,7 @@ export function ContainerMode({
           dailyWithdrawUsed: 0,
           coinSymbol,
           fixedPrice,
+          fixedPriceFromLiveFeed: fixedPriceFromLiveFeed ? true : undefined,
           dailySchedule,
           serverSessionId: out.sessionId,
         }
@@ -1156,6 +1253,56 @@ export function ContainerMode({
         </button>
       </div>
 
+      {/* Live BTC reference — Binance spot (display only; not ledger settlement) */}
+      <Card className="border border-emerald-500/50 bg-gradient-to-r from-emerald-950/40 via-slate-900/80 to-slate-900/90 p-3 shadow-md sm:p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-emerald-100">
+            <BarChart3 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">BTC / USDT · live reference</p>
+              <p className="text-[10px] text-emerald-100/70">Binance public spot feed — for context in Container; not a price guarantee for locks.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+            {btcSpotRef.status === "loading" || btcSpotRef.status === "idle" ? (
+              <span className="text-sm text-emerald-100/80">Loading spot…</span>
+            ) : btcSpotRef.status === "error" ? (
+              <span className="text-sm text-amber-200">Reference unavailable ({btcSpotRef.message})</span>
+            ) : btcSpotRef.status === "live" ? (
+              <>
+                <span className="font-mono text-xl font-bold tabular-nums text-white sm:text-2xl">
+                  $
+                  {btcSpotRef.priceUsd.toLocaleString(undefined, {
+                    minimumFractionDigits: btcSpotRef.priceUsd >= 1000 ? 0 : 2,
+                    maximumFractionDigits: btcSpotRef.priceUsd >= 1000 ? 0 : 2,
+                  })}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    btcSpotRef.change24hPct >= 0
+                      ? "bg-emerald-500/25 text-emerald-200"
+                      : "bg-rose-500/25 text-rose-100"
+                  }`}
+                >
+                  {btcSpotRef.change24hPct >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {btcSpotRef.change24hPct >= 0 ? "+" : ""}
+                  {btcSpotRef.change24hPct.toFixed(2)}% 24h
+                </span>
+                <span className="text-[10px] text-emerald-100/60">
+                  Updated {new Date(btcSpotRef.updatedAt).toLocaleTimeString()} · {btcSpotRef.source}
+                </span>
+              </>
+            ) : (
+              <span className="text-sm text-emerald-100/80">Loading spot…</span>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {/* ============ DASHBOARD TAB ============ */}
       {activeTab === "dashboard" && (
         <div className="space-y-4">
@@ -1317,9 +1464,16 @@ export function ContainerMode({
                               <span className="rounded bg-warning/20 px-2 py-0.5 text-xs font-medium text-warning">
                                 {trade.period} Month Fix
                               </span>
+                            <div className="flex flex-col gap-0.5">
                               <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
                                 {trade.coinSymbol} @ ${trade.fixedPrice?.toLocaleString()}
                               </span>
+                              {trade.fixedPriceFromLiveFeed ? (
+                                <span className="text-[10px] font-normal leading-tight text-emerald-700 dark:text-emerald-800">
+                                  Lock snapshot from Binance spot at open (reference).
+                                </span>
+                              ) : null}
+                            </div>
                             </div>
                           </div>
                         </div>
@@ -1391,7 +1545,22 @@ export function ContainerMode({
                           <Shield className="h-3 w-3 text-primary" />
                           <span>Your stake is frozen as <strong className="text-primary">{trade.coinSymbol}</strong> share holding, keeping the coin supported.</span>
                         </p>
-                        <p className="mt-1">Commission earned when {trade.coinSymbol} rises above ${trade.fixedPrice?.toLocaleString()}.</p>
+                        <p className="mt-1 text-xs leading-relaxed">
+                          Commission accrues per policy when <strong className="text-foreground">{trade.coinSymbol}</strong>{" "}
+                          clears the lock reference{" "}
+                          <strong className="font-mono text-foreground">${trade.fixedPrice?.toLocaleString()}</strong>.
+                          {trade.coinSymbol === "BTC" && btcSpotRef.status === "live" ? (
+                            <>
+                              {" "}
+                              Live Binance spot (reference):{" "}
+                              <strong className="font-mono text-foreground">
+                                ${btcSpotRef.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                              </strong>
+                              .
+                            </>
+                          ) : null}{" "}
+                          <span className="text-muted-foreground">Settlement follows Nexus policy, not this headline.</span>
+                        </p>
                       </div>
 
                       <div className="flex gap-2">
@@ -1625,7 +1794,12 @@ export function ContainerMode({
                 <div className="mt-3 pt-2 border-t border-warning/20 space-y-1 text-xs">
                   <p>- Your stake is <strong>FROZEN</strong> as share holding for the traded coin</p>
                   <p>- Your funds keep the coin alive during market dips</p>
-                  <p>- When coin rises above fixed price, you earn commission without affecting shares</p>
+                  <p>
+                    - When the staked coin clears the <strong className="text-foreground">reference lock level</strong>{" "}
+                    on your card, commission accrues per policy. For BTC, compare that level to the{" "}
+                    <strong className="text-foreground">live Binance spot strip</strong> above — display only, not a
+                    settlement oracle.
+                  </p>
                   <p className="text-warning">- If funds appear in main wallet early, system opted out to protect your capital</p>
                 </div>
               </div>
@@ -1855,13 +2029,19 @@ export function ContainerMode({
                         .
                       </li>
                     </ul>
-                    <label className="flex cursor-pointer items-start gap-2 pt-1">
+                    <label
+                      htmlFor="container-copy-risk-ack"
+                      className="flex min-h-[52px] cursor-pointer items-start gap-3 rounded-xl border-2 border-slate-800 bg-white p-3.5 text-slate-900 shadow-[0_2px_12px_rgba(0,0,0,0.35)] dark:border-slate-200 dark:bg-white dark:text-slate-900"
+                    >
                       <Checkbox
+                        id="container-copy-risk-ack"
                         checked={copyRiskAcknowledged}
                         onCheckedChange={(v) => setCopyRiskAcknowledged(v === true)}
-                        className="mt-0.5"
+                        className="mt-0.5 size-5 shrink-0 rounded border-2 border-slate-800 bg-white shadow-none ring-offset-white focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:text-white dark:border-slate-800 dark:bg-white dark:data-[state=checked]:border-emerald-600 dark:data-[state=checked]:bg-emerald-600"
                       />
-                      <span>I understand copy trading is high-risk, uninsured, and separate from fixed container locks.</span>
+                      <span className="text-sm font-medium leading-snug">
+                        I understand copy trading is high-risk, uninsured, and separate from fixed container locks.
+                      </span>
                     </label>
                   </div>
                 </>
