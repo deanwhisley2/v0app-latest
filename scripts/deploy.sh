@@ -40,6 +40,9 @@ fi
 echo "==> Deploy ${APP_NAME} → ${APP_DIR}"
 cd "${APP_DIR}"
 
+# Default: compiler-authoritative build (tsc + Next typecheck). Set STRICT_BUILD=0 to bypass only in emergencies.
+STRICT_BUILD="${STRICT_BUILD:-1}"
+
 ENV_LOCAL="${APP_DIR}/.env.local"
 if [[ ! -f "${ENV_LOCAL}" ]]; then
   echo "ERROR: ${ENV_LOCAL} not found."
@@ -75,11 +78,12 @@ fi
 echo "==> Dependencies"
 npm ci
 
-echo "==> Build (production)"
-if [[ "${STRICT_BUILD:-0}" == "1" ]]; then
+echo "==> Build (production) STRICT_BUILD=${STRICT_BUILD}"
+if [[ "${STRICT_BUILD}" == "1" ]]; then
   echo "==> STRICT_BUILD=1: enforcing full TypeScript validation during build"
   NODE_ENV=production NEXT_IGNORE_BUILD_TS=0 npm run verify:ci
 else
+  echo "==> WARNING: STRICT_BUILD=0 — Next may skip type validation (legacy fallback)."
   NODE_ENV=production npm run build
 fi
 
@@ -102,5 +106,19 @@ echo "==> PM2: restart ${APP_NAME} with ${ECOSYSTEM}"
 pm2 delete "${APP_NAME}" 2>/dev/null || true
 pm2 start "${ECOSYSTEM_PATH}"
 pm2 save
+
+echo "==> Post-deploy verification"
+if [[ -f "${APP_DIR}/.deploy-revision" ]]; then
+  echo "==> .deploy-revision: $(cat "${APP_DIR}/.deploy-revision")"
+else
+  echo "==> .deploy-revision: (missing — not deployed via git-archive?)"
+fi
+if ls "${APP_DIR}"/b_* >/dev/null 2>&1; then
+  echo "ERROR: stale b_* directories still present after deploy hygiene."
+  ls -la "${APP_DIR}"/b_* 2>/dev/null || true
+  exit 1
+fi
+echo "==> OK: no stale b_* bundle directories"
+pm2 describe "${APP_NAME}" >/dev/null && echo "==> PM2: ${APP_NAME} process present"
 
 echo "==> Deploy complete."

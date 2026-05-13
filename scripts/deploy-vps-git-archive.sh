@@ -8,6 +8,7 @@
 #
 # Optional env:
 #   REMOTE_HOST=67.159.52.40 REMOTE_USER=vpsuser REMOTE_APP_DIR=/opt/nexus-pro
+#   STRICT_BUILD=1 (default) runs npm run verify:ci on the server; STRICT_BUILD=0 legacy fallback only.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -54,7 +55,7 @@ rm -f /tmp/nexus-deploy.tgz
 # Runtime proof of which tree was extracted (VPS has no .git here).
 printf '%s\\n' "${COMMIT}" > .deploy-revision
 chmod +x scripts/deploy.sh
-export STRICT_BUILD="${STRICT_BUILD:-0}"
+export STRICT_BUILD="${STRICT_BUILD:-1}"
 exec bash scripts/deploy.sh
 EOF
 
