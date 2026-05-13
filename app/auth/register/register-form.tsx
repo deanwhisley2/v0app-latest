@@ -1,9 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,14 +30,6 @@ import {
   validateSelfieQuality,
 } from "@/lib/selfie-hash"
 
-function turnstileLanguageFor(lang: AppLanguage): string {
-  if (lang === "fr") return "fr"
-  if (lang === "ar") return "ar"
-  if (lang === "sw") return "sw"
-  if (lang === "pt") return "pt"
-  return "en"
-}
-
 const REGISTER_JOELIN_CHIPS = [
   { label: "Registration steps", prompt: "What happens step by step after I submit this registration form?" },
   { label: "Email verification", prompt: "Why do I need to verify my email and how long does it take?" },
@@ -49,11 +40,7 @@ const REGISTER_JOELIN_CHIPS = [
   { label: "Trust & fees", prompt: "What should a new member know about deposits and Container Mode fees?" },
 ]
 
-export type RegisterFormProps = {
-  turnstileSiteKey: string
-}
-
-export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
+export default function RegisterPage() {
   const router = useRouter()
   const { language: ctxLang, currency: ctxCur, setPreferences, formatUserMoney } = useUserPreferences()
   const testimonialNotif = useAuthTestimonialNotifs({
@@ -76,8 +63,6 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
   const [operatingCountry, setOperatingCountry] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
-  const turnstileRef = useRef<TurnstileInstance | null>(null)
 
   useEffect(() => {
     setLanguage(ctxLang)
@@ -125,10 +110,6 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
       setError("Passwords do not match.")
       return
     }
-    if (turnstileSiteKey && !turnstileToken?.trim()) {
-      setError(reg.captchaRequired)
-      return
-    }
     setIsSubmitting(true)
     setPreferences({
       language,
@@ -145,7 +126,6 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          turnstile_token: turnstileToken?.trim() ?? "",
           email: trimmedEmail,
           password,
           full_name: trimmedName,
@@ -169,14 +149,10 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
         const json = (await res.json().catch(() => ({}))) as { error?: string }
         if (!res.ok) {
           setError(json.error || "Registration failed")
-          turnstileRef.current?.reset()
-          setTurnstileToken(null)
           return
         }
       } else if (!res.ok) {
         setError("Registration failed")
-        turnstileRef.current?.reset()
-        setTurnstileToken(null)
         return
       }
 
@@ -189,8 +165,6 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
-      turnstileRef.current?.reset()
-      setTurnstileToken(null)
     } finally {
       setIsSubmitting(false)
     }
@@ -410,43 +384,6 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
               disabled={isSubmitting}
             />
           </div>
-
-          {turnstileSiteKey ? (
-            <div className="space-y-2">
-              <Label>{reg.captchaLabel}</Label>
-              <p className="text-xs text-muted-foreground">{reg.captchaHint}</p>
-              <div className="flex w-full justify-center overflow-x-auto py-1" dir="ltr">
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={turnstileSiteKey}
-                  options={{
-                    theme: "auto",
-                    size: "flexible",
-                    language: turnstileLanguageFor(language),
-                  }}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onExpire={() => {
-                    setTurnstileToken(null)
-                    turnstileRef.current?.reset()
-                  }}
-                  onError={() => {
-                    setTurnstileToken(null)
-                  }}
-                />
-              </div>
-            </div>
-          ) : process.env.NODE_ENV === "production" ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
-              Sign-up security is not fully configured (missing Turnstile site key). Set{" "}
-              <code className="rounded bg-black/10 px-1 dark:bg-white/10">TURNSTILE_SITE_KEY</code> or{" "}
-              <code className="rounded bg-black/10 px-1 dark:bg-white/10">NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> and{" "}
-              <code className="rounded bg-black/10 px-1 dark:bg-white/10">TURNSTILE_SECRET_KEY</code> in the server
-              environment (see <code className="rounded bg-black/10 px-1 dark:bg-white/10">.env.local.example</code>), then
-              restart PM2. Registration cannot complete until both are present.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">{reg.captchaDevSkip}</p>
-          )}
 
           {error ? (
             <p

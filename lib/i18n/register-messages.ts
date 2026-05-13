@@ -14,12 +14,6 @@ type Reg = {
   operatingCountry?: string
   /** Optional referrer code from link or pasted id */
   referralCodeOptional?: string
-  /** Cloudflare Turnstile (human verification) */
-  captchaLabel: string
-  captchaHint: string
-  captchaRequired: string
-  /** When server secret is unset (local dev only) */
-  captchaDevSkip: string
   submit: string
   submitting: string
   signInLink: string
@@ -39,10 +33,6 @@ const register: Record<AppLanguage, Reg> = {
     currency: "Display currency",
     operatingCountry: "Operating country (optional)",
     referralCodeOptional: "Referral ID (optional)",
-    captchaLabel: "Human verification",
-    captchaHint: "Complete the check below. It helps prevent bots and fake signups.",
-    captchaRequired: "Please complete the security verification before registering.",
-    captchaDevSkip: "Security check is skipped on the server in local development when Turnstile keys are unset.",
     submit: "Register",
     submitting: "Creating account…",
     signInLink: "Sign in",
@@ -58,10 +48,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "Angalau herufi 6 (tumia nenosiri imara).",
     language: "Lugha",
     currency: "Sarafu ya kuonyesha salio",
-    captchaLabel: "Uthibitisho wa mtu",
-    captchaHint: "Kamilisha hatua hapa chini. Inasaidia kuzuia roboti na akaunti bandia.",
-    captchaRequired: "Tafadhali kamilisha uthibitisho wa usalama kabla ya kujisajili.",
-    captchaDevSkip: "Uthibitisho una ruka kwenye seva katika maendeleo ya ndani ikiwa funguo hazipo.",
     submit: "Jisajili",
     submitting: "Inaunda akaunti…",
     signInLink: "Ingia",
@@ -77,10 +63,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "Au moins 6 caractères (mot de passe fort).",
     language: "Langue",
     currency: "Devise d’affichage",
-    captchaLabel: "Vérification humaine",
-    captchaHint: "Complétez la vérification ci-dessous. Elle limite les robots et faux comptes.",
-    captchaRequired: "Veuillez terminer la vérification de sécurité avant de vous inscrire.",
-    captchaDevSkip: "La vérification est ignorée côté serveur en développement local si les clés Turnstile sont absentes.",
     submit: "S’inscrire",
     submitting: "Création du compte…",
     signInLink: "Connexion",
@@ -96,10 +78,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "6 أحرف على الأقل (استخدم كلمة مرور قوية).",
     language: "اللغة",
     currency: "عملة العرض",
-    captchaLabel: "التحقق البشري",
-    captchaHint: "أكمل التحقق أدناه. يحدّ من الحسابات الآلية والوهمية.",
-    captchaRequired: "يُرجى إكمال التحقق الأمني قبل التسجيل.",
-    captchaDevSkip: "يُتخطى التحقق على الخادم في بيئة التطوير المحلية عند عدم ضبط مفاتيح Turnstile.",
     submit: "تسجيل",
     submitting: "جارٍ إنشاء الحساب…",
     signInLink: "تسجيل الدخول",
@@ -115,10 +93,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "Pelo menos 6 caracteres (palavra-passe forte).",
     language: "Idioma",
     currency: "Moeda de visualização",
-    captchaLabel: "Human verification",
-    captchaHint: "Complete the check below. It helps prevent bots and fake signups.",
-    captchaRequired: "Please complete the security verification before registering.",
-    captchaDevSkip: "Security check is skipped on the server in local development when Turnstile keys are unset.",
     submit: "Registar",
     submitting: "A criar conta…",
     signInLink: "Entrar",
@@ -134,10 +108,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "Aƙalla haruffa 6 (yi amfani da kalmar sirri mai ƙarfi).",
     language: "Harshe",
     currency: "Kudin nuni",
-    captchaLabel: "Tabbatar da mutum",
-    captchaHint: "Kammala binciken nan. Yana taimakawa wajen hana robobi da rijistar bogi.",
-    captchaRequired: "Da fatan za a kammala tabbatar da tsaro kafin rijista.",
-    captchaDevSkip: "An tsallake tabbatarwa akan sabar a cikin gida idan ba a sa makullan Turnstile ba.",
     submit: "Rijista",
     submitting: "Ana ƙirƙirar asusu…",
     signInLink: "Shiga",
@@ -153,10 +123,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "ቢያንስ 6 ቁምፊዎች (ጠንካራ የይለፍ ቃል ይጠቀሙ)።",
     language: "ቋንቋ",
     currency: "የማሳያ ምንዛሬ",
-    captchaLabel: "Human verification",
-    captchaHint: "Complete the check below. It helps prevent bots and fake signups.",
-    captchaRequired: "Please complete the security verification before registering.",
-    captchaDevSkip: "Security check is skipped on the server in local development when Turnstile keys are unset.",
     submit: "መዝገብ",
     submitting: "መለያ በመፍጠር ላይ…",
     signInLink: "ግባ",
@@ -172,10 +138,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "Okungenani izinhlamvu eziyi-6 (sebenzisa iphasiwedi eqinile).",
     language: "Ulimi",
     currency: "Imali yokubuka",
-    captchaLabel: "Human verification",
-    captchaHint: "Complete the check below. It helps prevent bots and fake signups.",
-    captchaRequired: "Please complete the security verification before registering.",
-    captchaDevSkip: "Security check is skipped on the server in local development when Turnstile keys are unset.",
     submit: "Bhalisa",
     submitting: "Kudala i-akhawunti…",
     signInLink: "Ngena",
@@ -191,10 +153,6 @@ const register: Record<AppLanguage, Reg> = {
     passwordHint: "6 araf minimum (jëfandikoo baatu-jàll bu am doole).",
     language: "Làkk",
     currency: "Ortu na wone xaalis",
-    captchaLabel: "Human verification",
-    captchaHint: "Complete the check below. It helps prevent bots and fake signups.",
-    captchaRequired: "Please complete the security verification before registering.",
-    captchaDevSkip: "Security check is skipped on the server in local development when Turnstile keys are unset.",
     submit: "Bindu",
     submitting: "Compte bi di sos…",
     signInLink: "Dugg",

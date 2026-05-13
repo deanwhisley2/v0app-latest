@@ -7,11 +7,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
-import { clientIpFromRequest, verifyTurnstileForRegister } from "@/lib/server/verify-turnstile"
 
 type RegisterBody = {
-  /** Cloudflare Turnstile token — verified server-side when `TURNSTILE_SECRET_KEY` is set (required in production). */
-  turnstile_token?: string
   email?: string
   password?: string
   full_name?: string
@@ -38,14 +35,6 @@ export async function POST(request: Request) {
     body = (await request.json()) as RegisterBody
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
-  }
-
-  const turnstileCheck = await verifyTurnstileForRegister(
-    typeof body.turnstile_token === "string" ? body.turnstile_token : undefined,
-    clientIpFromRequest(request),
-  )
-  if (!turnstileCheck.ok) {
-    return NextResponse.json({ error: turnstileCheck.error }, { status: turnstileCheck.status })
   }
 
   const email = typeof body.email === "string" ? body.email.trim() : ""

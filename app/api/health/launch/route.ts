@@ -3,8 +3,6 @@ import { join } from "path"
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { NEXUS_TIER_MATRIX_PUBLIC } from "@/lib/nexus-tier-matrix"
-import { getTurnstileSiteKey } from "@/lib/server/turnstile-site-key"
-import { isTurnstileSecretConfigured } from "@/lib/server/verify-turnstile"
 
 export const dynamic = "force-dynamic"
 
@@ -47,17 +45,10 @@ export async function GET() {
 
   const coreReady = url && srk && anon && databasePing
 
-  const turnstileSite = Boolean(getTurnstileSiteKey())
-  const turnstileSecret = isTurnstileSecretConfigured()
-
   /** Optional: registration / password flows need Brevo; core app shell works without. */
   const optionalServices = {
     brevo_api_configured: Boolean(process.env.BREVO_API_KEY?.trim()),
     next_public_site_url: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
-    /** Both required for production registration + Turnstile-backed login (see `.env.local.example`). */
-    turnstile_site_key_configured: turnstileSite,
-    turnstile_secret_configured: turnstileSecret,
-    turnstile_pair_ready: turnstileSite && turnstileSecret,
   }
 
   return NextResponse.json({
@@ -92,8 +83,6 @@ export async function GET() {
       site_url: "Set NEXT_PUBLIC_SITE_URL (e.g. https://nexuspro.it.com) for auth links and metadata.",
       transactional_email:
         "Set BREVO_API_KEY (and optional BREVO_SENDER_*) in production env if sign-up verification emails must be delivered.",
-      turnstile:
-        "Set TURNSTILE_SECRET_KEY plus TURNSTILE_SITE_KEY (runtime) or NEXT_PUBLIC_TURNSTILE_SITE_KEY (build-time) on the host; match hostnames in Cloudflare Turnstile; enable captcha / attack protection in Supabase if you pass captchaToken on sign-in.",
     },
   })
 }
