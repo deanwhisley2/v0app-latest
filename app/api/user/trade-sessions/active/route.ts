@@ -86,7 +86,8 @@ export async function GET(request: Request) {
         typeof md.fixed_price_usd === "number" && Number.isFinite(md.fixed_price_usd)
           ? md.fixed_price_usd
           : fallback.fixedPriceUsd
-      const schedule = buildContainerDailySchedule(principalUsd, months, seedKey)
+      const insuranceFee = roundUsd2(Number(r.insurance_fee_amount ?? 0))
+      const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, insuranceFee)
       const startAt = new Date(r.created_at)
       const smoothGross = scheduledEarnedUsdSmooth(schedule, startAt, now)
       const cap = totalScheduleTargetUsd(schedule)
@@ -99,7 +100,7 @@ export async function GET(request: Request) {
         sessionId: r.id,
         traderPersonaId: r.trader_persona_id,
         principalUsd,
-        insuranceFeeUsd: roundUsd2(Number(r.insurance_fee_amount ?? 0)),
+        insuranceFeeUsd: insuranceFee,
         riskClass: r.risk_class,
         fixPeriodMonths: months,
         seedKey,

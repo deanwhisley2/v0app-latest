@@ -1,5 +1,10 @@
-/** Total return over the full fixed period: 22% × principal × number of months (container / platform deposit). */
-export const CONTAINER_PERIOD_RETURN_MONTHLY_PCT = 22
+import { roundUsd2 } from "@/lib/nexus-financial-policy"
+
+/**
+ * Nominal monthly policy return rate on **yield base** (principal minus opening insurance),
+ * applied for each month in the lock. Daily buckets sum to this target over the full period.
+ */
+export const CONTAINER_PERIOD_RETURN_MONTHLY_PCT = 23
 
 export type FixPeriodMonths = 1 | 3 | 6
 
@@ -26,28 +31,36 @@ export function stringSeed(s: string): number {
 }
 
 /**
- * Random positive daily amounts that sum to principal × 22% × periodMonths.
- * Deterministic from `seedKey` so the same trade always gets the same curve.
+ * Deterministic daily accrual buckets that sum to:
+ *   (principal − opening insurance) × CONTAINER_PERIOD_RETURN_MONTHLY_PCT × periodMonths
+ * (falls back to full principal if the net base would be non-positive).
+ * Weights are tightly banded (~±12% around the equal-per-day mean) so the curve feels “alive”
+ * day to day while reconciling exactly to the policy total (ledger-aligned targets on the server).
  */
 export function buildContainerDailySchedule(
   principalUsd: number,
   periodMonths: FixPeriodMonths,
-  seedKey: string
+  seedKey: string,
+  insuranceFeeUsd = 0
 ): number[] {
   const days = fixPeriodDayCount(periodMonths)
-  const target = principalUsd * (CONTAINER_PERIOD_RETURN_MONTHLY_PCT / 100) * periodMonths
+  const ins = Math.max(0, roundUsd2(insuranceFeeUsd))
+  const netForYield = roundUsd2(principalUsd - ins)
+  const baseUsd = netForYield > 0 ? netForYield : roundUsd2(principalUsd)
+  const target = roundUsd2(baseUsd * (CONTAINER_PERIOD_RETURN_MONTHLY_PCT / 100) * periodMonths)
+
   const rnd = mulberry32(stringSeed(seedKey))
   const weights: number[] = []
   let sumW = 0
   for (let i = 0; i < days; i++) {
-    const w = 0.15 + rnd() * 0.85
+    const w = 0.88 + rnd() * 0.24
     weights.push(w)
     sumW += w
   }
   const scale = target / sumW
   const daily = weights.map((w) => Math.round(w * scale * 100) / 100)
   const drift = Math.round((target - daily.reduce((a, b) => a + b, 0)) * 100) / 100
-  if (daily.length > 0) daily[daily.length - 1] = Math.round((daily[daily.length - 1] + drift) * 100) / 100
+  if (daily.length > 0) daily[daily.length - 1] = Math.round((daily[daily.length - 1]! + drift) * 100) / 100
   return daily
 }
 

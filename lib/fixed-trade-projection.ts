@@ -22,9 +22,10 @@ export type FixedTradeProjection = {
 export function fixedTradeScheduleProjection(
   principalUsd: number,
   periodMonths: FixPeriodMonths,
-  seedKey: string
+  seedKey: string,
+  insuranceFeeUsd = 0
 ): FixedTradeProjection {
-  const schedule = buildContainerDailySchedule(principalUsd, periodMonths, seedKey)
+  const schedule = buildContainerDailySchedule(principalUsd, periodMonths, seedKey, insuranceFeeUsd)
   const totalTargetUsd = Math.round(schedule.reduce((a, b) => a + b, 0) * 100) / 100
   const dayOneUsd = schedule[0] ?? 0
   const weekOneUsd = cumulativeThroughDay(schedule, Math.min(7, schedule.length))
