@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { buildContainerDailySchedule, scheduledEarnedUsdSmooth, totalScheduleTargetUsd } from "@/lib/container-earnings-schedule"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
+import { computeFixedSessionPolicyGrossUsd, type FixedSessionEarnedRow } from "@/lib/server/fixed-trade-earnings-snapshot"
 
 type CopyRow = {
   id: string
@@ -25,6 +25,8 @@ type FixedRow = {
   seed_key: string | null
   created_at: string
   metadata: Record<string, unknown> | null
+  cumulative_earnings_released_usd?: string | number | null
+  last_earnings_release_at?: string | null
 }
 
 /**
@@ -50,7 +52,7 @@ export async function GET(request: Request) {
       admin
         .from("fixed_trade_sessions")
         .select(
-          "id,trader_persona_id,principal_amount,insurance_fee_amount,risk_class,fix_period_months,seed_key,created_at,metadata"
+          "id,trader_persona_id,principal_amount,insurance_fee_amount,risk_class,fix_period_months,seed_key,created_at,metadata,cumulative_earnings_released_usd,last_earnings_release_at"
         )
         .eq("user_id", user.id)
         .eq("status", "active")
@@ -87,13 +89,14 @@ export async function GET(request: Request) {
           ? md.fixed_price_usd
           : fallback.fixedPriceUsd
       const insuranceFee = roundUsd2(Number(r.insurance_fee_amount ?? 0))
-      const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, insuranceFee)
-      const startAt = new Date(r.created_at)
-      const smoothGross = scheduledEarnedUsdSmooth(schedule, startAt, now)
-      const cap = totalScheduleTargetUsd(schedule)
-      const earnedUsd = roundUsd2(Math.min(cap, smoothGross))
+      const earnedUsd = computeFixedSessionPolicyGrossUsd(r as FixedSessionEarnedRow, now)
       const leaseEnd = officialLeaseEndDate(r.created_at, months)
       const withdrawPercent = months === 1 ? 30 : months === 3 ? 50 : 70
+      const totalWithdrawnUsd = roundUsd2(Number(r.cumulative_earnings_released_usd ?? 0))
+      const lastWithdrawalAt =
+        typeof r.last_earnings_release_at === "string" && r.last_earnings_release_at.trim()
+          ? r.last_earnings_release_at
+          : null
 
       return {
         kind: "fixed" as const,
@@ -109,9 +112,8 @@ export async function GET(request: Request) {
         coinSymbol,
         fixedPriceUsd,
         earnedUsd,
-        /** Withdrawal counters are not yet ledger-backed — hydrate as zero until a dedicated slice. */
-        totalWithdrawnUsd: 0,
-        lastWithdrawalAt: null as string | null,
+        totalWithdrawnUsd,
+        lastWithdrawalAt,
         withdrawablePercent: withdrawPercent,
       }
     })

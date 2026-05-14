@@ -2187,7 +2187,7 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="rounded-xl border border-success/30 bg-success/10 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Container Withdrawable Earnings</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Container Liquid Earnings</p>
                 <p className="mt-1 font-mono text-lg font-bold">
                   {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
                 </p>
@@ -3056,6 +3056,7 @@ export default function DashboardPage() {
                 userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
                 retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
                 retailerLiquidityOpsBlocked={retailerOpsBlocked}
+                containerLiquidEarningsUsd={containerWithdrawableEarnings}
               />
             </main>
           </div>

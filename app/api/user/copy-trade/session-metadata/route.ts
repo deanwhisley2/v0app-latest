@@ -5,13 +5,41 @@ import { getTradingUserLevel } from "@/lib/server/security-authz"
 
 type Metadata = Record<string, unknown>
 
-function mergeCopyMetadata(prev: Metadata | null | undefined, autoAdjust: boolean): Metadata {
-  const base = prev && typeof prev === "object" ? { ...prev } : {}
-  const ui = typeof base.ui === "object" && base.ui !== null ? { ...(base.ui as object) } : {}
-  return { ...base, v: 1, ui: { ...ui, autoAdjust } }
+type ModelMeta = {
+  earnedUsd?: number
+  drawdownPct?: number
+  updatedAt?: string
 }
 
-/** Persist copy-desk UI flags (e.g. auto-adjust) for session recovery — does not move money. */
+function mergeCopyMetadata(
+  prev: Metadata | null | undefined,
+  patch: { autoAdjust?: boolean; modeledEarnedUsd?: number; modeledDrawdownPct?: number },
+): Metadata {
+  const base = prev && typeof prev === "object" ? { ...prev } : {}
+  const ui = typeof base.ui === "object" && base.ui !== null ? { ...(base.ui as object) } : {}
+  const next: Metadata = { ...base, v: 1, ui: { ...ui } }
+
+  if (typeof patch.autoAdjust === "boolean") {
+    next.ui = { ...(next.ui as object), autoAdjust: patch.autoAdjust }
+  }
+
+  if (patch.modeledEarnedUsd !== undefined || patch.modeledDrawdownPct !== undefined) {
+    const prevModel =
+      typeof base.model === "object" && base.model !== null ? { ...(base.model as ModelMeta) } : {}
+    const model: ModelMeta = { ...prevModel, updatedAt: new Date().toISOString() }
+    if (typeof patch.modeledEarnedUsd === "number" && Number.isFinite(patch.modeledEarnedUsd)) {
+      model.earnedUsd = patch.modeledEarnedUsd
+    }
+    if (typeof patch.modeledDrawdownPct === "number" && Number.isFinite(patch.modeledDrawdownPct)) {
+      model.drawdownPct = Math.max(0, Math.min(0.85, patch.modeledDrawdownPct))
+    }
+    next.model = model
+  }
+
+  return next
+}
+
+/** Persist copy-desk UI flags and last modeled marks for server-side expiry sweep — does not move money. */
 export async function PATCH(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "mutate")
@@ -25,11 +53,20 @@ export async function PATCH(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       sessionId?: string
       autoAdjust?: boolean
+      modeledEarnedUsd?: number
+      modeledDrawdownPct?: number
     }
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : ""
     if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 })
-    if (typeof body.autoAdjust !== "boolean") {
-      return NextResponse.json({ error: "autoAdjust boolean required" }, { status: 400 })
+
+    const hasAuto = typeof body.autoAdjust === "boolean"
+    const hasModeledEarned = typeof body.modeledEarnedUsd === "number" && Number.isFinite(body.modeledEarnedUsd)
+    const hasModeledDd = typeof body.modeledDrawdownPct === "number" && Number.isFinite(body.modeledDrawdownPct)
+    if (!hasAuto && !hasModeledEarned && !hasModeledDd) {
+      return NextResponse.json(
+        { error: "Provide autoAdjust and/or modeledEarnedUsd / modeledDrawdownPct to update." },
+        { status: 400 },
+      )
     }
 
     const admin = createAdminClient()
@@ -45,7 +82,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Session is not active" }, { status: 400 })
     }
 
-    const nextMeta = mergeCopyMetadata(row.metadata as Metadata | null, body.autoAdjust)
+    const nextMeta = mergeCopyMetadata(row.metadata as Metadata | null, {
+      autoAdjust: hasAuto ? body.autoAdjust : undefined,
+      modeledEarnedUsd: hasModeledEarned ? body.modeledEarnedUsd : undefined,
+      modeledDrawdownPct: hasModeledDd ? body.modeledDrawdownPct : undefined,
+    })
     const { error: uErr } = await admin
       .from("copy_trade_sessions")
       .update({ metadata: nextMeta })
