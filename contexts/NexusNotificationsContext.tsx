@@ -60,6 +60,8 @@ function mapServerAccountRow(r: {
   nav: unknown
   read_at: string | null
   created_at: string
+  user_archived_at?: string | null
+  metadata?: unknown
 }): NexusNotificationItem {
   const raw = (r.notification_type ?? "system").toLowerCase()
   const type: NexusNotificationType = KNOWN_NOTIF_TYPES.includes(raw as NexusNotificationType)
@@ -68,7 +70,12 @@ function mapServerAccountRow(r: {
   const nav =
     r.nav && typeof r.nav === "object" && r.nav !== null && "kind" in (r.nav as object)
       ? (r.nav as NexusNotificationNav)
-      : ({ kind: "wallet" } satisfies NexusNotificationNav)
+      : ({ kind: "notifications" } satisfies NexusNotificationNav)
+  const meta =
+    r.metadata && typeof r.metadata === "object" && r.metadata !== null
+      ? (r.metadata as Record<string, unknown>)
+      : null
+  const detailText = typeof meta?.friendly_detail === "string" ? meta.friendly_detail : undefined
   return {
     id: r.id,
     type,
@@ -76,6 +83,8 @@ function mapServerAccountRow(r: {
     message: r.body,
     timestamp: r.created_at,
     read: !!r.read_at,
+    archived: !!r.user_archived_at,
+    detailText,
     nav,
   }
 }
@@ -102,29 +111,29 @@ function seedInbox(): NexusNotificationItem[] {
 
     switch (type) {
       case "price":
-        title = `${sym} price move`
-        message = `${sym} moved sharply in the last hour — open chart to review.`
+        title = `${sym} moved`
+        message = `${sym} had a sharp move recently — open Trade if you want a closer look.`
         nav = { kind: "trade", symbol: sym }
         break
       case "trade":
-        title = i % 2 === 0 ? "Order filled" : "Order partially filled"
-        message = `Limit ${i % 2 === 0 ? "BUY" : "SELL"} on ${sym} — size and venue in Orders.`
+        title = i % 2 === 0 ? "Order filled" : "Order partly filled"
+        message = `Your ${i % 2 === 0 ? "buy" : "sell"} on ${sym} — check Orders for size and status.`
         nav = { kind: "orders" }
         break
       case "security":
-        title = "Security notice"
-        message = `Activity #${i + 1}: review login or API key usage in Security Center.`
+        title = "Heads up — sign-in"
+        message = `We saw activity #${i + 1} on your account. If that was not you, check Security in Settings.`
         nav = { kind: "settings", view: "security" }
         break
       case "promo":
-        title = "Promo & rewards"
-        message = `Limited offer ${i + 1} — tap Wallet for eligibility and terms.`
-        nav = { kind: "wallet" }
+        title = "Rewards"
+        message = `Offer ${i + 1} — details will show here when they are ready.`
+        nav = { kind: "notifications" }
         break
       case "system":
       default:
-        title = "System update"
-        message = `Platform notice ${i + 1}: maintenance windows and status updates.`
+        title = "From Nexus"
+        message = `Update ${i + 1}: planned work or small fixes — nothing you need to do unless we say so.`
         nav = { kind: "settings", view: "about" }
         break
     }
@@ -144,16 +153,7 @@ function seedInbox(): NexusNotificationItem[] {
 }
 
 function seedHistory(): NexusNotificationItem[] {
-  const days = [1, 2, 3, 5, 7, 10, 14, 21]
-  return days.map((d, i) => ({
-    id: `h-${i}`,
-    type: "system" as const,
-    title: "Weekly summary",
-    message: `Portfolio snapshot from ${d} day(s) ago is ready to review.`,
-    timestamp: iso(new Date(Date.now() - 86400000 * d)),
-    read: true,
-    nav: { kind: "detail" },
-  }))
+  return []
 }
 
 function loadPersisted(): { inbox: NexusNotificationItem[]; history: NexusNotificationItem[] } | null {
@@ -197,6 +197,7 @@ type NexusNotificationsContextValue = {
   addNotification: (item: Omit<NexusNotificationItem, "id" | "timestamp" | "read"> & { id?: string; timestamp?: string }) => string
   deleteFromHistory: (id: string) => void
   clearHistory: () => void
+  unarchiveFromHistory: (id: string) => void
 }
 
 const NexusNotificationsContext = createContext<NexusNotificationsContextValue | null>(null)
@@ -319,7 +320,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token || cancelled) return
-        const res = await fetch("/api/user/account-notifications?limit=250", {
+        const res = await fetch("/api/user/account-notifications?folder=inbox&limit=250", {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         })
@@ -333,6 +334,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
             nav: unknown
             read_at: string | null
             created_at: string
+            user_archived_at?: string | null
+            metadata?: unknown
           }>
         }
         const rows = out.items ?? []
@@ -377,6 +380,13 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         nav: raw.nav,
         read_at: typeof raw.read_at === "string" ? raw.read_at : null,
         created_at,
+        user_archived_at:
+          typeof raw.user_archived_at === "string"
+            ? raw.user_archived_at
+            : raw.user_archived_at === null
+              ? null
+              : undefined,
+        metadata: raw.metadata,
       })
     }
 
@@ -405,6 +415,10 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
           }
           const item = mapRow(raw)
           if (!item) return
+          if (item.archived) {
+            setInbox((prev) => prev.filter((n) => n.id !== item.id))
+            return
+          }
           setInbox((prev) => {
             const merged = upsertServerNotificationRows(prev, [item])
             if (sameInboxSignature(prev, merged)) return prev
@@ -474,14 +488,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         })
         return
       }
-      setInbox((prev) => {
-        const hit = prev.find((n) => n.id === id)
-        const next = prev.filter((n) => n.id !== id)
-        if (hit) {
-          setHistory((h) => [{ ...hit, read: true }, ...h])
-        }
-        return next
-      })
+      setInbox((prev) => prev.filter((n) => n.id !== id))
     },
     [patchAccountNotification]
   )
@@ -489,15 +496,15 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
   const archiveFromInbox = useCallback(
     (id: string) => {
       if (isServerNotificationId(id)) {
-        void patchAccountNotification({ id, action: "mark_read" }).then((ok) => {
-          if (ok) setInbox((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        void patchAccountNotification({ id, action: "archive" }).then((ok) => {
+          if (ok) setInbox((prev) => prev.filter((n) => n.id !== id))
         })
         return
       }
       setInbox((prev) => {
         const hit = prev.find((n) => n.id === id)
         if (!hit) return prev
-        const archived: NexusNotificationItem = { ...hit, read: true }
+        const archived: NexusNotificationItem = { ...hit, read: true, archived: true }
         setHistory((h) => [archived, ...h])
         return prev.filter((n) => n.id !== id)
       })
@@ -536,6 +543,17 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     setHistory((prev) => prev.filter((n) => n.id !== id))
   }, [])
 
+  const unarchiveFromHistory = useCallback((id: string) => {
+    setHistory((prev) => {
+      const hit = prev.find((n) => n.id === id)
+      if (!hit) return prev
+      const next = prev.filter((n) => n.id !== id)
+      const back: NexusNotificationItem = { ...hit, read: false, archived: false }
+      setInbox((inb) => [back, ...inb])
+      return next
+    })
+  }, [])
+
   const clearHistory = useCallback(() => {
     setHistory([])
   }, [])
@@ -555,6 +573,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       addNotification,
       deleteFromHistory,
       clearHistory,
+      unarchiveFromHistory,
     }),
     [
       inbox,
@@ -570,6 +589,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       addNotification,
       deleteFromHistory,
       clearHistory,
+      unarchiveFromHistory,
     ]
   )
 

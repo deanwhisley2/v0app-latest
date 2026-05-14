@@ -9,7 +9,7 @@ export async function notifyCustomerFundingOperational(
   const body = params.viaTreasury
     ? "Funding approved successfully — company treasury liquidity was used for this settlement."
     : "Funding approved successfully by operational support."
-  const nav: NexusNotificationNav = { kind: "wallet" }
+  const nav: NexusNotificationNav = { kind: "notifications" }
   const { error } = await admin.from("user_account_notifications").upsert(
     {
       user_id: params.userId,
@@ -31,7 +31,7 @@ export async function notifyRetailerOverrideDebit(
   admin: SupabaseClient,
   params: { retailerUserId: string; requestId: string; amountUsd: number },
 ): Promise<void> {
-  const nav: NexusNotificationNav = { kind: "wallet" }
+  const nav: NexusNotificationNav = { kind: "notifications" }
   const { error } = await admin.from("user_account_notifications").upsert(
     {
       user_id: params.retailerUserId,

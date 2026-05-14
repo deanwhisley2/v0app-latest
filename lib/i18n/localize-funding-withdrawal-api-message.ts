@@ -45,6 +45,15 @@ EXACT_KEY[DUPLICATE_TOPUP] = "funding.apiErr.duplicatePendingTopup"
 const MIN_WITHDRAW_RE =
   /^Minimum withdrawal is ([\d.]+) USD \(normalized internal unit\)\.$/
 
+const MIN_WITHDRAW_ABOUT_RE =
+  /^Minimum withdrawal is about ([\d.]+) USD in internal units \(20,000 UGX equivalent at current FX\)\.$/
+
+const WITHDRAW_COOLDOWN_RE =
+  /^You can submit one withdrawal every 24 hours\. Next withdrawal is available after (.+)\.$/
+
+const WITHDRAW_MAX_HALF_RE =
+  /^For security, each withdrawal is capped at 50% of your total balance \(about ([\d.]+) USD right now\)\.$/
+
 export function localizeFundingWithdrawalApiMessage(
   raw: string | undefined | null,
   t: (key: string) => string,
@@ -54,7 +63,20 @@ export function localizeFundingWithdrawalApiMessage(
   if (!s) return t("withdrawal.apiErr.genericFailed")
   const key = EXACT_KEY[s]
   if (key) return t(key)
+  const mAbout = s.match(MIN_WITHDRAW_ABOUT_RE)
+  if (mAbout) return t("withdrawal.apiErr.minimumUsd").replace("{{min}}", mAbout[1])
   const m = s.match(MIN_WITHDRAW_RE)
   if (m) return t("withdrawal.apiErr.minimumUsd").replace("{{min}}", m[1])
+  const mCd = s.match(WITHDRAW_COOLDOWN_RE)
+  if (mCd) {
+    const iso = mCd[1]
+    const when = new Date(iso)
+    const human = Number.isFinite(when.getTime())
+      ? when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : iso
+    return t("withdrawal.apiErr.cooldownNext").replace("{{when}}", human)
+  }
+  const mMax = s.match(WITHDRAW_MAX_HALF_RE)
+  if (mMax) return t("withdrawal.apiErr.maxHalfBalance").replace("{{max}}", mMax[1])
   return s
 }

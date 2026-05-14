@@ -48,11 +48,11 @@ const settingsItems: Omit<SearchResult, "id">[] = [
 ]
 
 const walletItems: Omit<SearchResult, "id">[] = [
-  { title: "Send Crypto", description: "Transfer funds to another wallet", category: "wallet", icon: <ArrowRight className="h-4 w-4" />, path: "wallet" },
-  { title: "Receive Crypto", description: "Get your deposit address", category: "wallet", icon: <Wallet className="h-4 w-4" />, path: "wallet" },
-  { title: "Transaction History", description: "View all past transactions", category: "wallet", icon: <History className="h-4 w-4" />, path: "wallet" },
-  { title: "Portfolio Overview", description: "See your holdings and P&L", category: "wallet", icon: <TrendingUp className="h-4 w-4" />, path: "wallet" },
-  { title: "Earn Rewards", description: "Stake crypto for passive income", category: "wallet", icon: <Sparkles className="h-4 w-4" />, path: "wallet" },
+  { title: "Send Crypto", description: "Move funds to an external address", category: "wallet", icon: <ArrowRight className="h-4 w-4" />, path: "settings" },
+  { title: "Receive Crypto", description: "Get your deposit details", category: "wallet", icon: <Wallet className="h-4 w-4" />, path: "settings" },
+  { title: "Transaction History", description: "See recent money movements", category: "wallet", icon: <History className="h-4 w-4" />, path: "notifications" },
+  { title: "Portfolio Overview", description: "See balances at a glance", category: "wallet", icon: <TrendingUp className="h-4 w-4" />, path: "settings" },
+  { title: "Earn Rewards", description: "Rewards and promos", category: "wallet", icon: <Sparkles className="h-4 w-4" />, path: "notifications" },
 ]
 
 const helpItems: Omit<SearchResult, "id">[] = [
@@ -70,13 +70,13 @@ const quickActions: Omit<SearchResult, "id">[] = [
 ]
 
 const mockOrders: Omit<SearchResult, "id">[] = [
-  { title: "ORD-001 - Buy BTC", description: "$500 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "wallet" },
-  { title: "ORD-002 - Sell ETH", description: "$250 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "wallet" },
-  { title: "ORD-003 - Buy SOL", description: "$100 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "wallet" },
-  { title: "ORD-004 - Buy BTC", description: "$1,200 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "wallet" },
-  { title: "ORD-005 - Sell ADA", description: "$350 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "wallet" },
-  { title: "ORD-006 - Buy ETH", description: "$800 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "wallet" },
-  { title: "ORD-007 - Sell DOGE", description: "$50 - Cancelled", category: "order", icon: <X className="h-4 w-4 text-destructive" />, path: "wallet" },
+  { title: "ORD-001 - Buy BTC", description: "$500 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
+  { title: "ORD-002 - Sell ETH", description: "$250 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
+  { title: "ORD-003 - Buy SOL", description: "$100 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "notifications" },
+  { title: "ORD-004 - Buy BTC", description: "$1,200 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
+  { title: "ORD-005 - Sell ADA", description: "$350 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
+  { title: "ORD-006 - Buy ETH", description: "$800 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "notifications" },
+  { title: "ORD-007 - Sell DOGE", description: "$50 - Cancelled", category: "order", icon: <X className="h-4 w-4 text-destructive" />, path: "notifications" },
 ]
 
 export function GlobalSearch({ isOpen, onClose, onNavigate, coins }: GlobalSearchProps) {

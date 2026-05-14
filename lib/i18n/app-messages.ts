@@ -16,6 +16,8 @@ const en: Record<string, string> = {
   "nav.markets": "Markets",
   "nav.wallstreet": "Wallstreet",
   "nav.wallet": "Wallet",
+  "nav.notifications": "Notifications",
+  "nav.desk": "Desk",
   "nav.settings": "Settings",
 
   "bottom.assistantTitle": "Joelin",
@@ -26,6 +28,20 @@ const en: Record<string, string> = {
 
   "header.searchHint": "Search",
   "header.cantFind": "Can't find it?",
+  "header.archivedTitle": "Saved notifications",
+  "header.archivedSubtitle": "Items you archived for later.",
+  "header.archivedEmpty": "Nothing saved yet. Open the Notifications tab and tap Archive on any item.",
+
+  "notifications.center.subtitle": "Money moves, trades, and simple account notes in one place.",
+  "notifications.center.markAllRead": "Mark all read",
+  "notifications.center.markRead": "Mark read",
+  "notifications.center.archive": "Archive",
+  "notifications.center.delete": "Delete",
+  "notifications.center.unarchive": "Move to inbox",
+  "notifications.center.openLinked": "Go to linked screen",
+  "notifications.center.empty": "You are all caught up — no notifications right now.",
+  "notifications.center.detailBalancePlain":
+    "This is a simple balance update — the title tells you what changed. If this does not look right, open Settings and reach support.",
 
   "settings.back": "Back to settings",
   "settings.languageTitle": "Language",

@@ -8,8 +8,11 @@ import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
 /** Minimum deposit in USD (normalized accounting unit). */
 export const NEXUS_MIN_DEPOSIT_USD = 5
 
-/** Minimum withdrawal in USD (normalized accounting unit). */
+/** Legacy floor in USD; product minimum is driven by {@link NEXUS_MIN_WITHDRAW_UGX} equivalent via FX. */
 export const NEXUS_MIN_WITHDRAW_USD = 3
+
+/** Minimum cashout in Ugandan shilling (or FX-equivalent in other currencies). */
+export const NEXUS_MIN_WITHDRAW_UGX = 20_000
 
 /** Referrer reward as fraction of referee’s first successful deposit (spec). */
 export const NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT = 0.035
@@ -24,8 +27,8 @@ export const NEXUS_EMERGENCY_PULLOUT_THRESHOLD = 0.07
 export const NEXUS_HARD_PROTECTION_THRESHOLD = 0.09
 
 export const PROCESSING_COPY = {
-  deposits: "Typically 1–15 minutes depending on network, retailer confirmation, and payment rail.",
-  withdrawals: "Typically 1–2 hours depending on network, retailer activity, withdrawal method, and country.",
+  deposits: "Most of the time this is a few minutes. Busy banks or networks can make it slower.",
+  withdrawals: "Often within a few hours. It depends on your country and how we send the money.",
 } as const
 
 export type FixInsuranceWithdrawFees = {

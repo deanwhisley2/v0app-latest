@@ -22,8 +22,12 @@ export type NexusNotificationItem = {
   type: NexusNotificationType
   title: string
   message: string
+  /** Optional friendlier explanation for the detail screen (falls back to `message`). */
+  detailText?: string
   timestamp: string
   read: boolean
+  /** Server-backed: user moved row to Archived (bell). */
+  archived?: boolean
   nav?: NexusNotificationNav
   analysis?: AnalysisNotificationPayload
 }

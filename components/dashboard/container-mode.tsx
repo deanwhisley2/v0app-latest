@@ -283,7 +283,7 @@ export function ContainerMode({
   retailerLiquidityOpsBlocked = false,
   containerLiquidEarningsUsd = 0,
 }: ContainerModeProps) {
-  const { formatUserMoney, currency } = useUserPreferences()
+  const { formatUserMoney, currency, t } = useUserPreferences()
   const { addNotification } = useNexusNotifications()
   const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
@@ -435,18 +435,6 @@ export function ContainerMode({
     return fixedTradeScheduleProjection(principalUsd, fixPeriod as FixPeriodMonths, seed, insuranceUsd)
   }, [activeTab, selectedTrader, fixAmount, fixPeriod, currency, userLevel])
 
-  const joinNotificationLines = useMemo(() => {
-    const m = (usd: number) => formatUserMoney(usd)
-    return [
-      () => `Member opened a fixed-term allocation (~${m(420)})`,
-      () => `Trader desk activity: modest scheduled accrual on a ${m(210)} managed allocation`,
-      () => `New follower joined copy rotation (${m(350)}, 24h cycle)`,
-      () => `Scheduled earnings milestone on a ${m(180)} fixed lock`,
-      () => `Member reviewed Container wallet — withdrawal queue steady`,
-      () => `Desk cleared an inbound confirmation under ${m(95)}`,
-    ]
-  }, [formatUserMoney])
-
   // Server-authoritative recovery: active copy/fixed sessions after login, refresh, device change, or runtime restart.
   useEffect(() => {
     let cancelled = false
@@ -580,9 +568,6 @@ export function ContainerMode({
     }
   }, [])
 
-  const [joinNotifMessage, setJoinNotifMessage] = useState("")
-  const [showJoinNotif, setShowJoinNotif] = useState(false)
-
   useEffect(() => {
     const updateCountdowns = () => {
       const newCountdowns: Record<string, string> = {}
@@ -620,7 +605,7 @@ export function ContainerMode({
 
   const notifyCopy = useCallback(
     (title: string, message: string) => {
-      addNotification({ type: "system", title, message, nav: { kind: "wallet" } })
+      addNotification({ type: "system", title, message, nav: { kind: "notifications" } })
     },
     [addNotification]
   )
@@ -733,13 +718,10 @@ export function ContainerMode({
           settledIds.add(r.sessionId)
           addNotification({
             type: "system",
-            title: "Fixed trade matured",
-            message: `Principal ${formatUserMoney(r.settlement.principalReturnedUsd)} to Nexus Main; ${formatUserMoney(
-              r.settlement.terminalLiquidNetUsd,
-            )} net to container liquid (terminal fee ${formatUserMoney(r.settlement.terminalFeeUsd)}; policy gross ${formatUserMoney(
-              r.settlement.finalPolicyGrossUsd,
-            )}).`,
-            nav: { kind: "wallet" },
+            title: "Your fixed trade finished",
+            message: `Principal ${formatUserMoney(r.settlement.principalReturnedUsd)} is back on your main balance. ${formatUserMoney(r.settlement.terminalLiquidNetUsd)} went to your container earnings pocket (after fees).`,
+            detailText: `Think of it like a lease ending: your starting amount returns to spendable “main” cash, and the profit slice that belongs in your earnings pocket moves there so you can transfer it when you want. Small fees were taken for processing — that is normal.`,
+            nav: { kind: "notifications" },
           })
         }
         if (settledIds.size > 0) {
@@ -840,25 +822,6 @@ export function ContainerMode({
     const id = window.setInterval(sync, 15_000)
     return () => window.clearInterval(id)
   }, [activeFixTrades.length])
-
-  // Small bottom join notifications (amounts in user currency)
-  useEffect(() => {
-    const showNotif = () => {
-      const pickers = joinNotificationLines
-      const line = pickers[Math.floor(Math.random() * pickers.length)]?.() ?? ""
-      setJoinNotifMessage(line)
-      setShowJoinNotif(true)
-      setTimeout(() => setShowJoinNotif(false), 4000)
-    }
-
-    const initialTimeout = setTimeout(showNotif, 22_000)
-    const interval = setInterval(showNotif, 62_000 + Math.random() * 48_000)
-
-    return () => {
-      clearTimeout(initialTimeout)
-      clearInterval(interval)
-    }
-  }, [joinNotificationLines])
 
   const availableTraders = copyDeskCatalog.filter((t) => !t.locked)
   const lockedTraders = copyDeskCatalog.filter((t) => t.locked)
@@ -1174,7 +1137,7 @@ export function ContainerMode({
           type: "system",
           title: "Fixed trade schedule active",
           message: `${formatUserMoney(amount)} · ${fixPeriod} month lock (funded from Nexus Main). Earnings accrue on the policy daily curve.`,
-          nav: { kind: "wallet" },
+          nav: { kind: "notifications" },
         })
         setSelectedTrader(null)
       } finally {
@@ -1331,8 +1294,9 @@ export function ContainerMode({
           ),
         )
         toastMutationSuccess(
-          `Released ${formatUserMoney(gross)} gross to Container Liquid (${formatUserMoney(netLiq)} after release fee). ` +
-            `Transfer container liquid to Nexus Main from the dashboard wallet card when you want it spendable there.`,
+          t("funding.container.sessionToPocketToast")
+            .replace("{{gross}}", formatUserMoney(gross))
+            .replace("{{net}}", formatUserMoney(netLiq)),
         )
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Release failed.", { duration: 6500 })
@@ -1366,24 +1330,6 @@ export function ContainerMode({
 
   return (
     <div className="space-y-4">
-      {/* Join Notification Popup - Bottom Left */}
-      {showJoinNotif && (
-        <div className="fixed bottom-20 left-4 z-50 animate-in slide-in-from-left duration-300">
-          <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-card px-4 py-3 shadow-lg">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/20">
-              <Users className="h-4 w-4 text-success" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{joinNotifMessage}</p>
-              <p className="text-xs text-muted-foreground">Just now</p>
-            </div>
-            <button onClick={() => setShowJoinNotif(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Live Stats Banner */}
       <Card className="border-accent/30 bg-gradient-to-r from-accent/5 via-primary/5 to-success/5 p-3">
         <div className="flex flex-wrap items-center justify-between gap-4">

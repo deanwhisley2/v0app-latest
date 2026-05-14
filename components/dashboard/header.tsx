@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { NotificationPanel } from "./notification-panel"
+import { ArchivedNotificationsSheet } from "./archived-notifications-sheet"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { GlobalSearch } from "./global-search"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -35,7 +35,7 @@ interface HeaderProps {
   currentUser?: { email: string; username: string; fullName: string; level: number }
   /** Level 2 retailer credit desk — combined with level for badge label. */
   retailerCreditDesk?: boolean
-  /** Level 5 or retailer credit desk — only Assets + Settings in primary nav. */
+  /** Level 5 or retailer credit desk — Desk + Settings in primary nav. */
   operationalWorkspace?: boolean
   /** Populated from GET /api/user/referral — share link + counts */
   referral?: { referralCode: string; referralLink: string; refereeCount: number } | null
@@ -54,7 +54,7 @@ export function Header({
 }: HeaderProps) {
   const { t } = useUserPreferences()
   const { unreadCount } = useNexusNotifications()
-  const [showNotifications, setShowNotifications] = useState(false)
+  const [showArchivedNotifications, setShowArchivedNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -137,15 +137,18 @@ export function Header({
   const mainTabsAll = [
     { id: "container", labelKey: "nav.container" },
     { id: "wallstreet", labelKey: "nav.wallstreet" },
-    { id: "wallet", labelKey: "nav.wallet" },
+    { id: "notifications", labelKey: "nav.notifications" },
     { id: "settings", labelKey: "nav.settings" },
   ] as const
   const mainTabs = operationalWorkspace
     ? ([
-        { id: "wallet", labelKey: "nav.wallet" },
+        { id: "desk", labelKey: "nav.desk" },
         { id: "settings", labelKey: "nav.settings" },
       ] as const)
     : mainTabsAll
+
+  const resolvedHeaderActive =
+    activeTab === "wallet" ? (operationalWorkspace ? "desk" : "notifications") : activeTab
 
   return (
     <>
@@ -167,7 +170,7 @@ export function Header({
                 type="button"
                 onClick={() => onTabChange(tab.id)}
                 className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
+                  resolvedHeaderActive === tab.id
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
@@ -199,7 +202,7 @@ export function Header({
               size="icon" 
               className="relative"
               onClick={() => {
-                setShowNotifications(!showNotifications)
+                setShowArchivedNotifications((v) => !v)
               }}
             >
               <Bell className="h-5 w-5 text-muted-foreground" />
@@ -215,7 +218,7 @@ export function Header({
               <button
                 onClick={() => {
                   setShowProfileMenu(!showProfileMenu)
-                  setShowNotifications(false)
+                  setShowArchivedNotifications(false)
                 }}
                 title="View Profile"
                 className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary/80 to-accent font-semibold text-primary-foreground transition-all hover:scale-105 ${showProfileMenu ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
@@ -587,9 +590,9 @@ export function Header({
       </header>
 
       {/* Notification Panel */}
-      <NotificationPanel 
-        isOpen={showNotifications} 
-        onClose={() => setShowNotifications(false)} 
+      <ArchivedNotificationsSheet
+        isOpen={showArchivedNotifications}
+        onClose={() => setShowArchivedNotifications(false)}
       />
 
       {/* Global Search */}

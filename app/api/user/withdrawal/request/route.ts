@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { minWithdrawUsdOk } from "@/lib/nexus-fx"
+import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 
 function round2(n: number): number {
@@ -27,14 +27,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Amount must be greater than 0" }, { status: 400 })
     }
 
+    const minFloor = roundUsd2(minWithdrawUsdFloor())
     if (!minWithdrawUsdOk(amount)) {
       return NextResponse.json(
-        { error: `Minimum withdrawal is ${roundUsd2(3)} USD (normalized internal unit).` },
+        {
+          error: `Minimum withdrawal is about ${minFloor} USD in internal units (20,000 UGX equivalent at current FX).`,
+        },
         { status: 400 }
       )
     }
 
     const admin = createAdminClient()
+    const since = new Date(Date.now() - 86_400_000).toISOString()
+    const { data: recentW, error: wqErr } = await admin
+      .from("withdrawal_requests")
+      .select("id,created_at")
+      .eq("user_id", user.id)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (wqErr) throw new Error(wqErr.message)
+    if (recentW?.created_at) {
+      const last = new Date(recentW.created_at as string).getTime()
+      const next = new Date(last + 86_400_000).toISOString()
+      return NextResponse.json(
+        {
+          error: `You can submit one withdrawal every 24 hours. Next withdrawal is available after ${next}.`,
+          nextEligibleAt: next,
+        },
+        { status: 429 }
+      )
+    }
+
     const { data: row, error: selErr } = await admin
       .from("user_balances")
       .select("available_balance, withdrawal_pending_balance")
@@ -45,6 +70,19 @@ export async function POST(request: Request) {
 
     const available = round2(Number(row?.available_balance ?? 0))
     const pendingWas = round2(Number((row as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
+    const totalBalance = round2(available + pendingWas)
+    const maxAllowed = round2(Math.min(available, totalBalance * 0.5))
+
+    if (amount > maxAllowed + 1e-6) {
+      return NextResponse.json(
+        {
+          error: `For security, each withdrawal is capped at 50% of your total balance (about ${roundUsd2(maxAllowed)} USD right now).`,
+          maxUsd: maxAllowed,
+          totalBalanceUsd: totalBalance,
+        },
+        { status: 400 }
+      )
+    }
 
     if (amount > available) {
       return NextResponse.json(

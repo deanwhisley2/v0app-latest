@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         notificationType: "financial",
         title: "Withdrawal request",
         body: `${currency} ${amount.toFixed(2)} submitted — pending admin review. Ref ${txRef}.`,
-        nav: { kind: "wallet" },
+        nav: { kind: "notifications" },
         metadata: {
           pending_id: pending.id,
           transaction_id: debit.transactionId,
@@ -172,7 +172,7 @@ export async function PUT(request: Request) {
         notificationType: "financial",
         title: "Withdrawal update",
         body: `Your ${currency} withdrawal was not approved. ${amount.toFixed(2)} ${currency} has been returned to your Nexus main balance.`,
-        nav: { kind: "wallet" },
+        nav: { kind: "notifications" },
         metadata: { pending_id: body.pendingId, resolution: "rejected" },
       })
       return NextResponse.json({ success: true, message: "Withdrawal rejected, funds returned." })
@@ -201,7 +201,7 @@ export async function PUT(request: Request) {
       notificationType: "financial",
       title: "Withdrawal completed",
       body: `Your ${currency} withdrawal (${amount.toFixed(2)}) has been completed and sent for settlement.`,
-      nav: { kind: "wallet" },
+      nav: { kind: "notifications" },
       metadata: { pending_id: body.pendingId, resolution: "approved", treasury_tx: treasuryResult.transactionId },
     })
 

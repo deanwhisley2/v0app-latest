@@ -34,8 +34,8 @@ import {
 } from "@/lib/dashboard-activity-session"
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
+import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
-import { ledgerOperationalTraceLines } from "@/lib/formatting/ledger-operational-trace"
 import {
   convertFromUsd,
   corridorFiatForCountryIso2,
@@ -157,6 +157,7 @@ export default function DashboardPage() {
     const lvl = op.snapshot?.profile?.tradingUserLevel ?? 1
     return lvl === 5 || (lvl === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller))
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
+
   const activityUserId = user?.id ?? "guest"
   const { formatUserMoney, currency, locale, t } = useUserPreferences()
   const testimonialNotif = useDashboardTestimonialNotifs({
@@ -165,6 +166,16 @@ export default function DashboardPage() {
     formatUserMoney,
   })
   const [activeTab, setActiveTab] = useState("container")
+  useEffect(() => {
+    if (activeTab !== "wallet") return
+    setActiveTab(operationalWorkspace ? "desk" : "notifications")
+  }, [activeTab, operationalWorkspace])
+
+  useEffect(() => {
+    if (activeTab !== "desk" || operationalWorkspace) return
+    setActiveTab("container")
+  }, [activeTab, operationalWorkspace])
+
   const tradeView: DashboardTradeView = "overview"
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   /** Deep-link / notification → operational support thread (wallet Assets). */
@@ -187,9 +198,30 @@ export default function DashboardPage() {
   const [containerFeesPaid, setContainerFeesPaid] = useState(0)
   const [isContainerFlowBusy, setIsContainerFlowBusy] = useState(false)
   const [containerEvents, setContainerEvents] = useState<ContainerBalanceEvent[]>([])
+  const containerLiquidHistoryEvents = useMemo(
+    () =>
+      containerEvents.filter((e) => {
+        const blob = `${e.event_type ?? ""} ${e.summary ?? ""} ${e.balance_destination ?? ""}`.toLowerCase()
+        return (
+          blob.includes("liquid") ||
+          blob.includes("withdrawable") ||
+          blob.includes("container_earn") ||
+          /earnings|transfer.?main|transfer_to_main|extract/i.test(blob)
+        )
+      }),
+    [containerEvents],
+  )
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
   const [fundAmount, setFundAmount] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
+  const [withdrawalEligibility, setWithdrawalEligibility] = useState<{
+    minUsd: number
+    maxUsd: number
+    cooldownActive: boolean
+    msRemaining: number
+    nextEligibleAt: string | null
+    totalBalanceUsd: number
+  } | null>(null)
   const [fundTxReference, setFundTxReference] = useState("")
   const [fundNote, setFundNote] = useState("")
   const [fundPayerName, setFundPayerName] = useState("")
@@ -419,7 +451,9 @@ export default function DashboardPage() {
     if (typeof window === "undefined") return
     const snap = readDashboardActivity(activityUserId)
     if (snap) {
-      setActiveTab(snap.activeTab)
+      let tab = snap.activeTab
+      if (tab === "wallet") tab = "notifications"
+      setActiveTab(tab)
       setSelectedCoinSymbol(snap.selectedCoinSymbol)
       setShowBalance(snap.showBalance)
       const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
@@ -488,10 +522,6 @@ export default function DashboardPage() {
   // Authoritative Postgres workspace replaces tab-local snapshot when bootstrap delivers it.
   useEffect(() => {
     if (!user?.id || isGuestSession || op.isLoading || !activityHydratedRef.current) return
-    if (operationalWorkspace) {
-      setActiveTab("wallet")
-      return
-    }
     const raw = op.snapshot?.workspaceSnapshot
     if (!raw || typeof raw !== "object") return
     const ser = JSON.stringify(raw)
@@ -501,7 +531,16 @@ export default function DashboardPage() {
     lastServerWorkspaceAppliedRef.current = ser
     lastWorkspacePostedRef.current = ser
 
-    setActiveTab(parsed.activeTab)
+    const coerceTab = (tab: string) => {
+      let t = tab === "wallet" ? "notifications" : tab
+      if (operationalWorkspace) {
+        if (t === "notifications" || t === "container" || t === "wallstreet") t = "desk"
+      }
+      return t
+    }
+    const tab = coerceTab(parsed.activeTab)
+
+    setActiveTab(tab)
     setSelectedCoinSymbol(parsed.selectedCoinSymbol)
     setShowBalance(parsed.showBalance)
     const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
@@ -517,16 +556,15 @@ export default function DashboardPage() {
       tradeAmount: parsed.live.tradeAmount,
     }
     setLiveAnalysis(resolvedLive)
-    writeDashboardActivity(parsed)
-    activityLastSerializedRef.current = JSON.stringify(
-      buildActivitySnapshot(activityUserId, {
-        activeTab: parsed.activeTab,
-        tradeView: parsed.tradeView,
-        selectedCoinSymbol: parsed.selectedCoinSymbol,
-        showBalance: parsed.showBalance,
-        liveAnalysis: resolvedLive,
-      })
-    )
+    const nextSnap = buildActivitySnapshot(activityUserId, {
+      activeTab: tab,
+      tradeView: parsed.tradeView,
+      selectedCoinSymbol: parsed.selectedCoinSymbol,
+      showBalance: parsed.showBalance,
+      liveAnalysis: resolvedLive,
+    })
+    writeDashboardActivity(nextSnap)
+    activityLastSerializedRef.current = JSON.stringify(nextSnap)
   }, [
     user?.id,
     isGuestSession,
@@ -633,12 +671,12 @@ export default function DashboardPage() {
   useEffect(() => {
     opsWorkspaceBootedRef.current = false
   }, [user?.id])
-  /** Land operational roles on Wallet → Assets (command center), not static /admin/treasury or /retailer/dashboard. */
+  /** Land operational roles on Desk (command center). */
   useEffect(() => {
     if (authLoading || !user || isGuestSession || !operationalWorkspace) return
     if (!opsWorkspaceBootedRef.current) {
       opsWorkspaceBootedRef.current = true
-      setActiveTab("wallet")
+      setActiveTab("desk")
     }
   }, [authLoading, user, isGuestSession, operationalWorkspace])
 
@@ -904,7 +942,7 @@ export default function DashboardPage() {
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
-        if (!token) throw new Error("Session expired.")
+        if (!token) throw new Error(t("withdrawal.error.sessionExpired"))
 
         const requestBody =
           action === "extract"
@@ -931,7 +969,7 @@ export default function DashboardPage() {
             container_withdrawable_earnings?: number
           }
         }
-        if (!res.ok) throw new Error(out.error || "Container balance action failed")
+        if (!res.ok) throw new Error(out.error?.trim() || t("funding.container.actionError"))
         setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
         setActiveContainerEarnings(
           Number(out.balances?.active_container_earnings ?? activeContainerEarnings)
@@ -960,17 +998,23 @@ export default function DashboardPage() {
         if (action === "extract") {
           setContainerFeesPaid((prev) => prev + Number(out.feeAmount ?? 0))
           showToast(
-            `Earnings extracted: ${formatUserMoney(Number(out.creditedAmount ?? 0))} credited (1% fee applied).`,
-            "success"
+            t("funding.container.extractToast").replace(
+              "{{amount}}",
+              formatUserMoney(Number(out.creditedAmount ?? 0)),
+            ),
+            "success",
           )
         } else {
           showToast(
-            `Transferred ${formatUserMoney(Number(out.transferAmount ?? 0))} to main balance.`,
-            "success"
+            t("funding.container.transferToast").replace(
+              "{{amount}}",
+              formatUserMoney(Number(out.transferAmount ?? 0)),
+            ),
+            "success",
           )
         }
       } catch (e) {
-        showToast(e instanceof Error ? e.message : "Container balance action failed", "error")
+        showToast(e instanceof Error ? e.message : t("funding.container.actionError"), "error")
       } finally {
         setIsContainerFlowBusy(false)
       }
@@ -982,6 +1026,7 @@ export default function DashboardPage() {
       isContainerFlowBusy,
       mainBalance,
       showToast,
+      t,
     ]
   )
 
@@ -1235,7 +1280,7 @@ export default function DashboardPage() {
   const handleHeaderTabChange = useCallback(
     (tab: string) => {
       if (operationalWorkspace && (tab === "container" || tab === "wallstreet")) {
-        showToast("Trading and execution views are disabled for your operational role. Use Assets or Settings.", "error")
+        showToast("Trading and execution views are disabled for your operational role. Use Desk or Settings.", "error")
         return
       }
       setActiveTab(tab)
@@ -1256,18 +1301,35 @@ export default function DashboardPage() {
           setActiveTab("container")
           break
         case "wallet":
-          setActiveTab("wallet")
+          if (operationalWorkspace) {
+            setActiveTab("desk")
+          } else {
+            setSettingsRequestedView("deposit-withdraw")
+            setActiveTab("settings")
+          }
+          break
+        case "notifications":
+          setActiveTab("notifications")
+          break
+        case "desk":
+          setActiveTab("desk")
           break
         case "settings":
           setSettingsRequestedView(nav.view as SettingsView)
           setActiveTab("settings")
           break
         case "orders":
-          setActiveTab("wallet")
+          setSettingsRequestedView("exchanges")
+          setActiveTab("settings")
           break
         case "support_thread":
-          setActiveTab("wallet")
-          setSupportThreadFocusId(nav.threadId)
+          if (operationalWorkspace) {
+            setSupportThreadFocusId(nav.threadId)
+            setActiveTab("desk")
+          } else {
+            setActiveTab("settings")
+            showToast("For account help, open Settings and use Contact Support.", "success")
+          }
           break
         case "expert-analysis":
           setActiveTab("wallstreet")
@@ -1277,11 +1339,11 @@ export default function DashboardPage() {
           break
       }
     },
-    [router, showToast]
+    [operationalWorkspace, showToast],
   )
 
-  useLayoutEffect(() => {
-    if (typeof window === "undefined") return
+  useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return
     try {
       const u = new URL(window.location.href)
       const raw = u.searchParams.get("supportThread")
@@ -1289,14 +1351,14 @@ export default function DashboardPage() {
       const tid = raw.trim()
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) return
       setSupportThreadFocusId(tid)
-      setActiveTab("wallet")
+      setActiveTab(operationalWorkspace ? "desk" : "settings")
       u.searchParams.delete("supportThread")
       const qs = u.searchParams.toString()
       window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
     } catch {
       /* ignore */
     }
-  }, [])
+  }, [authLoading, operationalWorkspace])
 
   useEffect(() => {
     registerAppNavigator(handleNotificationNav)
@@ -1696,6 +1758,50 @@ export default function DashboardPage() {
     }
   }, [showFundModal, l1FundSource])
 
+  useEffect(() => {
+    if (showFundModal !== "withdraw" || isGuestSession || !user) {
+      setWithdrawalEligibility(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const res = await fetch("/api/user/withdrawal/eligibility", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        if (!res.ok || cancelled) return
+        const j = (await res.json().catch(() => ({}))) as {
+          minUsd?: number
+          maxUsd?: number
+          cooldownActive?: boolean
+          msRemaining?: number
+          nextEligibleAt?: string | null
+          totalBalanceUsd?: number
+        }
+        if (cancelled) return
+        setWithdrawalEligibility({
+          minUsd: Number(j.minUsd ?? 0),
+          maxUsd: Number(j.maxUsd ?? 0),
+          cooldownActive: Boolean(j.cooldownActive),
+          msRemaining: Number(j.msRemaining ?? 0),
+          nextEligibleAt: j.nextEligibleAt ?? null,
+          totalBalanceUsd: Number(j.totalBalanceUsd ?? 0),
+        })
+      } catch {
+        if (!cancelled) setWithdrawalEligibility(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showFundModal, isGuestSession, user])
+
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseFloat(fundAmount)
     /** Withdraw & local mobile-money funding: user types preferred fiat → ledger uses USD-normalized units. */
@@ -1752,7 +1858,7 @@ export default function DashboardPage() {
           setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
           setWithdrawalPendingBalance(Number(out.balances?.withdrawal_pending_balance ?? withdrawalPendingBalance))
           showToast(
-            `${t("withdrawal.toast.successPrefix").replace("{{amount}}", formatUserMoney(amount))} ${t("withdrawal.toast.successSuffix")}`,
+            t("withdrawal.toast.success").replace("{{amount}}", formatUserMoney(amount)),
             "success",
           )
           setShowFundModal(null)
@@ -2161,11 +2267,11 @@ export default function DashboardPage() {
 
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-xl border border-border bg-background/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Nexus Main Balance</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.mainTitle")}</p>
                 <p className="mt-1 font-mono text-lg font-bold">
                   {showBalance ? formatUserMoney(mainBalance) : "••••"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Cashout and new container funding source.</p>
+                <p className="text-[11px] text-muted-foreground">{t("funding.balance.mainHint")}</p>
               </div>
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("withdrawal.card.frozenTitle")}</p>
@@ -2175,7 +2281,7 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-muted-foreground">{t("withdrawal.card.frozenBody")}</p>
               </div>
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Container Earnings</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.activeEarningsTitle")}</p>
                 <p className="mt-1 font-mono text-lg font-bold">
                   {showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
                 </p>
@@ -2185,11 +2291,11 @@ export default function DashboardPage() {
                   disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
                   className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                 >
-                  {isContainerFlowBusy ? "Processing..." : "Extract Earnings (auto 25%)"}
+                  {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.extractCta")}
                 </button>
               </div>
               <div className="rounded-xl border border-success/30 bg-success/10 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Container Liquid Earnings</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.liquidTitle")}</p>
                 <p className="mt-1 font-mono text-lg font-bold">
                   {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
                 </p>
@@ -2199,30 +2305,23 @@ export default function DashboardPage() {
                   disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
                   className="mt-2 w-full rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                 >
-                  {isContainerFlowBusy ? "Processing..." : "Transfer To Main Account"}
+                  {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
                 </button>
-                <div className="mt-2 max-h-36 space-y-2 overflow-y-auto rounded bg-background/50 p-1.5">
-                  {(containerEvents.length ? containerEvents : []).slice(0, 8).map((event) => (
-                    <div key={event.id} className="border-b border-border/40 pb-2 last:border-0 last:pb-0">
-                      <p className="text-[10px] text-muted-foreground">
-                        <span className="font-mono">{String(event.created_at ?? "").slice(0, 16)}</span> ·{" "}
-                        {event.summary || event.event_type} · {formatUserMoney(Number(event.net_amount ?? 0))}
+                <div className="mt-2 max-h-44 space-y-2 overflow-y-auto rounded bg-background/50 p-2">
+                  {(containerLiquidHistoryEvents.length ? containerLiquidHistoryEvents : []).slice(0, 12).map((event) => (
+                    <div key={event.id} className="border-b border-border/40 pb-2 text-xs last:border-0 last:pb-0">
+                      <p className="font-medium text-foreground">
+                        {event.summary?.trim() || t("funding.balance.activityFallback")}
                       </p>
-                      {ledgerOperationalTraceLines({
-                        metadata: event.metadata ?? undefined,
-                        balance_source: event.balance_source,
-                        balance_destination: event.balance_destination,
-                      }).map((line, li) => (
-                        <p key={`${event.id}-tr-${li}`} className="pl-1 text-[9px] leading-snug text-muted-foreground/90">
-                          {line}
-                        </p>
-                      ))}
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {String(event.created_at ?? "").slice(0, 16)} · {formatUserMoney(Number(event.net_amount ?? 0))}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
               <div className="rounded-xl border border-border bg-background/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Exchange Balances</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.exchangeTitle")}</p>
                 <p className="mt-1 font-mono text-lg font-bold">
                   {showBalance
                     ? formatUserMoney(
@@ -2231,7 +2330,10 @@ export default function DashboardPage() {
                     : "••••"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Separate from Nexus wallet. Fees paid: {showBalance ? formatUserMoney(containerFeesPaid) : "••••"}
+                  {t("funding.balance.exchangeHint").replace(
+                    "{{fees}}",
+                    showBalance ? formatUserMoney(containerFeesPaid) : "••••",
+                  )}
                 </p>
               </div>
             </div>
@@ -2946,6 +3048,24 @@ export default function DashboardPage() {
                     {showBalance ? formatUserMoney(mainBalance) : "••••"}
                   </p>
                 )}
+                {showFundModal === "withdraw" && withdrawalEligibility ? (
+                  <div className="mt-2 rounded-lg border border-border/80 bg-muted/30 p-2 text-[11px] leading-snug text-muted-foreground">
+                    <p>
+                      {t("withdrawal.modal.ruleOnce")}
+                      {withdrawalEligibility.cooldownActive
+                        ? ` ${t("withdrawal.modal.waitHours").replace(
+                            "{{hours}}",
+                            String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
+                          )}`
+                        : ` ${t("withdrawal.modal.readyNow")}`}
+                    </p>
+                    <p className="mt-1">
+                      {t("withdrawal.modal.rangeLine")
+                        .replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))
+                        .replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-1.5 flex flex-wrap gap-1.5 sm:gap-2">
                   {[50, 100, 250, 500].map((usdPreset) => (
                     <button
@@ -3114,7 +3234,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {activeTab === "wallet" && (
+        {activeTab === "desk" && operationalWorkspace ? (
           <div className="flex flex-col gap-4 lg:flex-row">
             {sidebarPanel ? (
               <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
@@ -3131,7 +3251,18 @@ export default function DashboardPage() {
               />
             </main>
           </div>
-        )}
+        ) : null}
+
+        {!operationalWorkspace && activeTab === "notifications" ? (
+          <div className="flex flex-col gap-4 lg:flex-row">
+            {sidebarPanel ? (
+              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+            ) : null}
+            <main className="min-w-0 flex-1">
+              <NotificationCenterScreen />
+            </main>
+          </div>
+        ) : null}
 
         {activeTab === "settings" && (
           <div className="flex flex-col gap-4 lg:flex-row">

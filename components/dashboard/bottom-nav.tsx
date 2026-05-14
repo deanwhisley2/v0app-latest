@@ -4,9 +4,10 @@ import { useMemo, useState, useCallback } from "react"
 import {
   Home,
   TrendingUp,
-  Wallet,
+  Bell,
   Settings,
   Zap,
+  Briefcase,
 } from "lucide-react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
@@ -17,15 +18,16 @@ interface BottomNavProps {
   activeTab: string
   onTabChange: (tab: string) => void
   isGuestSession?: boolean
-  /** Liquidity admin / retailer desk — only Wallet + Settings. */
+  /** Liquidity admin / retailer desk — Desk + Settings only. */
   operationalWorkspace?: boolean
 }
 
 const navDefs = [
   { id: "container", icon: Home, labelKey: "nav.container", color: "from-blue-500 to-cyan-500" },
   { id: "wallstreet", icon: TrendingUp, labelKey: "nav.wallstreet", color: "from-purple-500 to-pink-500" },
-  { id: "wallet", icon: Wallet, labelKey: "nav.wallet", color: "from-green-500 to-emerald-500" },
+  { id: "notifications", icon: Bell, labelKey: "nav.notifications", color: "from-green-500 to-emerald-500" },
   { id: "settings", icon: Settings, labelKey: "nav.settings", color: "from-orange-500 to-amber-500" },
+  { id: "desk", icon: Briefcase, labelKey: "nav.desk", color: "from-green-500 to-emerald-500" },
 ] as const
 
 type MiniMsg = { id: string; role: "user" | "assistant"; content: string }
@@ -71,10 +73,13 @@ export function BottomNav({
 
   const navItems = useMemo(() => {
     const defs = operationalWorkspace
-      ? navDefs.filter((d) => d.id === "wallet" || d.id === "settings")
-      : navDefs
+      ? navDefs.filter((d) => d.id === "desk" || d.id === "settings")
+      : navDefs.filter((d) => d.id !== "desk")
     return defs.map((d) => ({ ...d, label: t(d.labelKey) }))
   }, [t, operationalWorkspace])
+
+  const resolvedActiveTab =
+    activeTab === "wallet" ? (operationalWorkspace ? "desk" : "notifications") : activeTab
 
   return (
     <>
@@ -143,7 +148,7 @@ export function BottomNav({
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card md:hidden">
         <div className="flex items-center justify-around px-2 py-2 safe-area-pb">
           {navItems.map((item) => {
-            const isActive = activeTab === item.id
+            const isActive = resolvedActiveTab === item.id
             return (
               <button
                 key={item.id}

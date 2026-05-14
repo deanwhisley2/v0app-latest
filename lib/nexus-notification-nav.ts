@@ -1,8 +1,12 @@
 /** Deep-link targets from notifications (interpreted by dashboard). */
 export type NexusNotificationNav =
   | { kind: "trade"; symbol?: string }
+  /** @deprecated DB rows may still emit `wallet`; dashboard maps to money settings or desk. */
   | { kind: "wallet" }
-  | { kind: "settings"; view: "security" | "about" | "notifications" }
+  | { kind: "notifications" }
+  /** Operational liquidity desk (formerly Wallet tab). */
+  | { kind: "desk" }
+  | { kind: "settings"; view: "security" | "about" | "notifications" | "deposit-withdraw" }
   | { kind: "orders" }
   | { kind: "expert-analysis"; analysisId: string }
   | { kind: "detail" }

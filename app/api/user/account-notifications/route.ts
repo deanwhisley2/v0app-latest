@@ -12,13 +12,23 @@ export async function GET(request: Request) {
     const admin = createAdminClient()
     const { searchParams } = new URL(request.url)
     const limit = Math.min(500, Math.max(1, Number(searchParams.get("limit") ?? 200)))
-    const { data, error } = await admin
+    const folder = (searchParams.get("folder") ?? "inbox").toLowerCase()
+
+    let q = admin
       .from("user_account_notifications")
-      .select("id,notification_type,title,body,nav,read_at,metadata,created_at")
+      .select("id,notification_type,title,body,nav,read_at,metadata,created_at,user_archived_at")
       .eq("user_id", user.id)
       .is("user_deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(limit)
+
+    if (folder === "archived") {
+      q = q.not("user_archived_at", "is", null)
+    } else {
+      q = q.is("user_archived_at", null)
+    }
+
+    const { data, error } = await q
     if (error) throw new Error(error.message)
     return NextResponse.json({ items: data ?? [] })
   } catch (e) {
@@ -33,7 +43,7 @@ export async function PATCH(request: Request) {
     const { user } = auth
     const body = (await request.json().catch(() => ({}))) as {
       id?: string
-      action?: "mark_read" | "hide" | "clear_all" | "mark_all_read"
+      action?: "mark_read" | "hide" | "clear_all" | "mark_all_read" | "archive" | "unarchive"
     }
     const admin = createAdminClient()
     const now = new Date().toISOString()
@@ -44,6 +54,7 @@ export async function PATCH(request: Request) {
         .update({ read_at: now })
         .eq("user_id", user.id)
         .is("user_deleted_at", null)
+        .is("user_archived_at", null)
         .is("read_at", null)
       if (error) throw new Error(error.message)
       return NextResponse.json({ ok: true })
@@ -78,6 +89,26 @@ export async function PATCH(request: Request) {
       const { error } = await admin
         .from("user_account_notifications")
         .update({ user_deleted_at: now })
+        .eq("id", id)
+        .eq("user_id", user.id)
+      if (error) throw new Error(error.message)
+      return NextResponse.json({ ok: true })
+    }
+
+    if (body.action === "archive") {
+      const { error } = await admin
+        .from("user_account_notifications")
+        .update({ user_archived_at: now, read_at: now })
+        .eq("id", id)
+        .eq("user_id", user.id)
+      if (error) throw new Error(error.message)
+      return NextResponse.json({ ok: true })
+    }
+
+    if (body.action === "unarchive") {
+      const { error } = await admin
+        .from("user_account_notifications")
+        .update({ user_archived_at: null })
         .eq("id", id)
         .eq("user_id", user.id)
       if (error) throw new Error(error.message)
