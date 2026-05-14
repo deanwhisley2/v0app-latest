@@ -9,6 +9,7 @@ import {
   resolvePersonaId,
 } from "@/lib/server/container-governance"
 import { buildCopyTradeLifecycle } from "@/lib/server/copy-trade-lifecycle"
+import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 export async function POST(request: Request) {
   try {
@@ -26,12 +27,12 @@ export async function POST(request: Request) {
     const tradingLv = Number(profile?.trading_user_level ?? 1)
     const retailerDesk = tradingLv === 2 && Boolean(profile?.retailer_credit_seller)
     if (tradingLv === 5 || retailerDesk) {
-      return NextResponse.json(
-        {
-          error:
-            "Designated retailer desks and Level-5 accounts cannot open copy-trade sessions.",
-        },
-        { status: 403 },
+      return jsonMutationError(
+        403,
+        "ACCOUNT_TYPE_BLOCKED",
+        "Designated retailer desks and Level-5 accounts cannot open copy-trade sessions from this flow.",
+        "copy-trade/open: trading_user_level 5 or retailer desk.",
+        { suggested_action: "Use a standard trading account for copy allocations." },
       )
     }
 
@@ -42,36 +43,55 @@ export async function POST(request: Request) {
     const stakeUsd = Number(body.stakeUsd ?? 0)
     const traderPersonaIdRaw = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
     if (!Number.isFinite(stakeUsd) || !(stakeUsd > 0)) {
-      return NextResponse.json({ error: "stakeUsd must be > 0" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "INVALID_STAKE",
+        "Enter a stake amount greater than zero.",
+        "copy-trade/open: stakeUsd invalid or missing.",
+      )
     }
     if (!traderPersonaIdRaw) {
-      return NextResponse.json({ error: "traderPersonaId required" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "DESK_REQUIRED",
+        "Select a copy desk before starting an allocation.",
+        "copy-trade/open: missing traderPersonaId.",
+      )
     }
 
     const minStake = assertCopyStakeUsd(stakeUsd)
     if (!minStake.ok) {
-      return NextResponse.json({ error: minStake.message }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "STAKE_POLICY",
+        minStake.message,
+        "copy-trade/open: assertCopyStakeUsd failed.",
+      )
     }
 
     const persona = await resolvePersonaId(admin, traderPersonaIdRaw, "copy")
     if (!persona) {
-      return NextResponse.json(
-        { error: "Unknown or inactive copy-trade desk — refresh Container Mode." },
-        { status: 400 },
+      return jsonMutationError(
+        400,
+        "DESK_NOT_FOUND",
+        "That copy desk is unknown or inactive. Refresh Container Mode and try again.",
+        "copy-trade/open: resolvePersonaId returned null.",
+        { suggested_action: "Pick the desk again from the catalog." },
       )
     }
 
     const reserved = await casReserveCopyTradeStake(admin, user.id, stakeUsd)
     if (!reserved.ok) {
-      return NextResponse.json(
+      return jsonMutationError(
+        400,
+        "INSUFFICIENT_NEXUS_MAIN",
+        "Nexus Main does not have enough available balance for this copy allocation. Only Nexus Main may fund desk stakes.",
+        "copy-trade/open: casReserveCopyTradeStake failed.",
         {
-          error:
-            "Insufficient Nexus Main Account balance for copy-trade allocation. Only Nexus Main may fund desk stakes.",
-          code: "INSUFFICIENT_NEXUS_MAIN",
+          suggested_action: "Add funds to Nexus Main or reduce the stake.",
           required: reserved.required,
           available_balance: reserved.available_balance,
         },
-        { status: 400 },
       )
     }
 
@@ -90,14 +110,16 @@ export async function POST(request: Request) {
     if (insErr) {
       console.error("[copy-trade/open] session insert failed — refund stake", insErr)
       await casCreditNexusMainOnly(admin, user.id, stakeUsd)
-      return NextResponse.json(
-        {
-          error:
-            insErr.message.includes("copy_trade_sessions") || insErr.code === "42P01"
-              ? "Database migration missing: apply copy_trade_sessions table (see supabase/migrations)."
-              : insErr.message,
-        },
-        { status: 500 },
+      const isMigration =
+        insErr.message.includes("copy_trade_sessions") || insErr.code === "42P01"
+      return jsonMutationError(
+        500,
+        isMigration ? "DATABASE_SCHEMA" : "SESSION_INSERT_FAILED",
+        isMigration
+          ? "Trading sessions storage is not ready on this environment. Please contact support."
+          : "We could not create the copy session after reserving funds. Your stake reservation was reversed—try again or contact support.",
+        insErr.message,
+        { suggested_action: isMigration ? "Apply pending database migrations." : "Retry in a few minutes." },
       )
     }
 
@@ -135,12 +157,19 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
+      success: true,
       ok: true,
       sessionId: sessionRow?.id as string,
       createdAt: sessionRow?.created_at as string,
       balances: { available_balance: reserved.available_balance },
     })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+    console.error("[copy-trade/open]", e)
+    return jsonMutationError(
+      500,
+      "INTERNAL_ERROR",
+      "Copy allocation could not be opened. Please try again or contact support.",
+      e instanceof Error ? e.message : "unknown",
+    )
   }
 }
