@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { estimateCopyForcePulloutUsd, scheduledCopyCycleSettlementUsd } from "@/lib/copy-trade-policy"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { splitCopySettlementMainVsLiquid } from "@/lib/server/copy-trade-balance-credit"
 import {
   canonicalCopyTargetGrossUsd,
@@ -19,10 +18,6 @@ export type CopyTradeSettlementPayload = {
   mainCreditUsd: number
   liquidCreditUsd: number
   earningsExecutionFeeUsd?: number
-}
-
-function cycleElapsedMs(createdAtIso: string, nowMs: number): number {
-  return Math.max(0, nowMs - new Date(createdAtIso).getTime())
 }
 
 export async function settleCopyTradeSessionForUser(
@@ -49,7 +44,6 @@ export async function settleCopyTradeSessionForUser(
   if (row.status !== "active") throw new Error("Session already closed")
 
   const stakeUsd = roundUsd2(Number(row.stake_amount ?? 0))
-  const createdAt = row.created_at as string
   const md = (row.metadata ?? {}) as Record<string, unknown>
   const lifecycle = parseCopyTradeLifecycle(md)
   const targetGross =
@@ -60,7 +54,10 @@ export async function settleCopyTradeSessionForUser(
   let settlement: CopyTradeSettlementPayload
   let mainCredit: number
   let liquidCredit: number
-  let feeForEvent: number
+  let auditPrincipalGross: number
+  let auditPrincipalFee: number
+  let auditEarningsGross: number
+  let auditEarningsFee: number
 
   if (kind === "scheduled") {
     if (lifecycle && !copyLifecycleBucketSumReconcilesTarget(lifecycle)) {
@@ -80,7 +77,10 @@ export async function settleCopyTradeSessionForUser(
     }
     mainCredit = s.mainCreditUsd
     liquidCredit = s.liquidCreditUsd
-    feeForEvent = s.earningsFeeUsd
+    auditPrincipalGross = stakeUsd
+    auditPrincipalFee = 0
+    auditEarningsGross = s.grossProfitUsd
+    auditEarningsFee = s.earningsFeeUsd
   } else {
     const m = estimateCopyForcePulloutUsd({
       stakeUsd,
@@ -91,7 +91,6 @@ export async function settleCopyTradeSessionForUser(
     const split = splitCopySettlementMainVsLiquid(netToMain, stakeUsd)
     mainCredit = split.mainCredit
     liquidCredit = split.liquidCredit
-    feeForEvent = roundUsd2(m.cancelFeeUsd + m.withdrawFeeUsd)
     settlement = {
       kind: "force",
       stakeUsd,
@@ -102,6 +101,10 @@ export async function settleCopyTradeSessionForUser(
       mainCreditUsd: mainCredit,
       liquidCreditUsd: liquidCredit,
     }
+    auditPrincipalGross = roundUsd2(mainCredit + m.cancelFeeUsd)
+    auditPrincipalFee = m.cancelFeeUsd
+    auditEarningsGross = roundUsd2(liquidCredit + m.withdrawFeeUsd)
+    auditEarningsFee = m.withdrawFeeUsd
   }
 
   const finalStatus = kind === "scheduled" ? "settled" : "force_closed"
@@ -112,6 +115,11 @@ export async function settleCopyTradeSessionForUser(
     p_main_credit: mainCredit,
     p_liquid_credit: liquidCredit,
     p_final_status: finalStatus,
+    p_audit_principal_gross_usd: auditPrincipalGross,
+    p_audit_principal_fee_usd: auditPrincipalFee,
+    p_audit_earnings_gross_usd: auditEarningsGross,
+    p_audit_earnings_fee_usd: auditEarningsFee,
+    p_actor_type: financialActorType,
   })
   if (rpcErr) throw new Error(rpcErr.message)
 
@@ -130,38 +138,6 @@ export async function settleCopyTradeSessionForUser(
     available_balance: roundUsd2(Number(rpc.available_balance ?? 0)),
     container_withdrawable_earnings: roundUsd2(Number(rpc.container_withdrawable_earnings ?? 0)),
   }
-
-  if (rpc.idempotent) {
-    return { settlement, balances }
-  }
-
-  await recordFinancialEvent({
-    userId,
-    eventType: "copy_trade_session_settled",
-    category: "trade",
-    amount: roundUsd2(mainCredit + liquidCredit),
-    feeAmount: feeForEvent,
-    balanceSource: "copy_trade_session_lock",
-    balanceDestination: "available_balance+container_withdrawable_earnings",
-    status: "completed",
-    relatedTradeId: sessionId,
-    actorType: financialActorType,
-    actorId: userId,
-    summary:
-      kind === "scheduled"
-        ? `Copy-trade 24h cycle settled — stake ${roundUsd2(stakeUsd)} USD to Nexus Main; gross profit ${roundUsd2(targetGross)} USD, fee ${roundUsd2(feeForEvent)} USD; net ${roundUsd2(liquidCredit)} USD to container liquid.`
-        : `Copy-trade force exit — net ${roundUsd2(settlement.netToMainUsd)} USD after modeled fees (Nexus Main ${roundUsd2(mainCredit)}, container liquid ${roundUsd2(liquidCredit)}).`,
-    metadata: {
-      settlementKind: kind,
-      stakeUsd,
-      floatingPnLUsd: kind === "force" ? floatingPnLUsd : undefined,
-      coinImpactFraction: kind === "force" ? coinImpactFraction : undefined,
-      targetGrossProfitUsd: kind === "scheduled" ? targetGross : undefined,
-      mainCreditUsd: mainCredit,
-      liquidCreditUsd: liquidCredit,
-      cycleElapsedMs: cycleElapsedMs(createdAt, Date.now()),
-    },
-  })
 
   return { settlement, balances }
 }
