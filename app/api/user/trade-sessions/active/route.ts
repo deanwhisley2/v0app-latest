@@ -117,6 +117,9 @@ export async function GET(request: Request) {
         typeof r.last_earnings_release_at === "string" && r.last_earnings_release_at.trim()
           ? r.last_earnings_release_at
           : null
+      const msDay = 86_400_000
+      const daysUntilMaturity = Math.ceil((leaseEnd.getTime() - now.getTime()) / msDay)
+      const leaseEndedAwaitingSettlement = leaseEnd.getTime() <= now.getTime()
 
       return {
         kind: "fixed" as const,
@@ -135,6 +138,8 @@ export async function GET(request: Request) {
         totalWithdrawnUsd,
         lastWithdrawalAt,
         withdrawablePercent: withdrawPercent,
+        daysUntilMaturity,
+        leaseEndedAwaitingSettlement,
       }
     })
 

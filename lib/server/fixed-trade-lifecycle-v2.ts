@@ -47,6 +47,13 @@ export function buildFixedTradeLifecycleV2(
   }
 }
 
+/** Sum of daily accrual buckets must match lifecycle target (reconciliation guard). */
+export function fixedLifecycleDailySumReconcilesTarget(lc: FixedTradeLifecycleV2, toleranceUsd = 0.01): boolean {
+  const sum = roundUsd2(lc.dailyUsd.reduce((a, b) => a + b, 0))
+  const target = roundUsd2(lc.targetProfitUsd)
+  return Math.abs(sum - target) <= toleranceUsd
+}
+
 export function parseFixedTradeLifecycleV2(metadata: Record<string, unknown> | null | undefined): FixedTradeLifecycleV2 | null {
   const raw = metadata?.[FIXED_LIFECYCLE_META_KEY]
   if (!raw || typeof raw !== "object") return null

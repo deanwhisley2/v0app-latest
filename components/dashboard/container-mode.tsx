@@ -165,6 +165,10 @@ interface ActiveFixTrade {
   serverAccrued?: boolean
   /** When set, early pullout is processed via POST /api/user/fixed-trade/early-exit (funded server session). */
   serverSessionId?: string
+  /** Days until lease end (ceil); may be negative if past lease. */
+  daysUntilMaturity?: number
+  /** Lease calendar ended but session still active — worker / maturity-check will settle. */
+  leaseEndedAwaitingSettlement?: boolean
 }
 
 /** Cumulative policy gross (remaining earned + already withdrawn) — same units as server `earnedUsd` + withdrawals. */
@@ -493,6 +497,8 @@ export function ContainerMode({
             totalWithdrawnUsd: number
             lastWithdrawalAt: string | null
             withdrawablePercent: number
+            daysUntilMaturity?: number
+            leaseEndedAwaitingSettlement?: boolean
           }>
         }
         if (cancelled || !res.ok || !out.ok) return
@@ -543,6 +549,8 @@ export function ContainerMode({
             fixedPrice: row.fixedPriceUsd,
             serverAccrued: true,
             serverSessionId: row.sessionId,
+            daysUntilMaturity: typeof row.daysUntilMaturity === "number" ? row.daysUntilMaturity : undefined,
+            leaseEndedAwaitingSettlement: row.leaseEndedAwaitingSettlement === true,
           }
         })
 
@@ -637,6 +645,8 @@ export function ContainerMode({
             sessionId: string
             earnedUsd: number
             totalWithdrawnUsd: number
+            daysUntilMaturity?: number
+            leaseEndedAwaitingSettlement?: boolean
           }>
         }
         if (!res.ok || !out.ok) return
@@ -659,7 +669,14 @@ export function ContainerMode({
             const row = list.find((f) => f.sessionId === tr.serverSessionId)
             if (!row) return tr
             const remaining = Math.max(0, Math.round((row.earnedUsd - row.totalWithdrawnUsd) * 100) / 100)
-            return { ...tr, earned: remaining, totalWithdrawn: row.totalWithdrawnUsd }
+            return {
+              ...tr,
+              earned: remaining,
+              totalWithdrawn: row.totalWithdrawnUsd,
+              daysUntilMaturity: typeof row.daysUntilMaturity === "number" ? row.daysUntilMaturity : tr.daysUntilMaturity,
+              leaseEndedAwaitingSettlement:
+                row.leaseEndedAwaitingSettlement === true ? true : tr.leaseEndedAwaitingSettlement,
+            }
           })
         })
       } catch {
@@ -670,6 +687,72 @@ export function ContainerMode({
     const id = window.setInterval(() => void poll(), 8000)
     return () => window.clearInterval(id)
   }, [activeCopyTrades.length, activeFixTrades.length])
+
+  const maturitySweepPending = useMemo(
+    () => activeFixTrades.some((t) => t.leaseEndedAwaitingSettlement === true),
+    [activeFixTrades],
+  )
+
+  useEffect(() => {
+    if (!maturitySweepPending) return
+    let cancelled = false
+    const sweep = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const res = await fetch("/api/user/fixed-trade/maturity-check", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          results?: Array<{
+            sessionId: string
+            ok: boolean
+            idempotent?: boolean
+            settlement?: {
+              principalReturnedUsd: number
+              finalPolicyGrossUsd: number
+              terminalGrossUsd: number
+              terminalFeeUsd: number
+              terminalLiquidNetUsd: number
+            }
+          }>
+        }
+        if (cancelled || !res.ok || !out.ok) return
+        const settledIds = new Set<string>()
+        for (const r of out.results ?? []) {
+          if (!r.ok || !r.settlement || r.idempotent) continue
+          settledIds.add(r.sessionId)
+          addNotification({
+            type: "system",
+            title: "Fixed trade matured",
+            message: `Principal ${formatUserMoney(r.settlement.principalReturnedUsd)} to Nexus Main; ${formatUserMoney(
+              r.settlement.terminalLiquidNetUsd,
+            )} net to container liquid (terminal fee ${formatUserMoney(r.settlement.terminalFeeUsd)}; policy gross ${formatUserMoney(
+              r.settlement.finalPolicyGrossUsd,
+            )}).`,
+            nav: { kind: "wallet" },
+          })
+        }
+        if (settledIds.size > 0) {
+          setActiveFixTrades((prev) => prev.filter((t) => !t.serverSessionId || !settledIds.has(t.serverSessionId)))
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    void sweep()
+    const id = window.setInterval(() => void sweep(), 45_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [maturitySweepPending, addNotification, formatUserMoney])
 
   /** Auto-settle copy sessions after 24h — canonical scheduled server settlement. */
   useEffect(() => {
@@ -1715,6 +1798,24 @@ export function ContainerMode({
                           ) : null}
                         </div>
                       </div>
+
+                      {trade.leaseEndedAwaitingSettlement ? (
+                        <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+                          Lease ended — maturity settlement is processing on the server. This view refreshes when the
+                          session closes.
+                        </div>
+                      ) : typeof trade.daysUntilMaturity === "number" ? (
+                        <div className="mb-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                          {trade.daysUntilMaturity > 0 ? (
+                            <span>
+                              <span className="font-medium text-foreground">Maturing in {trade.daysUntilMaturity} day(s).</span>{" "}
+                              Principal and remaining earnings move automatically at lease end.
+                            </span>
+                          ) : (
+                            <span className="font-medium text-foreground">Matures today</span>
+                          )}
+                        </div>
+                      ) : null}
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-center text-sm">
                         <div className="rounded bg-background p-2">
