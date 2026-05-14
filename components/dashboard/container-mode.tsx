@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import toast from "react-hot-toast"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { supabase } from "@/lib/supabaseClient"
 import {
@@ -24,6 +25,7 @@ import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
+import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -708,8 +710,9 @@ export function ContainerMode({
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         })
-        const out = (await res.json().catch(() => ({}))) as {
+        const out = (await readJsonSafe(res)) as {
           ok?: boolean
+          success?: boolean
           results?: Array<{
             sessionId: string
             ok: boolean
@@ -723,7 +726,7 @@ export function ContainerMode({
             }
           }>
         }
-        if (cancelled || !res.ok || !out.ok) return
+        if (cancelled || !res.ok || out.success === false || out.ok === false) return
         const settledIds = new Set<string>()
         for (const r of out.results ?? []) {
           if (!r.ok || !r.settlement || r.idempotent) continue
@@ -889,7 +892,7 @@ export function ContainerMode({
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
       if (amount < copyMinUsdPolicy) {
-        alert(`Minimum copy allocation is $${copyMinUsdPolicy} USD equivalent in your currency.`)
+        toast.error(`Minimum copy allocation is $${copyMinUsdPolicy} USD equivalent in your currency.`, { duration: 6000 })
         return
       }
       if (!copyRiskAcknowledged) return
@@ -901,7 +904,7 @@ export function ContainerMode({
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token) {
-          alert("Sign in to start a copy-trade allocation.")
+          toast.error("Sign in to start a copy-trade allocation.", { duration: 5000 })
           return
         }
         const res = await fetch("/api/user/copy-trade/open", {
@@ -909,13 +912,14 @@ export function ContainerMode({
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ stakeUsd: amount, traderPersonaId: trader.id }),
         })
-        const out = (await res.json().catch(() => ({}))) as {
+        const out = (await readJsonSafe(res)) as {
+          success?: boolean
           error?: string
           sessionId?: string
           createdAt?: string
         }
-        if (!res.ok) {
-          alert(out.error || "Could not reserve copy-trade allocation from Nexus Main.")
+        if (!res.ok || out?.success === false) {
+          toastMutationError(out, "Could not reserve copy-trade allocation from Nexus Main.")
           return
         }
 
@@ -1000,7 +1004,7 @@ export function ContainerMode({
     void (async () => {
       const trade = activeCopyTrades.find((t) => t.traderId === traderId)
       if (!trade?.copySessionId) {
-        alert("This copy allocation has no server session — refresh and try again.")
+        toast.error("This copy allocation has no server session — refresh and try again.", { duration: 6000 })
         return
       }
 
@@ -1022,7 +1026,8 @@ export function ContainerMode({
             force: true,
           }),
         })
-        const out = (await res.json().catch(() => ({}))) as {
+        const out = (await readJsonSafe(res)) as {
+          success?: boolean
           error?: string
           settlement?: {
             netToMainUsd?: number
@@ -1032,7 +1037,10 @@ export function ContainerMode({
             withdrawFeeUsd?: number
           }
         }
-        if (!res.ok) throw new Error(out.error || "Settlement failed.")
+        if (!res.ok || out?.success === false) {
+          toastMutationError(out, "Settlement could not complete. Refresh and try again.")
+          return
+        }
 
         const mainCred = Number(out.settlement?.mainCreditUsd ?? out.settlement?.netToMainUsd ?? 0)
         const liqCred = Number(out.settlement?.liquidCreditUsd ?? 0)
@@ -1047,7 +1055,7 @@ export function ContainerMode({
           `Cancel ≈ ${formatUserMoney(out.settlement?.cancelFeeUsd ?? 0)}, withdrawal ≈ ${formatUserMoney(out.settlement?.withdrawFeeUsd ?? 0)}.`,
         )
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Settlement failed.")
+        toast.error(e instanceof Error ? e.message : "Settlement failed.", { duration: 6500 })
       } finally {
         setIsProcessing(false)
       }
@@ -1060,7 +1068,7 @@ export function ContainerMode({
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
       if (amount < fixMinUsdPolicy) {
-        alert(`Minimum fixed allocation is $${fixMinUsdPolicy} USD equivalent in your currency.`)
+        toast.error(`Minimum fixed allocation is $${fixMinUsdPolicy} USD equivalent in your currency.`, { duration: 6000 })
         return
       }
       if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
@@ -1072,7 +1080,7 @@ export function ContainerMode({
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token) {
-          alert("Sign in to open a fixed trade.")
+          toast.error("Sign in to open a fixed trade.", { duration: 5000 })
           return
         }
         const res = await fetch("/api/user/fixed-trade/open", {
@@ -1085,7 +1093,8 @@ export function ContainerMode({
             traderPersonaId: trader.id,
           }),
         })
-        const out = (await res.json().catch(() => ({}))) as {
+        const out = (await readJsonSafe(res)) as {
+          success?: boolean
           error?: string
           sessionId?: string
           seedKey?: string
@@ -1095,11 +1104,10 @@ export function ContainerMode({
           fixedPriceUsd?: number
           fees?: { insuranceFeeUsd?: number }
         }
-        if (!res.ok) {
-          alert(out.error || "Could not open fixed trade from Nexus Main.")
+        if (!res.ok || out?.success === false) {
+          toastMutationError(out, "Could not open fixed trade from Nexus Main.")
           return
         }
-
         const withdrawPercent = fixPeriod === 1 ? 30 : fixPeriod === 3 ? 50 : 70
 
         const startTime = out.createdAt ? new Date(out.createdAt) : new Date()
@@ -1122,15 +1130,18 @@ export function ContainerMode({
           fixedPrice = out.fixedPriceUsd
         } else if (coinSymbol === "BTC") {
           if (btcSpotRef.status !== "live") {
-            alert(
-              "Live BTC market reference is still loading. Wait a few seconds and try again — we no longer use placeholder prices."
+            toast.error(
+              "Live BTC market reference is still loading. Wait a few seconds and try again — we no longer use placeholder prices.",
+              { duration: 7500 },
             )
             return
           }
           fixedPrice = Math.round(btcSpotRef.priceUsd)
           fixedPriceFromLiveFeed = true
         } else {
-          alert("Desk did not return a lock reference price for this coin. Try again or contact support.")
+          toast.error("Desk did not return a lock reference price for this coin. Try again or contact support.", {
+            duration: 6500,
+          })
           return
         }
 
@@ -1189,7 +1200,8 @@ export function ContainerMode({
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ sessionId: trade.serverSessionId }),
       })
-      const out = (await res.json().catch(() => ({}))) as {
+      const out = (await readJsonSafe(res)) as {
+        success?: boolean
         error?: string
         settlement?: {
           agreementPenaltyUsd?: number
@@ -1199,16 +1211,19 @@ export function ContainerMode({
           totalCreditedToMainUsd?: number
         }
       }
-      if (!res.ok) throw new Error(out.error || "Early exit failed")
+      if (!res.ok || out?.success === false) {
+        toastMutationError(out, "Early exit could not be completed.")
+        return
+      }
 
       setActiveFixTrades((prev) => prev.filter((t) => t.traderId !== traderId))
       const s = out.settlement
-      alert(
+      toastMutationSuccess(
         `Early exit settled. Credited to Nexus Main: ${formatUserMoney(s?.totalCreditedToMainUsd ?? 0)} ` +
-          `(full earned ${formatUserMoney(s?.sessionEarnedUsd ?? 0)} + net principal after penalties).`
+          `(full earned ${formatUserMoney(s?.sessionEarnedUsd ?? 0)} + net principal after penalties).`,
       )
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Early exit failed")
+      toast.error(e instanceof Error ? e.message : "Early exit failed", { duration: 6500 })
     } finally {
       setIsProcessing(false)
     }
@@ -1218,13 +1233,17 @@ export function ContainerMode({
     void (async () => {
       const trade = activeFixTrades.find((t) => t.traderId === traderId)
       if (!trade?.serverSessionId) {
-        alert("This fixed allocation has no funded server session — refresh the dashboard and try again.")
+        toast.error("This fixed allocation has no funded server session — refresh the dashboard and try again.", {
+          duration: 6500,
+        })
         return
       }
 
       const grossDisplayed = fixPolicyDisplayedGrossUsd(trade)
       if (!(grossDisplayed > 0)) {
-        alert("No accrued earnings are available to release yet. Earnings build on the desk schedule.")
+        toast.error("No accrued earnings are available to release yet. Earnings build on the desk schedule.", {
+          duration: 6500,
+        })
         return
       }
 
@@ -1240,8 +1259,9 @@ export function ContainerMode({
       if (!calendarEligible) {
         const nextUnlockDay = lastPeriod < 0 ? 5 : (lastPeriod + 1) * 5
         const waitDays = Math.max(0, nextUnlockDay - d)
-        alert(
-          `Next earnings release unlocks in about ${waitDays} full day(s) (unlocks on session day ${nextUnlockDay}: days 5, 10, 15, …).`,
+        toast.error(
+          `Next earnings release unlocks in about ${waitDays} full day(s) (session day ${nextUnlockDay}: days 5, 10, 15, …). Accruals continue until then.`,
+          { duration: 8000 },
         )
         return
       }
@@ -1249,12 +1269,12 @@ export function ContainerMode({
       const headroom = Math.max(0, Math.round((grossDisplayed - trade.totalWithdrawn) * 100) / 100)
       const maxWithdrawable = Math.max(0, (headroom * trade.withdrawablePercent) / 100)
       if (maxWithdrawable <= 0) {
-        alert(
+        toast.error(
           "Nothing eligible for this release window — the current policy slice may already be in container liquid, or accruals are still ramping.",
+          { duration: 7500 },
         )
         return
       }
-
       setIsProcessing(true)
       try {
         const {
@@ -1268,7 +1288,9 @@ export function ContainerMode({
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ sessionId: trade.serverSessionId }),
         })
-        const out = (await res.json().catch(() => ({}))) as {
+        const raw = await readJsonSafe(res)
+        const out = raw as {
+          success?: boolean
           error?: string
           message?: string
           user_message?: string
@@ -1279,18 +1301,19 @@ export function ContainerMode({
           releasedGrossUsd?: number
         }
 
-        if (res.status === 423) {
-          alert(
-            out.user_message ||
-              out.message ||
-              (out.remaining_duration_phrase
-                ? `Next release unlocks in ${out.remaining_duration_phrase}.`
-                : "This release window is locked — try again after the next unlock."),
-          )
-          return
-        }
-        if (!res.ok) {
-          alert(out.error || "Could not release earnings — try again or contact support.")
+        if (!res.ok || out?.success === false) {
+          if (res.status === 423) {
+            toast.error(
+              out.user_message ||
+                out.message ||
+                (out.remaining_duration_phrase
+                  ? `Next release unlocks in ${out.remaining_duration_phrase}. Current accrued profit continues building until then.`
+                  : "This release window is locked — try again after the next unlock."),
+              { duration: 9000 },
+            )
+            return
+          }
+          toastMutationError(raw, "Could not release earnings — try again or contact support.")
           return
         }
 
@@ -1307,12 +1330,12 @@ export function ContainerMode({
               : t,
           ),
         )
-        alert(
+        toastMutationSuccess(
           `Released ${formatUserMoney(gross)} gross to Container Liquid (${formatUserMoney(netLiq)} after release fee). ` +
             `Transfer container liquid to Nexus Main from the dashboard wallet card when you want it spendable there.`,
         )
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Release failed.")
+        toast.error(e instanceof Error ? e.message : "Release failed.", { duration: 6500 })
       } finally {
         setIsProcessing(false)
       }

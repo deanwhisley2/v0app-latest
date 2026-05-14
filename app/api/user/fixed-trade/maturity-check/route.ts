@@ -5,6 +5,7 @@ import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
 import { settleFixedTradeMaturityForUser } from "@/lib/server/fixed-trade-maturity-settle"
+import { envelopeFromMaturityExceptionMessage, jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 /**
  * User-triggered maturity sweep for the authenticated account (same logic as cron, bounded).
@@ -17,7 +18,12 @@ export async function POST(request: Request) {
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
     if (level === 2 || level === 5) {
-      return NextResponse.json({ error: "This account type cannot run fixed-trade maturity." }, { status: 403 })
+      return jsonMutationError(
+        403,
+        "ACCOUNT_TYPE_BLOCKED",
+        "This account type cannot run fixed-trade maturity from the desk.",
+        "maturity-check: level 2 or 5.",
+      )
     }
 
     const admin = createAdminClient()
@@ -37,7 +43,8 @@ export async function POST(request: Request) {
       sessionId: string
       ok: boolean
       idempotent?: boolean
-      error?: string
+      success?: boolean
+      error?: { error_code: string; user_message: string; technical_message: string }
       settlement?: {
         principalReturnedUsd: number
         finalPolicyGrossUsd: number
@@ -60,6 +67,7 @@ export async function POST(request: Request) {
         results.push({
           sessionId,
           ok: true,
+          success: true,
           idempotent: out.idempotent,
           settlement: {
             principalReturnedUsd: out.settlement.principalReturnedUsd,
@@ -71,15 +79,28 @@ export async function POST(request: Request) {
         })
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        results.push({ sessionId, ok: false, error: msg })
+        const env = envelopeFromMaturityExceptionMessage(msg)
+        results.push({
+          sessionId,
+          ok: false,
+          success: false,
+          error: {
+            error_code: env.error_code,
+            user_message: env.user_message,
+            technical_message: env.technical_message,
+          },
+        })
       }
     }
 
-    return NextResponse.json({ ok: true, processed: results.length, results })
+    return NextResponse.json({ success: true, ok: true, processed: results.length, results })
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Internal error" },
-      { status: 500 },
+    console.error("[maturity-check]", e)
+    return jsonMutationError(
+      500,
+      "INTERNAL_ERROR",
+      "Maturity sweep could not run. Please try again shortly.",
+      e instanceof Error ? e.message : "unknown",
     )
   }
 }

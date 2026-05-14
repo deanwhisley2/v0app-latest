@@ -6,6 +6,7 @@ import { buildContainerDailySchedule, scheduledEarnedUsdSmooth, totalScheduleTar
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { computeEarlyExitSettlementUsd } from "@/lib/nexus-financial-policy"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
+import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -19,7 +20,15 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as { sessionId?: string }
     const sessionId = body.sessionId?.trim()
-    if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 })
+    if (!sessionId) {
+      return jsonMutationError(
+        400,
+        "SESSION_ID_REQUIRED",
+        "Session reference missing. Refresh and try again.",
+        "early-exit: missing sessionId.",
+        { suggested_action: "Re-open the desk card and retry early exit." },
+      )
+    }
 
     const admin = createAdminClient()
     const { data: session, error: sErr } = await admin
@@ -31,10 +40,36 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (sErr) throw new Error(sErr.message)
-    if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 })
-    if (session.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!session) {
+      return jsonMutationError(
+        404,
+        "SESSION_NOT_FOUND",
+        "We could not find that fixed allocation.",
+        "early-exit: no row for session id.",
+        { suggested_action: "Refresh Container Mode." },
+      )
+    }
+    if (session.user_id !== user.id) {
+      return jsonMutationError(
+        403,
+        "FORBIDDEN",
+        "You cannot early-exit an allocation that belongs to another account.",
+        "early-exit: user_id mismatch.",
+      )
+    }
     if (session.status !== "active") {
-      return NextResponse.json({ error: "Session is not active" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "EARLY_EXIT_NOT_ALLOWED",
+        "This allocation is not active, so early exit is not available here.",
+        `early-exit: status=${String(session.status)}.`,
+        {
+          suggested_action:
+            session.status === "matured" || session.status === "completed"
+              ? "Use wallet history for completed sessions."
+              : "Refresh to see the current session state.",
+        },
+      )
     }
 
     const principalUsd = round2(Number(session.principal_amount ?? 0))
@@ -45,9 +80,15 @@ export async function POST(request: Request) {
     const now = new Date()
 
     if (now.getTime() >= leaseEnd.getTime()) {
-      return NextResponse.json(
-        { error: "Lease period has ended — use normal completion/settlement, not early exit." },
-        { status: 400 }
+      return jsonMutationError(
+        400,
+        "EARLY_EXIT_LEASE_ENDED",
+        "The lease period has already ended. Use normal maturity settlement instead of early exit.",
+        "early-exit: now >= lease_end.",
+        {
+          suggested_action: "Use “Refresh settlement” or wait for automatic maturity processing.",
+          lease_ends_at: leaseEnd.toISOString(),
+        },
       )
     }
 
@@ -72,13 +113,14 @@ export async function POST(request: Request) {
 
     const stake = round2(Number(bal?.current_stake ?? 0))
     if (stake < principalUsd) {
-      return NextResponse.json(
+      return jsonMutationError(
+        409,
+        "STAKE_PRINCIPAL_MISMATCH",
+        "Your locked stake and this session’s principal do not match our records. Please pause and contact support.",
+        `early-exit: stake ${stake} < principal ${principalUsd}.`,
         {
-          error: "Accounting mismatch: locked stake is lower than session principal. Escalate support.",
-          current_stake: stake,
-          principalUsd,
+          suggested_action: "Contact support with approximate allocation time; do not repeat early exit.",
         },
-        { status: 409 }
       )
     }
 
@@ -127,7 +169,7 @@ export async function POST(request: Request) {
       actorType: "user",
       actorId: user.id,
       summary:
-        "Early pullout: penalties (10% agreement + insurance from principal only); full session earnings + net principal → Nexus Main; stake released.",
+        "Early exit: penalties (10% agreement + insurance from principal only); full session earnings + net principal → Nexus Main; stake released.",
       metadata: {
         principalUsd: settlement.principalUsd,
         agreementPenaltyUsd: settlement.agreementPenaltyUsd,
@@ -139,7 +181,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
-      ok: true,
+      success: true,
       sessionId,
       settlement,
       balances: {
@@ -148,9 +190,12 @@ export async function POST(request: Request) {
       },
     })
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Internal error" },
-      { status: 500 }
+    console.error("[early-exit]", e)
+    return jsonMutationError(
+      500,
+      "INTERNAL_ERROR",
+      "Early exit could not complete. Please try again or contact support.",
+      e instanceof Error ? e.message : "unknown",
     )
   }
 }

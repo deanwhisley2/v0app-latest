@@ -4,6 +4,7 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
 import { settleCopyTradeSessionForUser } from "@/lib/server/copy-trade-settle"
+import { envelopeFromCopyCloseMessage, jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 export async function POST(request: Request) {
   try {
@@ -12,9 +13,11 @@ export async function POST(request: Request) {
     const { user } = auth
     const level = await getTradingUserLevel(user.id)
     if (level === 2 || level === 5) {
-      return NextResponse.json(
-        { error: "Retailer and Level-5 admin accounts are operational/supervisory and cannot manage copy-trade sessions." },
-        { status: 403 }
+      return jsonMutationError(
+        403,
+        "ACCOUNT_TYPE_BLOCKED",
+        "This account type cannot manage copy-trade sessions from the desk.",
+        "copy-trade/close: level 2 or 5.",
       )
     }
 
@@ -27,7 +30,12 @@ export async function POST(request: Request) {
     }
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : ""
     if (!sessionId) {
-      return NextResponse.json({ error: "sessionId required" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "SESSION_ID_REQUIRED",
+        "Session reference missing. Refresh and try again.",
+        "copy-trade/close: missing sessionId.",
+      )
     }
 
     const floatingPnLUsd = Number(body.floatingPnLUsd ?? 0)
@@ -43,7 +51,9 @@ export async function POST(request: Request) {
       .eq("user_id", user.id)
       .maybeSingle()
     if (sErr) throw new Error(sErr.message)
-    if (!sessRow) return NextResponse.json({ error: "Session not found" }, { status: 404 })
+    if (!sessRow) {
+      return NextResponse.json(envelopeFromCopyCloseMessage("Session not found"), { status: 404 })
+    }
 
     const ageMs = Date.now() - new Date(String(sessRow.created_at)).getTime()
     const forceRequested = body.force === true
@@ -60,6 +70,7 @@ export async function POST(request: Request) {
         kind,
       })
       return NextResponse.json({
+        success: true,
         ok: true,
         settlement: {
           kind: settlement.kind,
@@ -72,25 +83,45 @@ export async function POST(request: Request) {
           liquidCreditUsd: settlement.liquidCreditUsd,
           earningsExecutionFeeUsd: settlement.earningsExecutionFeeUsd,
         },
-        balances: { available_balance: balances.available_balance, container_withdrawable_earnings: balances.container_withdrawable_earnings },
+        balances: {
+          available_balance: balances.available_balance,
+          container_withdrawable_earnings: balances.container_withdrawable_earnings,
+        },
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Internal error"
-      if (msg === "Session not found") return NextResponse.json({ error: msg }, { status: 404 })
-      if (msg === "Forbidden") return NextResponse.json({ error: msg }, { status: 403 })
-      if (msg === "Session already closed") return NextResponse.json({ error: msg }, { status: 400 })
+      if (msg === "Session not found")
+        return NextResponse.json(envelopeFromCopyCloseMessage(msg), { status: 404 })
+      if (msg === "Forbidden") return NextResponse.json(envelopeFromCopyCloseMessage(msg), { status: 403 })
+      if (msg === "Session already closed")
+        return NextResponse.json(envelopeFromCopyCloseMessage(msg), { status: 400 })
       if (msg === "COPY_LIFECYCLE_BUCKET_RECONCILE_FAILED") {
-        return NextResponse.json(
-          { error: "Copy lifecycle buckets do not reconcile to target gross — contact support." },
-          { status: 422 },
+        return jsonMutationError(
+          422,
+          "COPY_LIFECYCLE_RECONCILE",
+          "We could not verify this copy session’s accrual buckets. Support may need to review.",
+          msg,
+          { suggested_action: "Contact support if this repeats after refresh." },
         )
       }
       if (msg === "SETTLEMENT_CONFLICT") {
-        return NextResponse.json({ error: "Session is already being settled or was closed." }, { status: 409 })
+        return jsonMutationError(
+          409,
+          "SETTLEMENT_CONFLICT",
+          "This session is already closing or was settled. Refresh the dashboard.",
+          msg,
+          { suggested_action: "Refresh Container Mode and confirm the allocation is still open." },
+        )
       }
       throw e
     }
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+    console.error("[copy-trade/close]", e)
+    return jsonMutationError(
+      500,
+      "INTERNAL_ERROR",
+      "Copy settlement did not complete. Please try again.",
+      e instanceof Error ? e.message : "unknown",
+    )
   }
 }

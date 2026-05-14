@@ -15,6 +15,7 @@ import {
   resolvePersonaId,
 } from "@/lib/server/container-governance"
 import { buildFixedTradeLifecycleV2 } from "@/lib/server/fixed-trade-lifecycle-v2"
+import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -46,20 +47,45 @@ export async function POST(request: Request) {
     const traderPersonaIdRaw = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
 
     if (!Number.isFinite(principalUsd) || principalUsd <= 0) {
-      return NextResponse.json({ error: "principalUsd must be > 0" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "INVALID_PRINCIPAL",
+        "Enter a valid principal amount greater than zero.",
+        "fixed-trade/open: principalUsd invalid.",
+      )
     }
     const minP = assertFixPrincipalUsd(principalUsd)
     if (!minP.ok) {
-      return NextResponse.json({ error: minP.message }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "PRINCIPAL_POLICY",
+        minP.message,
+        "fixed-trade/open: assertFixPrincipalUsd failed.",
+      )
     }
     if (riskClass !== "Low" && riskClass !== "Medium" && riskClass !== "High") {
-      return NextResponse.json({ error: "invalid riskClass" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "INVALID_RISK_CLASS",
+        "Desk risk class was not recognized. Refresh and pick Low, Medium, or High again.",
+        "fixed-trade/open: invalid riskClass.",
+      )
     }
     if (fixPeriodMonths !== 1 && fixPeriodMonths !== 3 && fixPeriodMonths !== 6) {
-      return NextResponse.json({ error: "fixPeriodMonths must be 1, 3, or 6" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "INVALID_PERIOD",
+        "Lock period must be 1, 3, or 6 months.",
+        "fixed-trade/open: fixPeriodMonths invalid.",
+      )
     }
     if (!traderPersonaIdRaw) {
-      return NextResponse.json({ error: "traderPersonaId required" }, { status: 400 })
+      return jsonMutationError(
+        400,
+        "DESK_REQUIRED",
+        "Select a fixed desk before opening an allocation.",
+        "fixed-trade/open: missing traderPersonaId.",
+      )
     }
 
     const admin = createAdminClient()
@@ -73,43 +99,53 @@ export async function POST(request: Request) {
     const tradingLv = Number(profile?.trading_user_level ?? 1)
     const retailerDesk = tradingLv === 2 && Boolean(profile?.retailer_credit_seller)
     if (tradingLv === 5 || retailerDesk) {
-      return NextResponse.json(
-        {
-          error:
-            "Designated retailer desks and Level-5 accounts cannot open fixed trades.",
-        },
-        { status: 403 }
+      return jsonMutationError(
+        403,
+        "ACCOUNT_TYPE_BLOCKED",
+        "Designated retailer desks and Level-5 accounts cannot open fixed trades from this flow.",
+        "fixed-trade/open: level 5 or retailer desk.",
       )
     }
     const userLevel = mapProfileToFixUserLevel(tradingLv)
 
     const persona = await resolvePersonaId(admin, traderPersonaIdRaw, "fix")
     if (!persona || !persona.risk_class) {
-      return NextResponse.json(
-        { error: "Unknown or inactive fixed-trade desk — refresh Container Mode." },
-        { status: 400 },
+      return jsonMutationError(
+        400,
+        "DESK_NOT_FOUND",
+        "That fixed desk is unknown or inactive. Refresh Container Mode and try again.",
+        "fixed-trade/open: resolvePersonaId failed.",
+        { suggested_action: "Pick the desk again from the catalog." },
       )
     }
     if (persona.risk_class !== riskClass) {
-      return NextResponse.json(
-        { error: "riskClass does not match selected desk — refresh and retry." },
-        { status: 400 },
+      return jsonMutationError(
+        400,
+        "DESK_RISK_MISMATCH",
+        "The risk class no longer matches the desk you selected. Refresh and retry.",
+        "fixed-trade/open: persona risk vs request.",
       )
     }
 
     const unlockCtx = await buildUnlockContext(admin, user.id, { minPrincipalUsd: 100, minDaysActive: 30 })
     const gate = personaUnlocked(persona, unlockCtx)
     if (!gate.ok) {
-      return NextResponse.json({ error: gate.reason ?? "Desk locked." }, { status: 403 })
+      return jsonMutationError(
+        403,
+        "DESK_LOCKED",
+        gate.reason ?? "This desk is locked for your account right now.",
+        "fixed-trade/open: personaUnlocked gate.",
+        { suggested_action: "Review unlock requirements or pick another desk." },
+      )
     }
 
     if (!traderEligibleForFixedTrade(userLevel, riskClass)) {
-      return NextResponse.json(
-        {
-          error:
-            "Your account tier cannot open fixed trades with this desk risk class.",
-        },
-        { status: 403 }
+      return jsonMutationError(
+        403,
+        "TIER_DESK_NOT_ALLOWED",
+        "Your account tier cannot open fixed trades with this desk risk class.",
+        "fixed-trade/open: traderEligibleForFixedTrade false.",
+        { suggested_action: "Choose a lower-risk desk or upgrade when eligible." },
       )
     }
 
@@ -118,15 +154,16 @@ export async function POST(request: Request) {
 
     const debited = await casOpenFixedTradeDebit(admin, user.id, principalUsd, insuranceFeeUsd)
     if (!debited.ok) {
-      return NextResponse.json(
+      return jsonMutationError(
+        400,
+        "INSUFFICIENT_NEXUS_MAIN",
+        "Nexus Main does not have enough available balance to fund principal plus insurance. Retail and other buckets cannot be used here.",
+        "fixed-trade/open: casOpenFixedTradeDebit failed.",
         {
-          error:
-            "Insufficient Nexus Main Account balance — cannot fund principal plus insurance. Retail Balance and other buckets cannot be used for trading.",
-          code: "INSUFFICIENT_NEXUS_MAIN",
+          suggested_action: "Add funds to Nexus Main or reduce the allocation size.",
           required: debited.required,
           available_balance: debited.available_balance,
         },
-        { status: 400 },
       )
     }
     const nextAvailable = debited.available_balance
@@ -223,6 +260,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
+      success: true,
       ok: true,
       sessionId,
       seedKey: resolvedSeed,
@@ -240,9 +278,12 @@ export async function POST(request: Request) {
       },
     })
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Internal error" },
-      { status: 500 }
+    console.error("[fixed-trade/open]", e)
+    return jsonMutationError(
+      500,
+      "INTERNAL_ERROR",
+      "We could not open this fixed allocation. Please try again or contact support.",
+      e instanceof Error ? e.message : "unknown",
     )
   }
 }
