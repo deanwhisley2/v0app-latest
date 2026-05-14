@@ -1271,14 +1271,22 @@ export function ContainerMode({
         const out = (await res.json().catch(() => ({}))) as {
           error?: string
           message?: string
+          user_message?: string
           waitDays?: number
+          remaining_duration_phrase?: string
+          next_unlock_at?: string
           creditedLiquidUsd?: number
           releasedGrossUsd?: number
         }
 
         if (res.status === 423) {
-          const w = out.waitDays ?? 1
-          alert(out.message || `Next earnings release unlocks in ${w} day(s).`)
+          alert(
+            out.user_message ||
+              out.message ||
+              (out.remaining_duration_phrase
+                ? `Next release unlocks in ${out.remaining_duration_phrase}.`
+                : "This release window is locked — try again after the next unlock."),
+          )
           return
         }
         if (!res.ok) {
