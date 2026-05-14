@@ -163,7 +163,7 @@ interface ActiveFixTrade {
   dailySchedule?: number[]
   /** When true, `earned` is hydrated from the server accrual engine — do not recompute from local schedule. */
   serverAccrued?: boolean
-  /** When set, early pullout is processed via POST /api/user/fixed-trade/early-exit (funded server session). */
+  /** When set, early exit is processed via POST /api/user/fixed-trade/early-exit (funded server session). */
   serverSessionId?: string
   /** Days until lease end (ceil); may be negative if past lease. */
   daysUntilMaturity?: number
@@ -1204,7 +1204,7 @@ export function ContainerMode({
       setActiveFixTrades((prev) => prev.filter((t) => t.traderId !== traderId))
       const s = out.settlement
       alert(
-        `Early pullout settled. Credited to Nexus Main: ${formatUserMoney(s?.totalCreditedToMainUsd ?? 0)} ` +
+        `Early exit settled. Credited to Nexus Main: ${formatUserMoney(s?.totalCreditedToMainUsd ?? 0)} ` +
           `(full earned ${formatUserMoney(s?.sessionEarnedUsd ?? 0)} + net principal after penalties).`
       )
     } catch (e) {
@@ -1582,7 +1582,7 @@ export function ContainerMode({
 
       {/* ============ DASHBOARD TAB ============ */}
       {activeTab === "dashboard" && (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {/* Balance Overview */}
           <Card className="border-border bg-gradient-to-br from-card to-primary/5 p-6">
             <h3 className="mb-4 text-lg font-semibold">Container Balance</h3>
@@ -1729,7 +1729,10 @@ export function ContainerMode({
                   if (!trader) return null
 
                   return (
-                    <div key={trade.traderId} className="rounded-lg border border-warning/30 bg-warning/5 p-4">
+                    <div
+                      key={trade.traderId}
+                      className="overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4 pb-4"
+                    >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div 
@@ -1868,7 +1871,7 @@ export function ContainerMode({
                       </div>
 
                       {/* Share Holding Info */}
-                      <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+                      <div className="mb-2 rounded-lg border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
                         <p className="flex items-center gap-1">
                           <Shield className="h-3 w-3 text-primary" />
                           <span>
@@ -1895,37 +1898,39 @@ export function ContainerMode({
                         </p>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="mt-2 flex w-full min-w-0 flex-col gap-2.5 md:mt-3 md:flex-row md:items-stretch md:gap-3 md:pb-0">
                         {trade.earned > 0 ? (
-                          <Button 
-                            variant="default" 
-                            size="sm" 
-                            className="flex-1 bg-success hover:bg-success/90"
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="default"
+                            className="order-1 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md border-0 bg-success px-4 text-sm font-semibold text-white shadow-sm hover:bg-success/90 focus-visible:ring-success md:order-1 md:h-10 md:flex-1"
                             onClick={() => handleWithdrawEarnings(trade.traderId)}
                             disabled={isProcessing}
                           >
                             {isProcessing ? (
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                             ) : (
-                              <ArrowUpRight className="h-3 w-3 mr-1" />
+                              <ArrowUpRight className="h-4 w-4 shrink-0" />
                             )}
                             Withdraw Earnings
                           </Button>
                         ) : (
-                          <p className="flex-1 text-center text-xs text-muted-foreground py-2">
+                          <p className="order-1 w-full rounded-md border border-dashed border-border/80 bg-background/40 px-3 py-2.5 text-center text-xs leading-snug text-muted-foreground md:order-1 md:flex-1 md:text-left">
                             Confirmed earnings pool is still ramping — policy accrual above updates continuously.
                           </p>
                         )}
                         {trade.serverSessionId ? (
                           <Button
+                            type="button"
                             variant="outline"
-                            size="sm"
-                            className="border-warning text-warning hover:bg-warning/10"
+                            size="default"
+                            className="order-2 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-amber-600/35 bg-amber-500/[0.07] px-4 text-sm font-medium text-amber-950 hover:bg-amber-500/15 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-500/10 md:order-2 md:h-10 md:flex-1"
                             disabled={isProcessing}
                             onClick={() => {
                               if (
                                 confirm(
-                                  "Early pullout before lease end? You pay 10% agreement default + insurance (from protected allocation only). Session earnings are credited in full to Nexus Main.",
+                                  "Early exit before lease end? You pay 10% agreement default + insurance (from protected allocation only). Session earnings are credited in full to Nexus Main.",
                                 )
                               ) {
                                 void handleEarlyExitFixTrade(trade.traderId)
@@ -1933,15 +1938,21 @@ export function ContainerMode({
                             }}
                           >
                             {isProcessing ? (
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                             ) : (
-                              <Unlock className="h-3 w-3 mr-1" />
+                              <Unlock className="h-4 w-4 shrink-0" />
                             )}
-                            Early pullout
+                            Early Exit
                           </Button>
                         ) : (
-                          <Button variant="outline" size="sm" disabled className="text-muted-foreground">
-                            <Lock className="h-3 w-3 mr-1" />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="default"
+                            disabled
+                            className="order-2 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md text-muted-foreground md:h-10 md:flex-1"
+                          >
+                            <Lock className="h-4 w-4 shrink-0" />
                             Allocation locked
                           </Button>
                         )}
@@ -2463,7 +2474,7 @@ export function ContainerMode({
                     <p className="font-medium text-warning">Fixed Trade Terms:</p>
                     <ul className="text-muted-foreground space-y-1">
                       <li>
-                        - <strong>Locked crypto allocation</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""}. Early pullout (funded
+                        - <strong>Locked crypto allocation</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""}. Early exit (funded
                         sessions): 10% agreement default + insurance from protected allocation only;{" "}
                         <strong>full session earnings</strong> credited to Nexus Main with net principal.
                       </li>
