@@ -786,6 +786,7 @@ export default function DashboardPage() {
         total_earnings?: number
         active_container_earnings?: number
         active_container_earnings_resolved?: number
+        container_session_accrual_usd?: number
         container_withdrawable_earnings?: number
         lifetime_container_fees?: number
       }
@@ -793,9 +794,7 @@ export default function DashboardPage() {
       setRetailBalance(Number(json.retail_balance ?? 0))
       setWithdrawalPendingBalance(Number(json.withdrawal_pending_balance ?? 0))
       setTotalEarnings(Number(json.total_earnings ?? 0))
-      setActiveContainerEarnings(
-        Number(json.active_container_earnings_resolved ?? json.active_container_earnings ?? 0),
-      )
+      setActiveContainerEarnings(Number(json.active_container_earnings ?? 0))
       setContainerWithdrawableEarnings(Number(json.container_withdrawable_earnings ?? 0))
       setContainerFeesPaid(Number(json.lifetime_container_fees ?? 0))
     })()
@@ -870,9 +869,7 @@ export default function DashboardPage() {
     setMainBalance(Number(b.available_balance ?? 0))
     setWithdrawalPendingBalance(Number(b.withdrawal_pending_balance ?? 0))
     setTotalEarnings(Number(b.total_earnings ?? 0))
-    setActiveContainerEarnings(
-      Number(b.active_container_earnings_resolved ?? b.active_container_earnings ?? 0),
-    )
+    setActiveContainerEarnings(Number(b.active_container_earnings ?? 0))
     setContainerWithdrawableEarnings(Number(b.container_withdrawable_earnings ?? 0))
     setContainerFeesPaid(Number(b.lifetime_container_fees ?? 0))
   }, [isGuestSession, user?.id, op.snapshot?.userBalance])

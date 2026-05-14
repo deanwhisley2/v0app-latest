@@ -41,6 +41,16 @@ export function buildCopyTradeLifecycle(stakeUsd: number, sessionId: string, use
   }
 }
 
+/** Sum of hourly accrual buckets must match stored gross target (reconciliation guard). */
+export function copyLifecycleBucketSumReconcilesTarget(
+  lc: CopyTradeLifecycleMeta,
+  toleranceUsd = 0.01,
+): boolean {
+  const sum = roundUsd2(lc.bucketUsd.reduce((a, b) => a + b, 0))
+  const target = roundUsd2(lc.targetGrossProfitUsd)
+  return Math.abs(sum - target) <= toleranceUsd
+}
+
 export function parseCopyTradeLifecycle(metadata: Record<string, unknown> | null | undefined): CopyTradeLifecycleMeta | null {
   const raw = metadata?.[COPY_TRADE_LIFECYCLE_META_KEY]
   if (!raw || typeof raw !== "object") return null

@@ -2,8 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { estimateCopyForcePulloutUsd, scheduledCopyCycleSettlementUsd } from "@/lib/copy-trade-policy"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { applyCopyTradeSettlementCredits, splitCopySettlementMainVsLiquid } from "@/lib/server/copy-trade-balance-credit"
-import { canonicalCopyTargetGrossUsd, parseCopyTradeLifecycle } from "@/lib/server/copy-trade-lifecycle"
+import { splitCopySettlementMainVsLiquid } from "@/lib/server/copy-trade-balance-credit"
+import {
+  canonicalCopyTargetGrossUsd,
+  copyLifecycleBucketSumReconcilesTarget,
+  parseCopyTradeLifecycle,
+} from "@/lib/server/copy-trade-lifecycle"
 
 export type CopyTradeSettlementPayload = {
   kind: "scheduled" | "force"
@@ -59,6 +63,9 @@ export async function settleCopyTradeSessionForUser(
   let feeForEvent: number
 
   if (kind === "scheduled") {
+    if (lifecycle && !copyLifecycleBucketSumReconcilesTarget(lifecycle)) {
+      throw new Error("COPY_LIFECYCLE_BUCKET_RECONCILE_FAILED")
+    }
     const s = scheduledCopyCycleSettlementUsd(stakeUsd, targetGross)
     settlement = {
       kind: "scheduled",
@@ -97,34 +104,36 @@ export async function settleCopyTradeSessionForUser(
     }
   }
 
-  const now = new Date().toISOString()
+  const finalStatus = kind === "scheduled" ? "settled" : "force_closed"
 
-  const { data: claimed, error: claimErr } = await admin
-    .from("copy_trade_sessions")
-    .update({ settled_at: now })
-    .eq("id", sessionId)
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .is("settled_at", null)
-    .select("id")
-    .maybeSingle()
-  if (claimErr) throw new Error(claimErr.message)
-  if (!claimed) throw new Error("SETTLEMENT_CONFLICT")
+  const { data: rpcRaw, error: rpcErr } = await admin.rpc("copy_trade_finalize_settlement_v1", {
+    p_session_id: sessionId,
+    p_user_id: userId,
+    p_main_credit: mainCredit,
+    p_liquid_credit: liquidCredit,
+    p_final_status: finalStatus,
+  })
+  if (rpcErr) throw new Error(rpcErr.message)
 
-  let balances: { available_balance: number; container_withdrawable_earnings: number }
-  try {
-    balances = await applyCopyTradeSettlementCredits(admin, userId, mainCredit, liquidCredit)
-  } catch (creditErr) {
-    await admin.from("copy_trade_sessions").update({ settled_at: null }).eq("id", sessionId).eq("user_id", userId)
-    throw creditErr instanceof Error ? creditErr : new Error(String(creditErr))
+  const rpc = rpcRaw as {
+    ok?: boolean
+    idempotent?: boolean
+    error?: string
+    available_balance?: number | string
+    container_withdrawable_earnings?: number | string
+  }
+  if (!rpc?.ok) {
+    throw new Error(typeof rpc?.error === "string" ? rpc.error : "COPY_SETTLEMENT_RPC_FAILED")
   }
 
-  const { error: upErr } = await admin
-    .from("copy_trade_sessions")
-    .update({ status: "closed", closed_at: now })
-    .eq("id", sessionId)
-    .eq("user_id", userId)
-  if (upErr) throw new Error(upErr.message)
+  const balances = {
+    available_balance: roundUsd2(Number(rpc.available_balance ?? 0)),
+    container_withdrawable_earnings: roundUsd2(Number(rpc.container_withdrawable_earnings ?? 0)),
+  }
+
+  if (rpc.idempotent) {
+    return { settlement, balances }
+  }
 
   await recordFinancialEvent({
     userId,

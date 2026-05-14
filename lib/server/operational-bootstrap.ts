@@ -174,13 +174,16 @@ export async function buildOperationalBootstrapV1(params: {
 
   const bal = balanceRes.data as Record<string, unknown> | null
 
-  let sessionAccrualCombined = 0
+  let sessionAccrual: { combinedUsd: number; copyAccrualUsd: number; fixedPolicyGrossUsd: number } = {
+    combinedUsd: 0,
+    copyAccrualUsd: 0,
+    fixedPolicyGrossUsd: 0,
+  }
   if (bal) {
     try {
-      const s = await sumActiveSessionAccrualUsd(admin, params.userId)
-      sessionAccrualCombined = s.combinedUsd
+      sessionAccrual = await sumActiveSessionAccrualUsd(admin, params.userId)
     } catch {
-      sessionAccrualCombined = 0
+      sessionAccrual = { combinedUsd: 0, copyAccrualUsd: 0, fixedPolicyGrossUsd: 0 }
     }
   }
 
@@ -222,9 +225,10 @@ export async function buildOperationalBootstrapV1(params: {
             (bal as Record<string, unknown>).withdrawal_pending_balance ?? 0
           ),
           active_container_earnings: Number(bal.active_container_earnings ?? 0),
-          active_container_earnings_resolved: Math.round(
-            (Number(bal.active_container_earnings ?? 0) + sessionAccrualCombined) * 100
-          ) / 100,
+          active_container_earnings_resolved: Number(bal.active_container_earnings ?? 0),
+          container_session_accrual_usd: sessionAccrual.combinedUsd,
+          container_projected_copy_accrual_usd: sessionAccrual.copyAccrualUsd,
+          container_projected_fixed_accrual_usd: sessionAccrual.fixedPolicyGrossUsd,
           container_withdrawable_earnings: Number(bal.container_withdrawable_earnings ?? 0),
           lifetime_container_withdrawn: Number(bal.lifetime_container_withdrawn ?? 0),
           lifetime_container_fees: Number(bal.lifetime_container_fees ?? 0),

@@ -32,6 +32,10 @@ export interface OperationalBootstrapV1 {
     withdrawal_pending_balance?: number
     active_container_earnings?: number
     active_container_earnings_resolved?: number
+    /** View-only: active copy + fixed session gross accrual (not ledger liquid). */
+    container_session_accrual_usd?: number
+    container_projected_copy_accrual_usd?: number
+    container_projected_fixed_accrual_usd?: number
     container_withdrawable_earnings?: number
     lifetime_container_withdrawn?: number
     lifetime_container_fees?: number

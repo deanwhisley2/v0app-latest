@@ -473,6 +473,7 @@ export function ContainerMode({
             createdAt: string
             autoAdjust: boolean
             accruedGrossUsd?: number
+            displayAccruedGrossUsd?: number
             targetGrossProfitUsd?: number
             cycleEndsAt?: string
           }>
@@ -501,7 +502,12 @@ export function ContainerMode({
 
         const copy: ActiveCopyTrade[] = copyList.map((row) => {
           const startMs = new Date(row.createdAt).getTime()
-          const earned = typeof row.accruedGrossUsd === "number" ? row.accruedGrossUsd : 0
+          const earned =
+            typeof row.displayAccruedGrossUsd === "number"
+              ? row.displayAccruedGrossUsd
+              : typeof row.accruedGrossUsd === "number"
+                ? row.accruedGrossUsd
+                : 0
           return {
             traderId: row.traderPersonaId,
             amount: row.stakeUsd,
@@ -626,7 +632,7 @@ export function ContainerMode({
         })
         const out = (await res.json().catch(() => ({}))) as {
           ok?: boolean
-          copySessions?: Array<{ sessionId: string; accruedGrossUsd?: number }>
+          copySessions?: Array<{ sessionId: string; accruedGrossUsd?: number; displayAccruedGrossUsd?: number }>
           fixedSessions?: Array<{
             sessionId: string
             earnedUsd: number
@@ -638,7 +644,12 @@ export function ContainerMode({
           const list = out.copySessions ?? []
           return prev.map((t) => {
             const row = list.find((c) => c.sessionId === t.copySessionId)
-            const earned = typeof row?.accruedGrossUsd === "number" ? row.accruedGrossUsd : t.earned
+            const earned =
+              typeof row?.displayAccruedGrossUsd === "number"
+                ? row.displayAccruedGrossUsd
+                : typeof row?.accruedGrossUsd === "number"
+                  ? row.accruedGrossUsd
+                  : t.earned
             return row ? { ...t, earned } : t
           })
         })
@@ -1499,7 +1510,9 @@ export function ContainerMode({
               </div>
               <div className="rounded-xl bg-success/10 p-4 text-center">
                 <p className="text-sm text-muted-foreground">Total earnings so far</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/90">Copy + fixed accruals + container liquid (DB)</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground/90">
+                  Projected session accruals + realized container liquid (separate buckets)
+                </p>
                 <p className="mt-1 font-mono text-2xl font-bold text-success">+{formatUserMoney(totalEarnedDisplayUsd)}</p>
               </div>
               <div className="rounded-xl bg-primary/10 p-4 text-center">

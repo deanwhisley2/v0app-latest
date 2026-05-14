@@ -79,6 +79,12 @@ export async function POST(request: Request) {
       if (msg === "Session not found") return NextResponse.json({ error: msg }, { status: 404 })
       if (msg === "Forbidden") return NextResponse.json({ error: msg }, { status: 403 })
       if (msg === "Session already closed") return NextResponse.json({ error: msg }, { status: 400 })
+      if (msg === "COPY_LIFECYCLE_BUCKET_RECONCILE_FAILED") {
+        return NextResponse.json(
+          { error: "Copy lifecycle buckets do not reconcile to target gross — contact support." },
+          { status: 422 },
+        )
+      }
       if (msg === "SETTLEMENT_CONFLICT") {
         return NextResponse.json({ error: "Session is already being settled or was closed." }, { status: 409 })
       }

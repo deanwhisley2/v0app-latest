@@ -36,7 +36,6 @@ export async function GET(request: Request) {
     }
 
     const baseActive = Number(data?.active_container_earnings ?? 0)
-    const activeResolved = Math.round((baseActive + liveAccrual.combinedUsd) * 100) / 100
 
     const payload = {
       total_earnings: Number(data?.total_earnings ?? 0),
@@ -49,10 +48,12 @@ export async function GET(request: Request) {
       active_container_earnings: baseActive,
       /** DB bucket only (legacy / manual extracts). */
       active_container_earnings_db: baseActive,
-      /** Active copy + fixed server accruals (sessions). */
+      /** Active copy + fixed server accruals (sessions) — view-only; do not add to ledger liquid. */
       container_session_accrual_usd: liveAccrual.combinedUsd,
-      /** Suggested display total = DB active bucket + live session accrual. */
-      active_container_earnings_resolved: activeResolved,
+      container_projected_copy_accrual_usd: liveAccrual.copyAccrualUsd,
+      container_projected_fixed_accrual_usd: liveAccrual.fixedPolicyGrossUsd,
+      /** Same as `active_container_earnings` (no merge with session accrual — avoids double-count). */
+      active_container_earnings_resolved: baseActive,
       container_withdrawable_earnings: Number(data?.container_withdrawable_earnings ?? 0),
       lifetime_container_withdrawn: Number(data?.lifetime_container_withdrawn ?? 0),
       lifetime_container_fees: Number(data?.lifetime_container_fees ?? 0),

@@ -13,6 +13,7 @@ import {
   parseCopyTradeLifecycle,
 } from "@/lib/server/copy-trade-lifecycle"
 import { COPY_TRADE_CYCLE_MS } from "@/lib/copy-trade-policy"
+import { copyTradeDisplayAccruedGrossUsd } from "@/lib/server/copy-trade-display-accrual"
 
 type CopyRow = {
   id: string
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
         ? copyTradeAccruedGrossUsd(lc, r.created_at, now)
         : copyTradeLegacyLinearAccruedGrossUsd(stake, r.created_at, now)
       const targetGrossProfitUsd = lc?.targetGrossProfitUsd ?? canonicalCopyTargetGrossUsd(stake)
+      const displayAccruedGrossUsd = copyTradeDisplayAccruedGrossUsd(r.id, accruedGrossUsd, targetGrossProfitUsd, now)
       const cycleEndsAt = new Date(new Date(r.created_at).getTime() + COPY_TRADE_CYCLE_MS).toISOString()
       return {
         kind: "copy" as const,
@@ -87,6 +89,7 @@ export async function GET(request: Request) {
         createdAt: r.created_at,
         autoAdjust: md.ui?.autoAdjust === true,
         accruedGrossUsd,
+        displayAccruedGrossUsd,
         targetGrossProfitUsd,
         cycleEndsAt,
       }
