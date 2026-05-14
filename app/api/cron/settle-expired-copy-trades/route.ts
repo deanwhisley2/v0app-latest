@@ -3,10 +3,9 @@ import { COPY_TRADE_CYCLE_MS } from "@/lib/copy-trade-policy"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { settleCopyTradeSessionForUser } from "@/lib/server/copy-trade-settle"
 
-type Model = { earnedUsd?: number; drawdownPct?: number }
-
 /**
- * Expire stale copy-trade sessions (24h+) using last modeled marks from session metadata when present.
+ * Expire stale copy-trade sessions (24h+): canonical scheduled settlement
+ * (stake → Nexus Main; 0.71% gross earnings − 1.5% fee → container liquid).
  * Protect with `CRON_SECRET`: send header `x-cron-secret: <value>` or `Authorization: Bearer <value>`.
  */
 export async function POST(request: Request) {
@@ -23,7 +22,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient()
     const { data: rows, error } = await admin
       .from("copy_trade_sessions")
-      .select("id,user_id,metadata")
+      .select("id,user_id")
       .eq("status", "active")
       .is("settled_at", null)
       .lt("created_at", cutoffIso)
@@ -34,18 +33,14 @@ export async function POST(request: Request) {
     const failures: Array<{ sessionId: string; message: string }> = []
 
     for (const r of rows ?? []) {
-      const md = (r.metadata ?? {}) as { model?: Model }
-      const m = md.model ?? {}
-      const floating = typeof m.earnedUsd === "number" && Number.isFinite(m.earnedUsd) ? m.earnedUsd : 0
-      const coinImpact =
-        typeof m.drawdownPct === "number" && Number.isFinite(m.drawdownPct) ? Math.max(0, Math.min(0.85, m.drawdownPct)) : 0
       try {
         await settleCopyTradeSessionForUser(admin, {
           userId: r.user_id as string,
           sessionId: r.id as string,
-          floatingPnLUsd: floating,
-          coinImpactFraction: coinImpact,
+          floatingPnLUsd: 0,
+          coinImpactFraction: 0,
           financialActorType: "system",
+          kind: "scheduled",
         })
         settled += 1
       } catch (e) {

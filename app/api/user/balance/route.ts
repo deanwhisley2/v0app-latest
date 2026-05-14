@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { currencyEngine } from "@/lib/financial/currency-engine"
 import { treasury } from "@/lib/financial/treasury-authority"
+import { sumActiveSessionAccrualUsd } from "@/lib/server/container-session-accruals"
 
 export async function GET(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -27,6 +28,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Could not load balance" }, { status: 500 })
     }
 
+    let liveAccrual = { copyAccrualUsd: 0, fixedPolicyGrossUsd: 0, combinedUsd: 0 }
+    try {
+      liveAccrual = await sumActiveSessionAccrualUsd(admin, user.id)
+    } catch {
+      /* optional enrichment */
+    }
+
+    const baseActive = Number(data?.active_container_earnings ?? 0)
+    const activeResolved = Math.round((baseActive + liveAccrual.combinedUsd) * 100) / 100
+
     const payload = {
       total_earnings: Number(data?.total_earnings ?? 0),
       current_stake: Number(data?.current_stake ?? 0),
@@ -35,7 +46,13 @@ export async function GET(request: Request) {
       withdrawal_pending_balance: Number(
         (data as Record<string, unknown> | null)?.withdrawal_pending_balance ?? 0
       ),
-      active_container_earnings: Number(data?.active_container_earnings ?? 0),
+      active_container_earnings: baseActive,
+      /** DB bucket only (legacy / manual extracts). */
+      active_container_earnings_db: baseActive,
+      /** Active copy + fixed server accruals (sessions). */
+      container_session_accrual_usd: liveAccrual.combinedUsd,
+      /** Suggested display total = DB active bucket + live session accrual. */
+      active_container_earnings_resolved: activeResolved,
       container_withdrawable_earnings: Number(data?.container_withdrawable_earnings ?? 0),
       lifetime_container_withdrawn: Number(data?.lifetime_container_withdrawn ?? 0),
       lifetime_container_fees: Number(data?.lifetime_container_fees ?? 0),

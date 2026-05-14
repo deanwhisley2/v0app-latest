@@ -8,6 +8,7 @@ import {
   assertCopyStakeUsd,
   resolvePersonaId,
 } from "@/lib/server/container-governance"
+import { buildCopyTradeLifecycle } from "@/lib/server/copy-trade-lifecycle"
 
 export async function POST(request: Request) {
   try {
@@ -98,6 +99,23 @@ export async function POST(request: Request) {
         },
         { status: 500 },
       )
+    }
+
+    const sessionIdForMeta = sessionRow?.id as string
+    const lifecycle = buildCopyTradeLifecycle(roundUsd2(stakeUsd), sessionIdForMeta, user.id)
+    const { error: lifeErr } = await admin
+      .from("copy_trade_sessions")
+      .update({
+        metadata: {
+          v: 1,
+          ui: { autoAdjust: false },
+          canonicalPersonaId: persona.id,
+          lifecycle,
+        },
+      })
+      .eq("id", sessionIdForMeta)
+    if (lifeErr) {
+      console.error("[copy-trade/open] lifecycle metadata update failed", lifeErr)
     }
 
     await recordFinancialEvent({

@@ -57,40 +57,37 @@ export async function POST(request: Request) {
     const lastAtRaw = (row as { last_earnings_release_at?: string | null }).last_earnings_release_at
     const createdAt = new Date(String(row.created_at))
 
-    const msDay = 86_400_000
-    const daysSinceStart = Math.floor((now.getTime() - createdAt.getTime()) / msDay)
-    const lastRelease = lastAtRaw ? new Date(lastAtRaw) : null
-    const daysSinceLast = lastRelease
-      ? Math.floor((now.getTime() - lastRelease.getTime()) / msDay)
-      : daysSinceStart
+    const MS_DAY = 86_400_000
+    const d = Math.floor((now.getTime() - createdAt.getTime()) / MS_DAY)
+    const currentPeriod = Math.floor(d / 5)
+    let lastPeriod = -1
+    if (lastAtRaw) {
+      const ld = Math.floor((new Date(lastAtRaw).getTime() - createdAt.getTime()) / MS_DAY)
+      lastPeriod = Math.floor(ld / 5)
+    }
+    const calendarEligible = currentPeriod >= 1 && currentPeriod > lastPeriod
 
-    const canWithdraw5Day = daysSinceLast >= 5
-    const canWithdrawDaily = months === 6 && daysSinceLast >= 1
-
-    if (!canWithdraw5Day && !canWithdrawDaily) {
-      const need = months === 6 ? 1 : 5
-      const waitDays = Math.max(1, need - daysSinceLast)
+    if (!calendarEligible) {
+      const nextUnlockDay = lastPeriod < 0 ? 5 : (lastPeriod + 1) * 5
+      const waitDays = Math.max(0, nextUnlockDay - d)
       return NextResponse.json(
         {
           error: "WITHDRAW_WINDOW_LOCKED",
           waitDays,
-          message: `Next earnings release unlocks in ${waitDays} day(s). Fixed sessions use a ${need}-day cadence for this plan.`,
+          nextUnlockDay,
+          message: `Next earnings release unlocks in about ${waitDays} day(s) (day ${nextUnlockDay} of your session).`,
         },
         { status: 423 }
       )
     }
 
-    const pct = fixedSessionWithdrawPercent(months)
+    const pct = fixedSessionWithdrawPercent(months) / 100
     const headroom = roundUsd2(Math.max(0, grossPolicy - cumulative))
     if (!(headroom > 0)) {
       return NextResponse.json({ error: "All accrued earnings for this window are already in container liquid." }, { status: 400 })
     }
 
-    let sliceCap = roundUsd2((grossPolicy * pct) / 100)
-    if (months === 6 && canWithdrawDaily && !canWithdraw5Day) {
-      sliceCap = roundUsd2(Math.min(sliceCap, grossPolicy * 0.1))
-    }
-
+    const sliceCap = roundUsd2(headroom * pct)
     const toReleaseGross = roundUsd2(Math.max(0, Math.min(sliceCap, headroom)))
     if (!(toReleaseGross > 0)) {
       return NextResponse.json({ error: "No eligible earnings slice for this release window." }, { status: 400 })

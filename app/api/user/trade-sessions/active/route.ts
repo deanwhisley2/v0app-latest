@@ -6,6 +6,13 @@ import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { computeFixedSessionPolicyGrossUsd, type FixedSessionEarnedRow } from "@/lib/server/fixed-trade-earnings-snapshot"
+import {
+  canonicalCopyTargetGrossUsd,
+  copyTradeAccruedGrossUsd,
+  copyTradeLegacyLinearAccruedGrossUsd,
+  parseCopyTradeLifecycle,
+} from "@/lib/server/copy-trade-lifecycle"
+import { COPY_TRADE_CYCLE_MS } from "@/lib/copy-trade-policy"
 
 type CopyRow = {
   id: string
@@ -65,13 +72,23 @@ export async function GET(request: Request) {
     const now = new Date()
     const copySessions = (copyRows ?? []).map((r: CopyRow) => {
       const md = (r.metadata ?? {}) as { ui?: { autoAdjust?: boolean } }
+      const stake = roundUsd2(Number(r.stake_amount ?? 0))
+      const lc = parseCopyTradeLifecycle(r.metadata as Record<string, unknown> | null)
+      const accruedGrossUsd = lc
+        ? copyTradeAccruedGrossUsd(lc, r.created_at, now)
+        : copyTradeLegacyLinearAccruedGrossUsd(stake, r.created_at, now)
+      const targetGrossProfitUsd = lc?.targetGrossProfitUsd ?? canonicalCopyTargetGrossUsd(stake)
+      const cycleEndsAt = new Date(new Date(r.created_at).getTime() + COPY_TRADE_CYCLE_MS).toISOString()
       return {
         kind: "copy" as const,
         sessionId: r.id,
         traderPersonaId: r.trader_persona_id,
-        stakeUsd: roundUsd2(Number(r.stake_amount ?? 0)),
+        stakeUsd: stake,
         createdAt: r.created_at,
         autoAdjust: md.ui?.autoAdjust === true,
+        accruedGrossUsd,
+        targetGrossProfitUsd,
+        cycleEndsAt,
       }
     })
 

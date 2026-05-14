@@ -31,6 +31,7 @@ export interface OperationalBootstrapV1 {
     available_balance: number
     withdrawal_pending_balance?: number
     active_container_earnings?: number
+    active_container_earnings_resolved?: number
     container_withdrawable_earnings?: number
     lifetime_container_withdrawn?: number
     lifetime_container_fees?: number

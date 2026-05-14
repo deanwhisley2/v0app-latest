@@ -12,7 +12,6 @@ import {
   type FixPeriodMonths,
 } from "@/lib/container-earnings-schedule"
 import {
-  COPY_TRADE_AUTO_EXIT_PROFIT_RATE,
   COPY_TRADE_CYCLE_MS,
   COPY_TRADE_FORCE_CANCEL_FEE_RATE,
   COPY_TRADE_WITHDRAW_FEE_RATE,
@@ -162,6 +161,8 @@ interface ActiveFixTrade {
   fixedPriceFromLiveFeed?: boolean
   /** Platform-deposit container: random positive daily buckets that sum to an internal schedule target (server-side). */
   dailySchedule?: number[]
+  /** When true, `earned` is hydrated from the server accrual engine — do not recompute from local schedule. */
+  serverAccrued?: boolean
   /** When set, early pullout is processed via POST /api/user/fixed-trade/early-exit (funded server session). */
   serverSessionId?: string
 }
@@ -176,6 +177,9 @@ function fixEarningsGrossUsd(trade: ActiveFixTrade): number {
  * Deterministic from `buildContainerDailySchedule` — not RNG.
  */
 function fixPolicyDisplayedGrossUsd(trade: ActiveFixTrade, now = new Date()): number {
+  if (trade.serverAccrued) {
+    return fixEarningsGrossUsd(trade)
+  }
   if (!trade.dailySchedule?.length) return fixEarningsGrossUsd(trade)
   const cap = totalScheduleTargetUsd(trade.dailySchedule)
   const smooth = scheduledEarnedUsdSmooth(trade.dailySchedule, trade.startTime, now)
@@ -291,8 +295,6 @@ export function ContainerMode({
 
   const activeCopyTradesRef = useRef<ActiveCopyTrade[]>([])
   const copySettlingRef = useRef<Set<string>>(new Set())
-  const copyMetaSyncAtRef = useRef<Record<string, number>>({})
-
   useEffect(() => {
     activeCopyTradesRef.current = activeCopyTrades
   }, [activeCopyTrades])
@@ -470,6 +472,9 @@ export function ContainerMode({
             stakeUsd: number
             createdAt: string
             autoAdjust: boolean
+            accruedGrossUsd?: number
+            targetGrossProfitUsd?: number
+            cycleEndsAt?: string
           }>
           fixedSessions?: Array<{
             kind: "fixed"
@@ -496,12 +501,13 @@ export function ContainerMode({
 
         const copy: ActiveCopyTrade[] = copyList.map((row) => {
           const startMs = new Date(row.createdAt).getTime()
+          const earned = typeof row.accruedGrossUsd === "number" ? row.accruedGrossUsd : 0
           return {
             traderId: row.traderPersonaId,
             amount: row.stakeUsd,
             startTime: new Date(row.createdAt),
             minEndTime: new Date(startMs + COPY_TRADE_CYCLE_MS),
-            earned: 0,
+            earned,
             isTrading: true,
             autoAdjust: row.autoAdjust,
             drawdownPct: 0,
@@ -510,29 +516,29 @@ export function ContainerMode({
           }
         })
 
-        const fix: ActiveFixTrade[] = fixList.map((row) => ({
-          traderId: row.traderPersonaId ?? "desk-unknown",
-          amount: row.principalUsd,
-          period: row.fixPeriodMonths,
-          startTime: new Date(row.createdAt),
-          endTime: new Date(row.leaseEndAt),
-          earned: row.earnedUsd,
-          isLocked: true,
-          canWithdrawEarnings: true,
-          lastWithdrawalDate: row.lastWithdrawalAt ? new Date(row.lastWithdrawalAt) : null,
-          totalWithdrawn: row.totalWithdrawnUsd,
-          withdrawablePercent: row.withdrawablePercent,
-          dailyWithdrawUsed: 0,
-          coinSymbol: row.coinSymbol,
-          fixedPrice: row.fixedPriceUsd,
-          dailySchedule: buildContainerDailySchedule(
-            row.principalUsd,
-            row.fixPeriodMonths as FixPeriodMonths,
-            row.seedKey,
-            typeof row.insuranceFeeUsd === "number" ? row.insuranceFeeUsd : 0
-          ),
-          serverSessionId: row.sessionId,
-        }))
+        const fix: ActiveFixTrade[] = fixList.map((row) => {
+          const grossPolicy = row.earnedUsd
+          const withdrawn = row.totalWithdrawnUsd
+          const remaining = Math.max(0, Math.round((grossPolicy - withdrawn) * 100) / 100)
+          return {
+            traderId: row.traderPersonaId ?? "desk-unknown",
+            amount: row.principalUsd,
+            period: row.fixPeriodMonths,
+            startTime: new Date(row.createdAt),
+            endTime: new Date(row.leaseEndAt),
+            earned: remaining,
+            isLocked: true,
+            canWithdrawEarnings: true,
+            lastWithdrawalDate: row.lastWithdrawalAt ? new Date(row.lastWithdrawalAt) : null,
+            totalWithdrawn: row.totalWithdrawnUsd,
+            withdrawablePercent: row.withdrawablePercent,
+            dailyWithdrawUsed: 0,
+            coinSymbol: row.coinSymbol,
+            fixedPrice: row.fixedPriceUsd,
+            serverAccrued: true,
+            serverSessionId: row.sessionId,
+          }
+        })
 
         setActiveCopyTrades(copy)
         setActiveFixTrades(fix)
@@ -605,33 +611,56 @@ export function ContainerMode({
 
   /** Bounded copy-trade mark-to-model (not spot leverage); separate from fixed schedule. */
   useEffect(() => {
-    if (activeCopyTrades.length === 0) return
-    const tick = () => {
-      setActiveCopyTrades((trades) => {
-        const kept: ActiveCopyTrade[] = []
-        for (const t of trades) {
-          const elapsed = Date.now() - t.startTime.getTime()
-          const progress = Math.min(1, elapsed / COPY_TRADE_CYCLE_MS)
-          const drift = (Math.random() - 0.47) * 0.004 * t.amount
-          let earned = Math.round((t.earned + drift) * 100) / 100
-          const maxUp = t.amount * 0.06 * progress
-          const maxDown = -t.amount * 0.12 * progress
-          earned = Math.max(maxDown, Math.min(maxUp, earned))
-          let drawdownPct = Math.max(0, Math.min(0.35, t.drawdownPct + (Math.random() - 0.46) * 0.015))
-          if (earned > t.amount * 0.015) drawdownPct *= 0.88
-          const recoveryHold = t.autoAdjust && drawdownPct > 0.045 && earned < t.amount * 0.02
-
-          kept.push({ ...t, earned, drawdownPct, recoveryHold, isTrading: true })
+    if (activeCopyTrades.length === 0 && activeFixTrades.length === 0) return
+    const poll = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const res = await fetch("/api/user/trade-sessions/active", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          copySessions?: Array<{ sessionId: string; accruedGrossUsd?: number }>
+          fixedSessions?: Array<{
+            sessionId: string
+            earnedUsd: number
+            totalWithdrawnUsd: number
+          }>
         }
-        return kept
-      })
+        if (!res.ok || !out.ok) return
+        setActiveCopyTrades((prev) => {
+          const list = out.copySessions ?? []
+          return prev.map((t) => {
+            const row = list.find((c) => c.sessionId === t.copySessionId)
+            const earned = typeof row?.accruedGrossUsd === "number" ? row.accruedGrossUsd : t.earned
+            return row ? { ...t, earned } : t
+          })
+        })
+        setActiveFixTrades((prev) => {
+          const list = out.fixedSessions ?? []
+          return prev.map((tr) => {
+            const row = list.find((f) => f.sessionId === tr.serverSessionId)
+            if (!row) return tr
+            const remaining = Math.max(0, Math.round((row.earnedUsd - row.totalWithdrawnUsd) * 100) / 100)
+            return { ...tr, earned: remaining, totalWithdrawn: row.totalWithdrawnUsd }
+          })
+        })
+      } catch {
+        /* ignore */
+      }
     }
-    tick()
-    const id = window.setInterval(tick, 5000)
+    void poll()
+    const id = window.setInterval(() => void poll(), 8000)
     return () => window.clearInterval(id)
-  }, [activeCopyTrades.length])
+  }, [activeCopyTrades.length, activeFixTrades.length])
 
-  /** Auto-settle copy sessions after 24h or auto-adjust +5% target — persists server session + balances. */
+  /** Auto-settle copy sessions after 24h — canonical scheduled server settlement. */
   useEffect(() => {
     const id = window.setInterval(() => {
       const trades = activeCopyTradesRef.current
@@ -647,13 +676,9 @@ export function ContainerMode({
           if (copySettlingRef.current.has(t.copySessionId)) continue
 
           const elapsed = Date.now() - t.startTime.getTime()
-          const cycleDone = elapsed >= COPY_TRADE_CYCLE_MS
-          const autoProfitDone = t.autoAdjust && t.earned >= t.amount * (COPY_TRADE_AUTO_EXIT_PROFIT_RATE - 0.001)
-          if (!cycleDone && !autoProfitDone) continue
+          if (elapsed < COPY_TRADE_CYCLE_MS) continue
 
           copySettlingRef.current.add(t.copySessionId)
-          const floatingPnLUsd = cycleDone ? t.earned : t.amount * COPY_TRADE_AUTO_EXIT_PROFIT_RATE
-          const coinImpactFraction = cycleDone ? t.drawdownPct : 0
 
           try {
             const res = await fetch("/api/user/copy-trade/close", {
@@ -661,8 +686,8 @@ export function ContainerMode({
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
               body: JSON.stringify({
                 sessionId: t.copySessionId,
-                floatingPnLUsd,
-                coinImpactFraction,
+                floatingPnLUsd: 0,
+                coinImpactFraction: 0,
               }),
             })
             const out = (await res.json().catch(() => ({}))) as {
@@ -671,13 +696,14 @@ export function ContainerMode({
                 netToMainUsd?: number
                 liquidCreditUsd?: number
                 mainCreditUsd?: number
+                kind?: string
               }
             }
             if (!res.ok) throw new Error(out.error || "Settlement failed.")
 
             setActiveCopyTrades((prev) => prev.filter((x) => x.copySessionId !== t.copySessionId))
             notifyCopy(
-              cycleDone ? "Copy trade — 24h cycle complete" : "Copy trade — auto-adjust exit",
+              "Copy trade — 24h cycle complete",
               `Session settled. Nexus Main +${formatUserMoney(
                 out.settlement?.mainCreditUsd ?? out.settlement?.netToMainUsd ?? 0,
               )}; container liquid +${formatUserMoney(out.settlement?.liquidCreditUsd ?? 0)} (fees applied).`,
@@ -696,37 +722,6 @@ export function ContainerMode({
     return () => window.clearInterval(id)
   }, [formatUserMoney, notifyCopy])
 
-  /** Throttled modeled marks for cron sweep when the browser is online. */
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      void (async () => {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) return
-        const trades = activeCopyTradesRef.current
-        const now = Date.now()
-        for (const t of trades) {
-          if (!t.copySessionId) continue
-          const last = copyMetaSyncAtRef.current[t.copySessionId] ?? 0
-          if (now - last < 45_000) continue
-          copyMetaSyncAtRef.current[t.copySessionId] = now
-          await fetch("/api/user/copy-trade/session-metadata", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              sessionId: t.copySessionId,
-              modeledEarnedUsd: t.earned,
-              modeledDrawdownPct: t.drawdownPct,
-            }),
-          }).catch(() => null)
-        }
-      })()
-    }, 15_000)
-    return () => window.clearInterval(id)
-  }, [])
-
   useEffect(() => {
     const id = window.setInterval(() => setEarnDisplayTick((n) => n + 1), 10_000)
     return () => window.clearInterval(id)
@@ -737,6 +732,7 @@ export function ContainerMode({
     const sync = () => {
       setActiveFixTrades((trades) =>
         trades.map((trade) => {
+          if (trade.serverAccrued) return trade
           if (!trade.dailySchedule?.length) return trade
           const nextEarned = fixPolicyDisplayedRemainingUsd(trade)
           return Math.abs(nextEarned - trade.earned) > 0.005 ? { ...trade, earned: nextEarned } : trade
@@ -929,6 +925,7 @@ export function ContainerMode({
             sessionId: trade.copySessionId,
             floatingPnLUsd: trade.earned,
             coinImpactFraction: trade.drawdownPct,
+            force: true,
           }),
         })
         const out = (await res.json().catch(() => ({}))) as {
@@ -1138,27 +1135,25 @@ export function ContainerMode({
       }
 
       const msDay = 86_400_000
-      const daysSinceStart = Math.floor((Date.now() - trade.startTime.getTime()) / msDay)
-      const daysSinceLast = trade.lastWithdrawalDate
-        ? Math.floor((Date.now() - trade.lastWithdrawalDate.getTime()) / msDay)
-        : daysSinceStart
-
-      const canWithdraw5Day = daysSinceLast >= 5
-      const canWithdrawDaily = trade.period === 6 && daysSinceLast >= 1
-      if (!canWithdraw5Day && !canWithdrawDaily) {
-        const need = trade.period === 6 ? 1 : 5
-        const wait = Math.max(1, need - daysSinceLast)
+      const d = Math.floor((Date.now() - trade.startTime.getTime()) / msDay)
+      const currentPeriod = Math.floor(d / 5)
+      let lastPeriod = -1
+      if (trade.lastWithdrawalDate) {
+        const ld = Math.floor((trade.lastWithdrawalDate.getTime() - trade.startTime.getTime()) / msDay)
+        lastPeriod = Math.floor(ld / 5)
+      }
+      const calendarEligible = currentPeriod >= 1 && currentPeriod > lastPeriod
+      if (!calendarEligible) {
+        const nextUnlockDay = lastPeriod < 0 ? 5 : (lastPeriod + 1) * 5
+        const waitDays = Math.max(0, nextUnlockDay - d)
         alert(
-          `Next earnings release unlocks in about ${wait} day(s). ` +
-            `This fixed session uses a ${need}-day cadence${trade.period === 6 ? " (or eligible daily 10% slices once the daily path is open)" : ""}.`
+          `Next earnings release unlocks in about ${waitDays} full day(s) (unlocks on session day ${nextUnlockDay}: days 5, 10, 15, …).`,
         )
         return
       }
 
-      const maxWithdrawable = Math.max(
-        0,
-        (grossDisplayed * trade.withdrawablePercent) / 100 - trade.totalWithdrawn,
-      )
+      const headroom = Math.max(0, Math.round((grossDisplayed - trade.totalWithdrawn) * 100) / 100)
+      const maxWithdrawable = Math.max(0, (headroom * trade.withdrawablePercent) / 100)
       if (maxWithdrawable <= 0) {
         alert(
           "Nothing eligible for this release window — the current policy slice may already be in container liquid, or accruals are still ramping.",

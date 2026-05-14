@@ -1,6 +1,7 @@
 import { buildContainerDailySchedule, scheduledEarnedUsdSmooth, totalScheduleTargetUsd } from "@/lib/container-earnings-schedule"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
+import { fixedTradeV2AccruedGrossUsd, parseFixedTradeLifecycleV2 } from "@/lib/server/fixed-trade-lifecycle-v2"
 
 export type FixedSessionEarnedRow = {
   id: string
@@ -15,6 +16,11 @@ export type FixedSessionEarnedRow = {
 }
 
 export function computeFixedSessionPolicyGrossUsd(row: FixedSessionEarnedRow, now = new Date()): number {
+  const md = row.metadata as Record<string, unknown> | null | undefined
+  const v2 = parseFixedTradeLifecycleV2(md)
+  if (v2) {
+    return fixedTradeV2AccruedGrossUsd(v2, row.created_at, now)
+  }
   const principalUsd = roundUsd2(Number(row.principal_amount ?? 0))
   const months = Number(row.fix_period_months) as FixPeriodMonths
   const seedKey =

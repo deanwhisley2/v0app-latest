@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { COPY_TRADE_CYCLE_MS } from "@/lib/copy-trade-policy"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
       sessionId?: string
       floatingPnLUsd?: number
       coinImpactFraction?: number
+      /** When true, use force-exit fee model even after 24h. */
+      force?: boolean
     }
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : ""
     if (!sessionId) {
@@ -32,6 +35,21 @@ export async function POST(request: Request) {
       body.coinImpactFraction !== undefined ? Number(body.coinImpactFraction) : 0
 
     const admin = createAdminClient()
+
+    const { data: sessRow, error: sErr } = await admin
+      .from("copy_trade_sessions")
+      .select("created_at")
+      .eq("id", sessionId)
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (sErr) throw new Error(sErr.message)
+    if (!sessRow) return NextResponse.json({ error: "Session not found" }, { status: 404 })
+
+    const ageMs = Date.now() - new Date(String(sessRow.created_at)).getTime()
+    const forceRequested = body.force === true
+    const kind: "scheduled" | "force" =
+      forceRequested ? "force" : ageMs >= COPY_TRADE_CYCLE_MS ? "scheduled" : "force"
+
     try {
       const { settlement, balances } = await settleCopyTradeSessionForUser(admin, {
         userId: user.id,
@@ -39,10 +57,12 @@ export async function POST(request: Request) {
         floatingPnLUsd,
         coinImpactFraction,
         financialActorType: "user",
+        kind,
       })
       return NextResponse.json({
         ok: true,
         settlement: {
+          kind: settlement.kind,
           stakeUsd: settlement.stakeUsd,
           grossBeforeFeesUsd: settlement.grossBeforeFeesUsd,
           cancelFeeUsd: settlement.cancelFeeUsd,
@@ -50,6 +70,7 @@ export async function POST(request: Request) {
           netToMainUsd: settlement.netToMainUsd,
           mainCreditUsd: settlement.mainCreditUsd,
           liquidCreditUsd: settlement.liquidCreditUsd,
+          earningsExecutionFeeUsd: settlement.earningsExecutionFeeUsd,
         },
         balances: { available_balance: balances.available_balance, container_withdrawable_earnings: balances.container_withdrawable_earnings },
       })

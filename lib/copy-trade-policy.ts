@@ -8,6 +8,12 @@ import { roundUsd2 } from "@/lib/nexus-financial-policy"
 /** Active copy rotation length (spec). */
 export const COPY_TRADE_CYCLE_MS = 24 * 60 * 60 * 1000
 
+/** Canonical gross profit target per completed 24h cycle (on stake, no insurance). */
+export const COPY_TRADE_TARGET_PROFIT_RATE = 0.0071
+
+/** Execution / withdrawal fee applied to **scheduled** copy earnings only (not on returned stake). */
+export const COPY_TRADE_SCHEDULED_EARNINGS_FEE_RATE = 0.015
+
 /** Withdrawal fee on proceeds (same nominal rate as other Main withdrawals). */
 export const COPY_TRADE_WITHDRAW_FEE_RATE = 0.016
 
@@ -49,4 +55,27 @@ export function estimateCopyAutoAdjustExitUsd(stakeUsd: number): {
   const withdrawFeeUsd = roundUsd2(grossUsd * COPY_TRADE_WITHDRAW_FEE_RATE)
   const netToMainUsd = roundUsd2(grossUsd - withdrawFeeUsd)
   return { grossUsd, withdrawFeeUsd, netToMainUsd }
+}
+
+/** Scheduled 24h completion: full stake → Main; gross earnings − fee → Container Liquid. */
+export function scheduledCopyCycleSettlementUsd(stakeUsd: number, targetGrossProfitUsd: number): {
+  stakeReturnMainUsd: number
+  grossProfitUsd: number
+  earningsFeeUsd: number
+  netEarningsLiquidUsd: number
+  mainCreditUsd: number
+  liquidCreditUsd: number
+} {
+  const stake = roundUsd2(stakeUsd)
+  const gross = roundUsd2(Math.max(0, targetGrossProfitUsd))
+  const earningsFeeUsd = roundUsd2(gross * COPY_TRADE_SCHEDULED_EARNINGS_FEE_RATE)
+  const netEarn = roundUsd2(Math.max(0, gross - earningsFeeUsd))
+  return {
+    stakeReturnMainUsd: stake,
+    grossProfitUsd: gross,
+    earningsFeeUsd,
+    netEarningsLiquidUsd: netEarn,
+    mainCreditUsd: stake,
+    liquidCreditUsd: netEarn,
+  }
 }

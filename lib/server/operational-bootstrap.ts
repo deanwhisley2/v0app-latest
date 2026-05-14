@@ -5,6 +5,7 @@ import type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operat
 import { coerceOperationalPreferences } from "@/lib/operational-preferences-types"
 import { coerceExchangeBalancesSnapshot } from "@/lib/exchange-balances-snapshot-types"
 import { computeRetailerCreditSeller } from "@/lib/server/security-authz"
+import { sumActiveSessionAccrualUsd } from "@/lib/server/container-session-accruals"
 
 export type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operational-bootstrap-types"
 
@@ -173,6 +174,16 @@ export async function buildOperationalBootstrapV1(params: {
 
   const bal = balanceRes.data as Record<string, unknown> | null
 
+  let sessionAccrualCombined = 0
+  if (bal) {
+    try {
+      const s = await sumActiveSessionAccrualUsd(admin, params.userId)
+      sessionAccrualCombined = s.combinedUsd
+    } catch {
+      sessionAccrualCombined = 0
+    }
+  }
+
   const normalizedTradingLevel = ((): 1 | 2 | 5 => {
     const n = Number(rawProfile?.trading_user_level ?? 1)
     if (n === 2 || n === 5) return n
@@ -211,6 +222,9 @@ export async function buildOperationalBootstrapV1(params: {
             (bal as Record<string, unknown>).withdrawal_pending_balance ?? 0
           ),
           active_container_earnings: Number(bal.active_container_earnings ?? 0),
+          active_container_earnings_resolved: Math.round(
+            (Number(bal.active_container_earnings ?? 0) + sessionAccrualCombined) * 100
+          ) / 100,
           container_withdrawable_earnings: Number(bal.container_withdrawable_earnings ?? 0),
           lifetime_container_withdrawn: Number(bal.lifetime_container_withdrawn ?? 0),
           lifetime_container_fees: Number(bal.lifetime_container_fees ?? 0),

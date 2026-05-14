@@ -14,6 +14,7 @@ import {
   personaUnlocked,
   resolvePersonaId,
 } from "@/lib/server/container-governance"
+import { buildFixedTradeLifecycleV2 } from "@/lib/server/fixed-trade-lifecycle-v2"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -163,6 +164,27 @@ export async function POST(request: Request) {
     const createdAtIso = sessionRow?.created_at as string
     const resolvedSeed = (sessionRow?.seed_key as string | null)?.trim() || seedKey
     const leaseEnd = officialLeaseEndDate(createdAtIso, fixPeriodMonths)
+
+    const lifecycle = buildFixedTradeLifecycleV2(
+      roundUsd2(principalUsd),
+      fixPeriodMonths,
+      sessionId,
+      user.id,
+    )
+    const { error: lifeErr } = await admin
+      .from("fixed_trade_sessions")
+      .update({
+        metadata: {
+          v: 1,
+          coin_symbol: display.coinSymbol,
+          fixed_price_usd: display.fixedPriceUsd,
+          lifecycle,
+        },
+      })
+      .eq("id", sessionId)
+    if (lifeErr) {
+      console.error("[fixed-trade/open] lifecycle metadata update failed", lifeErr)
+    }
 
     await recordFinancialEvent({
       userId: user.id,

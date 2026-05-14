@@ -43,6 +43,12 @@ check(
 check("Copy policy exports fee helpers", estimateCopyForcePulloutUsd({ stakeUsd: 1000, floatingPnLUsd: 12 }).netToMainUsd > 0)
 
 check(
+  "Copy canonical 0.71% target rate exported",
+  has("lib/copy-trade-policy.ts", "COPY_TRADE_TARGET_PROFIT_RATE") &&
+    has("lib/copy-trade-policy.ts", "0.0071")
+)
+
+check(
   "Fixed projection uses schedule engine",
   fixedTradeScheduleProjection(1000, 3, "test").totalTargetUsd > 0 &&
     estimateCopyAutoAdjustExitUsd(1000).netToMainUsd > 0
