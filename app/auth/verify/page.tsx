@@ -116,9 +116,8 @@ function VerifyContent() {
 
   if (!email) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
-          <img src="/logo.jpg" alt="Nexus Pro" className="mx-auto mb-3 h-16 w-16 rounded-xl" />
           <h1 className="text-xl font-semibold text-foreground">Missing email address</h1>
           <p className="mt-3 text-muted-foreground">
             Go back and complete registration to continue verification.
@@ -137,9 +136,8 @@ function VerifyContent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="text-center">
-          <img src="/logo.jpg" alt="Nexus Pro" className="mx-auto mb-3 h-16 w-16 rounded-xl" />
           <h1 className="text-2xl font-semibold text-foreground">Verify your email</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Nexus Pro account security</p>
+          <p className="mt-1 text-xs text-muted-foreground">Enter the code we sent you to finish setting up your account.</p>
         </div>
 
         {!success ? (
