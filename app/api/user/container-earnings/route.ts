@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         status: "completed",
         actorType: "user",
         actorId: user.id,
-        summary: "Earnings extracted from active container to withdrawable balance.",
+        summary: "Earnings extracted from active container to container liquid.",
         metadata: { creditedAmount: credited, feeRate: CONTAINER_FEE_RATE },
       })
 
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
 
     // transfer_to_main
     if (withdrawable <= 0) {
-      return NextResponse.json({ error: "No withdrawable earnings to transfer" }, { status: 400 })
+      return NextResponse.json({ error: "No container liquid earnings to transfer" }, { status: 400 })
     }
     const transferAmount = withdrawable
     const nextAvailable = round2(available + transferAmount)
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
       status: "completed",
       actorType: "user",
       actorId: user.id,
-      summary: "Withdrawable container earnings transferred into Nexus main account.",
+      summary: "Container liquid earnings transferred into Nexus main account.",
     })
 
     return NextResponse.json({
