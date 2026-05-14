@@ -7,7 +7,6 @@ import { useAuth } from "@/contexts/AuthContext"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { Button } from "@/components/ui/button"
-import { NexusProLogo } from "@/components/brand/nexus-pro-logo"
 
 export default function HomePage() {
   const router = useRouter()
@@ -66,20 +65,15 @@ export default function HomePage() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background">
-      <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="relative mx-auto flex h-14 max-w-5xl items-center justify-center px-4">
-          <Link href="/" className="flex items-center outline-offset-4 hover:opacity-95" aria-label="NEXUS PRO home">
-            <NexusProLogo variant="default" className="h-8 w-auto sm:h-9" />
-          </Link>
-          {isGuestSession ? (
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-              <Button variant="secondary" size="sm" asChild>
-                <Link href="/dashboard">Open dashboard</Link>
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      </header>
+      {isGuestSession ? (
+        <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm">
+          <div className="mx-auto flex h-14 max-w-5xl items-center justify-end px-4">
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/dashboard">Open dashboard</Link>
+            </Button>
+          </div>
+        </header>
+      ) : null}
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-4 py-16 text-center">
         <h1 className="max-w-2xl text-4xl font-bold tracking-tight text-foreground md:text-5xl">
