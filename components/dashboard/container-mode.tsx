@@ -1594,27 +1594,6 @@ export function ContainerMode({
                 <p className="text-xs text-muted-foreground">{activeCopyTrades.length} copy, {activeFixTrades.length} fixed</p>
               </div>
             </div>
-            {withdrawalPolicyHint ? (
-              <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px] leading-snug text-muted-foreground">
-                <p className="font-medium text-foreground">{t("withdrawal.modal.ruleOnce")}</p>
-                <p className="mt-1">
-                  {t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalPolicyHint.minUsd))}
-                </p>
-                <p className="mt-0.5">
-                  {t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalPolicyHint.maxUsd))}
-                </p>
-                {withdrawalPolicyHint.cooldownActive ? (
-                  <p className="mt-1 text-foreground">
-                    {t("withdrawal.modal.waitHours").replace(
-                      "{{hours}}",
-                      String(Math.max(1, Math.ceil(withdrawalPolicyHint.msRemaining / 3_600_000))),
-                    )}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-success">{t("withdrawal.modal.readyNow")}</p>
-                )}
-              </div>
-            ) : null}
           </Card>
 
           {/* Active Copy Trades */}

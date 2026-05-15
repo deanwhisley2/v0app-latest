@@ -16,6 +16,7 @@ import { SettingsScreen, type SettingsView } from "@/components/dashboard/settin
 import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
 import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
 import { ContainerMode } from "@/components/dashboard/container-mode"
+import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
@@ -636,6 +637,7 @@ export default function DashboardPage() {
   const level5Operational = operationalWorkspace && tradingLevel === 5
   /** Regional liquidity desk: only Nexus Main + Retail Balance in the dashboard balance header. */
   const retailerOperationalHeader = operationalWorkspace && retailerCreditDesk
+  const showRetailBalancePanels = !operationalWorkspace && activeTab === "container"
 
   const opsWorkspaceBootedRef = useRef(false)
   useEffect(() => {
@@ -1960,7 +1962,7 @@ export default function DashboardPage() {
         operationalWorkspace={operationalWorkspace}
       />
 
-      {!operationalWorkspace && (
+      {showRetailBalancePanels && (
         <LiveMarketFeedBar
           status={marketFeed.status}
           updatedAt={marketFeed.updatedAt}
@@ -1968,11 +1970,12 @@ export default function DashboardPage() {
         />
       )}
 
-      {!operationalWorkspace && <Ticker coins={tickerCoins} />}
+      {showRetailBalancePanels ? <Ticker coins={tickerCoins} /> : null}
 
-      {/* Main Balance Card */}
+      {/* Operational / desk balance headers only (retail balances live on Container tab). */}
+      {(level5Operational && activeTab === "desk") || (retailerOperationalHeader && activeTab === "desk") ? (
       <div className="mx-auto max-w-[1600px] px-4 pt-4">
-        {level5Operational ? (
+        {level5Operational && activeTab === "desk" ? (
           <>
             <div className="mb-4 rounded-xl border border-border bg-card p-4">
               <div className="flex flex-wrap items-center gap-4">
@@ -2027,7 +2030,7 @@ export default function DashboardPage() {
               </p>
             </div>
           </>
-        ) : retailerOperationalHeader ? (
+        ) : retailerOperationalHeader && activeTab === "desk" ? (
           <>
             <div className="mb-4 rounded-xl border border-border bg-card p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -2101,178 +2104,9 @@ export default function DashboardPage() {
               </p>
             </div>
           </>
-        ) : (
-          <>
-            <div className="mb-4 rounded-xl border border-border bg-card p-4">
-              <div className="flex flex-wrap items-center gap-4">
-                {/* Balance Info */}
-                <div className="flex flex-1 items-center gap-4 min-w-0">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm text-muted-foreground">Available balance</p>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        Bot earnings (total):{" "}
-                        {showBalance ? formatUserMoney(totalEarnings) : "••••"}
-                      </span>
-                      <button
-                        onClick={() => setShowBalance(!showBalance)}
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                        title={showBalance ? "Hide balance" : "Show balance"}
-                      >
-                        {showBalance ? (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          </svg>
-                        ) : (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                    <p className="font-mono text-2xl font-bold text-foreground">
-                      {showBalance ? formatUserMoney(mainBalance) : "••••••••"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => {
-                      setShowFundModal("add")
-                      setFundAmount("")
-                      setL1FundSource("pick")
-                      setQualifiedRetailers([])
-                      setSelectedRetailerId("")
-                      setFundTxReference("")
-                      setFundNote("")
-                      setFundMobileNetwork("")
-                      setCryptoFundingMeta(null)
-                    }}
-                    className="flex items-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    {t("funding.button.addFunds")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowFundModal("withdraw")
-                      setFundAmount("")
-                    }}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
-                    </svg>
-                    {t("funding.button.withdraw")}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-3 rounded-xl border border-success/35 bg-success/10 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("funding.balance.liquidTitle")}
-                  </p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-foreground">
-                    {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{t("funding.balance.pocketHint")}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void runContainerFlowAction("transfer_to_main")}
-                  disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
-                  className="w-full shrink-0 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
-                >
-                  {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
-                </button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("withdrawal.card.frozenTitle")}</p>
-                <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
-                  {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{t("withdrawal.card.frozenBody")}</p>
-              </div>
-              <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.activeEarningsTitle")}</p>
-                <p className="mt-1 font-mono text-lg font-bold">
-                  {showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void runContainerFlowAction("extract")}
-                  disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
-                  className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                >
-                  {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.extractCta")}
-                </button>
-              </div>
-              <div className="rounded-xl border border-border bg-background/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.exchangeTitle")}</p>
-                <p className="mt-1 font-mono text-lg font-bold">
-                  {showBalance
-                    ? formatUserMoney(
-                        connectedExchanges.reduce((sum, ex) => sum + Number(ex.balance ?? 0), 0),
-                      )
-                    : "••••"}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {t("funding.balance.exchangeHint").replace(
-                    "{{fees}}",
-                    showBalance ? formatUserMoney(containerFeesPaid) : "••••",
-                  )}
-                </p>
-              </div>
-            </div>
-            {withdrawalEligibility ? (
-              <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px] leading-snug text-muted-foreground">
-                <p className="font-medium text-foreground">{t("withdrawal.modal.ruleOnce")}</p>
-                <p className="mt-1">
-                  {t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))}
-                </p>
-                <p className="mt-0.5">
-                  {t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}
-                </p>
-                {withdrawalEligibility.cooldownActive ? (
-                  <p className="mt-1 text-foreground">
-                    {t("withdrawal.modal.waitHours").replace(
-                      "{{hours}}",
-                      String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
-                    )}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-success">{t("withdrawal.modal.readyNow")}</p>
-                )}
-              </div>
-            ) : null}
-            <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-              <p>
-                <span className="font-medium text-foreground">{t("deposit.timingLabel")}</span> {PROCESSING_COPY.deposits}
-              </p>
-              <p className="mt-1">
-                <span className="font-medium text-foreground">{t("withdrawal.timingLabel")}</span> {PROCESSING_COPY.withdrawals}
-              </p>
-            </div>
-          </>
-        )}
+        ) : null}
       </div>
+      ) : null}
 
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
@@ -3099,39 +2933,64 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content — Container desk + Wallstreet assistant only (no legacy live/markets decks). */}
-      <div className="mx-auto max-w-[1600px] px-4 pb-24 md:pb-4">
+      <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:pb-4 ${activeTab === "container" ? "" : "pt-3"}`}>
         {activeTab === "container" && (
-          <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">
-            {sidebarPanel ? (
-              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-            ) : null}
-            <main className="min-w-0 flex-1">
-              <ContainerMode
-                userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
-                retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
-                retailerLiquidityOpsBlocked={retailerOpsBlocked}
-                containerLiquidEarningsUsd={containerWithdrawableEarnings}
-                withdrawalPolicyHint={
-                  withdrawalEligibility
-                    ? {
-                        minUsd: withdrawalEligibility.minUsd,
-                        maxUsd: withdrawalEligibility.maxUsd,
-                        cooldownActive: withdrawalEligibility.cooldownActive,
-                        msRemaining: withdrawalEligibility.msRemaining,
-                      }
-                    : null
-                }
+          <div className="space-y-4">
+            {showRetailBalancePanels ? (
+              <RetailBalanceHomePanels
+                t={t}
+                formatUserMoney={formatUserMoney}
+                showBalance={showBalance}
+                onToggleShowBalance={() => setShowBalance((v) => !v)}
+                mainBalance={mainBalance}
+                totalEarnings={totalEarnings}
+                containerWithdrawableEarnings={containerWithdrawableEarnings}
+                withdrawalPendingBalance={withdrawalPendingBalance}
+                activeContainerEarnings={activeContainerEarnings}
+                containerFeesPaid={containerFeesPaid}
+                connectedExchangeTotalUsd={connectedExchanges.reduce(
+                  (sum, ex) => sum + Number(ex.balance ?? 0),
+                  0,
+                )}
+                isContainerFlowBusy={isContainerFlowBusy}
+                withdrawalEligibility={withdrawalEligibility}
+                onAddFunds={() => {
+                  setShowFundModal("add")
+                  setFundAmount("")
+                  setL1FundSource("pick")
+                  setQualifiedRetailers([])
+                  setSelectedRetailerId("")
+                  setFundTxReference("")
+                  setFundNote("")
+                  setFundMobileNetwork("")
+                  setCryptoFundingMeta(null)
+                }}
+                onWithdraw={() => {
+                  setShowFundModal("withdraw")
+                  setFundAmount("")
+                }}
+                onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
+                onExtract={() => void runContainerFlowAction("extract")}
               />
-            </main>
+            ) : null}
+            <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">
+              {sidebarPanel ? (
+                <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
+              ) : null}
+              <main className="min-w-0 flex-1">
+                <ContainerMode
+                  userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
+                  retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
+                  retailerLiquidityOpsBlocked={retailerOpsBlocked}
+                  containerLiquidEarningsUsd={containerWithdrawableEarnings}
+                />
+              </main>
+            </div>
           </div>
         )}
 
         {activeTab === "wallstreet" && (
-          <div className="relative flex flex-col gap-4 lg:flex-row">
-            {sidebarPanel ? (
-              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-            ) : null}
-            <main className="relative min-w-0 flex-1">
+          <main className="relative min-w-0">
               <AIPanel
                 coins={tradeCatalog}
                 selectedCoin={selectedCoin}
@@ -3172,8 +3031,7 @@ export default function DashboardPage() {
                   />
                 </div>
               ) : null}
-            </main>
-          </div>
+          </main>
         )}
 
         {activeTab === "desk" && operationalWorkspace ? (
@@ -3196,23 +3054,11 @@ export default function DashboardPage() {
         ) : null}
 
         {!operationalWorkspace && activeTab === "notifications" ? (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            {sidebarPanel ? (
-              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-            ) : null}
-            <main className="min-w-0 flex-1">
-              <NotificationCenterScreen />
-            </main>
-          </div>
+          <NotificationCenterScreen />
         ) : null}
 
         {activeTab === "settings" && (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            {sidebarPanel ? (
-              <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-            ) : null}
-            <main className="min-w-0 flex-1">
-              <SettingsScreen
+          <SettingsScreen
                 onLogout={handleLogout}
                 requestedView={settingsRequestedView}
                 onRequestViewConsumed={handleSettingsRequestConsumed}
@@ -3220,8 +3066,6 @@ export default function DashboardPage() {
                 tradingUserLevel={currentUser?.level ?? 1}
                 retailerCreditDesk={retailerCreditDesk}
               />
-            </main>
-          </div>
         )}
       </div>
 
