@@ -6,12 +6,18 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import type { OperationalBootstrapV1 } from "@/lib/operational-bootstrap-types"
+import {
+  clearOperationalBootstrapCache,
+  readOperationalBootstrapCache,
+  writeOperationalBootstrapCache,
+} from "@/lib/operational-role-hint"
 import { NEXUS_OPERATIONAL_BC } from "@/lib/nexus-operational-sync-broadcast"
 import { supabase } from "@/lib/supabaseClient"
 
@@ -29,6 +35,23 @@ export function OperationalBootstrapProvider({ children }: { children: ReactNode
   const [snapshot, setSnapshot] = useState<OperationalBootstrapV1 | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const userIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!user?.id || isGuestSession) {
+      if (userIdRef.current) clearOperationalBootstrapCache(userIdRef.current)
+      userIdRef.current = null
+      setSnapshot(null)
+      setError(null)
+      setIsLoading(false)
+      return
+    }
+    if (userIdRef.current !== user.id) {
+      userIdRef.current = user.id
+      const cached = readOperationalBootstrapCache(user.id)
+      setSnapshot(cached)
+    }
+  }, [user?.id, isGuestSession])
 
   const fetchBootstrap = useCallback(async () => {
     if (!user?.id || isGuestSession || isDevLocalOnly()) {
@@ -56,14 +79,13 @@ export function OperationalBootstrapProvider({ children }: { children: ReactNode
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string }
         setError(typeof j.error === "string" ? j.error : `HTTP ${res.status}`)
-        setSnapshot(null)
         return
       }
       const json = (await res.json()) as OperationalBootstrapV1
       setSnapshot(json)
+      writeOperationalBootstrapCache(json)
     } catch (e) {
       setError(e instanceof Error ? e.message : "fetch_failed")
-      setSnapshot(null)
     } finally {
       setIsLoading(false)
     }
@@ -85,9 +107,15 @@ export function OperationalBootstrapProvider({ children }: { children: ReactNode
     }
   }, [fetchBootstrap])
 
+  const snapshotRef = useRef(snapshot)
+  snapshotRef.current = snapshot
+
   useEffect(() => {
     let last = 0
     const onBal = () => {
+      const prof = snapshotRef.current?.profile
+      const lvl = prof?.tradingUserLevel ?? 1
+      if (lvl === 5 || (lvl === 2 && prof?.retailerCreditSeller)) return
       const now = Date.now()
       if (now - last < 3000) return
       last = now
@@ -118,7 +146,7 @@ export function OperationalBootstrapProvider({ children }: { children: ReactNode
 
   const value = useMemo(
     () => ({ snapshot, isLoading, error, refetch: fetchBootstrap }),
-    [snapshot, isLoading, error, fetchBootstrap]
+    [snapshot, isLoading, error, fetchBootstrap],
   )
 
   return (

@@ -42,6 +42,15 @@ export type UiChromePreferences = OperationalPreferencesV1["uiChrome"]
 /** Bump when persistence shape changes (v3: server-backed account feed + local overlay). */
 const STORAGE_KEY = "nexus_notifications_v3"
 
+/** Placeholder inbox rows shown only for guest / demo sessions — not real account activity. */
+export function isDemoNotificationId(id: string): boolean {
+  return id.startsWith("seed-")
+}
+
+function withoutDemoNotifications(items: NexusNotificationItem[]): NexusNotificationItem[] {
+  return items.filter((n) => !isDemoNotificationId(n.id))
+}
+
 const KNOWN_NOTIF_TYPES: NexusNotificationType[] = [
   "price",
   "trade",
@@ -64,9 +73,17 @@ function mapServerAccountRow(r: {
   metadata?: unknown
 }): NexusNotificationItem {
   const raw = (r.notification_type ?? "system").toLowerCase()
-  const type: NexusNotificationType = KNOWN_NOTIF_TYPES.includes(raw as NexusNotificationType)
+  let type: NexusNotificationType = KNOWN_NOTIF_TYPES.includes(raw as NexusNotificationType)
     ? (raw as NexusNotificationType)
     : "system"
+  if (
+    raw.startsWith("crypto_deposit") ||
+    raw.includes("withdrawal") ||
+    raw.includes("funding") ||
+    raw.includes("retailer_fund")
+  ) {
+    type = "financial"
+  }
   const nav =
     r.nav && typeof r.nav === "object" && r.nav !== null && "kind" in (r.nav as object)
       ? (r.nav as NexusNotificationNav)
@@ -223,14 +240,24 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     const persisted = loadPersisted()
     hadLocalPersistedRef.current = !!persisted
     if (persisted) {
-      setInbox(persisted.inbox)
-      setHistory(persisted.history)
+      setInbox(withoutDemoNotifications(persisted.inbox))
+      setHistory(withoutDemoNotifications(persisted.history))
     } else {
-      setInbox(seedInbox())
+      setInbox([])
       setHistory(seedHistory())
     }
     setHydrated(true)
   }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (isGuestSession) {
+      setInbox((prev) => (prev.length > 0 ? prev : seedInbox()))
+      return
+    }
+    setInbox((prev) => withoutDemoNotifications(prev))
+    setHistory((prev) => withoutDemoNotifications(prev))
+  }, [hydrated, isGuestSession])
 
   useEffect(() => {
     if (!hydrated) return
@@ -264,8 +291,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     if (ser === serverNotifSerializedRef.current) return
     serverNotifSerializedRef.current = ser
     lastPostedJsonRef.current = ser
-    setInbox(n.inbox ?? [])
-    setHistory(n.history ?? [])
+    setInbox(withoutDemoNotifications(n.inbox ?? []))
+    setHistory(withoutDemoNotifications(n.history ?? []))
   }, [hydrated, user?.id, isGuestSession, bootLoading, snapshot?.operationalPreferences, accountNotifFeedOn])
 
   useEffect(() => {
@@ -343,7 +370,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         setAccountNotifFeedOn(true)
         const serverItems = rows.map(mapServerAccountRow)
         setInbox((prev) => {
-          const merged = mergeServerAccountWithLocals(prev, serverItems)
+          const merged = withoutDemoNotifications(mergeServerAccountWithLocals(prev, serverItems))
           if (sameInboxSignature(prev, merged)) return prev
           return merged
         })

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getGovernanceState } from "@/lib/global-execution-governor"
 import { getResumeGate } from "@/lib/startup-recovery"
@@ -9,6 +10,162 @@ import { sumActiveSessionAccrualUsd } from "@/lib/server/container-session-accru
 
 export type { OperationalBootstrapV1, StoredExchangePayload } from "@/lib/operational-bootstrap-types"
 
+const PROFILE_SELECT =
+  "email, full_name, is_verified, trading_user_level, retailer_credit_seller, funding_country_code, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot, operational_freeze_at, account_disabled_at"
+
+const BALANCE_SELECT =
+  "total_earnings, current_stake, available_balance, withdrawal_pending_balance, active_container_earnings, container_withdrawable_earnings, lifetime_container_withdrawn, lifetime_container_fees, last_updated, created_at"
+
+type RawProfile = {
+  email?: string
+  full_name?: string | null
+  is_verified?: boolean
+  trading_user_level?: number | string
+  retailer_credit_seller?: boolean | null
+  funding_country_code?: string | null
+  nexus_exchanges?: StoredExchangePayload[] | null
+  operational_workspace?: unknown | null
+  operational_preferences?: unknown | null
+  nexus_exchange_balances_snapshot?: unknown | null
+  operational_freeze_at?: string | null
+  account_disabled_at?: string | null
+}
+
+function normalizeTradingLevel(raw: RawProfile | null): 1 | 2 | 5 {
+  const n = Number(raw?.trading_user_level ?? 1)
+  if (n === 2 || n === 5) return n
+  return 1
+}
+
+function isOperationalDeskProfile(
+  userId: string,
+  raw: RawProfile | null,
+  level: 1 | 2 | 5,
+): boolean {
+  if (level === 5) return true
+  if (level === 2) {
+    return computeRetailerCreditSeller(userId, raw?.email ?? null, raw?.retailer_credit_seller ?? null)
+  }
+  return false
+}
+
+function buildProfilePayload(
+  userId: string,
+  raw: RawProfile | null,
+  level: 1 | 2 | 5,
+): OperationalBootstrapV1["profile"] {
+  if (!raw) return null
+  const profileExchanges =
+    raw.nexus_exchanges && Array.isArray(raw.nexus_exchanges) ? raw.nexus_exchanges : null
+  return {
+    email: raw.email ?? null,
+    fullName: (raw.full_name as string | null) ?? null,
+    isVerified: typeof raw.is_verified === "boolean" ? raw.is_verified : null,
+    tradingUserLevel: level,
+    retailerCreditSeller: computeRetailerCreditSeller(
+      userId,
+      raw.email ?? null,
+      raw.retailer_credit_seller ?? null,
+    ),
+    fundingCountryCode: raw.funding_country_code ?? null,
+    nexus_exchanges: profileExchanges,
+  }
+}
+
+function buildUserBalancePayload(
+  bal: Record<string, unknown> | null,
+  sessionAccrual: { combinedUsd: number; copyAccrualUsd: number; fixedPolicyGrossUsd: number },
+): OperationalBootstrapV1["userBalance"] {
+  if (!bal) return null
+  return {
+    total_earnings: Number(bal.total_earnings ?? 0),
+    current_stake: Number(bal.current_stake ?? 0),
+    available_balance: Number(bal.available_balance ?? 0),
+    withdrawal_pending_balance: Number((bal as Record<string, unknown>).withdrawal_pending_balance ?? 0),
+    active_container_earnings: Number(bal.active_container_earnings ?? 0),
+    active_container_earnings_resolved: Number(bal.active_container_earnings ?? 0),
+    container_session_accrual_usd: sessionAccrual.combinedUsd,
+    container_projected_copy_accrual_usd: sessionAccrual.copyAccrualUsd,
+    container_projected_fixed_accrual_usd: sessionAccrual.fixedPolicyGrossUsd,
+    container_withdrawable_earnings: Number(bal.container_withdrawable_earnings ?? 0),
+    lifetime_container_withdrawn: Number(bal.lifetime_container_withdrawn ?? 0),
+    lifetime_container_fees: Number(bal.lifetime_container_fees ?? 0),
+    last_updated: (bal.last_updated as string) ?? null,
+    created_at: (bal.created_at as string) ?? null,
+  }
+}
+
+const EMPTY_CONTINUITY: OperationalBootstrapV1["continuity"] = {
+  activeSessions: [],
+  positionState: [],
+  executionState: [],
+  cooldownState: [],
+  riskStateToday: null,
+  daemonSymbolState: [],
+  simulationState: [],
+  leases: [],
+}
+
+/** L5 / retailer desk: skip trader continuity tables (large, unused on ops UI). */
+async function buildOperationalBootstrapDeskV1(params: {
+  admin: SupabaseClient
+  userId: string
+  now: string
+  rawProfile: RawProfile | null
+  level: 1 | 2 | 5
+  jwtMetadataExchanges?: unknown
+}): Promise<OperationalBootstrapV1> {
+  const { admin, userId, now, rawProfile, level } = params
+
+  const metaExchanges = Array.isArray(params.jwtMetadataExchanges)
+    ? (params.jwtMetadataExchanges as StoredExchangePayload[])
+    : null
+  const profileExchanges =
+    rawProfile?.nexus_exchanges && Array.isArray(rawProfile.nexus_exchanges)
+      ? rawProfile.nexus_exchanges
+      : null
+  const exchangeConnections = profileExchanges?.length ? profileExchanges : metaExchanges
+
+  const balanceRes = await admin
+    .from("user_balances")
+    .select(BALANCE_SELECT)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (balanceRes.error) {
+    console.warn("[operational-bootstrap] user_balances (desk):", balanceRes.error.message)
+  }
+
+  const bal = balanceRes.data as Record<string, unknown> | null
+
+  return {
+    version: 1,
+    userId,
+    restoredAt: now,
+    accountGovernance: {
+      operationalFreezeAt: rawProfile?.operational_freeze_at ?? null,
+      accountDisabledAt: rawProfile?.account_disabled_at ?? null,
+    },
+    profile: buildProfilePayload(userId, rawProfile, level),
+    userBalance: buildUserBalancePayload(bal, {
+      combinedUsd: 0,
+      copyAccrualUsd: 0,
+      fixedPolicyGrossUsd: 0,
+    }),
+    exchangeConnections,
+    exchangeBalancesSnapshot: coerceExchangeBalancesSnapshot(
+      rawProfile?.nexus_exchange_balances_snapshot ?? null,
+    ),
+    resumeGate: { status: "OPERATIONAL_DESK", unresolvedCount: 0 },
+    governance: null,
+    continuity: EMPTY_CONTINUITY,
+    recentAnalysis: [],
+    recentNotifications: [],
+    workspaceSnapshot: rawProfile?.operational_workspace ?? null,
+    operationalPreferences: coerceOperationalPreferences(rawProfile?.operational_preferences ?? null),
+  }
+}
+
 export async function buildOperationalBootstrapV1(params: {
   userId: string
   jwtMetadataExchanges?: unknown
@@ -16,8 +173,31 @@ export async function buildOperationalBootstrapV1(params: {
   const admin = createAdminClient()
   const now = new Date().toISOString()
 
+  const profileRes = await admin
+    .from("profiles")
+    .select(PROFILE_SELECT)
+    .eq("id", params.userId)
+    .maybeSingle()
+
+  if (profileRes.error) {
+    console.warn("[operational-bootstrap] profiles:", profileRes.error.message)
+  }
+
+  const rawProfile = profileRes.data as RawProfile | null
+  const level = normalizeTradingLevel(rawProfile)
+
+  if (isOperationalDeskProfile(params.userId, rawProfile, level)) {
+    return buildOperationalBootstrapDeskV1({
+      admin,
+      userId: params.userId,
+      now,
+      rawProfile,
+      level,
+      jwtMetadataExchanges: params.jwtMetadataExchanges,
+    })
+  }
+
   const [
-    profileRes,
     balanceRes,
     sessionsRes,
     positionsRes,
@@ -32,20 +212,7 @@ export async function buildOperationalBootstrapV1(params: {
     resumeGate,
     governanceState,
   ] = await Promise.all([
-    admin
-      .from("profiles")
-      .select(
-        "email, full_name, is_verified, trading_user_level, retailer_credit_seller, funding_country_code, nexus_exchanges, operational_workspace, operational_preferences, nexus_exchange_balances_snapshot, operational_freeze_at, account_disabled_at"
-      )
-      .eq("id", params.userId)
-      .maybeSingle(),
-    admin
-      .from("user_balances")
-      .select(
-        "total_earnings, current_stake, available_balance, withdrawal_pending_balance, active_container_earnings, container_withdrawable_earnings, lifetime_container_withdrawn, lifetime_container_fees, last_updated, created_at"
-      )
-      .eq("user_id", params.userId)
-      .maybeSingle(),
+    admin.from("user_balances").select(BALANCE_SELECT).eq("user_id", params.userId).maybeSingle(),
     admin
       .from("TradeSession")
       .select("id,symbol,mode,status,totalAmount,usedAmount,startTime,endTime,config")
@@ -130,7 +297,6 @@ export async function buildOperationalBootstrapV1(params: {
     console.warn(`[operational-bootstrap] ${label}:`, msg)
   }
 
-  if (profileRes.error) logWarn("profiles", profileRes.error.message)
   if (balanceRes.error) logWarn("user_balances", balanceRes.error.message)
   if (sessionsRes.error) logWarn("TradeSession", sessionsRes.error.message)
   if (positionsRes.error) logWarn("PositionState", positionsRes.error.message)
@@ -143,42 +309,18 @@ export async function buildOperationalBootstrapV1(params: {
   if (analysisRes.error) logWarn("AnalysisHistory", analysisRes.error.message)
   if (notifRes.error) logWarn("NotificationRecord", notifRes.error.message)
 
-  const rawProfile = profileRes.data as {
-    email?: string
-    full_name?: string | null
-    is_verified?: boolean
-    /** PostgREST may return numeric columns as number or string depending on driver/column type. */
-    trading_user_level?: number | string
-    retailer_credit_seller?: boolean | null
-    funding_country_code?: string | null
-    nexus_exchanges?: StoredExchangePayload[] | null
-    operational_workspace?: unknown | null
-    operational_preferences?: unknown | null
-    nexus_exchange_balances_snapshot?: unknown | null
-    operational_freeze_at?: string | null
-    account_disabled_at?: string | null
-  } | null
-
   const metaExchanges = Array.isArray(params.jwtMetadataExchanges)
     ? (params.jwtMetadataExchanges as StoredExchangePayload[])
     : null
-
   const profileExchanges =
     rawProfile?.nexus_exchanges && Array.isArray(rawProfile.nexus_exchanges)
       ? rawProfile.nexus_exchanges
       : null
-
   const exchangeConnections = profileExchanges?.length ? profileExchanges : metaExchanges
-
-  const operationalPreferencesRow = coerceOperationalPreferences(rawProfile?.operational_preferences ?? null)
 
   const bal = balanceRes.data as Record<string, unknown> | null
 
-  let sessionAccrual: { combinedUsd: number; copyAccrualUsd: number; fixedPolicyGrossUsd: number } = {
-    combinedUsd: 0,
-    copyAccrualUsd: 0,
-    fixedPolicyGrossUsd: 0,
-  }
+  let sessionAccrual = { combinedUsd: 0, copyAccrualUsd: 0, fixedPolicyGrossUsd: 0 }
   if (bal) {
     try {
       sessionAccrual = await sumActiveSessionAccrualUsd(admin, params.userId)
@@ -186,12 +328,6 @@ export async function buildOperationalBootstrapV1(params: {
       sessionAccrual = { combinedUsd: 0, copyAccrualUsd: 0, fixedPolicyGrossUsd: 0 }
     }
   }
-
-  const normalizedTradingLevel = ((): 1 | 2 | 5 => {
-    const n = Number(rawProfile?.trading_user_level ?? 1)
-    if (n === 2 || n === 5) return n
-    return 1
-  })()
 
   return {
     version: 1,
@@ -201,43 +337,12 @@ export async function buildOperationalBootstrapV1(params: {
       operationalFreezeAt: rawProfile?.operational_freeze_at ?? null,
       accountDisabledAt: rawProfile?.account_disabled_at ?? null,
     },
-    profile: rawProfile
-      ? {
-          email: rawProfile.email ?? null,
-          fullName: (rawProfile.full_name as string | null) ?? null,
-          isVerified: typeof rawProfile.is_verified === "boolean" ? rawProfile.is_verified : null,
-          tradingUserLevel: normalizedTradingLevel,
-          retailerCreditSeller: computeRetailerCreditSeller(
-            params.userId,
-            rawProfile.email ?? null,
-            rawProfile.retailer_credit_seller ?? null
-          ),
-          fundingCountryCode: rawProfile.funding_country_code ?? null,
-          nexus_exchanges: profileExchanges,
-        }
-      : null,
-    userBalance: bal
-      ? {
-          total_earnings: Number(bal.total_earnings ?? 0),
-          current_stake: Number(bal.current_stake ?? 0),
-          available_balance: Number(bal.available_balance ?? 0),
-          withdrawal_pending_balance: Number(
-            (bal as Record<string, unknown>).withdrawal_pending_balance ?? 0
-          ),
-          active_container_earnings: Number(bal.active_container_earnings ?? 0),
-          active_container_earnings_resolved: Number(bal.active_container_earnings ?? 0),
-          container_session_accrual_usd: sessionAccrual.combinedUsd,
-          container_projected_copy_accrual_usd: sessionAccrual.copyAccrualUsd,
-          container_projected_fixed_accrual_usd: sessionAccrual.fixedPolicyGrossUsd,
-          container_withdrawable_earnings: Number(bal.container_withdrawable_earnings ?? 0),
-          lifetime_container_withdrawn: Number(bal.lifetime_container_withdrawn ?? 0),
-          lifetime_container_fees: Number(bal.lifetime_container_fees ?? 0),
-          last_updated: (bal.last_updated as string) ?? null,
-          created_at: (bal.created_at as string) ?? null,
-        }
-      : null,
+    profile: buildProfilePayload(params.userId, rawProfile, level),
+    userBalance: buildUserBalancePayload(bal, sessionAccrual),
     exchangeConnections,
-    exchangeBalancesSnapshot: coerceExchangeBalancesSnapshot(rawProfile?.nexus_exchange_balances_snapshot ?? null),
+    exchangeBalancesSnapshot: coerceExchangeBalancesSnapshot(
+      rawProfile?.nexus_exchange_balances_snapshot ?? null,
+    ),
     resumeGate,
     governance: governanceState,
     continuity: {
@@ -253,6 +358,6 @@ export async function buildOperationalBootstrapV1(params: {
     recentAnalysis: analysisRes.error ? [] : analysisRes.data ?? [],
     recentNotifications: notifRes.error ? [] : notifRes.data ?? [],
     workspaceSnapshot: rawProfile?.operational_workspace ?? null,
-    operationalPreferences: operationalPreferencesRow,
+    operationalPreferences: coerceOperationalPreferences(rawProfile?.operational_preferences ?? null),
   }
 }

@@ -45,6 +45,9 @@ import {
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
+import { TreasuryPoolsPanel } from "@/components/dashboard/treasury-pools-panel"
+import { getOperationalRoleHint } from "@/lib/operational-role-hint"
+import { parseUgAirtelMerchantDesk } from "@/lib/retailer-payment-templates"
 
 interface CurrentUser {
   email: string
@@ -138,11 +141,21 @@ export default function DashboardPage() {
   const { registerAppNavigator } = useNexusNotifications()
   const { user, isLoading: authLoading, signOut, isGuestSession } = useAuth()
   const op = useOperationalBootstrap()
+  const roleHint = useMemo(() => getOperationalRoleHint(user, op.snapshot), [user, op.snapshot])
   /** Level-5 liquidity admin or designated Level-2 retailer credit desk — Assets-only operational workspace (no trading Wallstreet/Container). */
   const operationalWorkspace = useMemo(() => {
-    const lvl = op.snapshot?.profile?.tradingUserLevel ?? 1
-    return lvl === 5 || (lvl === 2 && Boolean(op.snapshot?.profile?.retailerCreditSeller))
-  }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
+    if (op.snapshot?.profile) {
+      const lvl = op.snapshot.profile.tradingUserLevel ?? 1
+      return lvl === 5 || (lvl === 2 && Boolean(op.snapshot.profile.retailerCreditSeller))
+    }
+    return Boolean(roleHint?.isOperationalDesk)
+  }, [op.snapshot?.profile, roleHint?.isOperationalDesk])
+  const opsDeskBootstrapping =
+    Boolean(user) &&
+    !isGuestSession &&
+    op.isLoading &&
+    !op.snapshot?.profile &&
+    Boolean(roleHint?.isOperationalDesk)
 
   const activityUserId = user?.id ?? "guest"
   const { formatUserMoney, currency, locale, t } = useUserPreferences()
@@ -172,6 +185,8 @@ export default function DashboardPage() {
   const [retailBalance, setRetailBalance] = useState(0)
   const [treasuryPoolUsd, setTreasuryPoolUsd] = useState<number | null>(null)
   const [treasuryPoolFormatted, setTreasuryPoolFormatted] = useState("")
+  const [treasuryReserveUsd, setTreasuryReserveUsd] = useState<number | null>(null)
+  const [treasuryReserveFormatted, setTreasuryReserveFormatted] = useState("")
   const [withdrawalPendingBalance, setWithdrawalPendingBalance] = useState(0)
   const [referralInfo, setReferralInfo] = useState<{
     referralCode: string
@@ -756,6 +771,14 @@ export default function DashboardPage() {
     return officialCorridorFallback.id === selectedOfficialRouteId ? officialCorridorFallback : null
   }, [officialCorridorFallback, selectedOfficialRouteId])
 
+  const localMmAirtelMerchant = useMemo(() => {
+    if (!localMmSelectedDesk) return null
+    return parseUgAirtelMerchantDesk(
+      localMmSelectedDesk.payment_numbers,
+      localMmSelectedDesk.registered_payee_names,
+    )
+  }, [localMmSelectedDesk])
+
   useEffect(() => {
     if (isGuestSession) return
     if (!authLoading && !user) {
@@ -830,10 +853,19 @@ export default function DashboardPage() {
         if (!res.ok || cancelled) return
         const j = (await res.json()) as {
           treasury?: { usd?: number; usdFormatted?: string }
+          pools?: {
+            MAIN_TREASURY?: { usd?: number; usdFormatted?: string }
+            OPERATIONAL?: { usd?: number; usdFormatted?: string }
+          }
         }
-        const usd = Number(j.treasury?.usd ?? 0)
-        setTreasuryPoolUsd(Number.isFinite(usd) ? usd : 0)
-        setTreasuryPoolFormatted(String(j.treasury?.usdFormatted ?? "").trim())
+        const autoUsd = Number(j.pools?.MAIN_TREASURY?.usd ?? j.treasury?.usd ?? 0)
+        const reserveUsd = Number(j.pools?.OPERATIONAL?.usd ?? 0)
+        setTreasuryPoolUsd(Number.isFinite(autoUsd) ? autoUsd : 0)
+        setTreasuryPoolFormatted(
+          String(j.pools?.MAIN_TREASURY?.usdFormatted ?? j.treasury?.usdFormatted ?? "").trim(),
+        )
+        setTreasuryReserveUsd(Number.isFinite(reserveUsd) ? reserveUsd : 0)
+        setTreasuryReserveFormatted(String(j.pools?.OPERATIONAL?.usdFormatted ?? "").trim())
       } catch {
         /* ignore */
       }
@@ -1814,7 +1846,43 @@ export default function DashboardPage() {
                 : t("funding.error.useAdminQueue"),
             )
           }
-          if (l1FundSource === "crypto" || l1FundSource === "airtel") {
+          if (l1FundSource === "crypto") {
+            if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
+            if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
+            const res = await fetch("/api/user/crypto-deposit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                amountUsd: amount,
+                txHash: fundTxReference.trim(),
+              }),
+            })
+            const out = (await res.json().catch(() => ({}))) as {
+              error?: string
+              deposit?: { status?: string; failure_reason?: string | null }
+              verifyMessage?: string
+            }
+            if (!res.ok) {
+              throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not submit crypto deposit", t))
+            }
+            const st = String(out.deposit?.status ?? "")
+            if (st === "credited") {
+              showToast(t("funding.toast.cryptoCredited"), "success")
+              setFundTxReference("")
+              setFundNote("")
+              setFundAmount("")
+              setShowFundModal(null)
+            } else if (st === "failed") {
+              throw new Error(out.deposit?.failure_reason || out.verifyMessage || t("funding.error.fundActionFailed"))
+            } else {
+              showToast(t("funding.toast.cryptoVerifying"), "success")
+              setFundTxReference("")
+            }
+            setL1FundSource("crypto")
+            return
+          }
+
+          if (l1FundSource === "airtel") {
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
             if (!fundPaymentProofDataUrl) throw new Error(t("funding.error.proofRequired"))
@@ -1824,7 +1892,7 @@ export default function DashboardPage() {
               body: JSON.stringify({
                 amount,
                 txReference: fundTxReference.trim(),
-                fundChannel: l1FundSource === "crypto" ? "admin_crypto" : "admin_airtel_ug",
+                fundChannel: "admin_airtel_ug",
                 paymentProofDataUrl: fundPaymentProofDataUrl,
                 note: fundNote.trim() || null,
               }),
@@ -1834,10 +1902,7 @@ export default function DashboardPage() {
               throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
             }
             setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
-            showToast(
-              l1FundSource === "crypto" ? t("funding.toast.adminCryptoQueued") : t("funding.toast.adminAirtelQueued"),
-              "success",
-            )
+            showToast(t("funding.toast.adminAirtelQueued"), "success")
             setFundTxReference("")
             setFundNote("")
             setFundPaymentProofDataUrl(null)
@@ -1973,10 +2038,17 @@ export default function DashboardPage() {
     }
   }, [showToast, currentUser?.level])
 
-  if (authLoading || !user) {
+  if (authLoading || !user || opsDeskBootstrapping) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        {opsDeskBootstrapping ? (
+          <p className="max-w-sm text-center text-sm text-muted-foreground">
+            {roleHint?.tradingUserLevel === 5
+              ? "Loading treasury and approval desk…"
+              : "Loading operations desk…"}
+          </p>
+        ) : null}
       </div>
     )
   }
@@ -2016,51 +2088,69 @@ export default function DashboardPage() {
         {level5Operational && activeTab === "desk" ? (
           <>
             <div className="mb-4 rounded-xl border border-border bg-card p-4">
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex flex-1 items-center gap-4 min-w-0">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-foreground">Company treasury (USD)</p>
+                <button
+                  type="button"
+                  onClick={() => setShowBalance(!showBalance)}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                  title={showBalance ? "Hide balance" : "Show balance"}
+                >
+                  {showBalance ? (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                     </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">Nexus Treasury Pool</p>
-                      <button
-                        type="button"
-                        onClick={() => setShowBalance(!showBalance)}
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                        title={showBalance ? "Hide balance" : "Show balance"}
-                      >
-                        {showBalance ? (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          </svg>
-                        ) : (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                    <p className="font-mono text-2xl font-bold text-foreground">
-                      {showBalance
-                        ? treasuryPoolFormatted ||
-                          (treasuryPoolUsd != null && Number.isFinite(treasuryPoolUsd)
-                            ? new Intl.NumberFormat(locale || "en-US", { style: "currency", currency: "USD" }).format(
-                                treasuryPoolUsd,
-                              )
-                            : "…")
-                        : "••••••••"}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Single treasury authority · approvals, retailer top-ups, settlement, reconciliation (USD).
-                    </p>
-                  </div>
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Auto-approval float</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-primary">
+                    {showBalance
+                      ? treasuryPoolFormatted ||
+                        (treasuryPoolUsd != null && Number.isFinite(treasuryPoolUsd)
+                          ? new Intl.NumberFormat(locale || "en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            }).format(treasuryPoolUsd)
+                          : "…")
+                      : "••••••"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    MAIN_TREASURY · crypto credits, L5 approvals, retailer settlement debits.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Treasury reserve</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-foreground">
+                    {showBalance
+                      ? treasuryReserveFormatted ||
+                        (treasuryReserveUsd != null && Number.isFinite(treasuryReserveUsd)
+                          ? new Intl.NumberFormat(locale || "en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            }).format(treasuryReserveUsd)
+                          : "…")
+                      : "••••••"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    OPERATIONAL · bulk liquidity; transfer to float only when approvals need it.
+                  </p>
                 </div>
               </div>
             </div>
+            <TreasuryPoolsPanel
+              showBalance={showBalance}
+              formatUsd={(n) =>
+                new Intl.NumberFormat(locale || "en-US", { style: "currency", currency: "USD" }).format(n)
+              }
+            />
             <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">Settlement timing:</span> {PROCESSING_COPY.deposits}{" "}
@@ -2443,6 +2533,32 @@ export default function DashboardPage() {
                         {localMmSelectedDesk ? (
                           <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
                             <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
+                            {localMmAirtelMerchant ? (
+                              <div className="mb-2 space-y-1 rounded-md border border-[#ED1C24]/35 bg-[#ED1C24]/8 p-2.5 dark:text-red-50">
+                                <p className="font-semibold text-[#ED1C24]">{t("funding.retailer.airtelMerchantTitle")}</p>
+                                <ol className="list-decimal space-y-0.5 pl-4 text-[10px] leading-relaxed">
+                                  <li>
+                                    {t("funding.payment.airtelStep1").replace(
+                                      "{{ussd}}",
+                                      localMmAirtelMerchant.ussdPrefix,
+                                    )}
+                                  </li>
+                                  <li>
+                                    {t("funding.payment.airtelStep2").replace(
+                                      "{{merchantId}}",
+                                      localMmAirtelMerchant.merchantId,
+                                    )}
+                                  </li>
+                                  <li>
+                                    {t("funding.retailer.airtelPayeeStep").replace(
+                                      "{{payee}}",
+                                      localMmAirtelMerchant.payeeName,
+                                    )}
+                                  </li>
+                                  <li>{t("funding.payment.airtelStep4")}</li>
+                                </ol>
+                              </div>
+                            ) : null}
                             <p>
                               {t("funding.numbersLabel")}{" "}
                               {(localMmSelectedDesk.payment_numbers ?? [])
@@ -2811,17 +2927,21 @@ export default function DashboardPage() {
                     ? t("withdrawal.amountLabel").replace("{{currency}}", currency)
                     : retailerCreditDesk
                       ? t("funding.amount.retailerTopup").replace("{{currency}}", currency)
-                      : t("funding.amount.matchSend").replace("{{currency}}", currency)}
+                      : l1FundSource === "crypto"
+                        ? t("funding.amount.matchSend").replace("{{currency}}", "USD")
+                        : t("funding.amount.matchSend").replace("{{currency}}", currency)}
                 </label>
                 <input
                   type="number"
                   value={fundAmount}
                   onChange={(e) => setFundAmount(e.target.value)}
-                  placeholder={`0 (${currency})`}
+                  placeholder={l1FundSource === "crypto" ? "0 (USD)" : `0 (${currency})`}
                   className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"
                 />
                 <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground sm:text-[11px]">
-                  {t("funding.amount.ledgerNote").replace("{{currency}}", currency)}
+                  {l1FundSource === "crypto"
+                    ? t("funding.payment.cryptoAmountUsdHint")
+                    : t("funding.amount.ledgerNote").replace("{{currency}}", currency)}
                 </p>
                 {showFundModal === "withdraw" && (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -2874,6 +2994,14 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-2">
               {showFundModal === "add" &&
               customerRetailFunding &&
+              l1FundSource === "crypto" &&
+              !fundTxReference.trim() ? (
+                <p className="text-[10px] font-medium text-amber-800 dark:text-amber-100">
+                  {t("funding.payment.txHashRequiredHint")}
+                </p>
+              ) : null}
+              {showFundModal === "add" &&
+              customerRetailFunding &&
               l1FundSource === "local" &&
               localMmWizardStep === 2 ? (
                 <p className="text-[10px] text-muted-foreground">
@@ -2899,8 +3027,12 @@ export default function DashboardPage() {
                   (showFundModal === "add" &&
                     customerRetailFunding &&
                     (l1FundSource === "pick" ||
-                      ((l1FundSource === "crypto" || l1FundSource === "airtel") &&
-                        (!fundTxReference.trim() || !fundPaymentProofDataUrl || !(parseFloat(fundAmount) > 0))))) ||
+                      (l1FundSource === "crypto" &&
+                        (!fundTxReference.trim() || !(parseFloat(fundAmount) > 0))) ||
+                      (l1FundSource === "airtel" &&
+                        (!fundTxReference.trim() ||
+                          !fundPaymentProofDataUrl ||
+                          !(parseFloat(fundAmount) > 0))))) ||
                   (showFundModal === "add" && retailerCreditDesk) ||
                   (showFundModal === "add" && (currentUser?.level ?? 1) === 5) ||
                   (showFundModal === "add" &&
@@ -2936,7 +3068,9 @@ export default function DashboardPage() {
                     : t("withdrawal.cta.withdraw")
                 ) : customerRetailFunding && l1FundSource === "local" ? (
                   t("funding.cta.confirmPayment")
-                ) : customerRetailFunding && (l1FundSource === "crypto" || l1FundSource === "airtel") ? (
+                ) : customerRetailFunding && l1FundSource === "crypto" ? (
+                  t("funding.cta.submitCryptoDeposit")
+                ) : customerRetailFunding && l1FundSource === "airtel" ? (
                   t("funding.cta.submitAdminPayment")
                 ) : customerRetailFunding ? (
                   t("funding.cta.chooseLocalPath")

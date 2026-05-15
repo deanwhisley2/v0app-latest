@@ -7,6 +7,21 @@ const TABLE_BALANCES = "user_balances"
  * Credit customer Nexus Main from MAIN_TREASURY (company-funded approval).
  * Debits treasury first; compensating CREDIT if customer balance upsert fails.
  */
+async function treasuryDebitReferenceExists(
+  admin: SupabaseClient,
+  referenceId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("unified_ledger")
+    .select("transaction_id")
+    .eq("reference_id", referenceId)
+    .eq("operation", "DEBIT")
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return Boolean(data)
+}
+
 export async function creditCustomerMainFromTreasuryUsd(
   admin: SupabaseClient,
   params: {
@@ -16,9 +31,13 @@ export async function creditCustomerMainFromTreasuryUsd(
     adminUserId: string
     reason: string
   },
-): Promise<{ treasuryTransactionId: string }> {
+): Promise<{ treasuryTransactionId: string; idempotent?: boolean }> {
   const amt = params.amountUsd
   if (!(amt > 0) || Number.isNaN(amt)) throw new Error("Invalid settlement amount.")
+
+  if (await treasuryDebitReferenceExists(admin, params.referenceId)) {
+    return { treasuryTransactionId: params.referenceId, idempotent: true }
+  }
 
   const tr = await treasury.mutateTreasury(
     "DEBIT",

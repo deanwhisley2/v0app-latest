@@ -601,6 +601,9 @@ export function AdminOperationalAssets({
     stats_error?: string | null
   } | null>(null)
   const [deskError, setDeskError] = useState<string | null>(null)
+  const [cryptoDeposits, setCryptoDeposits] = useState<Array<Record<string, unknown>>>([])
+  const [cryptoSecurityEvents, setCryptoSecurityEvents] = useState<Array<Record<string, unknown>>>([])
+  const [cryptoDepositBusy, setCryptoDepositBusy] = useState<string | null>(null)
   const [reviewRow, setReviewRow] = useState<OperationsDeskApiRow | null>(null)
   const [reviewContext, setReviewContext] = useState<"active" | "history">("active")
   const [resolutionDraft, setResolutionDraft] = useState("")
@@ -664,9 +667,10 @@ export function AdminOperationalAssets({
     setLoading(true)
     setDeskError(null)
     try {
-      const [deskRes, rfRes] = await Promise.all([
+      const [deskRes, rfRes, cdRes] = await Promise.all([
         fetch("/api/admin/operations-desk", { headers: h, cache: "no-store" }),
         fetch("/api/admin/retailer-funding", { headers: h, cache: "no-store" }),
+        fetch("/api/admin/crypto-deposits", { headers: h, cache: "no-store" }),
       ])
       const dj = (await deskRes.json().catch(() => ({}))) as {
         pending?: OperationsDeskApiRow[]
@@ -701,6 +705,17 @@ export function AdminOperationalAssets({
       if (rfRes.ok) {
         const rj = (await rfRes.json()) as { retailers?: Array<Record<string, unknown>> }
         setApprovalRetailers(rj.retailers ?? [])
+      }
+      if (cdRes.ok) {
+        const cj = (await cdRes.json()) as {
+          deposits?: Array<Record<string, unknown>>
+          securityEvents?: Array<Record<string, unknown>>
+        }
+        setCryptoDeposits(cj.deposits ?? [])
+        setCryptoSecurityEvents(cj.securityEvents ?? [])
+      } else {
+        setCryptoDeposits([])
+        setCryptoSecurityEvents([])
       }
     } catch {
       setDeskError("Network error loading operations desk.")
@@ -849,6 +864,30 @@ export function AdminOperationalAssets({
       }
     },
     [reviewRow, resolutionDraft, refreshApproval],
+  )
+
+  const executeCryptoDepositAction = useCallback(
+    async (depositId: string, action: "approve" | "reject" | "retry") => {
+      const h = await authHeaders()
+      if (!h) return
+      setCryptoDepositBusy(`${depositId}:${action}`)
+      try {
+        const res = await fetch("/api/admin/crypto-deposits", {
+          method: "PATCH",
+          headers: { ...h, "Content-Type": "application/json" },
+          body: JSON.stringify({ depositId, action }),
+        })
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) {
+          window.alert(j.error ?? "Crypto deposit action failed")
+          return
+        }
+        await refreshApproval()
+      } finally {
+        setCryptoDepositBusy(null)
+      }
+    },
+    [refreshApproval],
   )
 
   const executeWithdrawalAction = useCallback(
@@ -1343,6 +1382,126 @@ export function AdminOperationalAssets({
                 {deskError}
               </div>
             ) : null}
+
+            <Card className="mb-4 border-[#26A17B]/35 bg-card p-4">
+              <h4 className="text-sm font-semibold text-foreground">USDT TRC20 auto-deposits (TronLink)</h4>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Credits on-chain received USDT first, then 6.5% fee compensation when eligible.
+              </p>
+              <div className="mt-3 max-h-56 overflow-auto rounded-md border border-border">
+                <table className="w-full border-collapse text-left text-[10px]">
+                  <thead className="bg-muted/80">
+                    <tr>
+                      <th className="p-2">When</th>
+                      <th className="p-2">User</th>
+                      <th className="p-2">Decl</th>
+                      <th className="p-2">Recv</th>
+                      <th className="p-2">Total</th>
+                      <th className="p-2">Tx</th>
+                      <th className="p-2">Status</th>
+                      <th className="p-2">Conf</th>
+                      <th className="p-2">Act</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cryptoDeposits.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-3 text-muted-foreground">
+                          No crypto deposit requests yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      cryptoDeposits.slice(0, 40).map((row) => {
+                        const id = String(row.id ?? "")
+                        const st = String(row.status ?? "")
+                        const busy = cryptoDepositBusy?.startsWith(`${id}:`) ?? false
+                        const needsAction = ["failed", "manual_review", "verified", "awaiting_confirmations"].includes(st)
+                        return (
+                          <tr key={id} className="border-t border-border/50">
+                            <td className="p-2 whitespace-nowrap">{String(row.created_at ?? "").slice(0, 16)}</td>
+                            <td className="max-w-[100px] truncate p-2" title={String(row.user_email ?? "")}>
+                              {String(row.user_email ?? row.user_id ?? "—")}
+                            </td>
+                            <td className="p-2 tabular-nums">${Number(row.amount_usd ?? 0).toFixed(2)}</td>
+                            <td className="p-2 tabular-nums">
+                              ${Number(row.on_chain_amount_usdt ?? 0).toFixed(2)}
+                            </td>
+                            <td className="p-2 tabular-nums" title={`+${Number(row.compensation_usd ?? 0).toFixed(2)} comp`}>
+                              ${Number(row.total_credited_usd ?? 0).toFixed(2)}
+                            </td>
+                            <td className="max-w-[80px] truncate p-2 font-mono" title={String(row.tx_hash ?? "")}>
+                              {String(row.tx_hash ?? "").slice(0, 10)}…
+                            </td>
+                            <td className="p-2 uppercase">
+                              {st}
+                              {row.security_flag ? (
+                                <span className="ml-1 text-amber-600" title={String(row.security_flag)}>
+                                  ⚠
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="p-2 tabular-nums">
+                              {Number(row.confirmations ?? 0)}/{Number(row.min_confirmations ?? 19)}
+                            </td>
+                            <td className="p-2">
+                              {st === "credited" ? (
+                                <span className="text-muted-foreground">Done</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void executeCryptoDepositAction(id, "retry")}
+                                    className="rounded bg-slate-600 px-1.5 py-0.5 text-[9px] font-bold text-white disabled:opacity-50"
+                                  >
+                                    Retry
+                                  </button>
+                                  {needsAction ? (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void executeCryptoDepositAction(id, "approve")}
+                                      className="rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold text-white disabled:opacity-50"
+                                    >
+                                      Approve
+                                    </button>
+                                  ) : null}
+                                  {st !== "rejected" ? (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void executeCryptoDepositAction(id, "reject")}
+                                      className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold text-white disabled:opacity-50"
+                                    >
+                                      Reject
+                                    </button>
+                                  ) : null}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {cryptoSecurityEvents.length > 0 ? (
+                <details className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-amber-900 dark:text-amber-100">
+                    Security alerts ({cryptoSecurityEvents.length})
+                  </summary>
+                  <ul className="mt-2 max-h-32 space-y-1 overflow-auto text-[10px]">
+                    {cryptoSecurityEvents.slice(0, 20).map((ev) => (
+                      <li key={String(ev.id)} className="border-t border-border/40 pt-1">
+                        <span className="font-mono uppercase">{String(ev.event_kind ?? "")}</span> ·{" "}
+                        {String(ev.message ?? "").slice(0, 80)}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </Card>
 
             <div className="mb-4 inline-flex rounded-lg border border-border p-1">
               <button

@@ -1,5 +1,6 @@
 import { createHash } from "crypto"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { evaluateDeviceLoginGate, type DeviceLoginGate } from "@/lib/server/device-login-policy"
 
 function parseUserAgent(userAgent: string) {
   const ua = userAgent.toLowerCase()
@@ -20,13 +21,16 @@ export async function trackLoginSession(params: {
   bearerToken: string
   userAgent: string
   ipAddress: string | null
-}) {
+}): Promise<DeviceLoginGate> {
+  const admin = createAdminClient()
+  const gate = await evaluateDeviceLoginGate(admin, params.userId, params.bearerToken)
+  if (!gate.allowed) return gate
+
   const tokenHash = createHash("sha256").update(params.bearerToken).digest("hex")
   const { browser, device } = parseUserAgent(params.userAgent)
-  const admin = createAdminClient()
   const now = new Date().toISOString()
 
-  await admin.from("login_sessions").upsert(
+  const { error } = await admin.from("login_sessions").upsert(
     {
       user_id: params.userId,
       session_token_hash: tokenHash,
@@ -37,8 +41,10 @@ export async function trackLoginSession(params: {
       status: "active",
       last_seen_at: now,
     },
-    { onConflict: "user_id,session_token_hash" }
+    { onConflict: "user_id,session_token_hash" },
   )
+  if (error) throw new Error(error.message)
+  return gate
 }
 
 export function getRequestIpAddress(request: Request): string | null {

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react"
 import QRCode from "qrcode"
 import { Check, Copy, ExternalLink, Smartphone, Wallet } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient"
+
+const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
 type PaymentConfig = {
   globalCrypto: {
@@ -10,6 +13,8 @@ type PaymentConfig = {
     walletAddress: string
     binanceDeepLink: string
     warning: string
+    autoVerify?: boolean
+    minConfirmations?: number
   }
   ugandaAirtel: {
     merchantId: string
@@ -43,18 +48,71 @@ export function FundingPaymentPanel({
   t,
 }: Props) {
   const [config, setConfig] = useState<PaymentConfig | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [cryptoDeposits, setCryptoDeposits] = useState<Array<Record<string, unknown>>>([])
+  const [cryptoDepositsLoading, setCryptoDepositsLoading] = useState(false)
+
+  const loadCryptoDeposits = useCallback(async () => {
+    setCryptoDepositsLoading(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/crypto-deposit?refresh=1", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = (await res.json().catch(() => ({}))) as { deposits?: Array<Record<string, unknown>> }
+      if (res.ok) setCryptoDeposits(j.deposits ?? [])
+    } catch {
+      /* ignore */
+    } finally {
+      setCryptoDepositsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeSource !== "crypto") return
+    void loadCryptoDeposits()
+    const id = window.setInterval(() => void loadCryptoDeposits(), 25_000)
+    return () => window.clearInterval(id)
+  }, [activeSource, loadCryptoDeposits])
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch("/api/user/funding-payment-config", { cache: "no-store" })
-        const j = (await res.json().catch(() => ({}))) as PaymentConfig
-        if (!cancelled && j.globalCrypto) setConfig(j)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          if (!cancelled) setConfigError("Please log in again to load payment details.")
+          return
+        }
+        const res = await fetch("/api/user/funding-payment-config", {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const j = (await res.json().catch(() => ({}))) as PaymentConfig & { error?: string }
+        if (!cancelled) {
+          if (!res.ok || !j.globalCrypto) {
+            setConfig(null)
+            setConfigError(j.error ?? "Could not load payment config.")
+            return
+          }
+          setConfigError(null)
+          setConfig(j)
+        }
       } catch {
-        if (!cancelled) setConfig(null)
+        if (!cancelled) {
+          setConfig(null)
+          setConfigError("Network error loading payment config.")
+        }
       }
     })()
     return () => {
@@ -62,7 +120,7 @@ export function FundingPaymentPanel({
     }
   }, [])
 
-  const wallet = config?.globalCrypto.walletAddress ?? ""
+  const wallet = config?.globalCrypto.walletAddress?.trim() || FALLBACK_TRC20_ADDRESS
   useEffect(() => {
     if (!wallet) {
       setQrDataUrl(null)
@@ -90,36 +148,37 @@ export function FundingPaymentPanel({
 
   const cardBase = "rounded-xl border-2 p-3 text-left transition-all sm:p-4 "
 
-  const submitFields = (
-    <div className="space-y-2 border-t border-border/60 pt-3">
-      <div>
-        <label className="mb-1 block text-[10px] font-medium text-foreground">{t("funding.txRefLabel")}</label>
-        <input
-          type="text"
-          value={fundTxReference}
-          onChange={(e) => onTxReferenceChange(e.target.value)}
-          placeholder={t("funding.payment.txRefPlaceholderCrypto")}
-          className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
+  const txHashField = (
+    <div>
+      <label className="mb-1 block text-[10px] font-medium text-foreground">{t("funding.txRefLabel")}</label>
+      <input
+        type="text"
+        value={fundTxReference}
+        onChange={(e) => onTxReferenceChange(e.target.value)}
+        placeholder={t("funding.payment.txRefPlaceholderCrypto")}
+        className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
+      />
+    </div>
+  )
+
+  const proofField = (
+    <div>
+      <label className="mb-1 block text-[10px] font-medium text-foreground">{t("funding.payment.proofLabel")}</label>
+      <p className="mb-1.5 text-[10px] text-muted-foreground">{t("funding.payment.proofHint")}</p>
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => onProofFile(e.target.files?.[0] ?? null)}
+        className="w-full text-[11px] file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
+      />
+      {paymentProofPreview ? (
+        <img
+          src={paymentProofPreview}
+          alt=""
+          className="mt-2 max-h-32 rounded-lg border border-border object-contain"
         />
-      </div>
-      <div>
-        <label className="mb-1 block text-[10px] font-medium text-foreground">{t("funding.payment.proofLabel")}</label>
-        <p className="mb-1.5 text-[10px] text-muted-foreground">{t("funding.payment.proofHint")}</p>
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) => onProofFile(e.target.files?.[0] ?? null)}
-          className="w-full text-[11px] file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
-        />
-        {paymentProofPreview ? (
-          <img
-            src={paymentProofPreview}
-            alt=""
-            className="mt-2 max-h-32 rounded-lg border border-border object-contain"
-          />
-        ) : null}
-      </div>
+      ) : null}
     </div>
   )
 
@@ -180,18 +239,31 @@ export function FundingPaymentPanel({
         <p className="text-[11px] text-muted-foreground">{t("funding.payment.pickRail")}</p>
       )}
 
-      {activeSource === "crypto" && config ? (
+      {activeSource === "crypto" ? (
         <div className="space-y-3 rounded-xl border border-[#26A17B]/40 bg-gradient-to-b from-[#26A17B]/8 to-muted/40 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-foreground">{t("funding.payment.cryptoPanelTitle")}</p>
             <span className="rounded-full bg-[#26A17B]/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1a7a5c] dark:text-emerald-200">
-              {config.globalCrypto.network}
+              {config?.globalCrypto.network ?? "USDT TRC20"}
             </span>
           </div>
+          {configError ? (
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+              {configError}
+            </p>
+          ) : null}
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-[11px] font-medium text-amber-950 dark:text-amber-100">
-            {config.globalCrypto.warning}
+            {config?.globalCrypto.warning ?? "Send only USDT via TRC20 network."}
           </p>
-          <p className="text-[10px] text-muted-foreground">{t("funding.payment.adminDirectNote")}</p>
+          <p className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-2 text-[11px] text-emerald-950 dark:text-emerald-100">
+            {t("funding.payment.cryptoAutoVerifyNote").replace(
+              "{{min}}",
+              String(config?.globalCrypto.minConfirmations ?? 19),
+            )}
+          </p>
+          <p className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-2 text-[11px] text-sky-950 dark:text-sky-100">
+            {t("funding.payment.cryptoCompensationNotice")}
+          </p>
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
             {qrDataUrl ? (
               <img
@@ -214,19 +286,65 @@ export function FundingPaymentPanel({
                   {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   {copied ? t("funding.payment.copied") : t("funding.payment.copyAddress")}
                 </button>
-                <a
-                  href={config.globalCrypto.binanceDeepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#F0B90B] bg-[#F0B90B]/15 px-3 py-2 text-xs font-semibold text-foreground"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {t("funding.payment.openBinance")}
-                </a>
+                {config?.globalCrypto.binanceDeepLink ? (
+                  <a
+                    href={config.globalCrypto.binanceDeepLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#F0B90B] bg-[#F0B90B]/15 px-3 py-2 text-xs font-semibold text-foreground"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {t("funding.payment.openBinance")}
+                  </a>
+                ) : null}
               </div>
             </div>
           </div>
-          {submitFields}
+          {cryptoDeposits.length > 0 ? (
+            <div className="rounded-lg border border-border/80 bg-background/60 p-2.5">
+              <p className="mb-2 text-[10px] font-semibold text-foreground">{t("funding.crypto.statusTitle")}</p>
+              <ul className="max-h-36 space-y-2 overflow-y-auto text-[10px]">
+                {cryptoDeposits.slice(0, 5).map((d) => {
+                  const st = String(d.status ?? "")
+                  const declared = Number(d.amount_usd ?? 0)
+                  const received = Number(d.on_chain_amount_usdt ?? 0)
+                  const total = Number(d.total_credited_usd ?? 0)
+                  const bonus = received > 0 ? Math.round(received * 0.065 * 100) / 100 : 0
+                  const expectedTotal = total > 0 ? total : Math.round((received + bonus) * 100) / 100
+                  const statusLabel = [
+                    "pending",
+                    "verifying",
+                    "awaiting_confirmations",
+                    "verified",
+                    "credited",
+                    "failed",
+                    "manual_review",
+                    "rejected",
+                  ].includes(st)
+                    ? t(`funding.crypto.status.${st}`)
+                    : st
+                  return (
+                    <li key={String(d.id)} className="rounded-md border border-border/60 bg-muted/30 p-2">
+                      <p className="font-medium text-foreground">{statusLabel}</p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        Declared ${declared.toFixed(2)} · Received{" "}
+                        {received > 0 ? `$${received.toFixed(2)}` : "—"}
+                        {st === "credited"
+                          ? ` · Credited $${total.toFixed(2)}`
+                          : received > 0
+                            ? ` · Expected ~$${expectedTotal.toFixed(2)}`
+                            : ""}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : null}
+          <div className="space-y-2 border-t border-border/60 pt-3">
+            <p className="text-[10px] font-semibold text-foreground">{t("funding.payment.txHashRequiredHint")}</p>
+            {txHashField}
+          </div>
         </div>
       ) : null}
 
@@ -250,7 +368,10 @@ export function FundingPaymentPanel({
             </li>
             <li>{t("funding.payment.airtelStep4")}</li>
           </ol>
-          {submitFields}
+          <div className="space-y-2 border-t border-border/60 pt-3">
+            {txHashField}
+            {proofField}
+          </div>
         </div>
       ) : null}
     </div>

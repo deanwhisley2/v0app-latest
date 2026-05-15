@@ -3,8 +3,9 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import {
   ADMIN_USDT_BINANCE_DEEP_LINK,
   ADMIN_USDT_TRC20_NETWORK,
-  ADMIN_USDT_TRC20_WALLET,
+  CRYPTO_MIN_CONFIRMATIONS,
   MAX_RETAILERS_ON_PAYMENT_PAGE,
+  NEXUS_TRC20_RECEIVE_ADDRESS,
   UGANDA_AIRTEL_MERCHANT_ID,
   UGANDA_AIRTEL_MERCHANT_NAME,
   UGANDA_AIRTEL_USSD_PREFIX,
@@ -19,10 +20,12 @@ export async function GET(request: Request) {
     return NextResponse.json({
       globalCrypto: {
         network: ADMIN_USDT_TRC20_NETWORK,
-        walletAddress: ADMIN_USDT_TRC20_WALLET,
+        walletAddress: NEXUS_TRC20_RECEIVE_ADDRESS,
         binanceDeepLink: ADMIN_USDT_BINANCE_DEEP_LINK,
         warning: "Send only USDT via TRC20 network.",
-        routedTo: "level_5_admin",
+        autoVerify: true,
+        minConfirmations: CRYPTO_MIN_CONFIRMATIONS,
+        routedTo: "tronlink_automated",
       },
       ugandaAirtel: {
         merchantId: UGANDA_AIRTEL_MERCHANT_ID,

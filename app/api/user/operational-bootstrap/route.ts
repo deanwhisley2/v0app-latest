@@ -17,21 +17,26 @@ export async function GET(request: Request) {
     const meta = user.user_metadata as Record<string, unknown> | undefined
     const jwtExchanges = meta?.nexus_exchanges
     const bearer = getBearerTokenFromRequest(request)
-    if (bearer) {
-      await trackLoginSession({
+
+    const [payload, deviceLogin] = await Promise.all([
+      buildOperationalBootstrapV1({
         userId: user.id,
-        bearerToken: bearer,
-        userAgent: request.headers.get("user-agent") ?? "",
-        ipAddress: getRequestIpAddress(request),
-      })
-    }
+        jwtMetadataExchanges: jwtExchanges,
+      }),
+      bearer
+        ? trackLoginSession({
+            userId: user.id,
+            bearerToken: bearer,
+            userAgent: request.headers.get("user-agent") ?? "",
+            ipAddress: getRequestIpAddress(request),
+          })
+        : Promise.resolve(null),
+    ])
 
-    const payload = await buildOperationalBootstrapV1({
-      userId: user.id,
-      jwtMetadataExchanges: jwtExchanges,
+    return NextResponse.json({
+      ...payload,
+      deviceLogin,
     })
-
-    return NextResponse.json(payload)
   } catch (e) {
     console.error("[operational-bootstrap] GET:", e)
     const msg = e instanceof Error ? e.message : "Internal error"

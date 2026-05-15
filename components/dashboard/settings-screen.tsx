@@ -58,6 +58,8 @@ type SessionItem = {
   device_name: string
   browser_name: string
   status: string
+  device_trust?: string
+  ip_address?: string | null
   first_seen_at: string
   last_seen_at: string
   revoked_at?: string | null
@@ -386,7 +388,7 @@ export function SettingsScreen({
     }
   }
 
-  async function revokeSession(sessionId: string) {
+  async function sessionAction(sessionId: string, action: "trust" | "block") {
     setSessionsMessage(null)
     try {
       const {
@@ -395,16 +397,27 @@ export function SettingsScreen({
       const token = session?.access_token
       if (!token) throw new Error("Session expired. Please sign in again.")
       const res = await fetch("/api/user/sessions", {
-        method: "DELETE",
+        method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId, action }),
       })
       const out = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(out.error || "Could not revoke session")
-      setSessionItems((prev) => prev.map((s) => (s.id === sessionId ? { ...s, status: "revoked", is_online: false } : s)))
-      setSessionsMessage("Session revoked.")
+      if (!res.ok) throw new Error(out.error || "Could not update session")
+      setSessionItems((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                device_trust: action === "trust" ? "trusted" : "blocked",
+                status: action === "block" ? "revoked" : s.status,
+                is_online: action === "block" ? false : s.is_online,
+              }
+            : s,
+        ),
+      )
+      setSessionsMessage(action === "trust" ? "Device marked as trusted." : "Device blocked and session revoked.")
     } catch (e) {
-      setSessionsMessage(e instanceof Error ? e.message : "Could not revoke session")
+      setSessionsMessage(e instanceof Error ? e.message : "Could not update session")
     }
   }
 
@@ -683,26 +696,60 @@ export function SettingsScreen({
           </div>
         </Card>
         <Card className="border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Device Management</h3>
-          <div className="space-y-2">
-            {sessionItems.map((s) => (
-              <div key={s.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium">{s.device_name} - {s.browser_name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {s.is_online ? "Online" : "Offline"} | Last active {new Date(s.last_seen_at).toLocaleString()}
-                    {s.is_current ? " | Current device" : ""}
-                  </p>
-                </div>
-                {!s.is_current && s.status === "active" ? (
-                  <Button size="sm" variant="outline" onClick={() => void revokeSession(s.id)}>Revoke</Button>
-                ) : null}
-              </div>
-            ))}
+          <h3 className="mb-2 text-lg font-semibold">{t("security.devices.title")}</h3>
+          <p className="mb-3 text-xs text-muted-foreground">{t("security.devices.hint")}</p>
+          <div className="max-h-[min(320px,45vh)] overflow-y-auto rounded-lg border border-border/80 bg-muted/20 p-2">
+            <div className="space-y-2 pr-1">
+              {sessionItems.length === 0 ? (
+                <p className="px-2 py-4 text-center text-xs text-muted-foreground">No devices recorded yet.</p>
+              ) : (
+                sessionItems.map((s) => (
+                  <div key={s.id} className="rounded-lg bg-background/80 px-3 py-2.5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {s.device_name} · {s.browser_name}
+                          {s.is_current ? (
+                            <span className="ml-2 text-[10px] font-semibold text-primary">(this device)</span>
+                          ) : null}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {s.is_online ? "Online" : "Offline"} · Last active{" "}
+                          {new Date(s.last_seen_at).toLocaleString()}
+                        </p>
+                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                          {t("security.devices.ip")}: {s.ip_address?.trim() || "—"}
+                        </p>
+                        {s.device_trust === "trusted" ? (
+                          <p className="mt-1 text-[10px] font-medium text-success">{t("security.devices.trusted")}</p>
+                        ) : s.device_trust === "blocked" || s.status === "revoked" ? (
+                          <p className="mt-1 text-[10px] font-medium text-destructive">{t("security.devices.blocked")}</p>
+                        ) : null}
+                      </div>
+                      {!s.is_current && s.status === "active" ? (
+                        <div className="flex shrink-0 flex-wrap gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => void sessionAction(s.id, "trust")}>
+                            {t("security.devices.trust")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                            onClick={() => void sessionAction(s.id, "block")}
+                          >
+                            {t("security.devices.block")}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
           {sessionsMessage ? <p className="mt-2 text-xs text-muted-foreground">{sessionsMessage}</p> : null}
         </Card>
-        <Card className="border-border bg-card p-6">
+                <Card className="border-border bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold">Change Password</h3>
           <p className="mb-3 text-xs text-muted-foreground">
             Enter your current password first. If unknown, use the face recovery fallback path from login.

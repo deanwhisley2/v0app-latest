@@ -32,7 +32,14 @@ const en: Record<string, string> = {
   "header.archivedSubtitle": "Things you moved out of your inbox.",
   "header.archivedEmpty": "Nothing saved yet. Open Notifications, open an item, then tap Archive.",
 
-  "notifications.center.subtitle": "Updates about your money, trades, and account — in plain language.",
+  "notifications.center.subtitle": "Updates about your money and account",
+  "security.devices.title": "Device management",
+  "security.devices.hint": "Trust devices you recognize. Block unknown logins. New devices may require email verification and a 6-hour cooldown.",
+  "security.devices.ip": "IP",
+  "security.devices.trust": "Trust",
+  "security.devices.block": "Block",
+  "security.devices.trusted": "Trusted",
+  "security.devices.blocked": "Blocked",
   "notifications.center.markAllRead": "Mark all as read",
   "notifications.center.markRead": "Mark as read",
   "notifications.center.archive": "Save for later",
@@ -40,8 +47,22 @@ const en: Record<string, string> = {
   "notifications.center.unarchive": "Put back in inbox",
   "notifications.center.openLinked": "Open related screen",
   "notifications.center.empty": "You are all caught up. We will post here when something matters.",
+  "notifications.center.depositsTitle": "USDT deposits",
+  "notifications.center.depositsEmptyInbox": "Your deposit updates appear above.",
+  "notifications.center.depositStatus.pending": "Checking your payment",
+  "notifications.center.depositStatus.verifying": "Checking your payment",
+  "notifications.center.depositStatus.awaiting_confirmations": "Verifying your deposit",
+  "notifications.center.depositStatus.verified": "Confirmed — adding to your balance",
+  "notifications.center.depositCreditingDelay":
+    "Your USDT is confirmed. If your balance has not updated in a few minutes, contact support.",
+  "notifications.center.depositStatus.manual_review": "We're taking a quick look",
+  "notifications.center.depositStatus.failed": "Couldn't complete",
+  "notifications.center.depositStatus.default": "In progress",
+  "notifications.center.depositVerifying": "Binance is verifying your transaction — it will be credited shortly.",
+  "notifications.center.depositAmountComing": "About ${{amount}} coming to your balance",
+  "notifications.center.depositFailed": "This deposit didn't go through. Try again or contact support.",
   "notifications.center.detailBalancePlain":
-    "This is just money moving between your balances — the title shows the amounts. You can move pocket money to your main balance on the dashboard whenever you want. If this looks wrong, open Settings and contact support.",
+    "Money moved between your balances. If something looks wrong, contact support in Settings.",
   "notifications.trade.fixedFinishedTitle": "Your fixed plan finished",
   "notifications.trade.fixedFinishedMessage":
     "{{principal}} is back on your main balance. {{pocket}} went to your pocket (after small fees).",
@@ -66,7 +87,7 @@ const en: Record<string, string> = {
   "notifications.container.maturesToday": "Finishes today.",
   "notifications.container.rampingHint": "Earnings are still building — the bar above keeps up as you go.",
   "notifications.container.earlyExitConfirm":
-    "Leave this plan early? There is a 10% agreement charge plus insurance from your protected amount. Money you already earned still goes to your main balance in full.",
+    "Leave this plan early? A 6‑month plan earns gradually — after a few hours only a small amount has built up. Early exit adds a 10% charge plus insurance from your protected amount. Whatever you earned so far still goes to your main balance.",
 
   "settings.back": "Back to settings",
   "settings.languageTitle": "Language",

@@ -162,14 +162,14 @@ export function Header({
             </div>
           </div>
 
-          {/* Section switching: bottom nav on mobile/tablet; avoid duplicate tabs here */}
-          <nav className="hidden">
+          {/* Mobile: bottom nav. Desktop (md+): section tabs in header — bottom bar is hidden on wide screens. */}
+          <nav className="hidden md:flex md:flex-1 md:items-center md:justify-center md:gap-1">
             {mainTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => onTabChange(tab.id)}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:px-4 ${
                   resolvedHeaderActive === tab.id
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -197,11 +197,17 @@ export function Header({
             </button>
 
             {/* Notifications */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="relative"
               onClick={() => {
+                setShowProfileMenu(false)
+                if (window.matchMedia("(min-width: 768px)").matches) {
+                  onTabChange(operationalWorkspace ? "desk" : "notifications")
+                  setShowArchivedNotifications(false)
+                  return
+                }
                 setShowArchivedNotifications((v) => !v)
               }}
             >
