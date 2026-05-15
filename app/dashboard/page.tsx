@@ -1759,7 +1759,7 @@ export default function DashboardPage() {
   }, [showFundModal, l1FundSource])
 
   useEffect(() => {
-    if (showFundModal !== "withdraw" || isGuestSession || !user) {
+    if (isGuestSession || !user || operationalWorkspace) {
       setWithdrawalEligibility(null)
       return
     }
@@ -1800,7 +1800,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [showFundModal, isGuestSession, user])
+  }, [isGuestSession, user, operationalWorkspace])
 
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseFloat(fundAmount)
@@ -2211,24 +2211,6 @@ export default function DashboardPage() {
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2 shrink-0">
-                  {!operationalWorkspace && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("wallstreet")}
-                        className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-                      >
-                        Wallstreet
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("container")}
-                        className="flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80"
-                      >
-                        Container
-                      </button>
-                    </>
-                  )}
                   <button
                     onClick={() => {
                       setShowFundModal("add")
@@ -2307,18 +2289,6 @@ export default function DashboardPage() {
                 >
                   {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
                 </button>
-                <div className="mt-2 max-h-44 space-y-2 overflow-y-auto rounded bg-background/50 p-2">
-                  {(containerLiquidHistoryEvents.length ? containerLiquidHistoryEvents : []).slice(0, 12).map((event) => (
-                    <div key={event.id} className="border-b border-border/40 pb-2 text-xs last:border-0 last:pb-0">
-                      <p className="font-medium text-foreground">
-                        {event.summary?.trim() || t("funding.balance.activityFallback")}
-                      </p>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">
-                        {String(event.created_at ?? "").slice(0, 16)} · {formatUserMoney(Number(event.net_amount ?? 0))}
-                      </p>
-                    </div>
-                  ))}
-                </div>
               </div>
               <div className="rounded-xl border border-border bg-background/60 p-3">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.exchangeTitle")}</p>
@@ -2337,6 +2307,27 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
+            {withdrawalEligibility ? (
+              <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px] leading-snug text-muted-foreground">
+                <p className="font-medium text-foreground">{t("withdrawal.modal.ruleOnce")}</p>
+                <p className="mt-1">
+                  {t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))}
+                </p>
+                <p className="mt-0.5">
+                  {t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}
+                </p>
+                {withdrawalEligibility.cooldownActive ? (
+                  <p className="mt-1 text-foreground">
+                    {t("withdrawal.modal.waitHours").replace(
+                      "{{hours}}",
+                      String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
+                    )}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-success">{t("withdrawal.modal.readyNow")}</p>
+                )}
+              </div>
+            ) : null}
             <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">{t("deposit.timingLabel")}</span> {PROCESSING_COPY.deposits}
@@ -3186,6 +3177,16 @@ export default function DashboardPage() {
                 retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
                 retailerLiquidityOpsBlocked={retailerOpsBlocked}
                 containerLiquidEarningsUsd={containerWithdrawableEarnings}
+                withdrawalPolicyHint={
+                  withdrawalEligibility
+                    ? {
+                        minUsd: withdrawalEligibility.minUsd,
+                        maxUsd: withdrawalEligibility.maxUsd,
+                        cooldownActive: withdrawalEligibility.cooldownActive,
+                        msRemaining: withdrawalEligibility.msRemaining,
+                      }
+                    : null
+                }
               />
             </main>
           </div>

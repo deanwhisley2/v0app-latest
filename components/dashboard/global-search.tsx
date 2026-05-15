@@ -62,6 +62,15 @@ const helpItems: Omit<SearchResult, "id">[] = [
   { title: "Contact Support", description: "Get help from our team", category: "help", icon: <HelpCircle className="h-4 w-4" /> },
 ]
 
+
+const appNavItems: Omit<SearchResult, "id">[] = [
+  { title: "Notifications", description: "Funding, withdrawals, and alerts", category: "wallet", icon: <Bell className="h-4 w-4" />, path: "notifications" },
+  { title: "Deposit funds", description: "Add money to your account", category: "wallet", icon: <Wallet className="h-4 w-4" />, path: "settings" },
+  { title: "Withdraw", description: "Cash out to your pocket", category: "wallet", icon: <ArrowUpDown className="h-4 w-4" />, path: "settings" },
+  { title: "Container desk", description: "Copy and fixed trades", category: "action", icon: <TrendingUp className="h-4 w-4" />, path: "container" },
+  { title: "Account balances", description: "Main, container, and exchange", category: "wallet", icon: <Receipt className="h-4 w-4" />, path: "settings" },
+]
+
 const quickActions: Omit<SearchResult, "id">[] = [
   { title: "Buy Bitcoin", description: "Quick buy BTC", category: "action", icon: <Sparkles className="h-4 w-4 text-warning" />, path: "trade" },
   { title: "Sell Ethereum", description: "Quick sell ETH", category: "action", icon: <Sparkles className="h-4 w-4 text-warning" />, path: "trade" },
@@ -142,6 +151,12 @@ export function GlobalSearch({ isOpen, onClose, onNavigate, coins }: GlobalSearc
     settingsItems.forEach((item, i) => {
       if (item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)) {
         searchResults.push({ ...item, id: `settings-${i}` })
+      }
+    })
+
+    appNavItems.forEach((item, i) => {
+      if (item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)) {
+        searchResults.push({ ...item, id: `nav-${i}` })
       }
     })
 

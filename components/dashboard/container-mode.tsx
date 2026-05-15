@@ -23,6 +23,7 @@ import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees } from "@/lib/nexus
 import { localFiatUnitsToUsd } from "@/lib/currency-display"
 import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
+import { computePlatformLiveStats } from "@/lib/platform-live-stats"
 import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
@@ -275,6 +276,13 @@ interface ContainerModeProps {
   retailerLiquidityOpsBlocked?: boolean
   /** DB-backed container liquid (withdrawable) — unified earnings banner. */
   containerLiquidEarningsUsd?: number
+  /** Pocket withdrawal policy hints (dashboard API). */
+  withdrawalPolicyHint?: {
+    minUsd: number
+    maxUsd: number
+    cooldownActive: boolean
+    msRemaining: number
+  } | null
 }
 
 export function ContainerMode({
@@ -282,6 +290,7 @@ export function ContainerMode({
   retailerCreditSeller = false,
   retailerLiquidityOpsBlocked = false,
   containerLiquidEarningsUsd = 0,
+  withdrawalPolicyHint = null,
 }: ContainerModeProps) {
   const { formatUserMoney, currency, t } = useUserPreferences()
   const { addNotification } = useNexusNotifications()
@@ -413,17 +422,12 @@ export function ContainerMode({
     }
   }, [])
 
-  /** Illustrative counts only; `totalEarned` is USD-normalized aggregate for display via formatUserMoney (not raw points). */
-  const liveStats = useMemo(
-    () => ({
-      totalUsers: 12_400,
-      todayJoins: 42,
-      activeFixTrades: 2_860,
-      /** USD-equivalent demo aggregate — avoids treating millions as fiat-local input. */
-      totalEarnedUsd: 118_000,
-    }),
-    []
-  )
+  const [liveStatsTick, setLiveStatsTick] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setLiveStatsTick((n) => n + 1), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+  const liveStats = useMemo(() => computePlatformLiveStats(), [liveStatsTick])
 
   const fixProjectionPreview = useMemo(() => {
     if (activeTab !== "fix" || !selectedTrader) return null
@@ -1590,6 +1594,27 @@ export function ContainerMode({
                 <p className="text-xs text-muted-foreground">{activeCopyTrades.length} copy, {activeFixTrades.length} fixed</p>
               </div>
             </div>
+            {withdrawalPolicyHint ? (
+              <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px] leading-snug text-muted-foreground">
+                <p className="font-medium text-foreground">{t("withdrawal.modal.ruleOnce")}</p>
+                <p className="mt-1">
+                  {t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalPolicyHint.minUsd))}
+                </p>
+                <p className="mt-0.5">
+                  {t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalPolicyHint.maxUsd))}
+                </p>
+                {withdrawalPolicyHint.cooldownActive ? (
+                  <p className="mt-1 text-foreground">
+                    {t("withdrawal.modal.waitHours").replace(
+                      "{{hours}}",
+                      String(Math.max(1, Math.ceil(withdrawalPolicyHint.msRemaining / 3_600_000))),
+                    )}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-success">{t("withdrawal.modal.readyNow")}</p>
+                )}
+              </div>
+            ) : null}
           </Card>
 
           {/* Active Copy Trades */}
@@ -1715,10 +1740,10 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.traderId}
-                      className="overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4 pb-4"
+                      className="min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
+                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div 
                             className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
                             style={{ backgroundColor: trader.riskLevel === "Low" ? "#22C55E" : trader.riskLevel === "Medium" ? "#EAB308" : "#EF4444" }}

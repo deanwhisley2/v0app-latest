@@ -15,14 +15,16 @@ export type NexusTierDefinition = {
 
 const L1: NexusTierDefinition = {
   key: "l1_customer",
-  badge: "L1 · Customer",
-  title: "Level 1 — Customer",
-  summary: "Standard trading, funding via crypto or local mobile money through qualified retailers.",
+  badge: "L1 · Member",
+  title: "Member",
+  summary:
+    "Your starting tier with full access to trading, funding, and container plans — built for everyday investors who want a clear, guided experience.",
   capabilities: [
-    "Trade, markets, wallet portfolio",
-    "Add funds: company crypto address or local mobile money → retailer pairing",
-    "Withdrawals: request from Nexus Main; pending until liquidity review",
-    "Wall Street: copy / fixed “container” experiences when level ≤ 2",
+    "Trade and follow markets from your dashboard",
+    "Add money with crypto or trusted local mobile-money desks",
+    "Withdraw from your main balance when you are ready (standard review applies)",
+    "Join container plans and copy sessions with traders you choose",
+    "Grow at your pace — unlock more desk features as you advance",
   ],
 }
 

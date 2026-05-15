@@ -148,6 +148,25 @@ export function SettingsScreen({
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+  const [antiPhishingCode, setAntiPhishingCode] = useState("")
+  const [antiPhishingSaved, setAntiPhishingSaved] = useState<string | null>(null)
+  const [antiPhishingMessage, setAntiPhishingMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return
+      const code =
+        typeof data.user?.user_metadata?.anti_phishing_code === "string"
+          ? data.user.user_metadata.anti_phishing_code.trim()
+          : ""
+      setAntiPhishingSaved(code || null)
+      setAntiPhishingCode(code)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -291,6 +310,47 @@ export function SettingsScreen({
       setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")
     } finally {
       setSelfieLoading(false)
+    }
+  }
+
+  async function removeWhitelistEntry(id: string) {
+    setWhitelistMessage(null)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Session expired. Please sign in again.")
+      const res = await fetch("/api/user/withdraw-whitelist", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(out.error || "Could not remove entry")
+      setWhitelistItems((prev) => prev.filter((w) => w.id !== id))
+      setWhitelistMessage("Entry removed.")
+    } catch (e) {
+      setWhitelistMessage(e instanceof Error ? e.message : "Could not remove entry")
+    }
+  }
+
+  async function saveAntiPhishingCode() {
+    setAntiPhishingMessage(null)
+    const trimmed = antiPhishingCode.trim()
+    if (trimmed.length < 4 || trimmed.length > 32) {
+      setAntiPhishingMessage("Use 4–32 characters (letters and numbers).")
+      return
+    }
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { anti_phishing_code: trimmed },
+      })
+      if (error) throw error
+      setAntiPhishingSaved(trimmed)
+      setAntiPhishingMessage("Anti-phishing code saved. It will appear in emails from us.")
+    } catch (e) {
+      setAntiPhishingMessage(e instanceof Error ? e.message : "Could not save code")
     }
   }
 
@@ -452,14 +512,14 @@ export function SettingsScreen({
           <Card className="border-primary/30 bg-primary/5 p-4">
             <h3 className="text-sm font-semibold text-foreground">{tier.title}</h3>
             <p className="mt-1 text-xs text-muted-foreground">{tier.summary}</p>
-            <ul className="mt-3 list-inside list-disc space-y-1 text-[11px] text-muted-foreground">
+            <ul className="mt-3 space-y-2 text-[11px] leading-snug text-muted-foreground">
               {tier.capabilities.map((line, idx) => (
-                <li key={`${tier.key}-${idx}`}>{line}</li>
+                <li key={`${tier.key}-${idx}`} className="flex gap-2">
+                  <span className="text-primary">•</span>
+                  <span>{line}</span>
+                </li>
               ))}
             </ul>
-            <p className="mt-2 text-[10px] text-muted-foreground">
-              Tier is set from your profile in the database; contact support to change it.
-            </p>
           </Card>
         )}
         {!selfieEnrolled && (
@@ -539,80 +599,60 @@ export function SettingsScreen({
 
   // Security View
   if (currentView === "security") {
-    const securityItems = [
-      { label: "Two-Factor Authentication", status: "Enabled", enabled: true },
-      { label: "Biometric Login", status: "Disabled", enabled: false },
-      { label: "Anti-Phishing Code", status: "Set", enabled: true },
-      { label: "Withdrawal Whitelist", status: `${whitelistItems.length} active entries`, enabled: true },
-      { label: "Device Management", status: `${sessionItems.length} sessions`, enabled: true },
-      { label: "Login Password", status: "Change", enabled: true },
-    ]
-
     return (
       <div className="space-y-4">
         {renderBackButton()}
-        <Card className={`p-4 ${selfieEnrolled ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/10"}`}>
-          <h3 className="font-semibold">
-            {selfieEnrolled ? "Selfie security is active" : "Selfie required for fund security"}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Selfie verification protects account recovery and reduces impersonation risk.
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Keep this enabled during setup and account lifetime so no one else can use selfie recovery for your profile.
-          </p>
-          {selfieUrl ? (
-            <img src={selfieUrl} alt="Registered selfie" className="mt-3 h-24 w-24 rounded-xl border border-border object-cover" />
-          ) : selfieEnrolled ? (
-            <div
-              className="mt-3 flex h-24 w-24 items-center justify-center rounded-xl border border-border bg-muted"
-              title="Selfie stored securely (preview not loaded for performance)"
-            >
-              <Check className="h-10 w-10 text-success" aria-hidden />
+        <Card className={`p-3 sm:p-4 ${selfieEnrolled ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/10"}`}>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">
+                {selfieEnrolled ? "Recovery selfie on file" : "Add a recovery selfie"}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">Protects face-based account recovery.</p>
             </div>
-          ) : null}
-          <div className="mt-3">
-            <Input
-              type="file"
-              accept="image/*"
-              capture="user"
-              disabled={selfieLoading}
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                void uploadSelfie(file)
-              }}
-            />
-            {selfieError ? <p className="mt-2 text-xs text-destructive">{selfieError}</p> : null}
-            {selfieCompareInfo ? (
-              <p className="mt-2 text-xs text-success">{selfieCompareInfo}</p>
-            ) : null}
-            {selfieLoading ? <p className="mt-2 text-xs text-muted-foreground">Uploading selfie...</p> : null}
+            {selfieEnrolled ? <Check className="h-5 w-5 shrink-0 text-success" aria-hidden /> : null}
           </div>
+          <Input
+            className="mt-3 text-xs"
+            type="file"
+            accept="image/*"
+            capture="user"
+            disabled={selfieLoading}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              void uploadSelfie(file)
+            }}
+          />
+          {selfieError ? <p className="mt-2 text-xs text-destructive">{selfieError}</p> : null}
+          {selfieCompareInfo ? <p className="mt-2 text-xs text-success">{selfieCompareInfo}</p> : null}
+          {selfieLoading ? <p className="mt-2 text-xs text-muted-foreground">Uploading…</p> : null}
         </Card>
-        <Card className="border-border bg-card p-6">
-          <h3 className="mb-6 text-lg font-semibold">Security Settings</h3>
-          <div className="space-y-3">
-            {securityItems.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between rounded-lg bg-muted/30 px-4 py-4"
-              >
-                <div>
-                  <p className="font-medium">{item.label}</p>
-                  <p className={`text-sm ${item.enabled ? "text-success" : "text-muted-foreground"}`}>
-                    {item.status}
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </div>
-            ))}
+        <Card className="border-border bg-card p-4 sm:p-6">
+          <h3 className="mb-3 text-lg font-semibold">Anti-Phishing Code</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            A personal phrase you expect in genuine Nexus PRO emails.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={antiPhishingCode}
+              onChange={(e) => setAntiPhishingCode(e.target.value)}
+              placeholder="e.g. BlueRiver42"
+              maxLength={32}
+            />
+            <Button size="sm" className="shrink-0" onClick={() => void saveAntiPhishingCode()}>
+              {antiPhishingSaved ? "Update" : "Save"}
+            </Button>
           </div>
+          {antiPhishingSaved ? (
+            <p className="mt-2 text-xs text-success">Active: {antiPhishingSaved}</p>
+          ) : null}
+          {antiPhishingMessage ? <p className="mt-2 text-xs text-muted-foreground">{antiPhishingMessage}</p> : null}
         </Card>
         <Card className="border-border bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold">Withdrawal Whitelist</h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            Add-only user flow: you can add up to 3 entries. Removal is admin-only for security.
+            Up to 3 payout destinations. Remove entries you no longer use.
           </p>
           <div className="mb-4 grid gap-2 md:grid-cols-3">
             <select
@@ -632,9 +672,12 @@ export function SettingsScreen({
           {whitelistMessage ? <p className="mt-2 text-xs text-muted-foreground">{whitelistMessage}</p> : null}
           <div className="mt-4 space-y-2">
             {whitelistItems.map((w) => (
-              <div key={w.id} className="rounded-lg bg-muted/30 px-3 py-2 text-sm">
-                <p className="font-medium">{w.holder_name} - {w.kind === "mobile_number" ? "Mobile" : "Crypto"}</p>
-                <p className="font-mono text-xs text-muted-foreground">{w.value}</p>
+              <div key={w.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium">{w.holder_name} - {w.kind === "mobile_number" ? "Mobile" : "Crypto"}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">{w.value}</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => void removeWhitelistEntry(w.id)}>Remove</Button>
               </div>
             ))}
           </div>
@@ -798,31 +841,14 @@ export function SettingsScreen({
 
   // Connected Exchanges
   if (currentView === "exchanges") {
-    const serverSideUi = process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1"
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <h2 className="text-lg font-semibold">Connected Exchanges</h2>
         <p className="text-sm text-muted-foreground">
-          Link exchanges for balance sync and Wallstreet routing labels. Execution is limited to the Container desk and
-          Wallstreet flows in this build.
+          Link your exchange accounts to see balances here and keep your trading view up to date. Keys stay encrypted in
+          your session — we only use them to read balances you choose to connect.
         </p>
-        {(isGuestSession || serverSideUi) && (
-          <Card className="border-primary/35 bg-primary/5 p-4 text-sm leading-relaxed">
-            <p className="font-medium text-foreground">Guest / server-side UI flag</p>
-            <p className="mt-2 text-muted-foreground">
-              Legacy <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/trade/*</code> automation was removed
-              from this deployment. Keys you configure here stay in this browser for balances and desk UI unless you
-              operate a separate execution stack.
-            </p>
-            {serverSideUi && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                <code className="rounded bg-muted px-1">NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI=1</code> is set —
-                Wall Street real-trade banners assume server keys are configured even without a linked exchange here.
-              </p>
-            )}
-          </Card>
-        )}
         <ExchangeBinding />
       </div>
     )
@@ -1093,9 +1119,17 @@ export function SettingsScreen({
             <p className="text-xs">2024 Nexus Pro. All rights reserved.</p>
           </div>
           <div className="space-y-2">
-            <Button variant="outline" className="w-full">Terms of Service</Button>
-            <Button variant="outline" className="w-full">Privacy Policy</Button>
-            <Button variant="outline" className="w-full">Contact Support</Button>
+            <Button variant="outline" className="w-full" asChild>
+              <a href="https://nexuspro.it.com" target="_blank" rel="noopener noreferrer">
+                Visit nexuspro.it.com <ExternalLink className="ml-2 inline h-4 w-4" />
+              </a>
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <a href="mailto:esknexuspro@gmail.com?subject=Nexus%20PRO%20Support">Contact Support</a>
+            </Button>
+            <p className="pt-2 text-xs text-muted-foreground">
+              Terms and Privacy: review the legal pack with support or at your onboarding link.
+            </p>
           </div>
         </Card>
       </div>

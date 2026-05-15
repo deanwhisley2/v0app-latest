@@ -65,3 +65,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const auth = await bearerUserWithGovernance(request, "mutate")
+    if ("response" in auth) return auth.response
+    const { user } = auth
+    const body = (await request.json().catch(() => ({}))) as { id?: string }
+    const id = typeof body.id === "string" ? body.id.trim() : ""
+    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
+    const admin = createAdminClient()
+    const { data: row, error: fetchErr } = await admin
+      .from("withdraw_whitelist_entries")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .is("removed_at", null)
+      .maybeSingle()
+    if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+    if (!row) return NextResponse.json({ error: "Entry not found" }, { status: 404 })
+    const { error } = await admin
+      .from("withdraw_whitelist_entries")
+      .update({ removed_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+  }
+}
