@@ -2536,6 +2536,7 @@ export default function DashboardPage() {
                             {localMmAirtelMerchant ? (
                               <div className="mb-2 space-y-1 rounded-md border border-[#ED1C24]/35 bg-[#ED1C24]/8 p-2.5 dark:text-red-50">
                                 <p className="font-semibold text-[#ED1C24]">{t("funding.retailer.airtelMerchantTitle")}</p>
+                                <p className="text-[10px] text-muted-foreground">{t("funding.payment.airtelIntro")}</p>
                                 <ol className="list-decimal space-y-0.5 pl-4 text-[10px] leading-relaxed">
                                   <li>
                                     {t("funding.payment.airtelStep1").replace(
@@ -2550,13 +2551,26 @@ export default function DashboardPage() {
                                     )}
                                   </li>
                                   <li>
-                                    {t("funding.retailer.airtelPayeeStep").replace(
-                                      "{{payee}}",
-                                      localMmAirtelMerchant.payeeName,
+                                    {t("funding.payment.airtelStep3").replace(
+                                      "{{email}}",
+                                      currentUser?.email || t("funding.payment.yourLoginEmail"),
                                     )}
                                   </li>
                                   <li>{t("funding.payment.airtelStep4")}</li>
+                                  <li>{t("funding.payment.airtelStep5")}</li>
                                 </ol>
+                                <p className="text-[10px] font-medium text-muted-foreground">
+                                  {t("funding.retailer.airtelLegalPayeeStep").replace(
+                                    "{{legalPayee}}",
+                                    localMmAirtelMerchant.payeeName,
+                                  )}
+                                </p>
+                                <p className="text-[10px] font-medium text-muted-foreground">
+                                  {t("funding.retailer.airtelMerchantDisplayStep").replace(
+                                    "{{merchantName}}",
+                                    localMmAirtelMerchant.merchantName,
+                                  )}
+                                </p>
                               </div>
                             ) : null}
                             <p>

@@ -8,6 +8,7 @@ import {
   NEXUS_TRC20_RECEIVE_ADDRESS,
   UGANDA_AIRTEL_MERCHANT_ID,
   UGANDA_AIRTEL_MERCHANT_NAME,
+  UGANDA_AIRTEL_LEGAL_PAYEE,
   UGANDA_AIRTEL_USSD_PREFIX,
 } from "@/lib/server/admin-payment-config"
 
@@ -30,6 +31,8 @@ export async function GET(request: Request) {
       ugandaAirtel: {
         merchantId: UGANDA_AIRTEL_MERCHANT_ID,
         merchantName: UGANDA_AIRTEL_MERCHANT_NAME,
+        legalPayeeName: UGANDA_AIRTEL_LEGAL_PAYEE,
+        networkMerchantNamesHint: "Nexus Pro or Venture Nexus Pro",
         ussdPrefix: UGANDA_AIRTEL_USSD_PREFIX,
         referenceHint: "Use your login email as the payment reference.",
         routedTo: "level_5_admin",

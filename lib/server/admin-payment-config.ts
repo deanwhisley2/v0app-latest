@@ -18,14 +18,17 @@ export const ADMIN_USDT_BINANCE_DEEP_LINK =
   "https://app.binance.com/uni-qr/web3-token-details?utm_medium=share&tokenCA=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t&binanceChainId=CT_195&chain=undefined"
 
 export const UGANDA_AIRTEL_MERCHANT_ID = "7095287"
+/** Legal payee printed on the MoMo receipt (merchant name on network may differ). */
+export const UGANDA_AIRTEL_LEGAL_PAYEE =
+  (process.env.NEXUS_UG_AIRTEL_LEGAL_PAYEE ?? "").trim() || "Pegasus Technologies LTD"
 export const UGANDA_AIRTEL_MERCHANT_NAME =
   (process.env.NEXUS_UG_AIRTEL_MERCHANT_NAME ?? "").trim() || "Nexus Pro"
-export const UGANDA_AIRTEL_USSD_PREFIX = "*1859#"
+export const UGANDA_AIRTEL_USSD_PREFIX = "*185*9#"
 
 /** Retailer desk esknexuspro — Pegasus / Nexus Pro2 merchant (local_mobile responsibility). */
 export const ESKNEXUSPRO_AIRTEL_MERCHANT_ID = "7095290"
 export const ESKNEXUSPRO_AIRTEL_MERCHANT_NAME = "Nexus Pro2"
-export const ESKNEXUSPRO_PAYEE_NAME = "Pegasus Technologies"
+export const ESKNEXUSPRO_PAYEE_NAME = "Pegasus Technologies LTD"
 
 export const MAX_RETAILERS_ON_PAYMENT_PAGE = 2
 

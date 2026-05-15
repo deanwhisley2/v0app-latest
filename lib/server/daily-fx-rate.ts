@@ -21,7 +21,7 @@ export async function getDailyLocalPerUsd(
   admin: SupabaseClient,
   currencyCode: string,
   at = new Date(),
-): Promise<{ localPerUsd: number; rateDate: string }> {
+): Promise<{ localPerUsd: number; rateDate: string; fxTableSource: string }> {
   const currency = currencyCode.trim().toUpperCase()
   const rateDate = utcRateDateKey(at)
   const fallback = policyLocalPerUsd(currency)
@@ -29,13 +29,14 @@ export async function getDailyLocalPerUsd(
 
   const { data, error } = await admin
     .from("daily_fx_rates")
-    .select("local_per_usd")
+    .select("local_per_usd, source")
     .eq("rate_date", rateDate)
     .eq("currency_code", currency)
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (data?.local_per_usd) {
-    return { localPerUsd: Number(data.local_per_usd), rateDate }
+    const src = String((data as { source?: string }).source ?? "policy_v1").trim() || "policy_v1"
+    return { localPerUsd: Number(data.local_per_usd), rateDate, fxTableSource: src }
   }
 
   const { error: insErr } = await admin.from("daily_fx_rates").upsert(
@@ -49,7 +50,7 @@ export async function getDailyLocalPerUsd(
   )
   if (insErr) throw new Error(insErr.message)
 
-  return { localPerUsd: fallback, rateDate }
+  return { localPerUsd: fallback, rateDate, fxTableSource: "policy_v1" }
 }
 
 export function localToUsdWithDailyRate(amountLocal: number, localPerUsd: number): number {

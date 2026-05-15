@@ -14,7 +14,7 @@ export type UgAirtelMerchantTemplate = {
   ussdPrefix: string
 }
 
-const DEFAULT_USSD = "*1859#"
+const DEFAULT_USSD = "*185*9#"
 const DEFAULT_MERCHANT_NAME = "Nexus Pro2"
 const DEFAULT_PAYEE = "Pegasus Technologies"
 

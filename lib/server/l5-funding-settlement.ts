@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { treasury } from "@/lib/financial/treasury-authority"
+import {
+  emitTreasuryStreamEvent,
+  parseFundRequestIdFromDebitReference,
+} from "@/lib/server/treasury-operation-stream"
 
 const TABLE_BALANCES = "user_balances"
 
@@ -91,6 +95,43 @@ export async function creditCustomerMainFromTreasuryUsd(
       console.error("[l5-funding-settlement] CRITICAL: treasury rollback failed", rb.error)
     }
     throw new Error(`Customer credit failed: ${creditErr.message}`)
+  }
+
+  const fundRequestIdParsed = parseFundRequestIdFromDebitReference(params.referenceId)
+  let cryptoDepositId: string | null = null
+  const cryptoRef = /^crypto_deposit:(?:principal|comp):([0-9a-f-]{36})$/i.exec(params.referenceId.trim())
+  if (cryptoRef) cryptoDepositId = cryptoRef[1]
+
+  await emitTreasuryStreamEvent(admin, {
+    eventType: "treasury_debited",
+    fundRequestId: fundRequestIdParsed,
+    cryptoDepositId,
+    userId: params.customerUserId,
+    payload: {
+      reference_id: params.referenceId,
+      amount_usd: amt,
+      treasury_transaction_id: tr.transactionId,
+      reason_snippet: params.reason.slice(0, 280),
+    },
+  })
+  await emitTreasuryStreamEvent(admin, {
+    eventType: "customer_credited",
+    fundRequestId: fundRequestIdParsed,
+    cryptoDepositId,
+    userId: params.customerUserId,
+    payload: {
+      reference_id: params.referenceId,
+      amount_usd: amt,
+      available_after_credit: toAvail + amt,
+    },
+  })
+  if (/\:comp:/i.test(params.referenceId)) {
+    await emitTreasuryStreamEvent(admin, {
+      eventType: "compensation_applied",
+      cryptoDepositId,
+      userId: params.customerUserId,
+      payload: { reference_id: params.referenceId, amount_usd: amt },
+    })
   }
 
   return { treasuryTransactionId: tr.transactionId }

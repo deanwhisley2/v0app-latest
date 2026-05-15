@@ -7,7 +7,10 @@ import {
   assertNoDuplicatePendingUserFunding,
   DuplicatePendingError,
 } from "@/lib/server/funding-duplicate-guard"
-import { attachProfileEmailsToRetailers } from "@/lib/server/retailer-funding-helpers"
+import {
+  attachProfileEmailsToRetailers,
+  finalizeRetailerLiquidityReservation,
+} from "@/lib/server/retailer-funding-helpers"
 import {
   assertRetailDeskQualifiesForCorridor,
   normalizeCorridorNetworkToken,
@@ -18,6 +21,12 @@ import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } f
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
 import { isAdminDirectFundChannel } from "@/lib/server/admin-payment-config"
 import { uploadFundingProof } from "@/lib/server/funding-proof-storage"
+import {
+  inferFundingFxRoutingLane,
+  insertFundingFxNormalization,
+  insertFundingFxNormalizationUsdOnly,
+} from "@/lib/server/funding-fx-middleware"
+import { emitTreasuryStreamEvent } from "@/lib/server/treasury-operation-stream"
 
 const CLIENT_USD_TOLERANCE = 0.05
 
@@ -171,6 +180,7 @@ export async function POST(request: Request) {
     let amountInputLocalNum: number | null = null
     let inputCurrencyStr: string | null = null
     let fxRateSnapshotNum: number | null = null
+    let fundingFxRateSourceTag: string | null = null
     let fxQuoteExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
     let retailerResponseDeadlineAt: string | null = null
@@ -208,12 +218,14 @@ export async function POST(request: Request) {
         inputCurrencyStr = explicitCur
         const daily = await getDailyLocalPerUsd(admin, inputCurrencyStr)
         fxRateSnapshotNum = daily.localPerUsd
+        fundingFxRateSourceTag = `internal_daily_fx_rates:${daily.fxTableSource}`
         fxQuoteExpiresAt = dailyFxQuoteExpiresAt(daily.rateDate)
         amountUsdLocked = localToUsdWithDailyRate(amountInputLocalNum, daily.localPerUsd)
       } else if (corridorFiat) {
         inputCurrencyStr = corridorFiat
         const daily = await getDailyLocalPerUsd(admin, corridorFiat)
         fxRateSnapshotNum = daily.localPerUsd
+        fundingFxRateSourceTag = `internal_daily_fx_rates:${daily.fxTableSource}`
         fxQuoteExpiresAt = dailyFxQuoteExpiresAt(daily.rateDate)
         const rawLocal = explicitLocal !== undefined && explicitLocal !== null ? Number(explicitLocal) : NaN
         if (Number.isFinite(rawLocal) && rawLocal > 0) {
@@ -431,6 +443,99 @@ export async function POST(request: Request) {
         amountUsdLocked,
       }),
       metadata: { phase: "create" },
+    })
+
+    const reqIdStr = String(data.id ?? "")
+    const lane = inferFundingFxRoutingLane({
+      fundChannel,
+      retailerId: insertRetailerId,
+      officialCorridorRouteId: insertOfficialRouteId,
+    })
+    try {
+      if (
+        fundChannel === "local_mobile" &&
+        amountInputLocalNum != null &&
+        amountInputLocalNum > 0 &&
+        inputCurrencyStr &&
+        fxRateSnapshotNum != null &&
+        fxRateSnapshotNum > 0
+      ) {
+        const rateDate = fxLockedAtIso.slice(0, 10)
+        await insertFundingFxNormalization(admin, {
+          fundRequestId: reqIdStr,
+          userId: user.id,
+          routingLane: lane,
+          amountInputLocal: amountInputLocalNum,
+          inputCurrency: inputCurrencyStr,
+          localPerUsd: fxRateSnapshotNum,
+          rateDate,
+          rateSource: fundingFxRateSourceTag ?? undefined,
+          amountUsdNormalized: amountUsdLocked,
+          rateCapturedAtIso: fxLockedAtIso,
+        })
+      } else if (isAdminDirectFundChannel(fundChannel)) {
+        await insertFundingFxNormalizationUsdOnly(admin, {
+          fundRequestId: reqIdStr,
+          userId: user.id,
+          routingLane: "admin_direct",
+          amountUsdNormalized: amountUsdLocked,
+        })
+      } else if (fundChannel === "legacy_admin") {
+        await insertFundingFxNormalizationUsdOnly(admin, {
+          fundRequestId: reqIdStr,
+          userId: user.id,
+          routingLane: "legacy_admin",
+          amountUsdNormalized: amountUsdLocked,
+        })
+      }
+    } catch (fxErr) {
+      console.error("[retailer-funding] FX normalization insert failed:", fxErr)
+      const deskReserve =
+        fundChannel === "local_mobile" && Boolean(insertRetailerId) && !insertOfficialRouteId
+      try {
+        if (deskReserve) {
+          await finalizeRetailerLiquidityReservation(admin, reqIdStr, "released", "fx_middleware_audit_failed")
+        }
+      } catch (relErr) {
+        console.error("[retailer-funding] rollback reservation failed:", relErr)
+      }
+      await admin.from("retailer_fund_requests").delete().eq("id", reqIdStr)
+      return NextResponse.json(
+        {
+          error:
+            fxErr instanceof Error
+              ? fxErr.message
+              : "Funding FX audit record could not be created — please try again.",
+        },
+        { status: 500 },
+      )
+    }
+
+    await emitTreasuryStreamEvent(admin, {
+      eventType: "funding_created",
+      fundRequestId: reqIdStr,
+      userId: user.id,
+      payload: {
+        fundChannel,
+        amount_usd_locked: amountUsdLocked,
+        corridor_route_id: insertOfficialRouteId,
+        retailer_id: insertRetailerId,
+      },
+    })
+    await emitTreasuryStreamEvent(admin, {
+      eventType: "fx_normalized",
+      fundRequestId: reqIdStr,
+      userId: user.id,
+      payload: {
+        routing_lane: lane,
+        has_local_quote: !!(
+          amountInputLocalNum != null &&
+          amountInputLocalNum > 0 &&
+          inputCurrencyStr &&
+          fxRateSnapshotNum != null
+        ),
+        rate_source_hint: fundingFxRateSourceTag,
+      },
     })
 
     await recordFinancialEvent({

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { adminRetailPoolUserId, getTreasurySettlementModeInfo } from "@/lib/server/admin-retail-pool"
 import { roundFundingAmount } from "@/lib/server/funding-duplicate-guard"
+import { settlementUsdFromFundRequestRow } from "@/lib/server/retailer-funding-helpers"
 
 type ProfileLite = {
   id: string
@@ -46,6 +47,10 @@ export type OperationsDeskRow = {
   payout_status?: string | null
   /** User's frozen withdrawal bucket at desk snapshot (withdrawal_pending_balance). */
   withdrawal_pending_usd?: number | null
+  /** Normalized USD for treasury settlement (from middleware / locked USD). */
+  l5_settlement_usd?: number | null
+  /** FX middleware audit row when present. */
+  fx_middleware?: Record<string, unknown> | null
 }
 
 function msSince(iso: string): number | null {
@@ -72,7 +77,7 @@ export async function GET(request: Request) {
       admin
         .from("retailer_fund_requests")
         .select(
-          "id,user_id,retailer_id,amount,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,appeal_note,payer_display_name,payer_phone,escalated_to_admin,resolution_note"
+          "id,user_id,retailer_id,amount,amount_usd_locked,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,appeal_note,payer_display_name,payer_phone,escalated_to_admin,resolution_note"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -190,6 +195,25 @@ export async function GET(request: Request) {
       return null
     }
 
+    const fxFundIds = [
+      ...new Set(fundRows.map((r) => String((r as { id?: string }).id ?? "")).filter(Boolean)),
+    ]
+    const fxByFundRequestId = new Map<string, Record<string, unknown>>()
+    if (fxFundIds.length) {
+      const { data: fxNorm, error: fxNormErr } = await admin
+        .from("funding_fx_normalization")
+        .select(
+          "fund_request_id,routing_lane,amount_input_local,input_currency,local_per_usd,rate_date,rate_source,rate_captured_at,middleware_version,amount_usd_normalized,settled_amount_usd,settled_local_equivalent",
+        )
+        .in("fund_request_id", fxFundIds)
+      if (!fxNormErr) {
+        for (const fxRow of fxNorm ?? []) {
+          const rid = String((fxRow as { fund_request_id?: string }).fund_request_id ?? "")
+          if (rid) fxByFundRequestId.set(rid, fxRow as Record<string, unknown>)
+        }
+      }
+    }
+
     const mapTopUp = (
       raw: Record<string, unknown>,
       terminal: boolean,
@@ -289,6 +313,10 @@ export async function GET(request: Request) {
         commission_rate: null,
         amount_credited: null,
         resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,
+        l5_settlement_usd: settlementUsdFromFundRequestRow(
+          raw as { amount_usd_locked?: unknown; amount?: unknown },
+        ),
+        fx_middleware: fxByFundRequestId.get(id) ?? null,
       }
     }
 

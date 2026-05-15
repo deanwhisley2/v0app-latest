@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify migrations directory
+        run: bash scripts/ci-migrations-present.sh
+
       - name: Typecheck + production build (Next enforces types)
         env:
           NEXT_TELEMETRY_DISABLED: "1"

@@ -16,9 +16,13 @@ import {
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
+import { finalizeFundingFxOnApproval, getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
 import { isAdminDirectFundChannel } from "@/lib/server/admin-payment-config"
 import { signedFundingProofUrl } from "@/lib/server/funding-proof-storage"
+import { assessFundingApprovalRisk } from "@/lib/server/funding-risk-score"
+import { emitTreasuryStreamEvent } from "@/lib/server/treasury-operation-stream"
+import { fundingRiskScoreBlockThreshold } from "@/lib/server/treasury-automation-policy"
 
 export async function GET(request: Request) {
   try {
@@ -57,15 +61,38 @@ export async function GET(request: Request) {
       }
     }
 
+    const rows = requestsRes.data ?? []
+    const ids = rows.map((r) => String((r as { id?: string }).id ?? "")).filter(Boolean)
+    const fxByReq = new Map<string, Record<string, unknown>>()
+    if (ids.length) {
+      const { data: fxRows, error: fxErr } = await admin
+        .from("funding_fx_normalization")
+        .select(
+          "fund_request_id,routing_lane,amount_input_local,input_currency,local_per_usd,rate_date,rate_source,rate_captured_at,middleware_version,amount_usd_normalized,settled_amount_usd,settled_local_equivalent",
+        )
+        .in("fund_request_id", ids)
+      if (!fxErr && fxRows?.length) {
+        for (const f of fxRows) {
+          const rid = String((f as { fund_request_id?: string }).fund_request_id ?? "")
+          if (rid) fxByReq.set(rid, f as Record<string, unknown>)
+        }
+      }
+    }
+
     const requests = await Promise.all(
-      (requestsRes.data ?? []).map(async (row) => {
-        const r = row as { user_id?: string; payment_proof_path?: string | null }
+      rows.map(async (row) => {
+        const r = row as { id?: string; user_id?: string; payment_proof_path?: string | null }
         const proofPath = String(r.payment_proof_path ?? "").trim()
         const payment_proof_url = proofPath ? await signedFundingProofUrl(admin, proofPath) : null
+        const rid = String(r.id ?? "")
         return {
           ...row,
           user_email: emailByUser.get(String(r.user_id ?? "")) ?? null,
           payment_proof_url,
+          l5_settlement_usd: settlementUsdFromFundRequestRow(
+            row as { amount_usd_locked?: unknown; amount?: unknown },
+          ),
+          fx_middleware: fxByReq.get(rid) ?? null,
         }
       }),
     )
@@ -137,6 +164,53 @@ export async function PATCH(request: Request) {
 
     const fundChannel = String((reqRow as { fund_channel?: string }).fund_channel ?? "legacy_admin")
 
+    if (body.action === "approve") {
+      const settlementUsdPre = settlementUsdFromFundRequestRow(
+        reqRow as { amount_usd_locked?: unknown; amount?: unknown },
+      )
+      const risk = await assessFundingApprovalRisk(admin, {
+        requestId: body.requestId,
+        retailerId: (reqRow as { retailer_id?: string | null }).retailer_id ?? null,
+        txReference: (reqRow as { tx_reference?: string }).tx_reference,
+        amountUsdLocked: settlementUsdPre,
+        fundChannel,
+        adminUserId: user.id,
+      })
+      const th = fundingRiskScoreBlockThreshold()
+      if ((risk.score ?? 0) >= 30) {
+        await emitTreasuryStreamEvent(admin, {
+          eventType: "risk_flag",
+          fundRequestId: body.requestId,
+          userId: customerId,
+          correlationId: `risk_gate:${body.requestId}:${risk.score}`,
+          payload: {
+            score: risk.score,
+            flags: risk.flags,
+            blocking_threshold_configured: th ?? null,
+          },
+        })
+      }
+      if (th != null && risk.score >= th) {
+        return NextResponse.json(
+          {
+            error: `Funding blocked by internal risk scoring (score ${risk.score}; minimum safe threshold configured at ${th}). Resolve flags manually or escalate outside auto-approve.`,
+            code: "FUNDING_RISK_BLOCKED",
+            risk,
+          },
+          { status: 409 },
+        )
+      }
+    }
+
+    if (body.action === "under_review") {
+      await emitTreasuryStreamEvent(admin, {
+        eventType: "approval_requested",
+        fundRequestId: body.requestId,
+        userId: customerId,
+        payload: { fundChannel, escalated_via: "l5_manual_hold" },
+      })
+    }
+
     const nextStatus =
       body.action === "approve"
         ? "approved"
@@ -176,6 +250,14 @@ export async function PATCH(request: Request) {
         }
       }
 
+      if (body.action === "approve") {
+        await finalizeFundingFxOnApproval(admin, {
+          fundRequestId: body.requestId!,
+          settledAmountUsd: settlementUsd,
+          settledByUserId: user.id,
+        })
+      }
+
       const { error: updateErr } = await admin
         .from("retailer_fund_requests")
         .update({
@@ -194,6 +276,7 @@ export async function PATCH(request: Request) {
       if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
       if (body.action === "approve") {
+        const fxLink = await ledgerFxLinkageMetadata(admin, body.requestId!)
         await recordFinancialEvent({
           userId: custId,
           eventType: "funding_request_admin_approved",
@@ -206,7 +289,7 @@ export async function PATCH(request: Request) {
           actorId: user.id,
           transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
           summary: `L5 approved admin direct ${fundChannel} funding (MAIN_TREASURY debited).`,
-          metadata: { requestId: body.requestId, fundChannel },
+          metadata: { requestId: body.requestId, fundChannel, ...fxLink },
         })
         await notifyCustomerFundingOperational(admin, {
           userId: custId,
@@ -473,6 +556,14 @@ export async function PATCH(request: Request) {
       if (body.action === "approve" && settledApprovalMode) {
         const isTreasury = settledApprovalMode === "treasury_pool"
         const classification = isTreasury ? "TREASURY_FUNDED_APPROVAL" : "RETAILER_OVERRIDE_APPROVAL"
+
+        await finalizeFundingFxOnApproval(admin, {
+          fundRequestId: body.requestId!,
+          settledAmountUsd: settlementUsdFromFundRequestRow(reqMeta),
+          settledByUserId: user.id,
+        })
+
+        const fxLink = await ledgerFxLinkageMetadata(admin, body.requestId!)
         await recordFinancialEvent({
           userId: custIdSafe(reqRow),
           eventType: `funding_request_admin_${nextStatus}`,
@@ -499,6 +590,7 @@ export async function PATCH(request: Request) {
             creditedAccount: "customer_nexus_main_available",
             fundingSource: isTreasury ? "company_treasury_pool" : "retailer_retail_balance",
             actingAuthority: "level_5_admin",
+            ...fxLink,
           },
         })
 
@@ -590,6 +682,19 @@ export async function PATCH(request: Request) {
       }
     }
 
+    if (body.action === "approve") {
+      await finalizeFundingFxOnApproval(admin, {
+        fundRequestId: body.requestId!,
+        settledAmountUsd: settlementUsdFromFundRequestRow(
+          reqRow as { amount_usd_locked?: unknown; amount?: unknown },
+        ),
+        settledByUserId: user.id,
+      })
+    }
+
+    const fxLedger =
+      body.action === "approve" ? await ledgerFxLinkageMetadata(admin, body.requestId!) : {}
+
     await recordFinancialEvent({
       userId: custIdSafe(reqRow),
       eventType: `funding_request_${nextStatus}`,
@@ -611,6 +716,7 @@ export async function PATCH(request: Request) {
         requestId: (reqRow as { id: string }).id,
         retailerId: (reqRow as { retailer_id: string }).retailer_id,
         fundChannel: "legacy_admin",
+        ...fxLedger,
       },
     })
 
@@ -625,6 +731,18 @@ function custIdSafe(reqRow: unknown): string {
   return String((reqRow as { user_id?: string }).user_id ?? "")
 }
 
+async function ledgerFxLinkageMetadata(admin: SupabaseClient, requestId: string): Promise<Record<string, unknown>> {
+  try {
+    const fx = await getFundingFxSnapshotByRequestId(admin, requestId)
+    return {
+      fundingFxNormalizationId: fx?.id != null ? String(fx.id) : null,
+      treasuryDebitReferenceId: `fund_req:${requestId}`,
+    }
+  } catch {
+    return { fundingFxNormalizationId: null, treasuryDebitReferenceId: `fund_req:${requestId}` }
+  }
+}
+
 async function notifyFundingStatus(
   admin: SupabaseClient,
   customerId: string,
@@ -632,6 +750,13 @@ async function notifyFundingStatus(
   nextStatus: string,
   note: string | null,
 ): Promise<void> {
+  if (nextStatus === "approved") {
+    await notifyCustomerFundingOperational(admin, {
+      userId: customerId,
+      requestId,
+      viaTreasury: false,
+    })
+  }
   let headline = ""
   if (nextStatus === "approved") headline = "Add-funds request approved — balance updated."
   else if (nextStatus === "rejected") headline = note ? `Add-funds rejected: ${note.slice(0, 80)}` : "Add-funds request rejected."

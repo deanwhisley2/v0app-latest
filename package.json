@@ -13,7 +13,7 @@
     "nexus:master-liquidity-check": "npx tsx scripts/master-liquidity-architecture-check.ts",
     "nexus:local-mm-flow-check": "npx tsx scripts/local-mm-funding-flow-check.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "rm -rf .next && tsc --noEmit",
     "build:strict": "NEXT_IGNORE_BUILD_TS=0 next build",
     "build:with-types": "npm run typecheck && npm run build:strict",
     "verify:ci": "npm run typecheck && npm run build:strict",

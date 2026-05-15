@@ -24,6 +24,89 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AdminSupportChatPanel } from "@/components/dashboard/admin-support-chat-panel"
 import { ledgerOperationalTraceLines } from "@/lib/formatting/ledger-operational-trace"
+import {
+  UGANDA_AIRTEL_LEGAL_PAYEE,
+  UGANDA_AIRTEL_MERCHANT_ID,
+  UGANDA_AIRTEL_MERCHANT_NAME,
+  UGANDA_AIRTEL_USSD_PREFIX,
+} from "@/lib/server/admin-payment-config"
+
+function FundingFxOpsSummary({
+  fx,
+  settlementUsd,
+}: {
+  fx: Record<string, unknown> | null | undefined
+  settlementUsd: number | null | undefined
+}) {
+  if (!fx || typeof fx !== "object") {
+    return (
+      <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[11px] text-muted-foreground">
+        No FX middleware row for this request yet (USD-native rail or pre-migration request).
+      </div>
+    )
+  }
+  const local = fx.amount_input_local != null ? Number(fx.amount_input_local) : NaN
+  const ccy = String(fx.input_currency ?? "").trim()
+  const lp = Number(fx.local_per_usd ?? 0)
+  const norm = Number(fx.amount_usd_normalized ?? 0)
+  const src = String(fx.rate_source ?? "—")
+  const cap = fx.rate_captured_at != null ? String(fx.rate_captured_at).slice(0, 19) : "—"
+  const ver = String(fx.middleware_version ?? "—")
+  const settled = fx.settled_amount_usd != null ? Number(fx.settled_amount_usd) : null
+  const settledLoc = fx.settled_local_equivalent != null ? Number(fx.settled_local_equivalent) : null
+  const treasuryLine =
+    settlementUsd != null && Number.isFinite(settlementUsd)
+      ? `$${settlementUsd.toFixed(2)} USD (treasury / settlement debit)`
+      : "—"
+
+  return (
+    <div className="space-y-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-[11px] text-emerald-950 dark:text-emerald-50">
+      <p className="font-bold uppercase tracking-wide">FX middleware (audit)</p>
+      <p>
+        <span className="text-muted-foreground">L5 settlement debit · </span>
+        <span className="font-mono font-semibold">{treasuryLine}</span>
+      </p>
+      {!Number.isFinite(local) || local <= 0 || !ccy ? (
+        <p className="text-muted-foreground">Original input was USD-native (no local leg on file).</p>
+      ) : (
+        <p>
+          <span className="text-muted-foreground">Customer submitted · </span>
+          <span className="font-mono font-semibold">
+            {local.toLocaleString(undefined, { maximumFractionDigits: 2 })} {ccy}
+          </span>
+        </p>
+      )}
+      <p>
+        <span className="text-muted-foreground">FX rate used (local per 1 USD) · </span>
+        <span className="font-mono">{Number.isFinite(lp) ? lp.toFixed(6) : "—"}</span>
+      </p>
+      <p>
+        <span className="text-muted-foreground">Normalized at submission · </span>
+        <span className="font-mono font-semibold">${Number.isFinite(norm) ? norm.toFixed(2) : "—"} USD</span>
+      </p>
+      {settled != null && Number.isFinite(settled) ? (
+        <p>
+          <span className="text-muted-foreground">Settled (approved) USD · </span>
+          <span className="font-mono">${settled.toFixed(2)}</span>
+        </p>
+      ) : null}
+      {settledLoc != null && Number.isFinite(settledLoc) && ccy ? (
+        <p>
+          <span className="text-muted-foreground">Local equivalent at locked rate · </span>
+          <span className="font-mono">
+            {settledLoc.toLocaleString(undefined, { maximumFractionDigits: 2 })} {ccy}
+          </span>
+        </p>
+      ) : null}
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        Source tag <span className="font-mono">{src}</span>
+        <br />
+        Rate captured <span className="font-mono">{cap}</span> · Middleware{" "}
+        <span className="font-mono">{ver}</span>
+      </p>
+    </div>
+  )
+}
 
 type TimelineItem = {
   sortAt: string
@@ -530,6 +613,8 @@ type OperationsDeskApiRow = {
   resolution_note?: string | null
   payout_status?: string | null
   withdrawal_pending_usd?: number | null
+  l5_settlement_usd?: number | null
+  fx_middleware?: Record<string, unknown> | null
 }
 
 function formatPendingAge(ms: number | null): string {
@@ -608,6 +693,7 @@ export function AdminOperationalAssets({
   const [reviewContext, setReviewContext] = useState<"active" | "history">("active")
   const [resolutionDraft, setResolutionDraft] = useState("")
   const [ledgerPreview, setLedgerPreview] = useState<Array<Record<string, unknown>>>([])
+  const [treasuryHealthExtended, setTreasuryHealthExtended] = useState<Record<string, unknown> | null>(null)
   const [accountNotifPreview, setAccountNotifPreview] = useState<
     Array<{ id: string; title: string; body: string; created_at: string; user_deleted_at?: string | null; read_at?: string | null }>
   >([])
@@ -667,10 +753,11 @@ export function AdminOperationalAssets({
     setLoading(true)
     setDeskError(null)
     try {
-      const [deskRes, rfRes, cdRes] = await Promise.all([
+      const [deskRes, rfRes, cdRes, thRes] = await Promise.all([
         fetch("/api/admin/operations-desk", { headers: h, cache: "no-store" }),
         fetch("/api/admin/retailer-funding", { headers: h, cache: "no-store" }),
         fetch("/api/admin/crypto-deposits", { headers: h, cache: "no-store" }),
+        fetch("/api/admin/treasury-health", { headers: h, cache: "no-store" }),
       ])
       const dj = (await deskRes.json().catch(() => ({}))) as {
         pending?: OperationsDeskApiRow[]
@@ -717,8 +804,15 @@ export function AdminOperationalAssets({
         setCryptoDeposits([])
         setCryptoSecurityEvents([])
       }
+      if (thRes.ok) {
+        const tj = (await thRes.json().catch(() => ({}))) as Record<string, unknown>
+        setTreasuryHealthExtended("error" in tj && typeof tj.error === "string" ? null : tj)
+      } else {
+        setTreasuryHealthExtended(null)
+      }
     } catch {
       setDeskError("Network error loading operations desk.")
+      setTreasuryHealthExtended(null)
     } finally {
       setLoading(false)
     }
@@ -1377,6 +1471,116 @@ export function AdminOperationalAssets({
               ) : null}
             </div>
 
+            <Card className="mb-4 border border-border bg-card p-4">
+              <h4 className="text-sm font-semibold text-foreground">Treasury health &amp; reconciliation</h4>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Live MAIN_TREASURY balance, utilization vs reserve floor, 24h approval flow, automation gates, and the latest
+                reconciliation run (cron: <span className="font-mono">/api/cron/treasury-reconcile</span>).
+              </p>
+              {!treasuryHealthExtended ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Extended metrics unavailable. Refresh queue (Level 5) or confirm migration{" "}
+                  <code className="rounded bg-muted px-1">treasury_observability_stream</code>.
+                </p>
+              ) : (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">MAIN treasury (USD)</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      $
+                      {Number(treasuryHealthExtended.main_treasury_usd ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Utilization vs reserve floor</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      {treasuryHealthExtended.utilization_vs_reserve_pct != null
+                        ? `${Number(treasuryHealthExtended.utilization_vs_reserve_pct)}%`
+                        : "—"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Floor: $
+                      {treasuryHealthExtended.reserve_floor_usd != null
+                        ? Number(treasuryHealthExtended.reserve_floor_usd).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Pending funding exposure</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      $
+                      {Number(treasuryHealthExtended.pending_funding_exposure_usd ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Approvals (24h, approx USD)</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      $
+                      {Number(treasuryHealthExtended.approvals_usd_approx_24h ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Failed funding (24h)</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      {String(treasuryHealthExtended.funding_rejected_count_24h ?? "—")}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Rejected retailer fund requests</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Crypto compensation (24h)</p>
+                    <p className="text-lg font-bold tabular-nums">
+                      $
+                      {Number(treasuryHealthExtended.crypto_compensation_usd_24h ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Stream events (24h)</p>
+                    <p className="text-lg font-bold tabular-nums">{String(treasuryHealthExtended.treasury_stream_events_24h ?? "—")}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2 sm:col-span-2 lg:col-span-3">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Automation &amp; risk gate</p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded border border-border bg-background/60 px-2 py-0.5">
+                        crypto_cron_paused:{" "}
+                        <strong>{String((treasuryHealthExtended.automation as Record<string, unknown> | undefined)?.crypto_cron_paused ?? "—")}</strong>
+                      </span>
+                      <span className="rounded border border-border bg-background/60 px-2 py-0.5">
+                        treasury_crypto_safe_mode:{" "}
+                        <strong>
+                          {String((treasuryHealthExtended.automation as Record<string, unknown> | undefined)?.treasury_crypto_safe_mode ?? "—")}
+                        </strong>
+                      </span>
+                      <span className="rounded border border-border bg-background/60 px-2 py-0.5">
+                        risk block min score:{" "}
+                        <strong>
+                          {String((treasuryHealthExtended.risk_gate as Record<string, unknown> | undefined)?.funding_score_block_minimum ?? "—")}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2 sm:col-span-2 lg:col-span-3">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Latest reconciliation run</p>
+                    {treasuryHealthExtended.latest_reconciliation_run &&
+                    typeof treasuryHealthExtended.latest_reconciliation_run === "object" ? (
+                      <pre className="mt-2 max-h-32 overflow-auto rounded bg-background/80 p-2 text-[10px] leading-relaxed">
+                        {JSON.stringify(treasuryHealthExtended.latest_reconciliation_run, null, 2)}
+                      </pre>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">No runs recorded yet.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </Card>
+
             {deskError ? (
               <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {deskError}
@@ -1582,7 +1786,23 @@ export function AdminOperationalAssets({
                         ) : null}
                       </td>
                       <td className="p-2 align-top font-mono text-[10px] break-all">{row.tx_reference}</td>
-                      <td className="p-2 align-top font-semibold">${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 align-top font-semibold">
+                        {row.kind === "user_add_funds" &&
+                        row.l5_settlement_usd != null &&
+                        Number.isFinite(Number(row.l5_settlement_usd)) ? (
+                          <div className="space-y-0.5">
+                            <div className="font-mono text-emerald-700 dark:text-emerald-300">
+                              ${Number(row.l5_settlement_usd).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              <span className="block text-[9px] font-normal text-muted-foreground">USD settle</span>
+                            </div>
+                            <div className="font-mono text-[10px] font-normal text-muted-foreground">
+                              Row ${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        ) : (
+                          `$${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        )}
+                      </td>
                       <td className="p-2 align-top font-mono text-[10px]">
                         Main ${Number(row.nexus_main_usd ?? 0).toFixed(0)}
                         <br />
@@ -1694,7 +1914,22 @@ export function AdminOperationalAssets({
                     </p>
                     <p className="mt-2 text-muted-foreground">{reviewRow.request_type_label}</p>
                     <p className="mt-2 font-mono break-all">Ref · {reviewRow.tx_reference}</p>
-                    <p className="mt-1 font-mono">${Number(reviewRow.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    {reviewRow.kind === "user_add_funds" &&
+                    reviewRow.l5_settlement_usd != null &&
+                    Number.isFinite(Number(reviewRow.l5_settlement_usd)) ? (
+                      <div className="mt-1 space-y-1">
+                        <p className="font-mono text-sm font-bold text-emerald-800 dark:text-emerald-200">
+                          L5 settlement (USD) · ${Number(reviewRow.l5_settlement_usd).toFixed(2)}
+                        </p>
+                        <p className="font-mono text-[10px] text-muted-foreground">
+                          Request row amount field · ${Number(reviewRow.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 font-mono">
+                        ${Number(reviewRow.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    )}
                   </div>
                   {reviewRow.duplicate_risk_hint ? (
                     <div className="rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-800 dark:text-rose-100">
@@ -1739,6 +1974,17 @@ export function AdminOperationalAssets({
                           </>
                         ) : null}
                       </p>
+                    ) : null}
+                    {reviewRow.kind === "user_add_funds" ? (
+                      <FundingFxOpsSummary
+                        fx={reviewRow.fx_middleware}
+                        settlementUsd={
+                          reviewRow.l5_settlement_usd != null &&
+                          Number.isFinite(Number(reviewRow.l5_settlement_usd))
+                            ? Number(reviewRow.l5_settlement_usd)
+                            : null
+                        }
+                      />
                     ) : null}
                     <p className="text-muted-foreground">
                       User ledger snapshot (recent events for this account)
@@ -1872,6 +2118,20 @@ export function AdminOperationalAssets({
                           String(reviewRow.fund_channel ?? "") === "admin_airtel_ug") ? (
                           <div className="mb-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-[11px] text-violet-950 dark:text-violet-100">
                             <p className="font-semibold">L5 admin direct payment</p>
+                            {String(reviewRow.fund_channel ?? "") === "admin_airtel_ug" ? (
+                              <>
+                                <p className="mt-2 font-medium">Uganda · Airtel Money (company receive line)</p>
+                                <p className="mt-1 text-muted-foreground dark:text-violet-100/90">
+                                  Receipt payee must match <strong>{UGANDA_AIRTEL_LEGAL_PAYEE}</strong>. On the Airtel menu,
+                                  merchant may show as <strong>{UGANDA_AIRTEL_MERCHANT_NAME}</strong> or Venture Nexus Pro.
+                                </p>
+                                <ul className="mt-1 list-disc pl-4 text-muted-foreground dark:text-violet-100/90">
+                                  <li>Dial {UGANDA_AIRTEL_USSD_PREFIX}</li>
+                                  <li>Merchant code {UGANDA_AIRTEL_MERCHANT_ID}</li>
+                                  <li>Reference = customer login email</li>
+                                </ul>
+                              </>
+                            ) : null}
                             <p className="mt-1 text-muted-foreground">
                               Customer paid company receive rails — no retailer desk is liable. Approve debits{" "}
                               <strong>MAIN_TREASURY</strong> only after verifying tx reference and payment proof in storage.

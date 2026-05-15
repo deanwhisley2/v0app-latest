@@ -19,6 +19,11 @@ import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import {
+  cryptoCronPausedGlobally,
+  treasuryCryptoCronSafeModeEnabled,
+} from "@/lib/server/treasury-automation-policy"
+import { emitTreasuryStreamEvent } from "@/lib/server/treasury-operation-stream"
+import {
   isValidTronTxHash,
   listRecentInboundUsdtTransfers,
   verifyTrc20DepositByTxHash,
@@ -655,6 +660,27 @@ export async function pollOpenCryptoDeposits(admin: SupabaseClient): Promise<{
   errors: string[]
   auditLast5h: { count: number; totalUsd: number }
 }> {
+  if (cryptoCronPausedGlobally() || treasuryCryptoCronSafeModeEnabled()) {
+    await emitTreasuryStreamEvent(admin, {
+      eventType: "automation_safe_mode_block",
+      payload: {
+        surface: "crypto_deposit_cron",
+        cron_paused: cryptoCronPausedGlobally(),
+        treasury_safe_mode: treasuryCryptoCronSafeModeEnabled(),
+      },
+    })
+    return {
+      processed: 0,
+      credited: 0,
+      errors: [
+        cryptoCronPausedGlobally()
+          ? "CRYPTO_CRON_PAUSED — verification cron short-circuit (incident stance)."
+          : "TREASURY_AUTOMATION_SAFE_MODE — auto USDT verification/credit suppressed.",
+      ],
+      auditLast5h: { count: 0, totalUsd: 0 },
+    }
+  }
+
   const { data: rows, error } = await admin
     .from("crypto_deposit_requests")
     .select("id")

@@ -19,6 +19,8 @@ type PaymentConfig = {
   ugandaAirtel: {
     merchantId: string
     merchantName: string
+    legalPayeeName: string
+    networkMerchantNamesHint: string
     ussdPrefix: string
     referenceHint: string
   }
@@ -354,9 +356,10 @@ export function FundingPaymentPanel({
             <span className="rounded-md bg-[#ED1C24] px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white">
               Airtel Money
             </span>
-            <p className="text-sm font-bold text-foreground">{config.ugandaAirtel.merchantName}</p>
+            <p className="text-sm font-bold text-foreground">{config.ugandaAirtel.legalPayeeName}</p>
           </div>
           <p className="text-[10px] text-muted-foreground">{t("funding.payment.adminDirectNote")}</p>
+          <p className="text-[10px] text-muted-foreground">{t("funding.payment.airtelIntro")}</p>
           <ol className="list-decimal space-y-1.5 pl-4 text-[11px] leading-relaxed text-foreground">
             <li>{t("funding.payment.airtelStep1").replace("{{ussd}}", config.ugandaAirtel.ussdPrefix)}</li>
             <li>{t("funding.payment.airtelStep2").replace("{{merchantId}}", config.ugandaAirtel.merchantId)}</li>
@@ -367,7 +370,17 @@ export function FundingPaymentPanel({
               )}
             </li>
             <li>{t("funding.payment.airtelStep4")}</li>
+            <li>{t("funding.payment.airtelStep5")}</li>
           </ol>
+          <p className="text-[10px] font-medium text-muted-foreground">
+            {t("funding.payment.airtelLegalPayee").replace("{{legalPayee}}", config.ugandaAirtel.legalPayeeName)}
+          </p>
+          <p className="text-[10px] font-medium text-muted-foreground">
+            {t("funding.payment.airtelNetworkMerchantLine").replace(
+              "{{names}}",
+              `${config.ugandaAirtel.merchantName} — or ${config.ugandaAirtel.networkMerchantNamesHint}`,
+            )}
+          </p>
           <div className="space-y-2 border-t border-border/60 pt-3">
             {txHashField}
             {proofField}
