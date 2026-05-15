@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
+import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid-withdraw-base"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { minWithdrawUsdFloor } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
 
 const WINDOW_MS = 86_400_000
 
@@ -17,16 +14,9 @@ export async function GET(request: Request) {
     const { user } = auth
     const admin = createAdminClient()
 
-    const { data: row, error: selErr } = await admin
-      .from("user_balances")
-      .select("available_balance, withdrawal_pending_balance")
-      .eq("user_id", user.id)
-      .maybeSingle()
-    if (selErr) throw new Error(selErr.message)
-
-    const available = round2(Number(row?.available_balance ?? 0))
-    const pending = round2(Number((row as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
-    const total = round2(available + pending)
+    const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
+    const available = liquid.availableUsd
+    const total = liquid.totalLiquidUsd
     const minUsd = roundUsd2(minWithdrawUsdFloor())
     const maxUsd = roundUsd2(Math.min(available, Math.max(0, total * 0.5)))
 
@@ -53,6 +43,8 @@ export async function GET(request: Request) {
       maxUsd,
       availableUsd: available,
       totalBalanceUsd: total,
+      containerLiquidUsd: liquid.containerLiquidUsd,
+      activeTradeProfitUsd: roundUsd2(liquid.fixedUnreleasedUsd + liquid.copyAccrualUsd),
       cooldownActive,
       nextEligibleAt,
       msRemaining,

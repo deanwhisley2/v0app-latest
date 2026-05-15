@@ -7,7 +7,7 @@ export const NEXUS_PRODUCT_NAME = "Nexus PRO"
 
 /** Withdrawal cadence on earnings (product UI), not headline return %. */
 export const CONTAINER_WITHDRAWAL_SUMMARY =
-  "When earnings unlock, the Container screen shows withdrawal milestones (for example portions of earnings at 30%, 50%, and 70% on the cadence that matches your 1, 3, or 6‑month plan — plus the optional daily slice on the longest plan). Always read the live labels on your Container screen before you commit funds."
+  "Fixed-trade earnings can be released to your container pocket when accrued; locked allocation stays in the trade until maturity or early exit. Pocket withdrawals from Nexus Main are capped at 50% of your liquid total per request. Always read the live labels on your Container screen before you commit funds."
 
 /** Core story: trader + coin hold + daily momentum — no fixed % to the customer. */
 export function containerCustomerEarningsStory(): string {

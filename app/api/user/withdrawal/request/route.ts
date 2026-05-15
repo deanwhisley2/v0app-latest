@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
+import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid-withdraw-base"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
@@ -60,6 +61,11 @@ export async function POST(request: Request) {
       )
     }
 
+    const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
+    const available = liquid.availableUsd
+    const totalBalance = liquid.totalLiquidUsd
+    const maxAllowed = round2(Math.min(available, totalBalance * 0.5))
+
     const { data: row, error: selErr } = await admin
       .from("user_balances")
       .select("available_balance, withdrawal_pending_balance")
@@ -68,10 +74,7 @@ export async function POST(request: Request) {
 
     if (selErr) throw new Error(selErr.message)
 
-    const available = round2(Number(row?.available_balance ?? 0))
     const pendingWas = round2(Number((row as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
-    const totalBalance = round2(available + pendingWas)
-    const maxAllowed = round2(Math.min(available, totalBalance * 0.5))
 
     if (amount > maxAllowed + 1e-6) {
       return NextResponse.json(

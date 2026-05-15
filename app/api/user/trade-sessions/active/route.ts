@@ -111,8 +111,8 @@ export async function GET(request: Request) {
       const insuranceFee = roundUsd2(Number(r.insurance_fee_amount ?? 0))
       const earnedUsd = computeFixedSessionPolicyGrossUsd(r as FixedSessionEarnedRow, now)
       const leaseEnd = officialLeaseEndDate(r.created_at, months)
-      const withdrawPercent = months === 1 ? 30 : months === 3 ? 50 : 70
       const totalWithdrawnUsd = roundUsd2(Number(r.cumulative_earnings_released_usd ?? 0))
+      const releasableHeadroomUsd = roundUsd2(Math.max(0, earnedUsd - totalWithdrawnUsd))
       const lastWithdrawalAt =
         typeof r.last_earnings_release_at === "string" && r.last_earnings_release_at.trim()
           ? r.last_earnings_release_at
@@ -137,7 +137,7 @@ export async function GET(request: Request) {
         earnedUsd,
         totalWithdrawnUsd,
         lastWithdrawalAt,
-        withdrawablePercent: withdrawPercent,
+        releasableHeadroomUsd,
         daysUntilMaturity,
         leaseEndedAwaitingSettlement,
       }

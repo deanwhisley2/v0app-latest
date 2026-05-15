@@ -156,8 +156,7 @@ interface ActiveFixTrade {
   canWithdrawEarnings: boolean
   lastWithdrawalDate: Date | null
   totalWithdrawn: number
-  withdrawablePercent: number // Based on period: 1m=30%, 3m=50%, 6m=70%
-  dailyWithdrawUsed: number // For 6-month users 10% daily option
+  dailyWithdrawUsed: number // legacy field (unused)
   coinSymbol: string // The coin this trade is fixed on
   fixedPrice: number // Lock reference level (USD); may mirror live spot at open when server omits snapshot
   /** When true, fixedPrice was filled from Binance spot reference at open (server omitted fixedPriceUsd). */
@@ -177,6 +176,10 @@ interface ActiveFixTrade {
 /** Cumulative policy gross (remaining earned + already withdrawn) — same units as server `earnedUsd` + withdrawals. */
 function fixEarningsGrossUsd(trade: ActiveFixTrade): number {
   return Math.round((trade.earned + (trade.totalWithdrawn ?? 0)) * 100) / 100
+}
+
+function fixUnreleasedHeadroomUsd(trade: ActiveFixTrade): number {
+  return Math.max(0, Math.round((fixPolicyDisplayedGrossUsd(trade) - (trade.totalWithdrawn ?? 0)) * 100) / 100)
 }
 
 /**
@@ -302,6 +305,7 @@ export function ContainerMode({
   const [fixPeriod, setFixPeriod] = useState<FixPeriod>(1)
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [fixTradeActionId, setFixTradeActionId] = useState<string | null>(null)
   const [copyRiskAcknowledged, setCopyRiskAcknowledged] = useState(false)
 
   const [activeCopyTrades, setActiveCopyTrades] = useState<ActiveCopyTrade[]>([])
@@ -490,7 +494,7 @@ export function ContainerMode({
             insuranceFeeUsd?: number
             totalWithdrawnUsd: number
             lastWithdrawalAt: string | null
-            withdrawablePercent: number
+            releasableHeadroomUsd: number
             daysUntilMaturity?: number
             leaseEndedAwaitingSettlement?: boolean
           }>
@@ -537,7 +541,6 @@ export function ContainerMode({
             canWithdrawEarnings: true,
             lastWithdrawalDate: row.lastWithdrawalAt ? new Date(row.lastWithdrawalAt) : null,
             totalWithdrawn: row.totalWithdrawnUsd,
-            withdrawablePercent: row.withdrawablePercent,
             dailyWithdrawUsed: 0,
             coinSymbol: row.coinSymbol,
             fixedPrice: row.fixedPriceUsd,
@@ -1080,8 +1083,6 @@ export function ContainerMode({
           toastMutationError(out, "Could not open fixed trade from Nexus Main.")
           return
         }
-        const withdrawPercent = fixPeriod === 1 ? 30 : fixPeriod === 3 ? 50 : 70
-
         const startTime = out.createdAt ? new Date(out.createdAt) : new Date()
         const endTime = out.leaseEndAt
           ? new Date(out.leaseEndAt)
@@ -1133,7 +1134,6 @@ export function ContainerMode({
           canWithdrawEarnings: true,
           lastWithdrawalDate: null,
           totalWithdrawn: 0,
-          withdrawablePercent: withdrawPercent,
           dailyWithdrawUsed: 0,
           coinSymbol,
           fixedPrice,
@@ -1161,7 +1161,7 @@ export function ContainerMode({
     const trade = activeFixTrades.find((t) => t.traderId === traderId)
     if (!trade?.serverSessionId) return
 
-    setIsProcessing(true)
+    setFixTradeActionId(traderId)
     try {
       const {
         data: { session },
@@ -1199,7 +1199,7 @@ export function ContainerMode({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Early exit failed", { duration: 6500 })
     } finally {
-      setIsProcessing(false)
+      setFixTradeActionId(null)
     }
   }
 
@@ -1221,35 +1221,15 @@ export function ContainerMode({
         return
       }
 
-      const msDay = 86_400_000
-      const d = Math.floor((Date.now() - trade.startTime.getTime()) / msDay)
-      const currentPeriod = Math.floor(d / 5)
-      let lastPeriod = -1
-      if (trade.lastWithdrawalDate) {
-        const ld = Math.floor((trade.lastWithdrawalDate.getTime() - trade.startTime.getTime()) / msDay)
-        lastPeriod = Math.floor(ld / 5)
-      }
-      const calendarEligible = currentPeriod >= 1 && currentPeriod > lastPeriod
-      if (!calendarEligible) {
-        const nextUnlockDay = lastPeriod < 0 ? 5 : (lastPeriod + 1) * 5
-        const waitDays = Math.max(0, nextUnlockDay - d)
-        toast.error(
-          `Next earnings release unlocks in about ${waitDays} full day(s) (session day ${nextUnlockDay}: days 5, 10, 15, …). Accruals continue until then.`,
-          { duration: 8000 },
-        )
-        return
-      }
-
       const headroom = Math.max(0, Math.round((grossDisplayed - trade.totalWithdrawn) * 100) / 100)
-      const maxWithdrawable = Math.max(0, (headroom * trade.withdrawablePercent) / 100)
-      if (maxWithdrawable <= 0) {
+      if (headroom <= 0) {
         toast.error(
-          "Nothing eligible for this release window — the current policy slice may already be in container liquid, or accruals are still ramping.",
+          "Nothing left to release for this allocation — earnings may already be in your pocket or still accruing.",
           { duration: 7500 },
         )
         return
       }
-      setIsProcessing(true)
+      setFixTradeActionId(traderId)
       try {
         const {
           data: { session },
@@ -1312,7 +1292,7 @@ export function ContainerMode({
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Release failed.", { duration: 6500 })
       } finally {
-        setIsProcessing(false)
+        setFixTradeActionId(null)
       }
     })()
   }
@@ -1719,7 +1699,7 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.traderId}
-                      className="min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
+                      className="relative isolate min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -1831,8 +1811,8 @@ export function ContainerMode({
                           <p className="font-mono font-medium text-warning">{countdowns[`fix_${trade.traderId}`]}</p>
                         </div>
                         <div className="rounded bg-background p-2">
-                          <p className="text-xs text-muted-foreground">Withdrawable</p>
-                          <p className="font-mono font-medium text-success">{trade.withdrawablePercent}%</p>
+                          <p className="text-xs text-muted-foreground">{t("container.fix.unreleasedLabel")}</p>
+                          <p className="font-mono font-medium text-success">{formatUserMoney(fixUnreleasedHeadroomUsd(trade))}</p>
                         </div>
                         <div className="rounded bg-background p-2">
                           <p className="text-xs text-muted-foreground">Withdrawn</p>
@@ -1844,29 +1824,17 @@ export function ContainerMode({
 
                       {/* Withdrawal Info */}
                       <div className="mb-3 rounded-lg bg-background/50 p-2 text-xs">
-                        <div className="flex items-center justify-between text-muted-foreground">
-                          <span>Withdrawal Schedule:</span>
-                          <span className="font-medium text-foreground">
-                            {trade.period === 1 && "30% every 5 days"}
-                            {trade.period === 3 && "50% every 5 days"}
-                            {trade.period === 6 && "70% every 5 days or 10% daily"}
-                          </span>
-                        </div>
+                        <p className="text-muted-foreground leading-relaxed">{t("container.fix.releaseRulesBody")}</p>
                         {trade.lastWithdrawalDate && (
                           <div className="flex items-center justify-between text-muted-foreground mt-1">
-                            <span>Last Withdrawal:</span>
+                            <span>Last release:</span>
                             <span>{trade.lastWithdrawalDate.toLocaleDateString()}</span>
                           </div>
                         )}
                         <div className="flex items-center justify-between text-muted-foreground mt-1">
-                          <span>Available to Withdraw:</span>
+                          <span>{t("container.fix.availableToRelease")}:</span>
                           <span className="font-medium text-success">
-                            {formatUserMoney(
-                              Math.max(
-                                0,
-                                (trade.earned * trade.withdrawablePercent) / 100 - (trade.totalWithdrawn || 0)
-                              )
-                            )}
+                            {formatUserMoney(fixUnreleasedHeadroomUsd(trade))}
                           </span>
                         </div>
                       </div>
@@ -1900,21 +1868,21 @@ export function ContainerMode({
                       </div>
 
                       <div className="mt-2 flex w-full min-w-0 flex-col gap-2.5 md:mt-3 md:flex-row md:items-stretch md:gap-3 md:pb-0">
-                        {trade.earned > 0 ? (
+                        {fixUnreleasedHeadroomUsd(trade) > 0 ? (
                           <Button
                             type="button"
                             variant="default"
                             size="default"
                             className="order-1 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md border-0 bg-success px-4 text-sm font-semibold text-white shadow-sm hover:bg-success/90 focus-visible:ring-success md:order-1 md:h-10 md:flex-1"
                             onClick={() => handleWithdrawEarnings(trade.traderId)}
-                            disabled={isProcessing}
+                            disabled={fixTradeActionId !== null}
                           >
-                            {isProcessing ? (
+                            {fixTradeActionId === trade.traderId ? (
                               <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                             ) : (
                               <ArrowUpRight className="h-4 w-4 shrink-0" />
                             )}
-                            Withdraw Earnings
+                            <span className="whitespace-nowrap">Release earnings</span>
                           </Button>
                         ) : (
                           <p className="order-1 w-full rounded-md border border-dashed border-border/80 bg-background/40 px-3 py-2.5 text-center text-xs leading-snug text-muted-foreground md:order-1 md:flex-1 md:text-left">
@@ -1926,8 +1894,8 @@ export function ContainerMode({
                             type="button"
                             variant="outline"
                             size="default"
-                            className="order-2 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-amber-600/35 bg-amber-500/[0.07] px-4 text-sm font-medium text-amber-950 hover:bg-amber-500/15 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-500/10 md:order-2 md:h-10 md:flex-1"
-                            disabled={isProcessing}
+                            className="order-2 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-amber-600/50 bg-amber-50 px-4 text-sm font-medium text-amber-950 shadow-none hover:bg-amber-100 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-50 dark:hover:bg-amber-950/70 md:order-2 md:h-10 md:flex-1"
+                            disabled={fixTradeActionId !== null}
                             onClick={() => {
                               if (
                                 confirm(
@@ -1938,12 +1906,12 @@ export function ContainerMode({
                               }
                             }}
                           >
-                            {isProcessing ? (
+                            {fixTradeActionId === trade.traderId ? (
                               <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                             ) : (
                               <Unlock className="h-4 w-4 shrink-0" />
                             )}
-                            Early Exit
+                            <span className="whitespace-nowrap">Early exit</span>
                           </Button>
                         ) : (
                           <Button
@@ -2116,21 +2084,10 @@ export function ContainerMode({
             <div className="flex items-start gap-3">
               <Lock className="h-5 w-5 shrink-0 text-warning" />
               <div className="text-sm">
-                <p className="font-medium text-warning">Fixed Trade Rules & Withdrawal Schedule</p>
+                <p className="font-medium text-warning">{t("container.fix.releaseRulesTitle")}</p>
                 <div className="mt-2 space-y-2 text-muted-foreground">
-                  <div className="rounded-lg bg-background/50 p-2">
-                    <p className="font-medium text-foreground text-xs">1 Month Fix</p>
-                    <p className="text-xs">- Withdraw up to <strong className="text-success">30%</strong> of earnings every 5 days</p>
-                  </div>
-                  <div className="rounded-lg bg-background/50 p-2">
-                    <p className="font-medium text-foreground text-xs">3 Month Fix</p>
-                    <p className="text-xs">- Withdraw up to <strong className="text-success">50%</strong> of earnings every 5 days</p>
-                  </div>
-                  <div className="rounded-lg bg-background/50 p-2">
-                    <p className="font-medium text-foreground text-xs">6 Month Fix</p>
-                    <p className="text-xs">- Withdraw up to <strong className="text-success">70%</strong> of earnings every 5 days</p>
-                    <p className="text-xs">- OR <strong className="text-primary">10% daily</strong> (counts toward 70% limit)</p>
-                  </div>
+                  <p className="text-xs leading-relaxed">{t("container.fix.releaseRulesBody")}</p>
+                  <p className="text-xs leading-relaxed">{t("container.fix.pocketWithdrawCap")}</p>
                 </div>
                 <div className="mt-3 rounded-md bg-background/40 p-2 text-xs text-muted-foreground">
                   {fixedTradeTierHint(userLevel)}
@@ -2466,8 +2423,7 @@ export function ContainerMode({
                       coin stays supported during slower periods.
                     </p>
                     <p className="text-xs">
-                      Withdrawal windows for earnings follow the milestones on this screen; your Container dashboard
-                      stays the source of truth.
+                      Release accrued earnings to your pocket anytime; Nexus Main withdrawals follow the 50% liquid-total cap on your dashboard.
                     </p>
                   </div>
 
@@ -2479,11 +2435,8 @@ export function ContainerMode({
                         sessions): 10% agreement default + insurance from protected allocation only;{" "}
                         <strong>full session earnings</strong> credited to Nexus Main with net principal.
                       </li>
-                      <li>- Earnings Withdrawal: <strong className="text-success">
-                        {fixPeriod === 1 ? "30%" : fixPeriod === 3 ? "50%" : "70%"}
-                      </strong> every 5 days
-                        {fixPeriod === 6 && <span className="text-primary"> (or 10% daily)</span>}
-                      </li>
+                      <li>- {t("container.fix.releaseRulesBody")}</li>
+                      <li>- {t("container.fix.pocketWithdrawCap")}</li>
                     </ul>
                     <div className="pt-2 border-t border-warning/30 text-xs">
                       <p className="text-muted-foreground">

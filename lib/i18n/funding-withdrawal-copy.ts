@@ -120,7 +120,14 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.modal.readyNow": "You can submit a withdrawal now.",
   "withdrawal.modal.minLine": "Minimum amount: about 20,000 UGX (shown as {{min}} in your currency).",
   "withdrawal.modal.maxLine":
-    "Maximum: up to 50% of your total balance at that moment (about {{max}} right now in your currency).",
+    "Maximum: up to 50% of your liquid account total (main balance, pocket earnings, and releasable trade profits — about {{max}} right now).",
+  "container.fix.releaseRulesTitle": "Earnings release",
+  "container.fix.releaseRulesBody":
+    "Release accrued fixed-trade profits to your pocket anytime. A small release fee applies. Locked allocation stays in the trade until maturity or early exit.",
+  "container.fix.pocketWithdrawCap":
+    "Pocket withdrawals from Nexus Main are capped at 50% of your liquid total per request (main + pocket + releasable profits). Locked trade principal cannot be withdrawn.",
+  "container.fix.unreleasedLabel": "Unreleased",
+  "container.fix.availableToRelease": "Available to release",
   "funding.balance.mainTitle": "Main balance",
   "funding.balance.mainHint": "Spend here, withdraw, or start new container money.",
   "funding.balance.activeEarningsTitle": "Still building in your container",
