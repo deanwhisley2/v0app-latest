@@ -44,6 +44,7 @@ import {
   localFiatUnitsToUsd,
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
+import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
 
 interface CurrentUser {
   email: string
@@ -201,7 +202,9 @@ export default function DashboardPage() {
   const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
   const [retailerPaymentNumbersInput, setRetailerPaymentNumbersInput] = useState("")
-  const [l1FundSource, setL1FundSource] = useState<"pick" | "crypto" | "local">("pick")
+  const [l1FundSource, setL1FundSource] = useState<L1FundSource>("crypto")
+  const [fundPaymentProofDataUrl, setFundPaymentProofDataUrl] = useState<string | null>(null)
+  const [fundPaymentProofPreview, setFundPaymentProofPreview] = useState<string | null>(null)
   const [fundingCountryCodeInput, setFundingCountryCodeInput] = useState("")
   const [fundMobileNetwork, setFundMobileNetwork] = useState("")
   const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
@@ -1811,6 +1814,40 @@ export default function DashboardPage() {
                 : t("funding.error.useAdminQueue"),
             )
           }
+          if (l1FundSource === "crypto" || l1FundSource === "airtel") {
+            if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
+            if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
+            if (!fundPaymentProofDataUrl) throw new Error(t("funding.error.proofRequired"))
+            const res = await fetch("/api/user/retailer-funding", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                amount,
+                txReference: fundTxReference.trim(),
+                fundChannel: l1FundSource === "crypto" ? "admin_crypto" : "admin_airtel_ug",
+                paymentProofDataUrl: fundPaymentProofDataUrl,
+                note: fundNote.trim() || null,
+              }),
+            })
+            const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
+            if (!res.ok) {
+              throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
+            }
+            setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
+            showToast(
+              l1FundSource === "crypto" ? t("funding.toast.adminCryptoQueued") : t("funding.toast.adminAirtelQueued"),
+              "success",
+            )
+            setFundTxReference("")
+            setFundNote("")
+            setFundPaymentProofDataUrl(null)
+            setFundPaymentProofPreview(null)
+            setL1FundSource("crypto")
+            setShowFundModal(null)
+            setFundAmount("")
+            return
+          }
+
           if (l1FundSource !== "local") {
             throw new Error(t("funding.error.openLocalMobileFirst"))
           }
@@ -1903,6 +1940,7 @@ export default function DashboardPage() {
     withdrawalPendingBalance,
     currency,
     localMmWizardStep,
+    fundPaymentProofDataUrl,
     t,
   ])
 
@@ -2056,13 +2094,15 @@ export default function DashboardPage() {
                     onClick={() => {
                       setShowFundModal("add")
                       setFundAmount("")
-                      setL1FundSource("pick")
+                      setL1FundSource("crypto")
                       setQualifiedRetailers([])
                       setSelectedRetailerId("")
                       setFundTxReference("")
                       setFundNote("")
                       setFundMobileNetwork("")
                       setCryptoFundingMeta(null)
+                      setFundPaymentProofDataUrl(null)
+                      setFundPaymentProofPreview(null)
                     }}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90 sm:flex-none"
                   >
@@ -2141,60 +2181,41 @@ export default function DashboardPage() {
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-28 px-4 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] sm:px-0 sm:pb-2">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setL1FundSource("crypto")
-                      setLocalMmWizardStep(1)
-                    }}
-                    className={`rounded-lg border-2 px-2 py-2 text-left text-[11px] font-semibold leading-tight transition-all sm:px-3 sm:py-2.5 sm:text-xs ${
-                      l1FundSource === "crypto" ? "border-primary" : "border-border"
-                    }`}
-                  >
-                    {t("funding.optionCrypto")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setL1FundSource("local")
+                <FundingPaymentPanel
+                  activeSource={l1FundSource}
+                  onSourceChange={(s) => {
+                    setL1FundSource(s)
+                    if (s === "local") {
                       setLocalMmWizardStep(1)
                       setQualifiedRetailers([])
                       setOfficialCorridorFallback(null)
                       setSelectedOfficialRouteId(null)
                       setSelectedRetailerId("")
                       setLocalMmRetailersSearched(false)
-                      setFundTxReference("")
-                      setFundNote("")
-                    }}
-                    className={`rounded-lg border-2 px-2 py-2 text-left text-[11px] font-semibold leading-tight transition-all sm:px-3 sm:py-2.5 sm:text-xs ${
-                      l1FundSource === "local" ? "border-primary" : "border-border"
-                    }`}
-                  >
-                    {t("funding.optionLocal")}
-                  </button>
-                </div>
+                    }
+                  }}
+                  userEmail={user?.email ?? currentUser?.email ?? ""}
+                  fundTxReference={fundTxReference}
+                  onTxReferenceChange={setFundTxReference}
+                  paymentProofPreview={fundPaymentProofPreview}
+                  onProofFile={(file) => {
+                    if (!file) {
+                      setFundPaymentProofPreview(null)
+                      setFundPaymentProofDataUrl(null)
+                      return
+                    }
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                      const url = typeof reader.result === "string" ? reader.result : null
+                      setFundPaymentProofPreview(url)
+                      setFundPaymentProofDataUrl(url)
+                    }
+                    reader.readAsDataURL(file)
+                  }}
+                  t={t}
+                />
 
-                {l1FundSource === "pick" && (
-                  <p className="text-[11px] text-muted-foreground">{t("funding.pickHint")}</p>
-                )}
-
-                {l1FundSource === "crypto" && (
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
-                    <p className="font-semibold text-foreground">{t("funding.crypto.companyWallet")}</p>
-                    <p className="text-muted-foreground">
-                      {t("funding.crypto.networkHint").replace(
-                        "{{network}}",
-                        cryptoFundingMeta?.companyCryptoNetwork ?? "configure NEXUS_COMPANY_CRYPTO_* in env",
-                      )}
-                    </p>
-                    <p className="break-all rounded bg-background p-2 font-mono text-[11px]">
-                      {cryptoFundingMeta?.companyCryptoWallet ?? t("funding.crypto.askSupport")}
-                    </p>
-                  </div>
-                )}
-
-                {l1FundSource === "local" && localMmWizardStep === 1 ? (
+                                {l1FundSource === "local" && localMmWizardStep === 1 ? (
                   <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3 sm:p-4">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-foreground">{t("funding.local.step1Title")}</p>
@@ -2782,7 +2803,8 @@ export default function DashboardPage() {
             <div className="shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] pt-2.5 shadow-[0_-8px_32px_rgba(0,0,0,0.18)] max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:bg-card max-sm:px-3 max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom,0px),28px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:z-20 sm:rounded-none sm:px-0 sm:pb-3 sm:pt-3">
             {(showFundModal === "withdraw" ||
               retailerCreditDesk ||
-              (customerRetailFunding && l1FundSource !== "local")) && (
+              (customerRetailFunding &&
+                (l1FundSource === "crypto" || l1FundSource === "airtel" || l1FundSource === "pick"))) && (
               <div className="mb-0">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground sm:text-sm">
                   {showFundModal === "withdraw"
@@ -2874,7 +2896,11 @@ export default function DashboardPage() {
                 disabled={
                   isFundProcessing ||
                   (showFundModal === "withdraw" && (!fundAmount || parseFloat(fundAmount) <= 0)) ||
-                  (showFundModal === "add" && customerRetailFunding && l1FundSource !== "local") ||
+                  (showFundModal === "add" &&
+                    customerRetailFunding &&
+                    (l1FundSource === "pick" ||
+                      ((l1FundSource === "crypto" || l1FundSource === "airtel") &&
+                        (!fundTxReference.trim() || !fundPaymentProofDataUrl || !(parseFloat(fundAmount) > 0))))) ||
                   (showFundModal === "add" && retailerCreditDesk) ||
                   (showFundModal === "add" && (currentUser?.level ?? 1) === 5) ||
                   (showFundModal === "add" &&
@@ -2910,6 +2936,8 @@ export default function DashboardPage() {
                     : t("withdrawal.cta.withdraw")
                 ) : customerRetailFunding && l1FundSource === "local" ? (
                   t("funding.cta.confirmPayment")
+                ) : customerRetailFunding && (l1FundSource === "crypto" || l1FundSource === "airtel") ? (
+                  t("funding.cta.submitAdminPayment")
                 ) : customerRetailFunding ? (
                   t("funding.cta.chooseLocalPath")
                 ) : (

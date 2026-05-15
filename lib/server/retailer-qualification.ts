@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { MAX_RETAILERS_ON_PAYMENT_PAGE } from "@/lib/server/admin-payment-config"
 import {
   countOpenInboundRequestsForRetailer,
   retailerDeskSupportsNetwork,
@@ -82,10 +83,20 @@ export async function collectQualifiedRetailDesks(
   const uids = candidates.map((r) => String((r as { user_id: string }).user_id))
   const verifiedIds = await loadVerifiedRetailerUserIds(admin, uids)
 
+  const { data: profRows } = await admin
+    .from("profiles")
+    .select("id,operational_freeze_at,account_disabled_at")
+    .in("id", uids.length ? uids : ["00000000-0000-0000-0000-000000000000"])
+  const profById = new Map((profRows ?? []).map((p) => [String(p.id), p]))
+
   const qualified: Array<Record<string, unknown>> = []
   for (const row of candidates) {
     const uid = String((row as { user_id: string }).user_id)
     if (!verifiedIds.has(uid)) continue
+    const prof = profById.get(uid)
+    if (prof?.account_disabled_at || prof?.operational_freeze_at) continue
+    const liq = String((row as { liquidity_status?: string }).liquidity_status ?? "")
+    if (!["active", "busy", "low_liquidity"].includes(liq)) continue
 
     if (!retailerDeskSupportsNetwork(row.payment_numbers, mobileNetwork, customerCountry)) continue
 
@@ -114,7 +125,7 @@ export async function collectQualifiedRetailDesks(
     return pb - pa
   })
 
-  return qualified
+  return qualified.slice(0, MAX_RETAILERS_ON_PAYMENT_PAGE)
 }
 
 export async function assertRetailDeskQualifiesForCorridor(

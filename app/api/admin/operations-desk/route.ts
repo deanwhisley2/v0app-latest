@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       admin
         .from("retailer_fund_requests")
         .select(
-          "id,user_id,retailer_id,amount,tx_reference,status,note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,appeal_note,payer_display_name,payer_phone,escalated_to_admin,resolution_note"
+          "id,user_id,retailer_id,amount,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,appeal_note,payer_display_name,payer_phone,escalated_to_admin,resolution_note"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -261,11 +261,15 @@ export async function GET(request: Request) {
         tx_reference: String(raw.tx_reference ?? ""),
         amount,
         request_type_label:
-          ch === "local_mobile"
-            ? retailPid
-              ? "Customer add funds (local mobile-money)"
-              : "Customer add funds (official company corridor)"
-            : "Customer add funds (legacy admin basin)",
+          ch === "admin_crypto"
+            ? "Customer add funds (USDT TRC20 · L5 admin direct)"
+            : ch === "admin_airtel_ug"
+              ? "Customer add funds (Uganda Airtel · L5 admin direct)"
+              : ch === "local_mobile"
+                ? retailPid
+                  ? "Customer add funds (local mobile-money)"
+                  : "Customer add funds (official company corridor)"
+                : "Customer add funds (legacy admin basin)",
         fund_channel: ch,
         mobile_network: mob || null,
         created_at,

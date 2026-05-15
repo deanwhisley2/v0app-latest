@@ -16,6 +16,9 @@ import {
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
+import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
+import { isAdminDirectFundChannel } from "@/lib/server/admin-payment-config"
+import { signedFundingProofUrl } from "@/lib/server/funding-proof-storage"
 
 export async function GET(request: Request) {
   try {
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
       admin
         .from("retailer_fund_requests")
         .select(
-          "id,user_id,retailer_id,amount,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,escalation_at,resolution_note,l5_settlement_mode,l5_override_note,approved_by_admin_for_retailer,retailer_approved_by,retailer_approved_at"
+          "id,user_id,retailer_id,amount,amount_usd_locked,tx_reference,status,note,appeal_note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,escalated_to_admin,escalation_at,resolution_note,l5_settlement_mode,l5_override_note,approved_by_admin_for_retailer,retailer_approved_by,retailer_approved_at"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -42,7 +45,32 @@ export async function GET(request: Request) {
     if (requestsRes.error) return NextResponse.json({ error: requestsRes.error.message }, { status: 500 })
     if (retailersRes.error) return NextResponse.json({ error: retailersRes.error.message }, { status: 500 })
     const retailers = await attachProfileEmailsToRetailers(admin, retailersRes.data ?? [])
-    return NextResponse.json({ requests: requestsRes.data ?? [], retailers })
+
+    const userIds = [...new Set((requestsRes.data ?? []).map((r) => String((r as { user_id?: string }).user_id ?? "")))]
+    const emailByUser = new Map<string, string>()
+    if (userIds.length) {
+      const { data: profs } = await admin.from("profiles").select("id,email").in("id", userIds)
+      for (const p of profs ?? []) {
+        const id = String((p as { id?: string }).id ?? "")
+        const em = String((p as { email?: string }).email ?? "").trim()
+        if (id && em) emailByUser.set(id, em)
+      }
+    }
+
+    const requests = await Promise.all(
+      (requestsRes.data ?? []).map(async (row) => {
+        const r = row as { user_id?: string; payment_proof_path?: string | null }
+        const proofPath = String(r.payment_proof_path ?? "").trim()
+        const payment_proof_url = proofPath ? await signedFundingProofUrl(admin, proofPath) : null
+        return {
+          ...row,
+          user_email: emailByUser.get(String(r.user_id ?? "")) ?? null,
+          payment_proof_url,
+        }
+      }),
+    )
+
+    return NextResponse.json({ requests, retailers })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Forbidden" }, { status: 403 })
   }
@@ -118,6 +146,94 @@ export async function PATCH(request: Request) {
             ? "under_review"
             : "resolved"
 
+    if (isAdminDirectFundChannel(fundChannel)) {
+      const settlementUsd = settlementUsdFromFundRequestRow(reqRow as { amount_usd_locked?: unknown; amount?: unknown })
+      const custId = (reqRow as { user_id: string }).user_id
+
+      if (body.action === "approve") {
+        const treasuryUsd = await treasury.getTreasuryBalance("MAIN_TREASURY")
+        if (treasuryUsd < settlementUsd) {
+          return NextResponse.json(
+            {
+              error: `Insufficient company treasury liquidity (available $${treasuryUsd.toFixed(2)} USD-equivalent).`,
+            },
+            { status: 400 },
+          )
+        }
+        try {
+          await creditCustomerMainFromTreasuryUsd(admin, {
+            customerUserId: custId,
+            amountUsd: settlementUsd,
+            referenceId: `fund_req:${body.requestId}`,
+            adminUserId: user.id,
+            reason: `L5 admin direct ${fundChannel} funding approval ${body.requestId}`,
+          })
+        } catch (err) {
+          return NextResponse.json(
+            { error: err instanceof Error ? err.message : "Treasury settlement failed." },
+            { status: 400 },
+          )
+        }
+      }
+
+      const { error: updateErr } = await admin
+        .from("retailer_fund_requests")
+        .update({
+          status: nextStatus,
+          reviewed_by: user.id,
+          reviewed_at: now,
+          resolved_by: body.action === "resolve" ? user.id : null,
+          resolved_at: body.action === "resolve" ? now : null,
+          updated_at: now,
+          resolution_note: resolutionNote,
+          l5_settlement_mode: body.action === "approve" ? "treasury_pool" : null,
+          approved_by_admin_for_retailer: false,
+        })
+        .eq("id", body.requestId)
+        .in("status", ["pending", "under_review", "appealed", "escalated"])
+      if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+      if (body.action === "approve") {
+        await recordFinancialEvent({
+          userId: custId,
+          eventType: "funding_request_admin_approved",
+          category: "admin",
+          amount: settlementUsd,
+          balanceSource: "main_treasury_pool",
+          balanceDestination: "nexus_main_available",
+          status: "approved",
+          actorType: "admin",
+          actorId: user.id,
+          transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
+          summary: `L5 approved admin direct ${fundChannel} funding (MAIN_TREASURY debited).`,
+          metadata: { requestId: body.requestId, fundChannel },
+        })
+        await notifyCustomerFundingOperational(admin, {
+          userId: custId,
+          requestId: body.requestId!,
+          viaTreasury: true,
+        })
+      } else {
+        await recordFinancialEvent({
+          userId: custId,
+          eventType: `funding_request_admin_${nextStatus}`,
+          category: "admin",
+          amount: settlementUsd,
+          balanceSource: "nexus_main_pending",
+          balanceDestination: "nexus_main_pending",
+          status: nextStatus === "rejected" ? "rejected" : "pending",
+          actorType: "admin",
+          actorId: user.id,
+          transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
+          summary: `Admin ${nextStatus} admin direct ${fundChannel} funding request.`,
+          metadata: { requestId: body.requestId, fundChannel },
+        })
+        await notifyFundingStatus(admin, custId, body.requestId!, nextStatus, resolutionNote)
+      }
+
+      return NextResponse.json({ ok: true })
+    }
+
     if (fundChannel === "local_mobile") {
       type L5Mode = "treasury_pool" | "retailer_retail_balance"
       let settledApprovalMode: L5Mode | undefined
@@ -131,6 +247,27 @@ export async function PATCH(request: Request) {
       const fxRow = reqRow as { fx_quote_expires_at?: string | null }
 
       if (body.action === "approve") {
+        const mathAudit = auditFundingConversion({
+          amountInputLocal: Number((reqRow as { amount_input_local?: unknown }).amount_input_local ?? 0) || null,
+          inputCurrency: String((reqRow as { input_currency?: string }).input_currency ?? "") || null,
+          fxRateSnapshot: Number((reqRow as { fx_rate_snapshot?: unknown }).fx_rate_snapshot ?? 0) || null,
+          amountUsdLocked: settlementUsd,
+        })
+        await persistFundingAudit(admin, {
+          fundRequestId: body.requestId,
+          userId: customerId,
+          retailerId: (reqRow as { retailer_id?: string }).retailer_id ?? null,
+          result: mathAudit,
+        })
+        if (!mathAudit.ok && mathAudit.severity === "critical") {
+          return NextResponse.json(
+            {
+              error: `Funding blocked: ${mathAudit.message} Resolve or reject before crediting.`,
+              auditCode: mathAudit.code,
+            },
+            { status: 422 },
+          )
+        }
         if (isFundingFxQuoteExpired(fxRow)) {
           return NextResponse.json(
             { error: "This funding quote has expired under policy — reject or resolve so the customer can submit a fresh request." },

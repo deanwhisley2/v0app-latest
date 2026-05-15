@@ -558,13 +558,28 @@ export function AdminOperationalAssets({
   onFocusSupportThreadConsumed?: () => void
 }) {
   const { user: authUser } = useAuth()
-  const [sub, setSub] = useState<"approval" | "users" | "history" | "support">("approval")
+  const [sub, setSub] = useState<"approval" | "users" | "retailers" | "history" | "support">("approval")
   const [supportFeedTick, setSupportFeedTick] = useState(0)
   const bumpSupportFeed = useCallback(() => setSupportFeedTick((n) => n + 1), [])
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [search, setSearch] = useState("")
+  const [retailerSearch, setRetailerSearch] = useState("")
+  const [retailerRows, setRetailerRows] = useState<
+    Array<{
+      id: string
+      userId: string
+      email: string | null
+      countryCode: string | null
+      displayStatus: string
+      retailBalanceUsd: number
+      spendableLiquidityUsd: number
+      lastActivityAt: string | null
+      lowFloatAlert: boolean
+    }>
+  >([])
+  const [lowFloatCount, setLowFloatCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [approvalRetailers, setApprovalRetailers] = useState<Array<Record<string, unknown>>>([])
   const [deskPending, setDeskPending] = useState<OperationsDeskApiRow[]>([])
@@ -870,6 +885,7 @@ export function AdminOperationalAssets({
     if (isGuest) return
     if (sub === "history") void refreshHistory()
     if (sub === "approval") void refreshApproval()
+    if (sub === "retailers") void refreshApproval()
   }, [isGuest, sub, refreshHistory, refreshApproval])
 
   useEffect(() => {
@@ -1000,6 +1016,7 @@ export function AdminOperationalAssets({
             { id: "approval" as const, label: "Approval desk", icon: ShieldCheck },
             { id: "support" as const, label: "Human support", icon: MessageCircle },
             { id: "users" as const, label: "Users", icon: Users },
+            { id: "retailers" as const, label: "Retailers", icon: Building2 },
             { id: "history" as const, label: "History", icon: History },
           ] as const
         ).map((tab) => (
@@ -1691,6 +1708,17 @@ export function AdminOperationalAssets({
                       reviewRow.status === "appealed" ||
                       reviewRow.status === "escalated" ? (
                       <>
+                        {reviewRow.kind === "user_add_funds" &&
+                        (String(reviewRow.fund_channel ?? "") === "admin_crypto" ||
+                          String(reviewRow.fund_channel ?? "") === "admin_airtel_ug") ? (
+                          <div className="mb-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-[11px] text-violet-950 dark:text-violet-100">
+                            <p className="font-semibold">L5 admin direct payment</p>
+                            <p className="mt-1 text-muted-foreground">
+                              Customer paid company receive rails — no retailer desk is liable. Approve debits{" "}
+                              <strong>MAIN_TREASURY</strong> only after verifying tx reference and payment proof in storage.
+                            </p>
+                          </div>
+                        ) : null}
                         {reviewRow.kind === "user_add_funds" &&
                         String(reviewRow.fund_channel ?? "") === "local_mobile" ? (
                           <div className="flex w-full flex-col gap-3">

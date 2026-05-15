@@ -13,23 +13,16 @@ import {
   normalizeCorridorNetworkToken,
 } from "@/lib/server/retailer-qualification"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
-import {
-  corridorFiatForCountryIso2,
-  isSupportedFiat,
-  localFiatUnitsToUsd,
-  USD_TO_FX,
-  type FiatCurrencyCode,
-} from "@/lib/currency-display"
+import { corridorFiatForCountryIso2, isSupportedFiat } from "@/lib/currency-display"
+import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } from "@/lib/server/daily-fx-rate"
+import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
+import { isAdminDirectFundChannel } from "@/lib/server/admin-payment-config"
+import { uploadFundingProof } from "@/lib/server/funding-proof-storage"
 
 const CLIENT_USD_TOLERANCE = 0.05
 
 function clientUsdMatchesServerLedger(clientUsd: number, serverUsd: number): boolean {
   return Math.abs(clientUsd - serverUsd) <= CLIENT_USD_TOLERANCE
-}
-
-function fxSnapshotLocalPerUsd(currency: string): number | null {
-  if (!isSupportedFiat(currency)) return null
-  return USD_TO_FX[currency as FiatCurrencyCode]
 }
 
 export async function GET(request: Request) {
@@ -43,7 +36,7 @@ export async function GET(request: Request) {
     const requestsRes = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,appeal_note,fund_channel,mobile_network,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
+        "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,appeal_note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -98,10 +91,12 @@ export async function POST(request: Request) {
       txReference?: string
       note?: string
       mobileNetwork?: string
-      fundChannel?: "local_mobile" | "legacy_admin"
+      fundChannel?: "local_mobile" | "legacy_admin" | "admin_crypto" | "admin_airtel_ug"
       fundingCountryCode?: string
       payerDisplayName?: string
       payerPhone?: string
+      paymentProofPath?: string
+      paymentProofDataUrl?: string
     }
     const retailerId = typeof body.retailerId === "string" ? body.retailerId.trim() : ""
     const officialCorridorRouteId =
@@ -113,13 +108,28 @@ export async function POST(request: Request) {
     const payerDisplayName =
       typeof body.payerDisplayName === "string" ? body.payerDisplayName.trim().slice(0, 120) || null : null
     const payerPhone = typeof body.payerPhone === "string" ? body.payerPhone.trim().slice(0, 32) || null : null
-    const fundChannel = body.fundChannel === "legacy_admin" ? "legacy_admin" : "local_mobile"
+    const fundChannelRaw = typeof body.fundChannel === "string" ? body.fundChannel.trim() : "local_mobile"
+    const fundChannel = isAdminDirectFundChannel(fundChannelRaw)
+      ? fundChannelRaw
+      : fundChannelRaw === "legacy_admin"
+        ? "legacy_admin"
+        : "local_mobile"
     const countryUpdate =
       typeof body.fundingCountryCode === "string" ? body.fundingCountryCode.trim().toUpperCase().slice(0, 2) : ""
 
     if (!txReference || !Number.isFinite(clientLedgerUsd) || clientLedgerUsd <= 0) {
       return NextResponse.json({ error: "amount and txReference are required." }, { status: 400 })
     }
+
+    if (isAdminDirectFundChannel(fundChannel)) {
+      if (retailerId || officialCorridorRouteId) {
+        return NextResponse.json(
+          { error: "Admin direct payments do not use a retailer desk — submit without retailerId." },
+          { status: 400 },
+        )
+      }
+    }
+
     if (fundChannel === "legacy_admin") {
       if (!retailerId) {
         return NextResponse.json({ error: "retailerId is required for legacy funding." }, { status: 400 })
@@ -161,7 +171,7 @@ export async function POST(request: Request) {
     let amountInputLocalNum: number | null = null
     let inputCurrencyStr: string | null = null
     let fxRateSnapshotNum: number | null = null
-    const fxQuoteExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+    let fxQuoteExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
     let retailerResponseDeadlineAt: string | null = null
     let insertRetailerId: string | null = null
@@ -196,16 +206,30 @@ export async function POST(request: Request) {
       if (hasExplicitFx) {
         amountInputLocalNum = Number(explicitLocal)
         inputCurrencyStr = explicitCur
-        amountUsdLocked = localFiatUnitsToUsd(amountInputLocalNum, inputCurrencyStr)
-        fxRateSnapshotNum = fxSnapshotLocalPerUsd(inputCurrencyStr)
+        const daily = await getDailyLocalPerUsd(admin, inputCurrencyStr)
+        fxRateSnapshotNum = daily.localPerUsd
+        fxQuoteExpiresAt = dailyFxQuoteExpiresAt(daily.rateDate)
+        amountUsdLocked = localToUsdWithDailyRate(amountInputLocalNum, daily.localPerUsd)
       } else if (corridorFiat) {
         inputCurrencyStr = corridorFiat
-        fxRateSnapshotNum = fxSnapshotLocalPerUsd(corridorFiat)
+        const daily = await getDailyLocalPerUsd(admin, corridorFiat)
+        fxRateSnapshotNum = daily.localPerUsd
+        fxQuoteExpiresAt = dailyFxQuoteExpiresAt(daily.rateDate)
         const rawLocal = explicitLocal !== undefined && explicitLocal !== null ? Number(explicitLocal) : NaN
         if (Number.isFinite(rawLocal) && rawLocal > 0) {
           amountInputLocalNum = rawLocal
-          amountUsdLocked = localFiatUnitsToUsd(rawLocal, corridorFiat)
+          amountUsdLocked = localToUsdWithDailyRate(rawLocal, daily.localPerUsd)
         }
+      }
+
+      const preAudit = auditFundingConversion({
+        amountInputLocal: amountInputLocalNum,
+        inputCurrency: inputCurrencyStr,
+        fxRateSnapshot: fxRateSnapshotNum,
+        amountUsdLocked,
+      })
+      if (!preAudit.ok) {
+        return NextResponse.json({ error: preAudit.message, code: preAudit.code }, { status: 400 })
       }
 
       if (!clientUsdMatchesServerLedger(clientLedgerUsd, amountUsdLocked)) {
@@ -271,10 +295,23 @@ export async function POST(request: Request) {
     } else if (fundChannel === "legacy_admin") {
       insertRetailerId = retailerId || null
       insertOfficialRouteId = null
+    } else if (isAdminDirectFundChannel(fundChannel)) {
+      insertRetailerId = null
+      insertOfficialRouteId = null
+      retailerResponseDeadlineAt = null
     }
 
+    const adminDirectNetwork =
+      fundChannel === "admin_crypto" ? "USDT-TRC20" : fundChannel === "admin_airtel_ug" ? "Airtel" : mobileNetwork
+
     try {
-      await assertNoDuplicatePendingUserFunding(admin, user.id, amountUsdLocked, fundChannel, mobileNetwork)
+      await assertNoDuplicatePendingUserFunding(
+        admin,
+        user.id,
+        amountUsdLocked,
+        fundChannel,
+        isAdminDirectFundChannel(fundChannel) ? adminDirectNetwork : mobileNetwork,
+      )
     } catch (err) {
       if (err instanceof DuplicatePendingError) {
         return NextResponse.json({ error: err.message, code: "DUPLICATE_PENDING" }, { status: 409 })
@@ -284,6 +321,20 @@ export async function POST(request: Request) {
 
     const fxLockedAtIso = new Date().toISOString()
     const amountRoundedDisplay = Math.round(amountUsdLocked * 100) / 100
+
+    let paymentProofPath =
+      typeof body.paymentProofPath === "string" ? body.paymentProofPath.trim().slice(0, 512) || null : null
+    const proofDataUrl = typeof body.paymentProofDataUrl === "string" ? body.paymentProofDataUrl.trim() : ""
+    if (proofDataUrl && isAdminDirectFundChannel(fundChannel)) {
+      try {
+        paymentProofPath = await uploadFundingProof(admin, user.id, proofDataUrl)
+      } catch (proofErr) {
+        return NextResponse.json(
+          { error: proofErr instanceof Error ? proofErr.message : "Payment proof upload failed." },
+          { status: 400 },
+        )
+      }
+    }
 
     let data: Record<string, unknown>
     if (fundChannel === "local_mobile" && insertRetailerId && !insertOfficialRouteId) {
@@ -347,19 +398,40 @@ export async function POST(request: Request) {
           note,
           status: "pending",
           fund_channel: fundChannel,
-          mobile_network: mobileNetwork,
+          mobile_network: isAdminDirectFundChannel(fundChannel) ? adminDirectNetwork : mobileNetwork,
           payer_display_name: payerDisplayName,
           payer_phone: payerPhone,
+          payment_proof_path: paymentProofPath,
           retailer_response_deadline_at: retailerResponseDeadlineAt,
-          escalated_to_admin: Boolean(insertOfficialRouteId && fundChannel === "local_mobile"),
+          escalated_to_admin: Boolean(
+            isAdminDirectFundChannel(fundChannel) ||
+              (insertOfficialRouteId && fundChannel === "local_mobile"),
+          ),
+          escalation_at: isAdminDirectFundChannel(fundChannel) ? fxLockedAtIso : null,
+          escalated_note: isAdminDirectFundChannel(fundChannel)
+            ? "User paid Level-5 admin receive rail; no retailer desk responsible."
+            : null,
         })
         .select(
-          "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,fund_channel,mobile_network,created_at,escalated_to_admin,retailer_response_deadline_at",
+          "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,escalated_to_admin,retailer_response_deadline_at",
         )
         .single()
       if (error) return NextResponse.json({ error: error.message }, { status: 400 })
       data = ins as Record<string, unknown>
     }
+
+    await persistFundingAudit(admin, {
+      fundRequestId: String(data.id ?? ""),
+      userId: user.id,
+      retailerId: insertRetailerId,
+      result: auditFundingConversion({
+        amountInputLocal: amountInputLocalNum,
+        inputCurrency: inputCurrencyStr,
+        fxRateSnapshot: fxRateSnapshotNum,
+        amountUsdLocked,
+      }),
+      metadata: { phase: "create" },
+    })
 
     await recordFinancialEvent({
       userId: user.id,
@@ -373,11 +445,15 @@ export async function POST(request: Request) {
       actorId: user.id,
       transactionRef: txReference,
       summary:
-        fundChannel === "local_mobile"
-          ? insertOfficialRouteId
-            ? "Local funding submitted — official company corridor (Level 5 operations will verify)."
-            : "Local mobile-money funding submitted; awaiting retailer verification."
-          : "Retailer funding request submitted (legacy admin channel).",
+        fundChannel === "admin_crypto"
+          ? "USDT TRC20 funding submitted — Level 5 admin will verify on-chain proof."
+          : fundChannel === "admin_airtel_ug"
+            ? "Uganda Airtel Money funding submitted — Level 5 admin will verify merchant payment."
+            : fundChannel === "local_mobile"
+              ? insertOfficialRouteId
+                ? "Local funding submitted — official company corridor (Level 5 operations will verify)."
+                : "Local mobile-money funding submitted; awaiting retailer verification."
+              : "Retailer funding request submitted (legacy admin channel).",
       metadata: {
         retailerId: insertRetailerId,
         officialCorridorRouteId: insertOfficialRouteId,
