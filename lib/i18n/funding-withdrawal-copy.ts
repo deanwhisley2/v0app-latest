@@ -17,6 +17,12 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.payment.ugandaSubtitle": "Pay merchant line · admin verifies",
   "funding.payment.retailerCapHint": "up to 2 verified desks in your country",
   "funding.payment.pickRail": "Choose crypto, Uganda Airtel, or local retailer desks above.",
+  "funding.payment.cryptoInstructionShort":
+    "USDT via TRC20 only. Send, then paste the transaction hash below. Chain confirmations apply before credit.",
+  "funding.payment.localAccordionHint":
+    "Complete your corridor and desk selection below — only one payment path is shown at a time.",
+  "funding.payment.cryptoOptionalStatus": "Deposit status",
+  "funding.payment.airtelStepsToggle": "Step-by-step (USSD)",
   "funding.payment.cryptoPanelTitle": "Crypto payment",
   "funding.payment.adminDirectNote":
     "You pay Nexus admin directly — no retailer is responsible until ops approves or rejects your request.",

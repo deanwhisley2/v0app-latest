@@ -1704,6 +1704,15 @@ export default function DashboardPage() {
   }, [showFundModal])
 
   useEffect(() => {
+    if (!showFundModal) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [showFundModal])
+
+  useEffect(() => {
     if (showFundModal !== "add" || l1FundSource !== "crypto") return
     let cancelled = false
     ;(async () => {
@@ -2241,20 +2250,22 @@ export default function DashboardPage() {
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
         <div
-          className="fixed inset-0 z-[100] flex flex-col bg-black/70 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+          className="fixed inset-0 z-[100] flex flex-col bg-black/75 pt-[max(0px,env(safe-area-inset-top,0px))] sm:items-center sm:justify-center sm:bg-black/65 sm:p-4 sm:pt-4 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="fund-modal-title"
         >
-          <div className="flex min-h-0 w-full max-w-md flex-1 flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[min(92dvh,700px)] sm:flex-none sm:rounded-2xl sm:p-5">
+          <div className="flex min-h-0 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md flex-1 flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[min(92dvh,720px)] sm:flex-none sm:rounded-2xl sm:p-5">
             {/* Modal Header */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 pb-2 pt-3 sm:px-0 sm:pb-3 sm:pt-0">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 pb-2 pt-2 max-sm:pt-3 sm:px-0 sm:pb-3 sm:pt-0">
               <h2 id="fund-modal-title" className="text-lg font-bold sm:text-xl">
                 {showFundModal === "add" ? t("funding.modal.titleAdd") : t("funding.modal.titleWithdraw")}
               </h2>
               <button
+                type="button"
                 onClick={() => setShowFundModal(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80"
+                aria-label={t("funding.button.close")}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 max-sm:h-11 max-sm:w-11 max-sm:bg-muted/90"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2268,7 +2279,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-28 px-4 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] sm:px-0 sm:pb-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-24 px-3 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(7.75rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
                 <FundingPaymentPanel
@@ -2285,6 +2296,8 @@ export default function DashboardPage() {
                     }
                   }}
                   userEmail={user?.email ?? currentUser?.email ?? ""}
+                  fundAmount={fundAmount}
+                  onFundAmountChange={setFundAmount}
                   fundTxReference={fundTxReference}
                   onTxReferenceChange={setFundTxReference}
                   paymentProofPreview={fundPaymentProofPreview}
@@ -2930,32 +2943,27 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-            <div className="shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] pt-2.5 shadow-[0_-8px_32px_rgba(0,0,0,0.18)] max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:bg-card max-sm:px-3 max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom,0px),28px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:z-20 sm:rounded-none sm:px-0 sm:pb-3 sm:pt-3">
+            <div className="shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-6px_24px_rgba(0,0,0,0.16)] max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:bg-card max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px))] max-sm:pt-2.5 max-sm:shadow-[0_-10px_32px_rgba(0,0,0,0.32)] sm:relative sm:z-20 sm:rounded-none sm:px-0 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:pt-3">
             {(showFundModal === "withdraw" ||
               retailerCreditDesk ||
-              (customerRetailFunding &&
-                (l1FundSource === "crypto" || l1FundSource === "airtel" || l1FundSource === "pick"))) && (
+              (customerRetailFunding && (l1FundSource === "airtel" || l1FundSource === "pick"))) && (
               <div className="mb-0">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground sm:text-sm">
                   {showFundModal === "withdraw"
                     ? t("withdrawal.amountLabel").replace("{{currency}}", currency)
                     : retailerCreditDesk
                       ? t("funding.amount.retailerTopup").replace("{{currency}}", currency)
-                      : l1FundSource === "crypto"
-                        ? t("funding.amount.matchSend").replace("{{currency}}", "USD")
-                        : t("funding.amount.matchSend").replace("{{currency}}", currency)}
+                      : t("funding.amount.matchSend").replace("{{currency}}", currency)}
                 </label>
                 <input
                   type="number"
                   value={fundAmount}
                   onChange={(e) => setFundAmount(e.target.value)}
-                  placeholder={l1FundSource === "crypto" ? "0 (USD)" : `0 (${currency})`}
+                  placeholder={`0 (${currency})`}
                   className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"
                 />
                 <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground sm:text-[11px]">
-                  {l1FundSource === "crypto"
-                    ? t("funding.payment.cryptoAmountUsdHint")
-                    : t("funding.amount.ledgerNote").replace("{{currency}}", currency)}
+                  {t("funding.amount.ledgerNote").replace("{{currency}}", currency)}
                 </p>
                 {showFundModal === "withdraw" && (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -3005,15 +3013,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              {showFundModal === "add" &&
-              customerRetailFunding &&
-              l1FundSource === "crypto" &&
-              !fundTxReference.trim() ? (
-                <p className="text-[10px] font-medium text-amber-800 dark:text-amber-100">
-                  {t("funding.payment.txHashRequiredHint")}
-                </p>
-              ) : null}
+            <div className="flex flex-col gap-1.5 sm:gap-2">
               {showFundModal === "add" &&
               customerRetailFunding &&
               l1FundSource === "local" &&
@@ -3092,15 +3092,6 @@ export default function DashboardPage() {
                   t("funding.cta.addFunds")
                 )}
               </button>
-              {showFundModal === "add" && customerRetailFunding && l1FundSource === "crypto" ? (
-                <button
-                  type="button"
-                  className="w-full rounded-lg border border-border py-2 text-sm font-medium"
-                  onClick={() => setShowFundModal(null)}
-                >
-                  {t("funding.button.close")}
-                </button>
-              ) : null}
             </div>
             </div>
             )}
