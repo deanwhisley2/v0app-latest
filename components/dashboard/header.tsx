@@ -162,8 +162,8 @@ export function Header({
             </div>
           </div>
 
-          {/* Center Navigation */}
-          <nav className="hidden items-center gap-1 md:flex">
+          {/* Section switching: bottom nav on mobile/tablet; avoid duplicate tabs here */}
+          <nav className="hidden">
             {mainTabs.map((tab) => (
               <button
                 key={tab.id}

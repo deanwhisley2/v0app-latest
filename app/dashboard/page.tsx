@@ -119,22 +119,6 @@ type IncomingFundReq = {
   created_at: string
 }
 
-type ContainerBalanceEvent = {
-  id: string
-  event_type: string
-  category?: string
-  gross_amount: number
-  fee_amount: number
-  net_amount: number
-  transaction_ref?: string
-  status?: string
-  summary?: string
-  balance_source?: string | null
-  balance_destination?: string | null
-  metadata?: Record<string, unknown> | null
-  created_at: string
-}
-
 const initialMarketFeed: MarketFeedState = {
   status: "loading",
   gainers: [],
@@ -197,20 +181,6 @@ export default function DashboardPage() {
   const [containerWithdrawableEarnings, setContainerWithdrawableEarnings] = useState(0)
   const [containerFeesPaid, setContainerFeesPaid] = useState(0)
   const [isContainerFlowBusy, setIsContainerFlowBusy] = useState(false)
-  const [containerEvents, setContainerEvents] = useState<ContainerBalanceEvent[]>([])
-  const containerLiquidHistoryEvents = useMemo(
-    () =>
-      containerEvents.filter((e) => {
-        const blob = `${e.event_type ?? ""} ${e.summary ?? ""} ${e.balance_destination ?? ""}`.toLowerCase()
-        return (
-          blob.includes("liquid") ||
-          blob.includes("withdrawable") ||
-          blob.includes("container_earn") ||
-          /earnings|transfer.?main|transfer_to_main|extract/i.test(blob)
-        )
-      }),
-    [containerEvents],
-  )
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
   const [fundAmount, setFundAmount] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
@@ -912,27 +882,6 @@ export default function DashboardPage() {
     setContainerFeesPaid(Number(b.lifetime_container_fees ?? 0))
   }, [isGuestSession, user?.id, op.snapshot?.userBalance])
 
-  useEffect(() => {
-    if (authLoading || !user || isGuestSession) return
-    ;(async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) return
-        const res = await fetch("/api/user/financial-events", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) return
-        const out = (await res.json().catch(() => ({}))) as { events?: ContainerBalanceEvent[] }
-        setContainerEvents(out.events ?? [])
-      } catch {
-        /* ignore */
-      }
-    })()
-  }, [authLoading, user, isGuestSession])
-
   const runContainerFlowAction = useCallback(
     async (action: "extract" | "transfer_to_main") => {
       if (isContainerFlowBusy) return
@@ -979,22 +928,6 @@ export default function DashboardPage() {
             out.balances?.container_withdrawable_earnings ?? containerWithdrawableEarnings
           )
         )
-        setContainerEvents((prev) => [
-          {
-            id: crypto.randomUUID(),
-            event_type: action,
-            gross_amount:
-              Number(
-                action === "extract"
-                  ? requestBody.grossAmount
-                  : out.transferAmount ?? out.creditedAmount ?? 0
-              ) || 0,
-            fee_amount: Number(out.feeAmount ?? 0),
-            net_amount: Number(out.creditedAmount ?? out.transferAmount ?? 0),
-            created_at: new Date().toISOString(),
-          },
-          ...prev,
-        ])
         if (action === "extract") {
           setContainerFeesPaid((prev) => prev + Number(out.feeAmount ?? 0))
           showToast(
@@ -2010,7 +1943,7 @@ export default function DashboardPage() {
 
   const sidebarPanel =
     operationalWorkspace ? null : (
-      <Sidebar coins={tradeCatalog.slice(0, 16)} portfolioTotal={mainBalance} portfolioChange={12.4} />
+      <Sidebar coins={tradeCatalog.slice(0, 16)} />
     )
 
   return (
@@ -2247,14 +2180,29 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-xl border border-border bg-background/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.mainTitle")}</p>
-                <p className="mt-1 font-mono text-lg font-bold">
-                  {showBalance ? formatUserMoney(mainBalance) : "••••"}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{t("funding.balance.mainHint")}</p>
+            <div className="mb-3 rounded-xl border border-success/35 bg-success/10 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("funding.balance.liquidTitle")}
+                  </p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-foreground">
+                    {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{t("funding.balance.pocketHint")}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runContainerFlowAction("transfer_to_main")}
+                  disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
+                  className="w-full shrink-0 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
+                >
+                  {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
+                </button>
               </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("withdrawal.card.frozenTitle")}</p>
                 <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
@@ -2274,20 +2222,6 @@ export default function DashboardPage() {
                   className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                 >
                   {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.extractCta")}
-                </button>
-              </div>
-              <div className="rounded-xl border border-success/30 bg-success/10 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.liquidTitle")}</p>
-                <p className="mt-1 font-mono text-lg font-bold">
-                  {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void runContainerFlowAction("transfer_to_main")}
-                  disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
-                  className="mt-2 w-full rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
                 </button>
               </div>
               <div className="rounded-xl border border-border bg-background/60 p-3">

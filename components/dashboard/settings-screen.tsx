@@ -846,8 +846,8 @@ export function SettingsScreen({
         {renderBackButton()}
         <h2 className="text-lg font-semibold">Connected Exchanges</h2>
         <p className="text-sm text-muted-foreground">
-          Link your exchange accounts to see balances here and keep your trading view up to date. Keys stay encrypted in
-          your session — we only use them to read balances you choose to connect.
+          Connect an exchange to see balances in one place. Use read-only API keys when possible. You can disconnect
+          anytime from this screen.
         </p>
         <ExchangeBinding />
       </div>
@@ -863,6 +863,7 @@ export function SettingsScreen({
         <DepositWithdraw
           securityLevel={securityLevel}
           balance={mainBalance}
+          showBalanceBanner={false}
           onTransaction={(type, amount, method) => {
             console.log(`[v0] ${type} ${amount} via ${method}`)
           }}
@@ -1103,34 +1104,48 @@ export function SettingsScreen({
     return (
       <div className="space-y-4">
         {renderBackButton()}
-        <Card className="border-border bg-card p-6 text-center">
-          <div className="mb-4 flex justify-center">
-            <img 
-              src="/logo.jpg" 
-              alt="Nexus Pro" 
-              className="h-24 w-24 rounded-2xl shadow-xl shadow-primary/30"
+        <Card className="overflow-hidden border-border bg-card p-0">
+          <div className="border-b border-border bg-gradient-to-br from-primary/10 to-accent/5 px-6 py-8 text-center">
+            <img
+              src="/logo.jpg"
+              alt="Nexus Pro"
+              className="mx-auto h-20 w-20 rounded-2xl shadow-lg shadow-primary/20"
             />
-          </div>
-          <h3 className="text-2xl font-black text-primary">NEXUS PRO</h3>
-          <p className="mb-4 text-sm text-muted-foreground">Version 2.4.1</p>
-          <div className="mb-6 space-y-2 text-sm text-muted-foreground">
-            <p>Professional Crypto Trading Platform</p>
-            <p>Your trusted partner in digital asset trading</p>
-            <p className="text-xs">2024 Nexus Pro. All rights reserved.</p>
-          </div>
-          <div className="space-y-2">
-            <Button variant="outline" className="w-full" asChild>
-              <a href="https://nexuspro.it.com" target="_blank" rel="noopener noreferrer">
-                Visit nexuspro.it.com <ExternalLink className="ml-2 inline h-4 w-4" />
-              </a>
-            </Button>
-            <Button variant="outline" className="w-full" asChild>
-              <a href="mailto:esknexuspro@gmail.com?subject=Nexus%20PRO%20Support">Contact Support</a>
-            </Button>
-            <p className="pt-2 text-xs text-muted-foreground">
-              Terms and Privacy: review the legal pack with support or at your onboarding link.
+            <h3 className="mt-4 text-2xl font-black text-primary">NEXUS PRO</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Version 2.4.1</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Trading intelligence, container earnings, and secure funding — built for clarity.
             </p>
           </div>
+          <div className="space-y-1 p-4">
+            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
+              <a href="/legal/terms">
+                Terms of Service
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </a>
+            </Button>
+            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
+              <a href="/legal/privacy">
+                Privacy Policy
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </a>
+            </Button>
+            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
+              <a href="mailto:esknexuspro@gmail.com?subject=Nexus%20PRO%20Support">
+                Contact Support
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              </a>
+            </Button>
+            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
+              <a href="https://nexuspro.it.com" target="_blank" rel="noopener noreferrer">
+                nexuspro.it.com
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              </a>
+            </Button>
+          </div>
+          <p className="border-t border-border px-6 py-4 text-center text-[11px] text-muted-foreground">
+            © {new Date().getFullYear()} NEXUS CRYPTO INTELLIGENCE. All rights reserved.
+          </p>
         </Card>
       </div>
     )

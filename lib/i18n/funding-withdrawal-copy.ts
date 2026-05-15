@@ -127,6 +127,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.balance.extractCta": "Move 25% to pocket",
   "funding.balance.processing": "One moment…",
   "funding.balance.liquidTitle": "In your pocket",
+  "funding.balance.pocketHint": "Ready to move to your main balance when you are.",
   "funding.balance.transferCta": "Send to main balance",
   "funding.balance.exchangeTitle": "Exchange balances",
   "funding.balance.exchangeHint": "Linked exchanges only. Container fees paid so far: {{fees}}",

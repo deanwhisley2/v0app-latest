@@ -47,7 +47,7 @@ import { runFullTradingPipeline } from "@/lib/full-trading-pipeline"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { runNexusAssistant } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
-import { ContainerMode, type UserLevel } from "./container-mode"
+import type { UserLevel } from "./container-mode"
 import { StrategyAnalyzer } from "./strategy-analyzer"
 import {
   getLiveRouteLabel,
@@ -90,7 +90,7 @@ export interface AnalysisSettings {
   executionMode?: "nex_auto" | "manual"
 }
 
-type AIMode = "strategy" | "compare" | "assistant" | "auto" | "container"
+type AIMode = "strategy" | "compare" | "assistant" | "auto"
 
 interface ChatMessage {
   role: "user" | "assistant"
@@ -365,15 +365,6 @@ export function AIPanel({
         >
           <Zap className="h-4 w-4" />
           Auto Trade
-        </Button>
-        <Button
-          variant={activeMode === "container" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveMode("container")}
-          className="gap-2 bg-gradient-to-r from-primary/80 to-accent/80 text-white hover:from-primary hover:to-accent"
-        >
-          <Target className="h-4 w-4" />
-          Container
         </Button>
       </div>
 
@@ -1437,11 +1428,6 @@ export function AIPanel({
             </p>
           </div>
         </div>
-      )}
-
-      {/* Container Mode - Copy Trade / Fix Trade */}
-      {activeMode === "container" && (
-        <ContainerMode userLevel={userLevel} />
       )}
 
       {/* Strategy Analyzer Modal */}

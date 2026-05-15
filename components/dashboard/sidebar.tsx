@@ -2,16 +2,14 @@
 
 import { TrendingUp, TrendingDown } from "lucide-react"
 import { Card } from "@/components/ui/card"
-import { formatPrice, getTopGainers, getTopLosers } from "@/lib/coins-data"
+import { getTopGainers, getTopLosers } from "@/lib/coins-data"
 import type { Coin } from "@/lib/coins-data"
 
 interface SidebarProps {
   coins: Coin[]
-  portfolioTotal: number
-  portfolioChange: number
 }
 
-export function Sidebar({ coins, portfolioTotal, portfolioChange }: SidebarProps) {
+export function Sidebar({ coins }: SidebarProps) {
   const topMovers = [...getTopGainers(coins, 3), ...getTopLosers(coins, 2)]
 
   return (
@@ -41,20 +39,6 @@ export function Sidebar({ coins, portfolioTotal, portfolioChange }: SidebarProps
           ))}
         </div>
 
-        <div className="mt-6 border-t border-border pt-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nexus Main</p>
-          <div className="text-center">
-            <p className="font-mono text-2xl font-bold text-primary">${formatPrice(portfolioTotal)}</p>
-            <span
-              className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                portfolioChange >= 0 ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
-              }`}
-            >
-              {portfolioChange >= 0 ? "+" : ""}
-              {portfolioChange.toFixed(1)}% (24h est.)
-            </span>
-          </div>
-        </div>
       </Card>
     </aside>
   )

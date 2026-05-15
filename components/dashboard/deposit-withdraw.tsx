@@ -34,13 +34,16 @@ type WithdrawMethod = "bank" | "mobile" | "crypto"
 interface DepositWithdrawProps {
   securityLevel: 1 | 2 | 3
   balance: number
+  /** When false, hides the large balance banner (balances live on Dashboard). */
+  showBalanceBanner?: boolean
   onTransaction: (type: TransactionType, amount: number, method: string) => void
   onRequireSecurityUpgrade: () => void
 }
 
 export function DepositWithdraw({ 
   securityLevel, 
-  balance, 
+  balance,
+  showBalanceBanner = true,
   onTransaction,
   onRequireSecurityUpgrade 
 }: DepositWithdrawProps) {
@@ -297,16 +300,21 @@ export function DepositWithdraw({
 
     return (
       <div className="space-y-4">
-        {/* Balance Display */}
-        <Card className="bg-gradient-to-br from-primary/10 to-accent/10 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">Available Balance</p>
-              <p className="text-2xl font-bold">${balance.toLocaleString()}</p>
+        {showBalanceBanner ? (
+          <Card className="bg-gradient-to-br from-primary/10 to-accent/10 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Available Balance</p>
+                <p className="text-2xl font-bold">${balance.toLocaleString()}</p>
+              </div>
+              <Wallet className="h-8 w-8 text-primary" />
             </div>
-            <Wallet className="h-8 w-8 text-primary" />
-          </div>
-        </Card>
+          </Card>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Amounts use your main balance on the Dashboard. Review balances there before withdrawing.
+          </p>
+        )}
 
         {/* Amount Input */}
         <div>
