@@ -27,8 +27,8 @@ export const NEXUS_EMERGENCY_PULLOUT_THRESHOLD = 0.07
 export const NEXUS_HARD_PROTECTION_THRESHOLD = 0.09
 
 export const PROCESSING_COPY = {
-  deposits: "Most of the time this is a few minutes. Busy banks or networks can make it slower.",
-  withdrawals: "Often within a few hours. It depends on your country and how we send the money.",
+  deposits: "Usually a few minutes. Busy banks or networks can slow it down a little.",
+  withdrawals: "Often a few hours. Timing depends on your country and how we send the money.",
 } as const
 
 export type FixInsuranceWithdrawFees = {

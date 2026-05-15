@@ -3060,9 +3060,16 @@ export default function DashboardPage() {
                         : ` ${t("withdrawal.modal.readyNow")}`}
                     </p>
                     <p className="mt-1">
-                      {t("withdrawal.modal.rangeLine")
-                        .replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))
-                        .replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}
+                      {t("withdrawal.modal.minLine").replace(
+                        "{{min}}",
+                        formatUserMoney(withdrawalEligibility.minUsd),
+                      )}
+                    </p>
+                    <p className="mt-0.5">
+                      {t("withdrawal.modal.maxLine").replace(
+                        "{{max}}",
+                        formatUserMoney(withdrawalEligibility.maxUsd),
+                      )}
                     </p>
                   </div>
                 ) : null}

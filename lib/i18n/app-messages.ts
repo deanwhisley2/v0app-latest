@@ -28,20 +28,45 @@ const en: Record<string, string> = {
 
   "header.searchHint": "Search",
   "header.cantFind": "Can't find it?",
-  "header.archivedTitle": "Saved notifications",
-  "header.archivedSubtitle": "Items you archived for later.",
-  "header.archivedEmpty": "Nothing saved yet. Open the Notifications tab and tap Archive on any item.",
+  "header.archivedTitle": "Saved for later",
+  "header.archivedSubtitle": "Things you moved out of your inbox.",
+  "header.archivedEmpty": "Nothing saved yet. Open Notifications, open an item, then tap Archive.",
 
-  "notifications.center.subtitle": "Money moves, trades, and simple account notes in one place.",
-  "notifications.center.markAllRead": "Mark all read",
-  "notifications.center.markRead": "Mark read",
-  "notifications.center.archive": "Archive",
+  "notifications.center.subtitle": "Updates about your money, trades, and account — in plain language.",
+  "notifications.center.markAllRead": "Mark all as read",
+  "notifications.center.markRead": "Mark as read",
+  "notifications.center.archive": "Save for later",
   "notifications.center.delete": "Delete",
-  "notifications.center.unarchive": "Move to inbox",
-  "notifications.center.openLinked": "Go to linked screen",
-  "notifications.center.empty": "You are all caught up — no notifications right now.",
+  "notifications.center.unarchive": "Put back in inbox",
+  "notifications.center.openLinked": "Open related screen",
+  "notifications.center.empty": "You are all caught up. We will post here when something matters.",
   "notifications.center.detailBalancePlain":
-    "This is a simple balance update — the title tells you what changed. If this does not look right, open Settings and reach support.",
+    "This is just money moving between your balances — the title shows the amounts. You can move pocket money to your main balance on the dashboard whenever you want. If this looks wrong, open Settings and contact support.",
+  "notifications.trade.fixedFinishedTitle": "Your fixed plan finished",
+  "notifications.trade.fixedFinishedMessage":
+    "{{principal}} is back on your main balance. {{pocket}} went to your pocket (after small fees).",
+  "notifications.trade.fixedFinishedDetail":
+    "Think of it like a plan ending: your starting amount is spendable again on your main balance, and the profit that belongs in your pocket is there so you can move it to main whenever you like.",
+  "notifications.trade.scheduleActiveTitle": "Fixed plan is live",
+  "notifications.trade.scheduleActiveMessage":
+    "{{amount}} · {{months}}-month plan (paid from your main balance). Earnings build day by day on the schedule you picked.",
+  "notifications.trade.copyCycleTitle": "Copy session finished",
+  "notifications.trade.copyCycleMessage":
+    "This 24-hour session closed. About {{mainAdd}} was added to your main balance and about {{pocketAdd}} to your pocket (fees already taken out).",
+  "notifications.trade.copySettlementFailTitle": "Copy session could not settle",
+  "notifications.trade.copySettlementFailMessage":
+    "Something blocked the automatic close. Try a refresh, or use the force pull-out option on your desk if it is still stuck.",
+
+  "notifications.container.dayProgressShort": "Day {{current}} of {{total}} · on schedule",
+  "notifications.container.earningsLabel": "Earnings",
+  "notifications.container.leaseSettling":
+    "Your plan ended and we are moving the money. This card refreshes when it is finished.",
+  "notifications.container.maturingIn":
+    "About {{n}} day(s) left on this plan. Principal and earnings move on their own when it ends.",
+  "notifications.container.maturesToday": "Finishes today.",
+  "notifications.container.rampingHint": "Earnings are still building — the bar above keeps up as you go.",
+  "notifications.container.earlyExitConfirm":
+    "Leave this plan early? There is a 10% agreement charge plus insurance from your protected amount. Money you already earned still goes to your main balance in full.",
 
   "settings.back": "Back to settings",
   "settings.languageTitle": "Language",

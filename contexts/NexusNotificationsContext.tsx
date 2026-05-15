@@ -111,29 +111,29 @@ function seedInbox(): NexusNotificationItem[] {
 
     switch (type) {
       case "price":
-        title = `${sym} moved`
-        message = `${sym} had a sharp move recently — open Trade if you want a closer look.`
+        title = `${sym} price update`
+        message = `${sym} moved a lot recently — tap Trade if you want to look closer.`
         nav = { kind: "trade", symbol: sym }
         break
       case "trade":
         title = i % 2 === 0 ? "Order filled" : "Order partly filled"
-        message = `Your ${i % 2 === 0 ? "buy" : "sell"} on ${sym} — check Orders for size and status.`
+        message = `Your ${i % 2 === 0 ? "buy" : "sell"} on ${sym}. Open Orders for the full picture.`
         nav = { kind: "orders" }
         break
       case "security":
-        title = "Heads up — sign-in"
-        message = `We saw activity #${i + 1} on your account. If that was not you, check Security in Settings.`
+        title = "Quick security check"
+        message = `We logged activity #${i + 1} on your account. If it was not you, open Security in Settings.`
         nav = { kind: "settings", view: "security" }
         break
       case "promo":
-        title = "Rewards"
-        message = `Offer ${i + 1} — details will show here when they are ready.`
+        title = "Rewards & offers"
+        message = `Offer ${i + 1} — we will add details here when it is ready.`
         nav = { kind: "notifications" }
         break
       case "system":
       default:
-        title = "From Nexus"
-        message = `Update ${i + 1}: planned work or small fixes — nothing you need to do unless we say so.`
+        title = "From the Nexus team"
+        message = `Small update ${i + 1}: maintenance or fixes. You only need to act if we say so.`
         nav = { kind: "settings", view: "about" }
         break
     }

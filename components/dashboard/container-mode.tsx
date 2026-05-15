@@ -718,9 +718,11 @@ export function ContainerMode({
           settledIds.add(r.sessionId)
           addNotification({
             type: "system",
-            title: "Your fixed trade finished",
-            message: `Principal ${formatUserMoney(r.settlement.principalReturnedUsd)} is back on your main balance. ${formatUserMoney(r.settlement.terminalLiquidNetUsd)} went to your container earnings pocket (after fees).`,
-            detailText: `Think of it like a lease ending: your starting amount returns to spendable “main” cash, and the profit slice that belongs in your earnings pocket moves there so you can transfer it when you want. Small fees were taken for processing — that is normal.`,
+            title: t("notifications.trade.fixedFinishedTitle"),
+            message: t("notifications.trade.fixedFinishedMessage")
+              .replace("{{principal}}", formatUserMoney(r.settlement.principalReturnedUsd))
+              .replace("{{pocket}}", formatUserMoney(r.settlement.terminalLiquidNetUsd)),
+            detailText: t("notifications.trade.fixedFinishedDetail"),
             nav: { kind: "notifications" },
           })
         }
@@ -737,7 +739,7 @@ export function ContainerMode({
       cancelled = true
       window.clearInterval(id)
     }
-  }, [maturitySweepPending, addNotification, formatUserMoney])
+  }, [maturitySweepPending, addNotification, formatUserMoney, t])
 
   /** Auto-settle copy sessions after 24h — canonical scheduled server settlement. */
   useEffect(() => {
@@ -750,21 +752,21 @@ export function ContainerMode({
         const token = session?.access_token
         if (!token) return
 
-        for (const t of trades) {
-          if (!t.copySessionId) continue
-          if (copySettlingRef.current.has(t.copySessionId)) continue
+        for (const copyTrade of trades) {
+          if (!copyTrade.copySessionId) continue
+          if (copySettlingRef.current.has(copyTrade.copySessionId)) continue
 
-          const elapsed = Date.now() - t.startTime.getTime()
+          const elapsed = Date.now() - copyTrade.startTime.getTime()
           if (elapsed < COPY_TRADE_CYCLE_MS) continue
 
-          copySettlingRef.current.add(t.copySessionId)
+          copySettlingRef.current.add(copyTrade.copySessionId)
 
           try {
             const res = await fetch("/api/user/copy-trade/close", {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
               body: JSON.stringify({
-                sessionId: t.copySessionId,
+                sessionId: copyTrade.copySessionId,
                 floatingPnLUsd: 0,
                 coinImpactFraction: 0,
               }),
@@ -780,26 +782,29 @@ export function ContainerMode({
             }
             if (!res.ok) throw new Error(out.error || "Settlement failed.")
 
-            setActiveCopyTrades((prev) => prev.filter((x) => x.copySessionId !== t.copySessionId))
+            setActiveCopyTrades((prev) => prev.filter((x) => x.copySessionId !== copyTrade.copySessionId))
             notifyCopy(
-              "Copy trade — 24h cycle complete",
-              `Session settled. Nexus Main +${formatUserMoney(
-                out.settlement?.mainCreditUsd ?? out.settlement?.netToMainUsd ?? 0,
-              )}; container liquid +${formatUserMoney(out.settlement?.liquidCreditUsd ?? 0)} (fees applied).`,
+              t("notifications.trade.copyCycleTitle"),
+              t("notifications.trade.copyCycleMessage")
+                .replace(
+                  "{{mainAdd}}",
+                  formatUserMoney(out.settlement?.mainCreditUsd ?? out.settlement?.netToMainUsd ?? 0),
+                )
+                .replace("{{pocketAdd}}", formatUserMoney(out.settlement?.liquidCreditUsd ?? 0)),
             )
           } catch (e) {
             notifyCopy(
-              "Copy settlement",
-              e instanceof Error ? e.message : "Settlement failed — use force pull-out or refresh.",
+              t("notifications.trade.copySettlementFailTitle"),
+              e instanceof Error ? e.message : t("notifications.trade.copySettlementFailMessage"),
             )
           } finally {
-            copySettlingRef.current.delete(t.copySessionId)
+            copySettlingRef.current.delete(copyTrade.copySessionId)
           }
         }
       })()
     }, 4000)
     return () => window.clearInterval(id)
-  }, [formatUserMoney, notifyCopy])
+  }, [formatUserMoney, notifyCopy, t])
 
   useEffect(() => {
     const id = window.setInterval(() => setEarnDisplayTick((n) => n + 1), 10_000)
@@ -1135,8 +1140,10 @@ export function ContainerMode({
         setActiveFixTrades((prev) => [...prev, newTrade])
         addNotification({
           type: "system",
-          title: "Fixed trade schedule active",
-          message: `${formatUserMoney(amount)} · ${fixPeriod} month lock (funded from Nexus Main). Earnings accrue on the policy daily curve.`,
+          title: t("notifications.trade.scheduleActiveTitle"),
+          message: t("notifications.trade.scheduleActiveMessage")
+            .replace("{{amount}}", formatUserMoney(amount))
+            .replace("{{months}}", String(fixPeriod)),
           nav: { kind: "notifications" },
         })
         setSelectedTrader(null)
@@ -1746,8 +1753,18 @@ export function ContainerMode({
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {trade.dailySchedule?.length
-                              ? `Day ${Math.min(completedFixDaysSince(trade.startTime), fixPeriodDayCount(trade.period))} / ${fixPeriodDayCount(trade.period)} · policy accrual`
-                              : "Earnings"}
+                              ? t("notifications.container.dayProgressShort")
+                                  .replace(
+                                    "{{current}}",
+                                    String(
+                                      Math.min(
+                                        completedFixDaysSince(trade.startTime),
+                                        fixPeriodDayCount(trade.period),
+                                      ),
+                                    ),
+                                  )
+                                  .replace("{{total}}", String(fixPeriodDayCount(trade.period)))
+                              : t("notifications.container.earningsLabel")}
                           </p>
                           {trade.dailySchedule?.length ? (
                             <>
@@ -1781,18 +1798,21 @@ export function ContainerMode({
 
                       {trade.leaseEndedAwaitingSettlement ? (
                         <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200">
-                          Lease ended — maturity settlement is processing on the server. This view refreshes when the
-                          session closes.
+                          {t("notifications.container.leaseSettling")}
                         </div>
                       ) : typeof trade.daysUntilMaturity === "number" ? (
                         <div className="mb-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
                           {trade.daysUntilMaturity > 0 ? (
-                            <span>
-                              <span className="font-medium text-foreground">Maturing in {trade.daysUntilMaturity} day(s).</span>{" "}
-                              Principal and remaining earnings move automatically at lease end.
+                            <span className="font-medium text-foreground">
+                              {t("notifications.container.maturingIn").replace(
+                                "{{n}}",
+                                String(trade.daysUntilMaturity),
+                              )}
                             </span>
                           ) : (
-                            <span className="font-medium text-foreground">Matures today</span>
+                            <span className="font-medium text-foreground">
+                              {t("notifications.container.maturesToday")}
+                            </span>
                           )}
                         </div>
                       ) : null}
@@ -1894,7 +1914,7 @@ export function ContainerMode({
                           </Button>
                         ) : (
                           <p className="order-1 w-full rounded-md border border-dashed border-border/80 bg-background/40 px-3 py-2.5 text-center text-xs leading-snug text-muted-foreground md:order-1 md:flex-1 md:text-left">
-                            Confirmed earnings pool is still ramping — policy accrual above updates continuously.
+                            {t("notifications.container.rampingHint")}
                           </p>
                         )}
                         {trade.serverSessionId ? (
@@ -1907,7 +1927,7 @@ export function ContainerMode({
                             onClick={() => {
                               if (
                                 confirm(
-                                  "Early exit before lease end? You pay 10% agreement default + insurance (from protected allocation only). Session earnings are credited in full to Nexus Main.",
+                                  t("notifications.container.earlyExitConfirm"),
                                 )
                               ) {
                                 void handleEarlyExitFixTrade(trade.traderId)
