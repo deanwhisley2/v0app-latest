@@ -12,7 +12,7 @@ export function approverDebitWithoutPoolEnabled(): boolean {
   return process.env.NEXUS_FLOAT_DEBIT_USE_APPROVER_WITHOUT_POOL?.trim() === "1"
 }
 
-function useApproverWhenPoolUnset(): boolean {
+function debitViaApproverWhenPoolUnset(): boolean {
   return approverDebitWithoutPoolEnabled()
 }
 
@@ -138,7 +138,7 @@ export async function debitFloatLiquidityOnApproval(
     await debitAdminRetailPoolIfConfigured(sb, amount)
     return "pool"
   }
-  if (useApproverWhenPoolUnset()) {
+  if (debitViaApproverWhenPoolUnset()) {
     await debitUserAvailableBalance(sb, approverUserId, amount, "Approver account")
     return "approver"
   }

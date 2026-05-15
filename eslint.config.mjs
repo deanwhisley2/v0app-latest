@@ -1,12 +1,12 @@
-import { dirname } from "path"
-import { fileURLToPath } from "url"
-import { FlatCompat } from "@eslint/eslintrc"
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals"
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-})
-
-export default [...compat.extends("next/core-web-vitals", "next/typescript")]
+/** @type {import("eslint").Linter.Config[]} */
+export default [
+  {
+    ignores: [
+      // Node utilities with embedded template blobs — not part of the Next.js app bundle.
+      "scripts/**",
+    ],
+  },
+  ...nextCoreWebVitals,
+]
