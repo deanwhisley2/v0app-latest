@@ -5,7 +5,6 @@ import QRCode from "qrcode"
 import { Check, ChevronDown, Copy, Smartphone, Wallet } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { AirtelPaymentSteps, PaymentReferenceFields } from "@/components/dashboard/mobile-money-payment-instructions"
-import { CUSTOMER_AIRTEL_MENU_DISPLAY_NAME } from "@/lib/customer-payment-instruction-display"
 
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
@@ -379,17 +378,14 @@ export function FundingPaymentPanel({
         t={t}
       />
       <p className="text-[10px] leading-snug text-muted-foreground break-words">
-        {t("funding.payment.registeredPayeeInstruction").replace(
-          "{{name}}",
-          CUSTOMER_AIRTEL_MENU_DISPLAY_NAME,
-        )}
+        {t("funding.payment.adminDirectRegisteredPayeeLine")}
       </p>
       <PaymentReferenceFields
         fundTxReference={fundTxReference}
         onTxReferenceChange={onTxReferenceChange}
         onTxReferenceBlur={onTxReferenceBlur}
         txReferenceError={txReferenceError}
-        hint={config.ugandaAirtel.referenceHint}
+        hint={t("funding.payment.adminDirectRefHint")}
         t={t}
       />
       {payerFields}

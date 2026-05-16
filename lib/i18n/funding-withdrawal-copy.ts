@@ -26,6 +26,10 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.payment.refRequired": "Payment reference required",
   "funding.payment.airtelMenuMayShow": "Airtel menu may show {{name}}",
   "funding.payment.registeredPayeeInstruction": "Registered payee name(s): {{name}}",
+  "funding.payment.adminDirectRegisteredPayeeLine": "Registered payee name(s): Nexus Pro /venture nexus pro",
+  "funding.payment.adminDirectRefHint": "Use your login email as the payment reference.",
+  "funding.retailer.airtelDeskNumbersLine": "Airtel Money Uganda: {{merchantId}}",
+  "funding.retailer.airtelDeskPayeeLine": "Nexus pro2",
   "funding.payment.cryptoPanelTitle": "Crypto payment",
   "funding.payment.adminDirectNote":
     "Complete payment steps. Submit reference. Status updates in Notifications.",

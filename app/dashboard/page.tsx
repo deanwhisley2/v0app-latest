@@ -2627,16 +2627,33 @@ export default function DashboardPage() {
                           <>
                             <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] leading-snug sm:p-3 sm:text-xs">
                               <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
-                              <p className="break-words">
-                                {t("funding.numbersLabel")}{" "}
-                                {(localMmSelectedDesk.payment_numbers ?? [])
-                                  .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                                  .join(" · ") || t("funding.noneInParens")}
-                              </p>
-                              <p className="break-words">
-                                {t("funding.registeredPayeeNames")}{" "}
-                                {localMmSelectedDesk.registered_payee_names || t("funding.confirmWithDesk")}
-                              </p>
+                              {localMmAirtelMerchant ? (
+                                <>
+                                  <p className="break-words">
+                                    {t("funding.numbersLabel")}{" "}
+                                    {t("funding.retailer.airtelDeskNumbersLine").replace(
+                                      "{{merchantId}}",
+                                      localMmAirtelMerchant.merchantId,
+                                    )}
+                                  </p>
+                                  <p className="break-words">
+                                    {t("funding.registeredPayeeNames")} {t("funding.retailer.airtelDeskPayeeLine")}
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="break-words">
+                                    {t("funding.numbersLabel")}{" "}
+                                    {(localMmSelectedDesk.payment_numbers ?? [])
+                                      .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                                      .join(" · ") || t("funding.noneInParens")}
+                                  </p>
+                                  <p className="break-words">
+                                    {t("funding.registeredPayeeNames")}{" "}
+                                    {localMmSelectedDesk.registered_payee_names || t("funding.confirmWithDesk")}
+                                  </p>
+                                </>
+                              )}
                               <p className="break-words">
                                 {t("funding.whatsappCall")} {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
                                 {localMmSelectedDesk.contact_phone || "—"}
