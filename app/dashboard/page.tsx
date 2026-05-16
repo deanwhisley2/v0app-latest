@@ -2752,7 +2752,10 @@ export default function DashboardPage() {
                     <div className="max-h-32 space-y-1 overflow-y-auto border-t border-border/50 px-2 pb-2 pt-1 sm:max-h-36">
                       {fundRequests.slice(0, 6).map((r) => (
                         <div key={r.id} className="text-[11px]">
-                          {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} • {r.status}
+                          {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} •{" "}
+                          {r.status === "appealed" || r.status === "escalated"
+                            ? t("funding.status.appealed")
+                            : r.status}
                           {(r.status === "rejected" || r.status === "under_review" || r.status === "pending") && (
                             <button
                               type="button"
@@ -2768,12 +2771,23 @@ export default function DashboardPage() {
                                   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                                   body: JSON.stringify({ requestId: r.id, appealNote: appealNote.trim() }),
                                 })
-                                if (!res.ok) return
+                                const out = (await res.json().catch(() => ({}))) as {
+                                  error?: string
+                                  threadId?: string
+                                }
+                                if (!res.ok) {
+                                  showToast(out.error ?? t("funding.apiErr.appealFields"), "error")
+                                  return
+                                }
                                 setFundRequests((prev) =>
                                   prev.map((x) =>
                                     x.id === r.id ? { ...x, status: "appealed", appeal_note: appealNote } : x
                                   )
                                 )
+                                if (out.threadId) {
+                                  setSupportThreadFocusId(out.threadId)
+                                }
+                                showToast(t("funding.appealEscalated"), "success")
                               }}
                             >
                               {t("funding.appeal")}

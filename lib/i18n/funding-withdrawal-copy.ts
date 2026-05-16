@@ -119,6 +119,8 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.recentRequestsExpand": "Recent funding requests — tap to expand",
   "funding.appeal": "Appeal",
   "funding.appealPrompt": "Brief issue description (no PINs or passwords)",
+  "funding.appealEscalated": "Escalated · Under review",
+  "funding.status.appealed": "Under review",
   "funding.incomingLocalTitle": "Incoming local funds",
   "funding.noPendingApprovals": "No pending approvals.",
   "funding.approve": "Approve",

@@ -744,21 +744,12 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "requestId and appealNote are required." }, { status: 400 })
     }
     const admin = createAdminClient()
-    const now = new Date().toISOString()
-    const { error } = await admin
-      .from("retailer_fund_requests")
-      .update({
-        appeal_note: appealNote,
-        status: "appealed",
-        escalated_to_admin: true,
-        escalated_note: appealNote,
-        escalation_at: now,
-        updated_at: now,
-      })
-      .eq("id", requestId)
-      .eq("user_id", user.id)
-      .in("status", ["rejected", "under_review", "pending"])
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    const { bridgeFundingAppeal } = await import("@/lib/server/operational-support-bridge")
+    const { threadId } = await bridgeFundingAppeal(admin, {
+      userId: user.id,
+      requestId,
+      appealNote,
+    })
     await recordFinancialEvent({
       userId: user.id,
       eventType: "funding_request_appealed",
@@ -769,10 +760,16 @@ export async function PATCH(request: Request) {
       actorId: user.id,
       relatedTradeId: requestId,
       summary: "Funding appeal escalated for human admin review.",
-      metadata: { appealNote, requestId },
+      metadata: { appealNote, requestId, operationalThreadId: threadId },
     })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({
+      ok: true,
+      threadId,
+      operationalStatus: "pending_admin",
+    })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+    const msg = e instanceof Error ? e.message : "Internal error"
+    const status = msg.includes("not found") || msg.includes("cannot be appealed") ? 400 : 500
+    return NextResponse.json({ error: msg }, { status })
   }
 }

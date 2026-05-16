@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { notifyLiquidityAdminsSupportQueue } from "@/lib/support-thread-notifications"
-
 /** User lists / creates operational support threads (appeals). */
 export async function GET(request: Request) {
   try {
@@ -39,63 +37,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "body is required (max 12000 chars)." }, { status: 400 })
     }
     const catRaw = typeof body.category === "string" ? body.category.trim().toLowerCase() : "general"
-    const category =
-      catRaw === "funding_dispute" ||
-      catRaw === "withdrawal_dispute" ||
-      catRaw === "appeal" ||
-      catRaw === "security" ||
-      catRaw === "retailer"
-        ? catRaw
-        : "general"
+    const allowed = [
+      "general",
+      "funding_dispute",
+      "withdrawal_dispute",
+      "appeal",
+      "security",
+      "retailer",
+      "crypto_dispute",
+      "assistant_escalation",
+      "transaction_review",
+      "operational_complaint",
+    ] as const
+    const category = (allowed as readonly string[]).includes(catRaw) ? catRaw : "general"
 
     const lk = body.linkedKind?.trim()
     const linked_kind =
-      lk === "retailer_fund_request" || lk === "withdrawal_request" ? lk : null
+      lk === "retailer_fund_request" ||
+      lk === "withdrawal_request" ||
+      lk === "crypto_deposit_request"
+        ? lk
+        : null
     const linked_id =
       typeof body.linkedId === "string" && /^[0-9a-f-]{36}$/i.test(body.linkedId) ? body.linkedId : null
 
     const admin = createAdminClient()
-    const now = new Date().toISOString()
-    const { data: thread, error: tErr } = await admin
-      .from("operational_support_threads")
-      .insert({
-        user_id: user.id,
-        category,
-        status: "pending_admin",
-        linked_kind,
-        linked_id,
-        unread_for_admin: true,
-        unread_for_user: false,
-        last_message_at: now,
-        updated_at: now,
-      })
-      .select("id")
-      .single()
-    if (tErr || !thread?.id) {
-      return NextResponse.json({ error: tErr?.message ?? "Failed to create thread." }, { status: 500 })
-    }
-
-    const { error: mErr } = await admin.from("operational_support_messages").insert({
-      thread_id: thread.id,
-      sender_user_id: user.id,
-      sender_role: "user",
+    const { bridgeUserOperationalEscalation } = await import("@/lib/server/operational-support-bridge")
+    const { threadId } = await bridgeUserOperationalEscalation(admin, {
+      userId: user.id,
       body: text,
+      category: category as (typeof allowed)[number],
+      linkedKind: linked_kind as "retailer_fund_request" | "withdrawal_request" | "crypto_deposit_request" | null,
+      linkedId: linked_id,
+      source: "user",
     })
-    if (mErr) {
-      return NextResponse.json({ error: mErr.message }, { status: 500 })
-    }
 
-    try {
-      await notifyLiquidityAdminsSupportQueue(admin, {
-        threadId: thread.id,
-        title: "New support / appeal",
-        body: text.slice(0, 400),
-      })
-    } catch (ne) {
-      console.error("[support] notify admins failed:", ne)
-    }
-
-    return NextResponse.json({ threadId: thread.id })
+    return NextResponse.json({ threadId, operationalStatus: "pending_admin" })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
   }

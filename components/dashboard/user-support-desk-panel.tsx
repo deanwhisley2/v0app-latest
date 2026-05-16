@@ -7,6 +7,10 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
+import {
+  operationalThreadCategoryLabel,
+  operationalThreadStatusLabel,
+} from "@/lib/operational-support-institutional"
 import { supabase } from "@/lib/supabaseClient"
 
 type ThreadRow = {
@@ -212,7 +216,9 @@ export function UserSupportDeskPanel(props: {
                     <span className="truncate font-mono text-[10px] text-muted-foreground">{t.id.slice(0, 8)}…</span>
                     {t.unread_for_user ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
                   </div>
-                  <p className="truncate text-xs capitalize text-muted-foreground">{t.category.replace(/_/g, " ")}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {operationalThreadCategoryLabel(t.category)} · {operationalThreadStatusLabel(t.status)}
+                  </p>
                 </button>
               </li>
             ))}
@@ -240,6 +246,7 @@ export function UserSupportDeskPanel(props: {
                       }`}
                     >
                       <p className="mb-1 text-[10px] uppercase opacity-70">{m.sender_role}</p>
+                      <p className="mb-1 text-[9px] opacity-60">{new Date(m.created_at).toLocaleString()}</p>
                       {m.body}
                     </div>
                   </div>

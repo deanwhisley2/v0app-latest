@@ -686,6 +686,7 @@ export function AdminOperationalAssets({
   const { user: authUser } = useAuth()
   const [sub, setSub] = useState<"approval" | "users" | "retailers" | "history" | "support">("approval")
   const [supportFeedTick, setSupportFeedTick] = useState(0)
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0)
   const bumpSupportFeed = useCallback(() => setSupportFeedTick((n) => n + 1), [])
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
@@ -1188,7 +1189,11 @@ export function AdminOperationalAssets({
         {(
           [
             { id: "approval" as const, label: "Approval desk", icon: ShieldCheck },
-            { id: "support" as const, label: "Human support", icon: MessageCircle },
+            {
+              id: "support" as const,
+              label: supportUnreadCount > 0 ? `Human support (${supportUnreadCount})` : "Human support",
+              icon: MessageCircle,
+            },
             { id: "users" as const, label: "Users", icon: Users },
             { id: "retailers" as const, label: "Retailers", icon: Building2 },
             { id: "history" as const, label: "History", icon: History },
@@ -1213,6 +1218,7 @@ export function AdminOperationalAssets({
           initialThreadId={focusSupportThreadId}
           onInitialThreadConsumed={onFocusSupportThreadConsumed}
           refreshTick={supportFeedTick}
+          onUnreadCount={setSupportUnreadCount}
         />
       )}
 

@@ -47,6 +47,8 @@ import { runFullTradingPipeline } from "@/lib/full-trading-pipeline"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { runNexusAssistant } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
+import { detectHumanEscalationIntent } from "@/lib/nexus-assistant/human-escalation"
+import { supabase } from "@/lib/supabaseClient"
 import type { UserLevel } from "./container-mode"
 import { StrategyAnalyzer } from "./strategy-analyzer"
 import {
@@ -288,7 +290,26 @@ export function AIPanel({
       focusSymbol: wallStreetCoin.symbol,
       precomputedDraft: draft,
     })
-    const assistantMessage: ChatMessage = { role: "assistant", content: response }
+    let assistantText = response
+    if (!isGuestSession && detectHumanEscalationIntent(raw)) {
+      const { data: s } = await supabase.auth.getSession()
+      const token = s.session?.access_token
+      if (token) {
+        const esc = await fetch("/api/user/operational-escalation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            body: `Assistant escalation: ${raw}`,
+            category: "assistant_escalation",
+            source: "assistant",
+          }),
+        })
+        if (esc.ok) {
+          assistantText = `${response}\n\nEscalated · Under review. Status: Wallet → Support.`
+        }
+      }
+    }
+    const assistantMessage: ChatMessage = { role: "assistant", content: assistantText }
     setChatMessages((prev) => [...prev, assistantMessage])
   }
 
