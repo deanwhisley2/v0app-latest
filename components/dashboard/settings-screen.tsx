@@ -1129,7 +1129,7 @@ export function SettingsScreen({
             <button className="flex w-full items-center justify-between rounded-lg bg-muted/30 px-4 py-4 hover:bg-muted/50">
               <div>
                 <p className="font-medium">Privacy Policy</p>
-                <p className="text-sm text-muted-foreground">How we handle your data</p>
+                <p className="text-sm text-muted-foreground">Data handling policy</p>
               </div>
               <ExternalLink className="h-5 w-5 text-muted-foreground" />
             </button>

@@ -282,7 +282,7 @@ export async function POST(request: Request) {
     return jsonMutationError(
       500,
       "INTERNAL_ERROR",
-      "We could not open this fixed allocation. Please try again or contact support.",
+      "Fixed trade could not open. Retry or contact support.",
       e instanceof Error ? e.message : "unknown",
     )
   }

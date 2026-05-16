@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       return jsonMutationError(
         404,
         "SESSION_NOT_FOUND",
-        "We could not find that fixed allocation.",
+        "Fixed allocation not found.",
         "early-exit: no row for session id.",
         { suggested_action: "Refresh Container Mode." },
       )
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       return jsonMutationError(
         409,
         "STAKE_PRINCIPAL_MISMATCH",
-        "Your locked stake and this session’s principal do not match our records. Please pause and contact support.",
+        "Stake and session principal mismatch. Contact support.",
         `early-exit: stake ${stake} < principal ${principalUsd}.`,
         {
           suggested_action: "Contact support with approximate allocation time; do not repeat early exit.",

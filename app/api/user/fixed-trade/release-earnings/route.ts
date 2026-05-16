@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       return jsonMutationError(
         500,
         "RPC_TRANSPORT_ERROR",
-        "We could not reach the settlement service. Please try again shortly.",
+        "Settlement service unavailable. Retry shortly.",
         error.message,
       )
     }

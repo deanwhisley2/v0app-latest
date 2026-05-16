@@ -22,7 +22,7 @@ const en: Record<string, string> = {
 
   "bottom.assistantTitle": "Joelin",
   "bottom.assistantSubtitle": "Quick help",
-  "bottom.assistantWelcome": "How can we help today?",
+  "bottom.assistantWelcome": "Nexus assistant — ask a question.",
   "bottom.askPlaceholder": "Ask something…",
   "bottom.send": "Send",
 
@@ -32,7 +32,7 @@ const en: Record<string, string> = {
   "header.archivedSubtitle": "Things you moved out of your inbox.",
   "header.archivedEmpty": "Nothing saved yet. Open Notifications, open an item, then tap Archive.",
 
-  "notifications.center.subtitle": "Updates about your money and account",
+  "notifications.center.subtitle": "Account and balance updates",
   "security.devices.title": "Device management",
   "security.devices.hint": "Trust devices you recognize. Block unknown logins. New devices may require email verification and a 6-hour cooldown.",
   "security.devices.ip": "IP",
@@ -46,48 +46,42 @@ const en: Record<string, string> = {
   "notifications.center.delete": "Delete",
   "notifications.center.unarchive": "Put back in inbox",
   "notifications.center.openLinked": "Open related screen",
-  "notifications.center.empty": "You are all caught up. We will post here when something matters.",
+  "notifications.center.empty": "No new notifications.",
   "notifications.center.depositsTitle": "USDT deposits",
   "notifications.center.depositsEmptyInbox": "Your deposit updates appear above.",
-  "notifications.center.depositStatus.pending": "Checking your payment",
-  "notifications.center.depositStatus.verifying": "Checking your payment",
-  "notifications.center.depositStatus.awaiting_confirmations": "Verifying your deposit",
-  "notifications.center.depositStatus.verified": "Confirmed — adding to your balance",
+  "notifications.center.depositStatus.pending": "Deposit pending",
+  "notifications.center.depositStatus.verifying": "Deposit verifying",
+  "notifications.center.depositStatus.awaiting_confirmations": "Awaiting confirmations",
+  "notifications.center.depositStatus.verified": "Verified — crediting balance",
   "notifications.center.depositCreditingDelay":
-    "Your USDT is confirmed. If your balance has not updated in a few minutes, contact support.",
-  "notifications.center.depositStatus.manual_review": "We're taking a quick look",
-  "notifications.center.depositStatus.failed": "Couldn't complete",
+    "Deposit confirmed. Balance update pending — contact support if delayed.",
+  "notifications.center.depositStatus.manual_review": "Deposit under review",
+  "notifications.center.depositStatus.failed": "Deposit failed",
   "notifications.center.depositStatus.default": "In progress",
-  "notifications.center.depositVerifying": "Binance is verifying your transaction — it will be credited shortly.",
-  "notifications.center.depositAmountComing": "About ${{amount}} coming to your balance",
-  "notifications.center.depositFailed": "This deposit didn't go through. Try again or contact support.",
-  "notifications.center.detailBalancePlain":
-    "Money moved between your balances. If something looks wrong, contact support in Settings.",
-  "notifications.trade.fixedFinishedTitle": "Your fixed plan finished",
+  "notifications.center.depositVerifying": "On-chain verification in progress.",
+  "notifications.center.depositAmountComing": "~${{amount}} credit pending",
+  "notifications.center.depositFailed": "Deposit failed. Retry or contact support.",
+  "notifications.center.detailBalancePlain": "Balance transfer recorded.",
+  "notifications.trade.fixedFinishedTitle": "Fixed trade completed",
   "notifications.trade.fixedFinishedMessage":
-    "{{principal}} is back on your main balance. {{pocket}} went to your pocket (after small fees).",
-  "notifications.trade.fixedFinishedDetail":
-    "Think of it like a plan ending: your starting amount is spendable again on your main balance, and the profit that belongs in your pocket is there so you can move it to main whenever you like.",
-  "notifications.trade.scheduleActiveTitle": "Fixed plan is live",
-  "notifications.trade.scheduleActiveMessage":
-    "{{amount}} · {{months}}-month plan (paid from your main balance). Earnings build day by day on the schedule you picked.",
-  "notifications.trade.copyCycleTitle": "Copy session finished",
+    "Principal {{principal}} → main balance. Earnings {{pocket}} → pocket.",
+  "notifications.trade.fixedFinishedDetail": "Fixed trade closed. Funds allocated per schedule.",
+  "notifications.trade.scheduleActiveTitle": "Fixed trade active",
+  "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}}-month plan. Earnings accrue on schedule.",
+  "notifications.trade.copyCycleTitle": "Copy session closed",
   "notifications.trade.copyCycleMessage":
-    "This 24-hour session closed. About {{mainAdd}} was added to your main balance and about {{pocketAdd}} to your pocket (fees already taken out).",
-  "notifications.trade.copySettlementFailTitle": "Copy session could not settle",
-  "notifications.trade.copySettlementFailMessage":
-    "Something blocked the automatic close. Try a refresh, or use the force pull-out option on your desk if it is still stuck.",
+    "Session closed. Main +{{mainAdd}} · Pocket +{{pocketAdd}} (fees deducted).",
+  "notifications.trade.copySettlementFailTitle": "Copy settlement failed",
+  "notifications.trade.copySettlementFailMessage": "Settlement incomplete. Refresh or use force pull-out.",
 
-  "notifications.container.dayProgressShort": "Day {{current}} of {{total}} · on schedule",
+  "notifications.container.dayProgressShort": "Day {{current}} of {{total}}",
   "notifications.container.earningsLabel": "Earnings",
-  "notifications.container.leaseSettling":
-    "Your plan ended and we are moving the money. This card refreshes when it is finished.",
-  "notifications.container.maturingIn":
-    "About {{n}} day(s) left on this plan. Principal and earnings move on their own when it ends.",
-  "notifications.container.maturesToday": "Finishes today.",
-  "notifications.container.rampingHint": "Earnings are still building — the bar above keeps up as you go.",
+  "notifications.container.leaseSettling": "Plan ended. Settlement in progress.",
+  "notifications.container.maturingIn": "~{{n}} day(s) remaining.",
+  "notifications.container.maturesToday": "Matures today.",
+  "notifications.container.rampingHint": "Earnings accruing.",
   "notifications.container.earlyExitConfirm":
-    "Leave this plan early? A 6‑month plan earns gradually — after a few hours only a small amount has built up. Early exit adds a 10% charge plus insurance from your protected amount. Whatever you earned so far still goes to your main balance.",
+    "Early exit? 10% fee plus insurance from protected amount. Accrued earnings transfer to main balance.",
 
   "settings.back": "Back to settings",
   "settings.languageTitle": "Language",
@@ -99,11 +93,10 @@ const en: Record<string, string> = {
   "settings.item.currency": "Display currency",
   "settings.item.region": "Operating country",
   "settings.regionTitle": "Operating country",
-  "settings.regionHint":
-    "Used for local funding corridors and regional defaults. Does not change ledger currency (USD-normalized internally).",
+  "settings.regionHint": "Local funding corridors and regional defaults.",
   "settings.regionApplySuggestion": "Apply suggested language & display currency",
   "settings.regionSaved": "Country saved for funding match.",
-  "common.missingTranslation": "This label is not translated yet — switch to English or contact support.",
+  "common.missingTranslation": "Translation unavailable. Switch to English or contact support.",
   ...fundingWithdrawalEn,
 }
 

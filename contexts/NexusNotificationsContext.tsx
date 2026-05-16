@@ -145,18 +145,18 @@ function seedInbox(): NexusNotificationItem[] {
         break
       case "security":
         title = "Quick security check"
-        message = `We logged activity #${i + 1} on your account. If it was not you, open Security in Settings.`
+        message = `Account activity #${i + 1} logged. If unrecognized, open Security in Settings.`
         nav = { kind: "settings", view: "security" }
         break
       case "promo":
         title = "Rewards & offers"
-        message = `Offer ${i + 1} — we will add details here when it is ready.`
+        message = `Offer ${i + 1} — details pending.`
         nav = { kind: "notifications" }
         break
       case "system":
       default:
         title = "From the Nexus team"
-        message = `Small update ${i + 1}: maintenance or fixes. You only need to act if we say so.`
+        message = `System update ${i + 1}: maintenance. Action required only if notified.`
         nav = { kind: "settings", view: "about" }
         break
     }

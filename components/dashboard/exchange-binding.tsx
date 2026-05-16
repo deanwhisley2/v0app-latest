@@ -289,7 +289,7 @@ export function ExchangeBinding({ onSelectExchange, selectedExchangeId }: Exchan
                     <p className="font-semibold">Important Security Notice</p>
                     <p>
                       Use <strong>read-only</strong> API keys when your exchange allows it. Your keys stay encrypted in
-                      your account — we use them only to show balances you connect.
+                      your account. Used only to display linked exchange balances.
                     </p>
                   </div>
                 </div>

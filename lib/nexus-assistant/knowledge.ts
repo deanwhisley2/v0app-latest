@@ -14,7 +14,7 @@ export function containerCustomerEarningsStory(): string {
   return [
     "In Container, you lock funds with a trader you choose for a fix window.",
     "That capital is aligned with the coin so the trader can hold conviction through quieter tape and still be ready when momentum improves — that is what “money fixed in a coin” is about.",
-    "What you earn comes from how actively and how well that trader trades for you during the lock, not from a headline percentage we quote in chat.",
+    "Earnings follow trader activity during the lock period, not headline rates shown in chat.",
     "You’ll see earnings build day by day on your Container screen: some days steadier, some days stronger — similar to a real desk, so you can feel momentum while you watch progress.",
     "The live Container view is always the source of truth for balances, daily movement, and what you can withdraw as milestones open.",
   ].join("\n")

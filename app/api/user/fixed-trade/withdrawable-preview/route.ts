@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       return jsonMutationError(
         500,
         "RPC_TRANSPORT_ERROR",
-        "We could not load the preview. Please try again shortly.",
+        "Preview unavailable. Retry shortly.",
         error.message,
       )
     }

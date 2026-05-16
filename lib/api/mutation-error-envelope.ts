@@ -74,7 +74,7 @@ export function envelopeFromFixedTradeReleaseRpc(rpc: Record<string, unknown>): 
     return {
       success: false,
       error_code: "SESSION_NOT_FOUND",
-      user_message: "We could not find that fixed allocation. Refresh the dashboard and try again.",
+      user_message: "Fixed allocation not found. Refresh dashboard and retry.",
       technical_message: "fixed_trade_release: session id not found or not visible.",
       context: { suggested_action: "Refresh Container Mode or open a new allocation." },
     }
@@ -158,7 +158,7 @@ export function envelopeFromFixedTradeReleaseRpc(rpc: Record<string, unknown>): 
   return {
     success: false,
     error_code: "FIXED_TRADE_RELEASE_FAILED",
-    user_message: "We could not complete this release. Please try again or contact support.",
+      user_message: "Earnings release failed. Retry or contact support.",
     technical_message: `fixed_trade_release: unmapped error ${code}.`,
     context: { suggested_action: "Retry shortly; include approximate time if you contact support." },
   }
@@ -178,8 +178,7 @@ export function envelopeFromMaturityExceptionMessage(msg: string): MutationError
     return {
       success: false,
       error_code: "MATURITY_LIFECYCLE_RECONCILE",
-      user_message:
-        "We paused automatic settlement for this session pending a desk review. Please contact support if this persists.",
+      user_message: "Settlement paused pending desk review. Contact support if persistent.",
       technical_message: "settleFixedTradeMaturityForUser: daily bucket sum does not reconcile to target.",
       context: { suggested_action: "Contact support with your session approximate open time." },
     }
@@ -215,7 +214,7 @@ export function envelopeFromCopyCloseMessage(msg: string): MutationErrorBody {
     return {
       success: false,
       error_code: "SESSION_NOT_FOUND",
-      user_message: "We could not find that copy allocation. Refresh and try again.",
+      user_message: "Copy allocation not found. Refresh and retry.",
       technical_message: "copy_trade_close: session row missing.",
       context: { suggested_action: "Refresh Container Mode." },
     }

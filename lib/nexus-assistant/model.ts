@@ -72,7 +72,7 @@ function adminDeskCopilotDraft(q: string): string {
       "4) Document a short resolution note before approving/rejecting; keep tone factual and kind.",
       "",
       "User-facing draft starter (edit before send):",
-      `"Thanks for your patience — we’re reviewing your case with our internal records. We’ll update you as soon as we’ve verified the details on our side."`,
+      `"Request under review. Status will update after verification."`,
     ].join("\n")
   }
   if (hasAny(q, ["investigation", "look into", "review user", "audit", "evidence"])) {
@@ -149,7 +149,7 @@ function authReply(q: string, authStep?: string): string | null {
       "",
       "1. Use the email or username field with the password you set.",
       "2. Continue to verification when the app asks — that step exists to protect withdrawals.",
-      "3. If you’re new, switch to Sign Up first so we can verify your contact methods.",
+      "3. New users: complete Sign Up first to verify contact methods.",
       "",
       authStep === "2fa"
         ? "You’re on 2FA — check email and SMS tabs, wait a full minute between resends, and watch spam folders."
@@ -181,7 +181,7 @@ function authReply(q: string, authStep?: string): string | null {
   }
   if (hasAny(q, ["sign up", "register", "create account", "new account"])) {
     return [
-      "Welcome in advance — on Sign Up, use a real email and phone you control; we use them for security, not spam.",
+      "On Sign Up, use a valid email and phone for account security.",
       "",
       "If someone invited you, enter their Referral ID or open their signup link with ?ref= so attribution saves cleanly.",
       "",
@@ -215,7 +215,7 @@ function helpTour(surface: NexusAssistantSurface): string {
   const tail =
     surface === "dashboard_wallstreet_assistant"
       ? "From this desk: ask Joelin for platform questions, use Strategies for votes, and Container when you’re ready for fixed-term flows — always confirm numbers on-screen."
-      : "From Settings: Connected Exchanges, Security Center, Deposit & Withdraw, and Joelin (here in Settings) are the trust pillars we recommend in order."
+      : "Settings order: Connected Exchanges, Security Center, Deposit & Withdraw, then Joelin assistant."
   return [
     "Quick tour — Nexus PRO is built as a stack:",
     "",
@@ -526,7 +526,7 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     return [
       "Settings → Security Center is your home base.",
       "",
-      "Turn on everything your tier offers, read device alerts, and pause deposits if anything looks off — we’d rather you wait an hour than move fast into a trap.",
+      "Enable tier features, monitor device alerts, pause deposits if activity looks unusual.",
     ].join("\n")
   }
 

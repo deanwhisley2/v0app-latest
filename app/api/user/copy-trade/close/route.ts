@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         return jsonMutationError(
           422,
           "COPY_LIFECYCLE_RECONCILE",
-          "We could not verify this copy session’s accrual buckets. Support may need to review.",
+          "Copy session accrual verification failed. Contact support.",
           msg,
           { suggested_action: "Contact support if this repeats after refresh." },
         )

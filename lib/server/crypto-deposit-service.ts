@@ -176,7 +176,7 @@ export async function createCryptoDepositRequest(
     sourceId: data.id as string,
     notificationType: "crypto_deposit_pending",
     title: "Crypto deposit received",
-    body: `We are verifying your USDT transfer (declared ${amountUsd.toFixed(2)} USD). You will be notified when it is credited.`,
+    body: `USDT deposit verifying (declared ${amountUsd.toFixed(2)} USD). Credit pending confirmation.`,
     metadata: { txHash, amountUsd, status: "verifying" },
   })
 

@@ -613,7 +613,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
               {!resetLinkSent ? (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   <p className="text-center text-sm text-muted-foreground">
-                    Enter your email address and we&apos;ll send you a link to reset your password.
+                    Enter email address. Reset link will be sent if account exists.
                   </p>
 
                   <div>
@@ -652,7 +652,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
                     <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-success" />
                     <h3 className="font-semibold text-success">Reset Link Sent!</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      We&apos;ve sent a password reset link to <strong>{resetEmail}</strong>
+                      Password reset link sent to <strong>{resetEmail}</strong>
                     </p>
                   </div>
 
@@ -1094,7 +1094,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
                   <span className="text-sm font-semibold">Verify Your Identity</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Record a short video clip facing the camera. We will match it with your registered video.
+                  Record a short video facing the camera. System matches registered verification video.
                 </p>
                 {videoRecorded ? (
                   <div className="flex items-center gap-2">

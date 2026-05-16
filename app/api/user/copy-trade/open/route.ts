@@ -117,7 +117,7 @@ export async function POST(request: Request) {
         isMigration ? "DATABASE_SCHEMA" : "SESSION_INSERT_FAILED",
         isMigration
           ? "Trading sessions storage is not ready on this environment. Please contact support."
-          : "We could not create the copy session after reserving funds. Your stake reservation was reversed—try again or contact support.",
+          : "Copy session creation failed. Stake reservation reversed. Retry or contact support.",
         insErr.message,
         { suggested_action: isMigration ? "Apply pending database migrations." : "Retry in a few minutes." },
       )

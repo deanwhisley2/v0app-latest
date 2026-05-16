@@ -75,7 +75,7 @@ export async function evaluateDeviceLoginGate(
   return {
     allowed: true,
     requiresVerification: true,
-    reason: "New device detected — confirm the code we sent to your email to finish signing in.",
+    reason: "New device detected. Confirm email code to complete sign-in.",
     nextEligibleAt: null,
   }
 }

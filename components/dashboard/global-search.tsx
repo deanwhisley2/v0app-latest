@@ -59,7 +59,7 @@ const helpItems: Omit<SearchResult, "id">[] = [
   { title: "How to Trade", description: "Learn trading basics", category: "help", icon: <HelpCircle className="h-4 w-4" /> },
   { title: "Deposit Funds", description: "Add money to your account", category: "help", icon: <HelpCircle className="h-4 w-4" /> },
   { title: "Withdraw Funds", description: "Cash out your crypto", category: "help", icon: <HelpCircle className="h-4 w-4" /> },
-  { title: "Contact Support", description: "Get help from our team", category: "help", icon: <HelpCircle className="h-4 w-4" /> },
+  { title: "Contact Support", description: "Support desk", category: "help", icon: <HelpCircle className="h-4 w-4" /> },
 ]
 
 

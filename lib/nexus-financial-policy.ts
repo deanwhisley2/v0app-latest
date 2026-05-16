@@ -27,10 +27,8 @@ export const NEXUS_EMERGENCY_PULLOUT_THRESHOLD = 0.07
 export const NEXUS_HARD_PROTECTION_THRESHOLD = 0.09
 
 export const PROCESSING_COPY = {
-  deposits:
-    "Most deposits show up quickly after we match your payment — often within minutes during business hours.",
-  withdrawals:
-    "Withdrawals are reviewed promptly. Most complete the same day once approved; timing depends on your payout route.",
+  deposits: "Deposits typically post within minutes after confirmation.",
+  withdrawals: "Withdrawals pending review. Settlement timing depends on payout route.",
 } as const
 
 export type FixInsuranceWithdrawFees = {

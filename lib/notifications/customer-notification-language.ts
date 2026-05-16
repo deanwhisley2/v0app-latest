@@ -6,6 +6,8 @@
 const INTERNAL_PHRASE =
   /normalized settlement|MAIN_TREASURY|OPERATIONAL(?:\s+pool)?|admin_airtel(?:_ug)?|admin[\s_-]*direct|admin_crypto|L5\s+approved|treasury[\s_-]*pool|retailer_retail_balance|fx[\s_-]*(snapshot|normalization|middleware)|funding_request_admin|legacy_admin|official[\s_-]*corridor|book entry|nexus_main_pending|→|debited|credited account|liquidity reservation|settlement trace|middleware_version|usd_native_v1|internal_daily_fx|internal unit|standard dollar|we convert|at today.?s rate|≈\s*USD|USD equivalent/i
 
+const CONVERSATIONAL_PHRASE = /\b(we|we're|we've|our team|we set aside|we took|we will|we are|we received|we kept|we verify|we credit|we'd)\b/i
+
 function formatLocalAmount(amount: number, currency: string): string {
   const ccy = currency.trim().toUpperCase()
   const frac = ccy === "UGX" || ccy === "TZS" || ccy === "RWF" || ccy === "MWK" ? 0 : 2
@@ -17,6 +19,7 @@ export function sanitizeCustomerNotificationText(text: string, fallback: string)
   const t = text.trim()
   if (!t) return fallback
   if (INTERNAL_PHRASE.test(t)) return fallback
+  if (CONVERSATIONAL_PHRASE.test(t)) return fallback
   if (/_[a-z]{2,}/.test(t) && /admin|treasury|corridor|settlement|normalized/i.test(t)) return fallback
   return t
 }
@@ -41,14 +44,14 @@ export function buildFundingApprovedCustomerCopy(params: {
     const localFmt = formatLocalAmount(local, ccy)
     return {
       title: "Funding approved",
-      body: `Your funding request of ${localFmt} has been approved. Your balance has been credited.`,
-      customerHint: "Funds have been successfully credited to your account.",
+      body: `Funding approved: ${localFmt}. Balance credited.`,
+      customerHint: "Balance credited.",
     }
   }
   return {
     title: "Funding approved",
-    body: "Your funding request has been approved. Your balance has been credited.",
-    customerHint: "Funds have been successfully credited to your account.",
+    body: "Funding approved. Balance credited.",
+    customerHint: "Balance credited.",
   }
 }
 
@@ -56,8 +59,8 @@ export function buildFundingRejectedCustomerCopy(note?: string | null): { title:
   const cleanNote = note?.trim()
   if (cleanNote && !INTERNAL_PHRASE.test(cleanNote) && cleanNote.length <= 120) {
     return {
-      title: "Funding request declined",
-      body: `Your funding request was not approved. ${cleanNote}`,
+      title: "Funding declined",
+      body: `Funding declined. ${cleanNote}`,
     }
   }
   return {
@@ -71,26 +74,26 @@ export function buildFundingHeldCustomerCopy(note?: string | null): { title: str
   if (cleanNote && !INTERNAL_PHRASE.test(cleanNote) && cleanNote.length <= 120) {
     return {
       title: "Funding under review",
-      body: `Your funding request is being reviewed. ${cleanNote}`,
+      body: `Request under review. ${cleanNote}`,
     }
   }
   return {
     title: "Funding under review",
-    body: "Your funding request is being reviewed. We will notify you when it is approved or declined.",
+    body: "Request under review.",
   }
 }
 
 export function buildFundingResolvedCustomerCopy(): { title: string; body: string } {
   return {
     title: "Funding request closed",
-    body: "Your funding request has been closed. Contact support if you have questions.",
+    body: "Funding request closed.",
   }
 }
 
 export function buildFundingSubmittedCustomerCopy(): { title: string; body: string } {
   return {
     title: "Funding submitted",
-    body: "We received your funding request and will notify you when it is reviewed.",
+    body: "Funding request submitted.",
   }
 }
 

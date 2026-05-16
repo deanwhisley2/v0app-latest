@@ -1104,7 +1104,7 @@ export function ContainerMode({
         } else if (coinSymbol === "BTC") {
           if (btcSpotRef.status !== "live") {
             toast.error(
-              "Live BTC market reference is still loading. Wait a few seconds and try again — we no longer use placeholder prices.",
+              "BTC market reference loading. Wait and retry.",
               { duration: 7500 },
             )
             return
