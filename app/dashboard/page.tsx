@@ -46,6 +46,10 @@ import {
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
+import {
+  PaymentReferenceFields,
+  RetailerPaymentInstructionPanel,
+} from "@/components/dashboard/mobile-money-payment-instructions"
 import { TreasuryPoolsPanel } from "@/components/dashboard/treasury-pools-panel"
 import { getOperationalRoleHint } from "@/lib/operational-role-hint"
 import { parseUgAirtelMerchantDesk } from "@/lib/retailer-payment-templates"
@@ -2618,60 +2622,53 @@ export default function DashboardPage() {
                     ) : null}
 
                     {qualifiedRetailers.length > 0 || officialCorridorFallback ? (
-                      <div className="space-y-3 border-t border-border/60 pt-3">
+                      <div className="max-w-full space-y-2 overflow-x-hidden border-t border-border/60 pt-2 sm:space-y-3 sm:pt-3">
                         {localMmSelectedDesk ? (
-                          <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] sm:text-xs">
-                            <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
-                            {localMmAirtelMerchant ? (
-                              <div className="mb-2 space-y-1 rounded-md border border-[#ED1C24]/35 bg-[#ED1C24]/8 p-2.5 dark:text-red-50">
-                                <p className="font-semibold text-[#ED1C24]">{t("funding.retailer.airtelMerchantTitle")}</p>
-                                <p className="text-[10px] text-muted-foreground">{t("funding.payment.airtelIntro")}</p>
-                                <ol className="list-decimal space-y-0.5 pl-4 text-[10px] leading-relaxed">
-                                  <li>
-                                    {t("funding.payment.airtelStep1").replace(
-                                      "{{ussd}}",
-                                      localMmAirtelMerchant.ussdPrefix,
-                                    )}
-                                  </li>
-                                  <li>
-                                    {t("funding.payment.airtelStep2").replace(
-                                      "{{merchantId}}",
-                                      localMmAirtelMerchant.merchantId,
-                                    )}
-                                  </li>
-                                  <li>
-                                    {t("funding.payment.airtelStep3").replace(
-                                      "{{email}}",
-                                      currentUser?.email || t("funding.payment.yourLoginEmail"),
-                                    )}
-                                  </li>
-                                  <li>{t("funding.payment.airtelStep4")}</li>
-                                  <li>{t("funding.payment.airtelStep5")}</li>
-                                </ol>
-                                <p className="text-[10px] font-medium text-muted-foreground">
-                                  {t("funding.retailer.airtelMerchantDisplayStep").replace(
-                                    "{{merchantName}}",
-                                    localMmAirtelMerchant.merchantName,
-                                  )}
-                                </p>
-                              </div>
-                            ) : null}
-                            <p>
-                              {t("funding.numbersLabel")}{" "}
-                              {(localMmSelectedDesk.payment_numbers ?? [])
-                                .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                                .join(" · ") || t("funding.noneInParens")}
-                            </p>
-                            <p>
-                              {t("funding.registeredPayeeNames")}{" "}
-                              {localMmSelectedDesk.registered_payee_names || t("funding.confirmWithDesk")}
-                            </p>
-                            <p>
-                              {t("funding.whatsappCall")} {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
-                              {localMmSelectedDesk.contact_phone || "—"}
-                            </p>
-                            <p className="font-medium text-destructive">{t("funding.wrongDestinationWarning")}</p>
-                          </div>
+                          <>
+                            <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] leading-snug sm:p-3 sm:text-xs">
+                              <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
+                              <p className="break-words">
+                                {t("funding.numbersLabel")}{" "}
+                                {(localMmSelectedDesk.payment_numbers ?? [])
+                                  .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
+                                  .join(" · ") || t("funding.noneInParens")}
+                              </p>
+                              <p className="break-words">
+                                {t("funding.registeredPayeeNames")}{" "}
+                                {localMmSelectedDesk.registered_payee_names || t("funding.confirmWithDesk")}
+                              </p>
+                              <p className="break-words">
+                                {t("funding.whatsappCall")} {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
+                                {localMmSelectedDesk.contact_phone || "—"}
+                              </p>
+                              <p className="font-medium text-destructive break-words">{t("funding.wrongDestinationWarning")}</p>
+                            </div>
+                            <RetailerPaymentInstructionPanel
+                              airtel={
+                                localMmAirtelMerchant
+                                  ? {
+                                      ussdPrefix: localMmAirtelMerchant.ussdPrefix,
+                                      merchantId: localMmAirtelMerchant.merchantId,
+                                    }
+                                  : null
+                              }
+                              instructionPayeeRaw={localMmSelectedDesk.registered_payee_names}
+                              payerEmail={currentUser?.email || t("funding.payment.yourLoginEmail")}
+                              fundTxReference={fundTxReference}
+                              onTxReferenceChange={(v) => {
+                                setFundTxReference(v)
+                                setFundTxRefError(null)
+                              }}
+                              onTxReferenceBlur={() => void validateFundTxReferenceOnBlur()}
+                              txReferenceError={fundTxRefError}
+                              txRefHint={
+                                selectedOfficialRouteId ? t("funding.txRefHintOfficial") : t("funding.txRefHintRetailer")
+                              }
+                              fundNote={fundNote}
+                              onFundNoteChange={setFundNote}
+                              t={t}
+                            />
+                          </>
                         ) : localMmSelectedOfficial ? (
                           <div className="space-y-1 rounded-md border border-sky-600/40 bg-sky-500/10 p-3 text-[11px] sm:text-xs dark:text-sky-50">
                             <p className="font-semibold text-sky-900 dark:text-sky-100">{t("funding.officialReceiveTitle")}</p>
@@ -2694,46 +2691,35 @@ export default function DashboardPage() {
                             {t("funding.tapDeskOrOfficial")}
                           </div>
                         )}
-                        <div>
-                          <label className="mb-1 block text-[10px] font-medium text-foreground">
-                            {t("funding.txRefLabel")}
-                          </label>
-                          <p className="mb-1.5 text-[10px] text-muted-foreground">
-                            {selectedOfficialRouteId ? t("funding.txRefHintOfficial") : t("funding.txRefHintRetailer")}
-                          </p>
-                          <input
-                            type="text"
-                            inputMode="text"
-                            autoComplete="off"
-                            name="momo-tx-id"
-                            value={fundTxReference}
-                            onChange={(e) => {
-                              setFundTxReference(e.target.value)
-                              setFundTxRefError(null)
-                            }}
-                            onBlur={() => void validateFundTxReferenceOnBlur()}
-                            placeholder={t("funding.txRefPlaceholder")}
-                            aria-invalid={fundTxRefError ? true : undefined}
-                            className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2.5 font-mono text-base outline-none focus:border-primary"
-                          />
-                          {fundTxRefError ? (
-                            <p className="mt-1 text-[10px] font-medium text-destructive" role="alert">
-                              {fundTxRefError}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                            {t("funding.optionalMemo")}
-                          </label>
-                          <input
-                            type="text"
-                            value={fundNote}
-                            onChange={(e) => setFundNote(e.target.value)}
-                            placeholder={t("funding.memoPlaceholder")}
-                            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-                          />
-                        </div>
+                        {!localMmSelectedDesk ? (
+                          <div className="max-w-full space-y-2 overflow-x-hidden rounded-lg border border-border/70 bg-background/80 p-2.5 sm:p-3">
+                            <PaymentReferenceFields
+                              fundTxReference={fundTxReference}
+                              onTxReferenceChange={(v) => {
+                                setFundTxReference(v)
+                                setFundTxRefError(null)
+                              }}
+                              onTxReferenceBlur={() => void validateFundTxReferenceOnBlur()}
+                              txReferenceError={fundTxRefError}
+                              hint={
+                                selectedOfficialRouteId ? t("funding.txRefHintOfficial") : t("funding.txRefHintRetailer")
+                              }
+                              t={t}
+                            />
+                            <div>
+                              <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                                {t("funding.optionalMemo")}
+                              </label>
+                              <input
+                                type="text"
+                                value={fundNote}
+                                onChange={(e) => setFundNote(e.target.value)}
+                                placeholder={t("funding.memoPlaceholder")}
+                                className="w-full min-h-[44px] rounded-md border border-border bg-background px-3 py-2 text-sm"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

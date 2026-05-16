@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react"
 import QRCode from "qrcode"
 import { Check, ChevronDown, Copy, Smartphone, Wallet } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
+import { AirtelPaymentSteps, PaymentReferenceFields } from "@/components/dashboard/mobile-money-payment-instructions"
+import { CUSTOMER_AIRTEL_MENU_DISPLAY_NAME } from "@/lib/customer-payment-instruction-display"
 
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
@@ -364,58 +366,33 @@ export function FundingPaymentPanel({
     <div
       role="tabpanel"
       aria-labelledby="fund-method-airtel"
-      className="space-y-2 rounded-xl border border-[#ED1C24]/30 bg-[#ED1C24]/5 p-3 sm:space-y-3 sm:p-3.5"
+      className="max-w-full space-y-2 overflow-x-hidden rounded-xl border border-[#ED1C24]/30 bg-[#ED1C24]/5 p-2.5 sm:p-3"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-md bg-[#ED1C24] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
-          Airtel Money
-        </span>
-        <p className="text-sm font-bold text-foreground">{config.ugandaAirtel.merchantName}</p>
-      </div>
-      <p className="text-[10px] leading-snug text-muted-foreground">
-        {t("funding.payment.adminDirectNote")} {t("funding.payment.airtelIntro")}
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {t("funding.payment.instructionPanelTitle")}
       </p>
-      <details className="rounded-lg border border-border/60 bg-background/60">
-        <summary className="cursor-pointer select-none px-2 py-2 text-[10px] font-semibold text-foreground">
-          {t("funding.payment.airtelStepsToggle")}
-        </summary>
-        <ol className="list-decimal space-y-1 border-t border-border/50 px-2 py-2 pl-6 text-[11px] leading-snug text-foreground">
-          <li>{t("funding.payment.airtelStep1").replace("{{ussd}}", config.ugandaAirtel.ussdPrefix)}</li>
-          <li>{t("funding.payment.airtelStep2").replace("{{merchantId}}", config.ugandaAirtel.merchantId)}</li>
-          <li>
-            {t("funding.payment.airtelStep3").replace("{{email}}", userEmail || t("funding.payment.yourLoginEmail"))}
-          </li>
-          <li>{t("funding.payment.airtelStep4")}</li>
-          <li>{t("funding.payment.airtelStep5")}</li>
-        </ol>
-        <div className="space-y-1 border-t border-border/50 px-2 py-2 text-[10px] text-muted-foreground">
-          <p>
-            {t("funding.payment.airtelNetworkMerchantLine").replace(
-              "{{names}}",
-              `${config.ugandaAirtel.merchantName} (${config.ugandaAirtel.networkMerchantNamesHint})`,
-            )}
-          </p>
-        </div>
-      </details>
-      <div className="space-y-2 border-t border-border/50 pt-2">
-        <label className="block text-[10px] font-medium text-foreground">{t("funding.txRefLabel")}</label>
-        <input
-          type="text"
-          value={fundTxReference}
-          onChange={(e) => onTxReferenceChange(e.target.value)}
-          onBlur={() => onTxReferenceBlur?.()}
-          placeholder={t("funding.payment.txRefPlaceholderCrypto")}
-          autoComplete="off"
-          aria-invalid={txReferenceError ? true : undefined}
-          className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
-        />
-        {txReferenceError ? (
-          <p className="text-[10px] font-medium text-destructive" role="alert">
-            {txReferenceError}
-          </p>
-        ) : null}
-        {payerFields}
-      </div>
+      <p className="text-[10px] leading-snug text-muted-foreground break-words">{t("funding.payment.adminDirectNote")}</p>
+      <AirtelPaymentSteps
+        ussdPrefix={config.ugandaAirtel.ussdPrefix}
+        merchantId={config.ugandaAirtel.merchantId}
+        payerEmail={userEmail || t("funding.payment.yourLoginEmail")}
+        t={t}
+      />
+      <p className="text-[10px] leading-snug text-muted-foreground break-words">
+        {t("funding.payment.registeredPayeeInstruction").replace(
+          "{{name}}",
+          CUSTOMER_AIRTEL_MENU_DISPLAY_NAME,
+        )}
+      </p>
+      <PaymentReferenceFields
+        fundTxReference={fundTxReference}
+        onTxReferenceChange={onTxReferenceChange}
+        onTxReferenceBlur={onTxReferenceBlur}
+        txReferenceError={txReferenceError}
+        hint={config.ugandaAirtel.referenceHint}
+        t={t}
+      />
+      {payerFields}
     </div>
   )
 
