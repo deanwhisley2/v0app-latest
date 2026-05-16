@@ -25,13 +25,12 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.payment.airtelStepsToggle": "Step-by-step (USSD)",
   "funding.payment.cryptoPanelTitle": "Crypto payment",
   "funding.payment.adminDirectNote":
-    "You pay Nexus admin directly — no retailer is responsible until ops approves or rejects your request.",
+    "Pay using the steps below, then submit your reference. We will notify you when your request is reviewed.",
   "funding.payment.cryptoAutoVerifyNote":
     "Send USDT TRC20 to the address above, then paste your transaction hash. We verify on-chain ({{min}}+ confirmations) and credit Nexus Main automatically.",
   "funding.payment.cryptoCompensationNotice":
     "Crypto cashback compensation begins from qualified deposits of $10 and above using supported rounded amounts (10, 15, 20, 25, 30…). Enter the amount in USDT/USD you intended to send — we credit what the chain received, plus up to 6.5% fee compensation when eligible.",
-  "funding.payment.cryptoAmountUsdHint":
-    "Enter amount in USDT/USD (what you sent on-chain). Your account balance is credited in your display currency after verification.",
+  "funding.payment.cryptoAmountUsdHint": "Enter the USDT amount you sent on-chain.",
   "funding.payment.copyAddress": "Copy address",
   "funding.payment.copied": "Copied",
   "funding.payment.openBinance": "Open in Binance",
@@ -134,9 +133,10 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.footerNextLead": "Next: tap",
   "funding.footerNextTail": "in the form above — nothing to confirm here yet.",
   "withdrawal.amountLabel": "Withdraw amount ({{currency}})",
-  "funding.amount.retailerTopup": "Requested admin top-up ({{currency}})",
-  "funding.amount.matchSend": "Funding amount in {{currency}} (match what you send)",
-  "funding.amount.ledgerNote": "We convert to our standard dollar amount in the background — you still type in {{currency}}.",
+  "funding.amount.retailerTopup": "Requested top-up amount ({{currency}})",
+  "funding.amount.matchSend": "Amount you send ({{currency}})",
+  "funding.amount.hintMatchSend": "Enter the same amount shown on your payment receipt or SMS.",
+  "funding.amount.minimumLine": "Minimum: {{amount}}",
   "withdrawal.availableLabel": "Available:",
   "withdrawal.status.selectDesk": "Pick a desk or the company line above.",
   "withdrawal.status.enterTxRef": "Paste the payment ID from your receipt or SMS.",
@@ -179,7 +179,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.modal.ruleOnce": "You can withdraw once every 24 hours.",
   "withdrawal.modal.waitHours": "Next withdrawal in about {{hours}} hours.",
   "withdrawal.modal.readyNow": "You can submit a withdrawal now.",
-  "withdrawal.modal.minLine": "Minimum amount: about 20,000 UGX (shown as {{min}} in your currency).",
+  "withdrawal.modal.minLine": "Minimum withdrawal: {{min}}",
   "withdrawal.modal.maxLine":
     "Maximum: up to 50% of your liquid account total (main balance, pocket earnings, and releasable trade profits — about {{max}} right now).",
   "container.fix.releaseRulesTitle": "Earnings release",
@@ -214,8 +214,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.apiErr.deskOrOfficialNotBoth": "Choose either a retailer desk or the official corridor — not both.",
   "funding.apiErr.payerRequired": "Sender name and phone are required for local mobile funding.",
   "funding.apiErr.saveCountryFirst": "Save your two-letter funding country before submitting a local funding request.",
-  "funding.apiErr.fxMismatch":
-    "The amount we calculated does not match what you entered — refresh the page and type your local amount again.",
+  "funding.apiErr.fxMismatch": "Please refresh the page and enter your funding amount again.",
   "funding.apiErr.officialNotFound": "Official corridor route not found.",
   "funding.apiErr.officialInactive": "This official corridor route is not active.",
   "funding.apiErr.officialCountryMismatch": "Country does not match the official corridor route.",
@@ -237,8 +236,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.apiErr.appealFields": "Request ID and appeal note are required.",
 
   "withdrawal.apiErr.amountPositive": "Amount must be greater than zero.",
-  "withdrawal.apiErr.minimumUsd":
-    "Smallest amount you can take out right now is about {{min}} (about 20,000 UGX at today’s rate).",
+  "withdrawal.apiErr.minimumUsd": "Minimum withdrawal is {{min}}.",
   "withdrawal.apiErr.insufficientMain": "That amount is more than you have in your main balance.",
   "withdrawal.apiErr.genericFailed": "Withdrawal could not be completed.",
   "withdrawal.apiErr.cooldownNext": "You can only withdraw once every 24 hours. Next window: {{when}}.",

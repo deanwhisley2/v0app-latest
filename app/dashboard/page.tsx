@@ -38,10 +38,11 @@ import { OperationalContinuityHud } from "@/components/dashboard/operational-con
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
-  convertFromUsd,
   corridorFiatForCountryIso2,
   formatLocalFiatAmount,
+  formatMinDepositForCustomer,
   localFiatUnitsToUsd,
+  minDepositLocalAmount,
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
@@ -764,6 +765,20 @@ export default function DashboardPage() {
       : l1FundSource === "airtel"
         ? localMmCorridorFiat ?? corridorFiatForCountryIso2("UG") ?? "UGX"
         : currency
+
+  const customerMinDepositDisplay = useMemo(() => {
+    const cur =
+      showFundModal === "withdraw"
+        ? currency
+        : l1FundSource === "local" && localMmCorridorFiat
+          ? localMmCorridorFiat
+          : l1FundSource === "airtel"
+            ? fundingAmountLabelCurrency
+            : l1FundSource === "crypto"
+              ? "USD"
+              : currency
+    return formatMinDepositForCustomer(cur, locale || "en-US")
+  }, [showFundModal, currency, l1FundSource, localMmCorridorFiat, fundingAmountLabelCurrency, locale])
 
   /** Step 2 desk matching — normalize ids so Tx fields + warning always align with selection. */
   const localMmSelectedDesk = useMemo(() => {
@@ -1837,7 +1852,7 @@ export default function DashboardPage() {
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               amount,
-              currencyContext: "USD",
+              currencyContext: currency,
             }),
           })
           const out = (await res.json().catch(() => ({}))) as {
@@ -2301,7 +2316,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-32 px-3 pb-4 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(11rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-36 px-3 pb-4 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(13rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
                 <FundingPaymentPanel
@@ -2327,6 +2342,10 @@ export default function DashboardPage() {
                   fundPayerPhone={fundPayerPhone}
                   onPayerPhoneChange={setFundPayerPhone}
                   t={t}
+                  minDepositLabel={t("funding.amount.minimumLine").replace(
+                    "{{amount}}",
+                    customerMinDepositDisplay,
+                  )}
                 />
 
                                 {l1FundSource === "local" && localMmWizardStep === 1 ? (
@@ -2383,6 +2402,16 @@ export default function DashboardPage() {
                           placeholder="0"
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 font-mono text-sm"
                         />
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {t("funding.amount.minimumLine").replace(
+                            "{{amount}}",
+                            formatLocalFiatAmount(
+                              minDepositLocalAmount(fundingAmountLabelCurrency),
+                              fundingAmountLabelCurrency,
+                              locale || "en-US",
+                            ),
+                          )}
+                        </p>
                       </div>
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
@@ -2970,9 +2999,16 @@ export default function DashboardPage() {
                   placeholder={`0 (${currency})`}
                   className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"
                 />
-                <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground sm:text-[11px]">
-                  {t("funding.amount.ledgerNote").replace("{{currency}}", currency)}
-                </p>
+                {showFundModal !== "withdraw" && (
+                  <>
+                    <p className="mt-1 text-[10px] text-muted-foreground sm:text-[11px]">
+                      {t("funding.amount.hintMatchSend")}
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-medium text-muted-foreground sm:text-[11px]">
+                      {t("funding.amount.minimumLine").replace("{{amount}}", customerMinDepositDisplay)}
+                    </p>
+                  </>
+                )}
                 {showFundModal === "withdraw" && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {t("withdrawal.availableLabel")}{" "}
@@ -2993,7 +3029,11 @@ export default function DashboardPage() {
                     <p className="mt-1">
                       {t("withdrawal.modal.minLine").replace(
                         "{{min}}",
-                        formatUserMoney(withdrawalEligibility.minUsd),
+                        formatLocalFiatAmount(
+                          minDepositLocalAmount(currency),
+                          currency,
+                          locale || "en-US",
+                        ),
                       )}
                     </p>
                     <p className="mt-0.5">
@@ -3004,20 +3044,6 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 ) : null}
-                <div className="mt-1.5 flex flex-wrap gap-1.5 sm:gap-2">
-                  {[50, 100, 250, 500].map((usdPreset) => (
-                    <button
-                      key={usdPreset}
-                      type="button"
-                      onClick={() =>
-                        setFundAmount(String(Math.round(convertFromUsd(usdPreset, currency) * 100) / 100))
-                      }
-                      className="min-w-[4rem] flex-1 rounded-lg bg-muted py-1.5 text-[10px] font-medium hover:bg-muted/80 sm:py-2 sm:text-xs"
-                    >
-                      ≈{formatUserMoney(usdPreset)}
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
 

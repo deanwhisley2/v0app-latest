@@ -41,6 +41,8 @@ type Props = {
   /** When set with onFundAmountChange, amount field is rendered in crypto flow (compact mobile layout). */
   fundAmount?: string
   onFundAmountChange?: (v: string) => void
+  /** e.g. "Minimum: UGX 20,000" — customer-safe, no FX samples */
+  minDepositLabel?: string
   t: (key: string) => string
 }
 
@@ -62,6 +64,7 @@ export function FundingPaymentPanel({
   onPayerPhoneChange,
   fundAmount = "",
   onFundAmountChange,
+  minDepositLabel,
   t,
 }: Props) {
   const [config, setConfig] = useState<PaymentConfig | null>(null)
@@ -142,8 +145,6 @@ export function FundingPaymentPanel({
       /* ignore */
     }
   }, [wallet])
-
-  const cryptoUsdQuick = [50, 100, 250, 500]
 
   const payerFields =
     onPayerNameChange && onPayerPhoneChange ? (
@@ -315,18 +316,9 @@ export function FundingPaymentPanel({
             className="w-full min-h-[44px] rounded-lg border border-border bg-background px-3 py-2 font-mono text-base outline-none focus:border-primary"
           />
           <p className="text-[10px] leading-snug text-muted-foreground">{t("funding.payment.cryptoAmountUsdHint")}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {cryptoUsdQuick.map((usd) => (
-              <button
-                key={usd}
-                type="button"
-                onClick={() => onFundAmountChange(String(usd))}
-                className="min-h-[36px] min-w-[3.25rem] flex-1 rounded-md border border-border bg-muted/60 px-2 text-[10px] font-medium hover:bg-muted sm:flex-none"
-              >
-                ${usd}
-              </button>
-            ))}
-          </div>
+          {minDepositLabel ? (
+            <p className="text-[10px] font-medium text-muted-foreground">{minDepositLabel}</p>
+          ) : null}
         </div>
       ) : null}
 

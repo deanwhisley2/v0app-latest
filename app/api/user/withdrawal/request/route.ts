@@ -3,7 +3,8 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid-withdraw-base"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
+import { formatLocalFiatAmount, isSupportedFiat } from "@/lib/currency-display"
+import { minWithdrawUsdOk, minWithdrawUsdFloor, usdToLocalUnits } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 
 function round2(n: number): number {
@@ -30,9 +31,16 @@ export async function POST(request: Request) {
 
     const minFloor = roundUsd2(minWithdrawUsdFloor())
     if (!minWithdrawUsdOk(amount)) {
+      const ccyRaw = String(body.currencyContext ?? "").trim().toUpperCase()
+      const ccy = isSupportedFiat(ccyRaw) ? ccyRaw : "USD"
+      const local = usdToLocalUnits(minFloor, ccy)
+      const minLabel =
+        local != null && Number.isFinite(local)
+          ? formatLocalFiatAmount(local, ccy, "en-US")
+          : `$${minFloor.toFixed(2)}`
       return NextResponse.json(
         {
-          error: `Minimum withdrawal is about ${minFloor} USD in internal units (20,000 UGX equivalent at current FX).`,
+          error: `Minimum withdrawal is ${minLabel}.`,
         },
         { status: 400 }
       )

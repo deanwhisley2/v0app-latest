@@ -1,13 +1,10 @@
 /**
- * Display & funding conversion helpers.
+ * Display helpers for wallet / funding UI.
  *
- * **Canonical accounting unit for API / `user_balances` / ledger paths: USD-equivalent**
- * (sometimes called “Nexus normalized units” — always USD in code, never raw local floats).
- *
- * `formatMoneyAmount(amountUsd, …)` multiplies USD → local for Intl display.
- * User **input** in their preferred fiat must be converted **to USD first** via
- * `localFiatUnitsToUsd` before comparing to balances or sending to APIs.
+ * Server-side accounting uses USD-equivalent units; customer screens should show
+ * local fiat amounts only — never conversion mechanics or treasury wording.
  */
+import { NEXUS_MIN_DEPOSIT_USD } from "@/lib/nexus-financial-policy"
 
 /** Approximate USD → local rates for display (container / wallet copy). Not FX trading quotes. */
 export const USD_TO_FX: Record<string, number> = {
@@ -88,6 +85,19 @@ export function formatLocalFiatAmount(amountLocal: number, currency: string, loc
 /** Format ledger/API USD for the user’s display currency (same as UserPreferences formatUserMoney). */
 export function formatAccountingUsdForDisplay(amountUsd: number, currency: string, locale: string): string {
   return formatMoneyAmount(amountUsd, currency, locale)
+}
+
+/** Product minimum deposit expressed in the user's fiat (display only). */
+export function minDepositLocalAmount(currency: string): number {
+  const c = isSupportedFiat(currency) ? currency : "USD"
+  const local = convertFromUsd(NEXUS_MIN_DEPOSIT_USD, c)
+  if (c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK") return Math.ceil(local)
+  return Math.round(local * 100) / 100
+}
+
+export function formatMinDepositForCustomer(currency: string, locale: string): string {
+  const c = isSupportedFiat(currency) ? currency : "USD"
+  return formatLocalFiatAmount(minDepositLocalAmount(c), c, locale)
 }
 
 export function formatMoneyAmount(amountUsd: number, currency: string, locale: string): string {

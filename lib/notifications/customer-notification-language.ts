@@ -4,7 +4,7 @@
  */
 
 const INTERNAL_PHRASE =
-  /normalized settlement|MAIN_TREASURY|OPERATIONAL(?:\s+pool)?|admin_airtel(?:_ug)?|admin[\s_-]*direct|admin_crypto|L5\s+approved|treasury[\s_-]*pool|retailer_retail_balance|fx[\s_-]*(snapshot|normalization|middleware)|funding_request_admin|legacy_admin|official[\s_-]*corridor|book entry|nexus_main_pending|→|debited|credited account|liquidity reservation|settlement trace|middleware_version|usd_native_v1|internal_daily_fx/i
+  /normalized settlement|MAIN_TREASURY|OPERATIONAL(?:\s+pool)?|admin_airtel(?:_ug)?|admin[\s_-]*direct|admin_crypto|L5\s+approved|treasury[\s_-]*pool|retailer_retail_balance|fx[\s_-]*(snapshot|normalization|middleware)|funding_request_admin|legacy_admin|official[\s_-]*corridor|book entry|nexus_main_pending|→|debited|credited account|liquidity reservation|settlement trace|middleware_version|usd_native_v1|internal_daily_fx|internal unit|standard dollar|we convert|at today.?s rate|≈\s*USD|USD equivalent/i
 
 function formatLocalAmount(amount: number, currency: string): string {
   const ccy = currency.trim().toUpperCase()
@@ -41,21 +41,13 @@ export function buildFundingApprovedCustomerCopy(params: {
     const localFmt = formatLocalAmount(local, ccy)
     return {
       title: "Funding approved",
-      body: `Your funding request of ${localFmt} has been approved and credited to your Nexus Main balance.`,
-      customerHint: "Funds have been successfully credited to your account.",
-    }
-  }
-  const usd = Number(params.amountUsd ?? NaN)
-  if (Number.isFinite(usd) && usd > 0) {
-    return {
-      title: "Funding approved",
-      body: `Your funding of $${usd.toFixed(2)} has been approved and credited to your Nexus Main balance.`,
+      body: `Your funding request of ${localFmt} has been approved. Your balance has been credited.`,
       customerHint: "Funds have been successfully credited to your account.",
     }
   }
   return {
     title: "Funding approved",
-    body: "Your funding request has been approved and credited to your Nexus Main balance.",
+    body: "Your funding request has been approved. Your balance has been credited.",
     customerHint: "Funds have been successfully credited to your account.",
   }
 }
@@ -70,7 +62,7 @@ export function buildFundingRejectedCustomerCopy(note?: string | null): { title:
   }
   return {
     title: "Funding request declined",
-    body: "Your funding request was not approved. Contact support if you need help.",
+    body: "Funding request rejected.",
   }
 }
 
@@ -105,7 +97,7 @@ export function buildFundingSubmittedCustomerCopy(): { title: string; body: stri
 /** Short headline for legacy NotificationRecord inbox rows. */
 export function buildFundingStatusHeadline(status: string, note?: string | null): string {
   if (status === "approved") return "Funding approved"
-  if (status === "rejected") return "Funding request declined"
+  if (status === "rejected") return "Funding request rejected"
   if (status === "under_review") return "Funding under review"
   if (status === "resolved") return "Funding request closed"
   return sanitizeCustomerNotificationText(status, "Funding update")

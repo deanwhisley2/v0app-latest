@@ -48,6 +48,8 @@ const MIN_WITHDRAW_RE =
 const MIN_WITHDRAW_ABOUT_RE =
   /^Minimum withdrawal is about ([\d.]+) USD in internal units \(20,000 UGX equivalent at current FX\)\.$/
 
+const MIN_WITHDRAW_LOCAL_RE = /^Minimum withdrawal is (.+)\.$/
+
 const WITHDRAW_COOLDOWN_RE =
   /^You can submit one withdrawal every 24 hours\. Next withdrawal is available after (.+)\.$/
 
@@ -63,6 +65,8 @@ export function localizeFundingWithdrawalApiMessage(
   if (!s) return t("withdrawal.apiErr.genericFailed")
   const key = EXACT_KEY[s]
   if (key) return t(key)
+  const mLocal = s.match(MIN_WITHDRAW_LOCAL_RE)
+  if (mLocal) return t("withdrawal.apiErr.minimumUsd").replace("{{min}}", mLocal[1])
   const mAbout = s.match(MIN_WITHDRAW_ABOUT_RE)
   if (mAbout) return t("withdrawal.apiErr.minimumUsd").replace("{{min}}", mAbout[1])
   const m = s.match(MIN_WITHDRAW_RE)
