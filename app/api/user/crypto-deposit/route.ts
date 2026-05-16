@@ -6,6 +6,12 @@ import {
   processCryptoDepositVerification,
   refreshUserCryptoDeposits,
 } from "@/lib/server/crypto-deposit-service"
+import {
+  DuplicateFundingReferenceError,
+  FUNDING_REFERENCE_ALREADY_USED_MESSAGE,
+  FUNDING_REFERENCE_UNAVAILABLE_MESSAGE,
+  isFundingReferenceCooldownActive,
+} from "@/lib/server/funding-reference-guard"
 
 export async function GET(request: Request) {
   try {
@@ -56,6 +62,12 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
+    if (await isFundingReferenceCooldownActive(admin, user.id)) {
+      return NextResponse.json(
+        { error: "Funding temporarily unavailable.", code: "FUNDING_COOLDOWN" },
+        { status: 429 },
+      )
+    }
     const email = user.email ?? ""
     const created = await createCryptoDepositRequest(admin, {
       userId: user.id,
@@ -85,6 +97,22 @@ export async function POST(request: Request) {
       })
     }
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 400 })
+    if (e instanceof DuplicateFundingReferenceError) {
+      return NextResponse.json(
+        { error: e.customerMessage, code: e.code },
+        { status: e.httpStatus },
+      )
+    }
+    const msg = e instanceof Error ? e.message : "Internal error"
+    if (
+      msg === FUNDING_REFERENCE_ALREADY_USED_MESSAGE ||
+      msg === FUNDING_REFERENCE_UNAVAILABLE_MESSAGE
+    ) {
+      return NextResponse.json(
+        { error: msg, code: "DUPLICATE_FUNDING_REFERENCE" },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 }

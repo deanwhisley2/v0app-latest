@@ -8,6 +8,12 @@ import {
   DuplicatePendingError,
 } from "@/lib/server/funding-duplicate-guard"
 import {
+  assertFundingPaymentReferenceAvailable,
+  DuplicateFundingReferenceError,
+  isFundingReferenceCooldownActive,
+  registerFundingPaymentReference,
+} from "@/lib/server/funding-reference-guard"
+import {
   attachProfileEmailsToRetailers,
   finalizeRetailerLiquidityReservation,
 } from "@/lib/server/retailer-funding-helpers"
@@ -381,6 +387,29 @@ export async function POST(request: Request) {
     const adminDirectNetwork =
       fundChannel === "admin_crypto" ? "USDT-TRC20" : fundChannel === "admin_airtel_ug" ? "Airtel" : mobileNetwork
 
+    if (await isFundingReferenceCooldownActive(admin, user.id)) {
+      return NextResponse.json(
+        { error: "Funding temporarily unavailable.", code: "FUNDING_COOLDOWN" },
+        { status: 429 },
+      )
+    }
+
+    let normalizedPaymentRef: string
+    try {
+      normalizedPaymentRef = await assertFundingPaymentReferenceAvailable(admin, {
+        rawReference: txReference,
+        userId: user.id,
+      })
+    } catch (err) {
+      if (err instanceof DuplicateFundingReferenceError) {
+        return NextResponse.json(
+          { error: err.customerMessage, code: err.code },
+          { status: err.httpStatus },
+        )
+      }
+      throw err
+    }
+
     try {
       await assertNoDuplicatePendingUserFunding(
         admin,
@@ -443,6 +472,18 @@ export async function POST(request: Request) {
             { status: 409 },
           )
         }
+        if (msg.includes("FUNDING_REFERENCE_ALREADY_USED")) {
+          return NextResponse.json(
+            { error: "Transaction reference already used.", code: "DUPLICATE_FUNDING_REFERENCE" },
+            { status: 409 },
+          )
+        }
+        if (msg.includes("FUNDING_REFERENCE_INVALID")) {
+          return NextResponse.json(
+            { error: "Transaction reference invalid.", code: "DUPLICATE_FUNDING_REFERENCE" },
+            { status: 400 },
+          )
+        }
         return NextResponse.json({ error: rpcErr.message }, { status: 400 })
       }
       const payload = rpcData as { request_id?: string } | null
@@ -493,8 +534,23 @@ export async function POST(request: Request) {
           "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,escalated_to_admin,retailer_response_deadline_at",
         )
         .single()
-      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      if (error) {
+        if (error.code === "23505") {
+          return NextResponse.json(
+            { error: "Transaction reference already used.", code: "DUPLICATE_FUNDING_REFERENCE" },
+            { status: 409 },
+          )
+        }
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
       data = ins as Record<string, unknown>
+      await registerFundingPaymentReference(admin, {
+        normalized: normalizedPaymentRef,
+        userId: user.id,
+        sourceTable: "retailer_fund_requests",
+        sourceId: String(data.id),
+        statusSnapshot: "pending",
+      })
     }
 
     await persistFundingAudit(admin, {

@@ -5,6 +5,12 @@ import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { adminRetailPoolUserId, getTreasurySettlementModeInfo } from "@/lib/server/admin-retail-pool"
 import { roundFundingAmount } from "@/lib/server/funding-duplicate-guard"
 import { settlementUsdFromFundRequestRow } from "@/lib/server/retailer-funding-helpers"
+import {
+  loadFundingReferenceAdminHints,
+  mergeOpsDuplicateHint,
+  type FundingReferenceAdminHint,
+} from "@/lib/server/funding-reference-admin-hints"
+import { normalizeFundingPaymentReference } from "@/lib/server/funding-reference-normalize"
 
 type ProfileLite = {
   id: string
@@ -214,6 +220,21 @@ export async function GET(request: Request) {
       }
     }
 
+    const allPaymentRefs = [
+      ...topRows.map((r) => String((r as { crypto_tx_reference?: string }).crypto_tx_reference ?? "")),
+      ...fundRows.map((r) => String((r as { tx_reference?: string }).tx_reference ?? "")),
+    ]
+    let refHintByNorm = new Map<string, FundingReferenceAdminHint>()
+    try {
+      refHintByNorm = await loadFundingReferenceAdminHints(admin, allPaymentRefs)
+    } catch {
+      refHintByNorm = new Map()
+    }
+    const refHintForRaw = (raw: string): FundingReferenceAdminHint | null => {
+      const norm = normalizeFundingPaymentReference(raw)
+      return norm ? refHintByNorm.get(norm) ?? null : null
+    }
+
     const mapTopUp = (
       raw: Record<string, unknown>,
       terminal: boolean,
@@ -246,7 +267,10 @@ export async function GET(request: Request) {
         retail_balance_usd: bal ? bal.r : null,
         withdrawal_pending_usd: bal ? bal.w : null,
         retailer_basin_usd: null,
-        duplicate_risk_hint: terminal ? null : duplicateTopupRisk(retailerUserId, amount, id),
+        duplicate_risk_hint: mergeOpsDuplicateHint(
+          terminal ? null : duplicateTopupRisk(retailerUserId, amount, id),
+          refHintForRaw(String(raw.crypto_tx_reference ?? "")),
+        ),
         note: raw.note ? String(raw.note) : null,
         payer_display_name: null,
         payer_phone: null,
@@ -310,7 +334,10 @@ export async function GET(request: Request) {
         retailer_basin_usd: basin,
         retailer_desk_profile_id: retailPid || null,
         retailer_desk_email: deskProf?.email ?? null,
-        duplicate_risk_hint: terminal ? null : duplicateFundingRisk(custId, amount, ch, mob, id),
+        duplicate_risk_hint: mergeOpsDuplicateHint(
+          terminal ? null : duplicateFundingRisk(custId, amount, ch, mob, id),
+          refHintForRaw(String(raw.tx_reference ?? "")),
+        ),
         note: raw.note ? String(raw.note) : null,
         payer_display_name: raw.payer_display_name ? String(raw.payer_display_name) : null,
         payer_phone: raw.payer_phone ? String(raw.payer_phone) : null,

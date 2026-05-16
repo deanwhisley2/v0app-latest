@@ -211,6 +211,7 @@ export default function DashboardPage() {
     totalBalanceUsd: number
   } | null>(null)
   const [fundTxReference, setFundTxReference] = useState("")
+  const [fundTxRefError, setFundTxRefError] = useState<string | null>(null)
   const [fundNote, setFundNote] = useState("")
   const [fundPayerName, setFundPayerName] = useState("")
   const [fundPayerPhone, setFundPayerPhone] = useState("")
@@ -779,6 +780,39 @@ export default function DashboardPage() {
               : currency
     return formatMinDepositForCustomer(cur, locale || "en-US")
   }, [showFundModal, currency, l1FundSource, localMmCorridorFiat, fundingAmountLabelCurrency, locale])
+
+  const validateFundTxReferenceOnBlur = useCallback(async () => {
+    const ref = fundTxReference.trim()
+    if (ref.length < 4) {
+      setFundTxRefError(null)
+      return
+    }
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/funding-reference/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reference: ref }),
+      })
+      const out = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string }
+      if (out.ok) {
+        setFundTxRefError(null)
+        return
+      }
+      setFundTxRefError(
+        localizeFundingWithdrawalApiMessage(
+          typeof out.message === "string" ? out.message : t("funding.field.txRefError"),
+          t,
+        ),
+      )
+    } catch {
+      setFundTxRefError(null)
+    }
+  }, [fundTxReference, t])
 
   /** Step 2 desk matching — normalize ids so Tx fields + warning always align with selection. */
   const localMmSelectedDesk = useMemo(() => {
@@ -2336,7 +2370,12 @@ export default function DashboardPage() {
                   fundAmount={fundAmount}
                   onFundAmountChange={setFundAmount}
                   fundTxReference={fundTxReference}
-                  onTxReferenceChange={setFundTxReference}
+                  onTxReferenceChange={(v) => {
+                    setFundTxReference(v)
+                    setFundTxRefError(null)
+                  }}
+                  txReferenceError={fundTxRefError}
+                  onTxReferenceBlur={validateFundTxReferenceOnBlur}
                   fundPayerName={fundPayerName}
                   onPayerNameChange={setFundPayerName}
                   fundPayerPhone={fundPayerPhone}
@@ -2671,10 +2710,20 @@ export default function DashboardPage() {
                             autoComplete="off"
                             name="momo-tx-id"
                             value={fundTxReference}
-                            onChange={(e) => setFundTxReference(e.target.value)}
+                            onChange={(e) => {
+                              setFundTxReference(e.target.value)
+                              setFundTxRefError(null)
+                            }}
+                            onBlur={() => void validateFundTxReferenceOnBlur()}
                             placeholder={t("funding.txRefPlaceholder")}
+                            aria-invalid={fundTxRefError ? true : undefined}
                             className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2.5 font-mono text-base outline-none focus:border-primary"
                           />
+                          {fundTxRefError ? (
+                            <p className="mt-1 text-[10px] font-medium text-destructive" role="alert">
+                              {fundTxRefError}
+                            </p>
+                          ) : null}
                         </div>
                         <div>
                           <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
@@ -3076,9 +3125,12 @@ export default function DashboardPage() {
                     customerRetailFunding &&
                     (l1FundSource === "pick" ||
                       (l1FundSource === "crypto" &&
-                        (!fundTxReference.trim() || !(parseFloat(fundAmount) > 0))) ||
+                        (!fundTxReference.trim() ||
+                          Boolean(fundTxRefError) ||
+                          !(parseFloat(fundAmount) > 0))) ||
                       (l1FundSource === "airtel" &&
                         (!fundTxReference.trim() ||
+                          Boolean(fundTxRefError) ||
                           !fundPayerName.trim() ||
                           !fundPayerPhone.trim() ||
                           !(parseFloat(fundAmount) > 0))))) ||
@@ -3090,6 +3142,7 @@ export default function DashboardPage() {
                     (localMmWizardStep !== 2 ||
                       (!localMmSelectedDesk && !selectedOfficialRouteId) ||
                       !fundTxReference.trim() ||
+                      Boolean(fundTxRefError) ||
                       !fundPayerName.trim() ||
                       !fundPayerPhone.trim() ||
                       !fundMobileNetwork.trim() ||

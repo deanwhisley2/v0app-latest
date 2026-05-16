@@ -43,6 +43,9 @@ type Props = {
   onFundAmountChange?: (v: string) => void
   /** e.g. "Minimum: UGX 20,000" — customer-safe, no FX samples */
   minDepositLabel?: string
+  /** Pre-submit server check message (customer-safe). */
+  txReferenceError?: string | null
+  onTxReferenceBlur?: () => void
   t: (key: string) => string
 }
 
@@ -65,6 +68,8 @@ export function FundingPaymentPanel({
   fundAmount = "",
   onFundAmountChange,
   minDepositLabel,
+  txReferenceError,
+  onTxReferenceBlur,
   t,
 }: Props) {
   const [config, setConfig] = useState<PaymentConfig | null>(null)
@@ -331,10 +336,17 @@ export function FundingPaymentPanel({
           type="text"
           value={fundTxReference}
           onChange={(e) => onTxReferenceChange(e.target.value)}
+          onBlur={() => onTxReferenceBlur?.()}
           placeholder={t("funding.payment.txRefPlaceholderCrypto")}
           autoComplete="off"
+          aria-invalid={txReferenceError ? true : undefined}
           className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
         />
+        {txReferenceError ? (
+          <p className="text-[10px] font-medium text-destructive" role="alert">
+            {txReferenceError}
+          </p>
+        ) : null}
       </div>
 
       <details className="mt-2 rounded-lg border border-border/60 bg-muted/20">
@@ -391,10 +403,17 @@ export function FundingPaymentPanel({
           type="text"
           value={fundTxReference}
           onChange={(e) => onTxReferenceChange(e.target.value)}
+          onBlur={() => onTxReferenceBlur?.()}
           placeholder={t("funding.payment.txRefPlaceholderCrypto")}
           autoComplete="off"
+          aria-invalid={txReferenceError ? true : undefined}
           className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
         />
+        {txReferenceError ? (
+          <p className="text-[10px] font-medium text-destructive" role="alert">
+            {txReferenceError}
+          </p>
+        ) : null}
         {payerFields}
       </div>
     </div>

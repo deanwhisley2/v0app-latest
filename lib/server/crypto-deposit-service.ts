@@ -28,6 +28,11 @@ import {
   listRecentInboundUsdtTransfers,
   verifyTrc20DepositByTxHash,
 } from "@/lib/server/tron-trc20-verify"
+import {
+  assertFundingPaymentReferenceAvailable,
+  DuplicateFundingReferenceError,
+  registerFundingPaymentReference,
+} from "@/lib/server/funding-reference-guard"
 
 const DEPOSIT_SELECT =
   "id,user_id,user_email,amount_usd,tx_hash,status,on_chain_amount_usdt,confirmations,min_confirmations,failure_reason,created_at,credited_at,credited_principal_usd,compensation_usd,total_credited_usd,chain_block_timestamp_ms,security_flag,auto_approved"
@@ -114,20 +119,27 @@ export async function createCryptoDepositRequest(
   const amountUsd = roundUsd2(params.amountUsd)
   if (!(amountUsd > 0)) throw new Error("Amount must be greater than zero.")
 
-  const existing = await findDepositByTxHash(admin, txHash)
-  if (existing) {
-    if (existing.status === "credited" || existing.tx_hash_locked_at) {
+  try {
+    await assertFundingPaymentReferenceAvailable(admin, {
+      rawReference: txHash,
+      userId: params.userId,
+    })
+  } catch (err) {
+    if (err instanceof DuplicateFundingReferenceError) {
       await logCryptoDepositSecurityEvent(admin, {
         userId: params.userId,
-        depositRequestId: existing.id,
         eventKind: "tx_hash_reuse_attempt",
         severity: "critical",
         txHash,
-        message: "Attempt to reuse a transaction hash already credited.",
-        details: { priorUserId: existing.user_id, priorStatus: existing.status },
+        message: err.customerMessage,
       })
-      throw new Error("This transaction hash was already used for a completed deposit.")
+      throw new Error(err.customerMessage)
     }
+    throw err
+  }
+
+  const existing = await findDepositByTxHash(admin, txHash)
+  if (existing) {
     if (existing.user_id === params.userId) {
       return existing as CryptoDepositRow
     }
@@ -137,9 +149,9 @@ export async function createCryptoDepositRequest(
       eventKind: "duplicate_tx_other_user",
       severity: "critical",
       txHash,
-      message: "Transaction hash already linked to another account.",
+      message: "Transaction reference unavailable.",
     })
-    throw new Error("This transaction hash is already linked to another account.")
+    throw new Error("Transaction reference unavailable.")
   }
 
   const now = new Date().toISOString()
@@ -159,7 +171,20 @@ export async function createCryptoDepositRequest(
     })
     .select(DEPOSIT_SELECT)
     .single()
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Transaction reference already used.")
+    }
+    throw new Error(error.message)
+  }
+
+  await registerFundingPaymentReference(admin, {
+    normalized: txHash,
+    userId: params.userId,
+    sourceTable: "crypto_deposit_requests",
+    sourceId: String(data.id),
+    statusSnapshot: "verifying",
+  })
 
   await appendLog(admin, data.id as string, {
     event_type: "deposit_created",

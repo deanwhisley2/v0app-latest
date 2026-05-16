@@ -7,6 +7,12 @@ import {
   assertNoDuplicatePendingRetailerTopup,
   DuplicatePendingError,
 } from "@/lib/server/funding-duplicate-guard"
+import {
+  assertFundingPaymentReferenceAvailable,
+  DuplicateFundingReferenceError,
+  isFundingReferenceCooldownActive,
+  registerFundingPaymentReference,
+} from "@/lib/server/funding-reference-guard"
 
 export async function GET(request: Request) {
   try {
@@ -54,6 +60,28 @@ export async function POST(request: Request) {
     if (!Number.isFinite(amount) || amount <= 0 || !cryptoTxReference) {
       return NextResponse.json({ error: "amountRequested and cryptoTxReference are required." }, { status: 400 })
     }
+    if (await isFundingReferenceCooldownActive(admin, user.id)) {
+      return NextResponse.json(
+        { error: "Funding temporarily unavailable.", code: "FUNDING_COOLDOWN" },
+        { status: 429 },
+      )
+    }
+    let normalizedRef: string
+    try {
+      normalizedRef = await assertFundingPaymentReferenceAvailable(admin, {
+        rawReference: cryptoTxReference,
+        userId: user.id,
+      })
+    } catch (err) {
+      if (err instanceof DuplicateFundingReferenceError) {
+        return NextResponse.json(
+          { error: err.customerMessage, code: err.code },
+          { status: err.httpStatus },
+        )
+      }
+      throw err
+    }
+
     try {
       await assertNoDuplicatePendingRetailerTopup(admin, user.id, amount)
     } catch (err) {
@@ -73,7 +101,22 @@ export async function POST(request: Request) {
       })
       .select("id,amount_requested,crypto_tx_reference,status,created_at")
       .single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "Transaction reference already used.", code: "DUPLICATE_FUNDING_REFERENCE" },
+          { status: 409 },
+        )
+      }
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    await registerFundingPaymentReference(admin, {
+      normalized: normalizedRef,
+      userId: user.id,
+      sourceTable: "retailer_admin_topup_requests",
+      sourceId: String(data.id),
+      statusSnapshot: "pending",
+    })
     await notifyUserFundingDecision(admin, {
       userId: user.id,
       headline: "Float top-up request queued for Level-5 review",

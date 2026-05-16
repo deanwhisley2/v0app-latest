@@ -42,6 +42,11 @@ const DUPLICATE_TOPUP =
 EXACT_KEY[DUPLICATE_FUNDING] = "funding.apiErr.duplicatePendingFunding"
 EXACT_KEY[DUPLICATE_TOPUP] = "funding.apiErr.duplicatePendingTopup"
 
+EXACT_KEY["Transaction reference already used."] = "funding.apiErr.duplicateReference"
+EXACT_KEY["Transaction reference unavailable."] = "funding.apiErr.referenceUnavailable"
+EXACT_KEY["Transaction reference invalid."] = "funding.apiErr.referenceInvalid"
+EXACT_KEY["Funding temporarily unavailable."] = "funding.apiErr.fundingCooldown"
+
 const MIN_WITHDRAW_RE =
   /^Minimum withdrawal is ([\d.]+) USD \(normalized internal unit\)\.$/
 
