@@ -87,7 +87,7 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         setInlineError(json.error || "Invalid or expired code.")
         return
       }
-      toast.success(json.message || "Verified — you can sign in.")
+      toast.success(json.message || "Verified. Sign in enabled.")
       router.replace("/auth/login")
       router.refresh()
     } catch {

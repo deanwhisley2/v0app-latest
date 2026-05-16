@@ -893,7 +893,7 @@ export function SettingsScreen({
         {renderBackButton()}
         <h2 className="text-lg font-semibold">Connected Exchanges</h2>
         <p className="text-sm text-muted-foreground">
-          Connect an exchange to see balances in one place. Use read-only API keys when possible. You can disconnect
+          Link exchange for balance display. Read-only API keys recommended. Disconnect
           anytime from this screen.
         </p>
         <ExchangeBinding />

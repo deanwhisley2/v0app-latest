@@ -51,7 +51,7 @@ const MIN_WITHDRAW_ABOUT_RE =
 const MIN_WITHDRAW_LOCAL_RE = /^Minimum withdrawal is (.+)\.$/
 
 const WITHDRAW_COOLDOWN_RE =
-  /^You can submit one withdrawal every 24 hours\. Next withdrawal is available after (.+)\.$/
+  /^(?:You can submit one withdrawal every 24 hours\. Next withdrawal is available after|Withdrawal limit: one per 24 hours\. Next window:) (.+)\.$/
 
 const WITHDRAW_MAX_HALF_RE =
   /^For security, each withdrawal is capped at 50% of your total balance \(about ([\d.]+) USD right now\)\.$/

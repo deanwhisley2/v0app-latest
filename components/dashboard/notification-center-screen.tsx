@@ -31,8 +31,8 @@ function formatWhen(iso: string) {
 
 function previewText(message: string) {
   const t = message.trim()
-  if (t.length <= 100) return t
-  return `${t.slice(0, 97)}…`
+  if (t.length <= 72) return t
+  return `${t.slice(0, 69)}…`
 }
 
 /** Short, plain-language detail when we do not have a dedicated `detailText` from the server. */
@@ -211,7 +211,9 @@ export function NotificationCenterScreen() {
                   <p className="font-semibold text-foreground">{n.title}</p>
                   <span className="shrink-0 text-[10px] text-muted-foreground">{formatWhen(n.timestamp)}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">{previewText(n.message)}</p>
+                <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+                  {previewText(n.message)}
+                </p>
               </div>
             </button>
           ))
@@ -236,7 +238,9 @@ export function NotificationCenterScreen() {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               <p className="text-xs text-muted-foreground">{formatWhen(selected.timestamp)}</p>
-              <p className="mt-3 text-sm leading-relaxed text-foreground">{friendlyExplanation(selected, t)}</p>
+              <p className="mt-3 line-clamp-4 text-sm leading-snug text-foreground">
+                {friendlyExplanation(selected, t)}
+              </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2 border-t border-border/60 p-4">
               <Button

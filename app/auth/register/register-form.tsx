@@ -266,7 +266,7 @@ export default function RegisterPage() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Used for local funding corridors. You can change this later in Settings.</p>
+            <p className="text-xs text-muted-foreground">Local funding route. Editable in Settings.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="register-full-name">{reg.fullName}</Label>
@@ -353,7 +353,7 @@ export default function RegisterPage() {
               </div>
             ) : (
               <p className="text-xs text-warning">
-                Optional at signup. You can add it later in Security Center for stronger recovery protection.
+                Optional at signup. Add later in Security Center.
               </p>
             )}
           </div>

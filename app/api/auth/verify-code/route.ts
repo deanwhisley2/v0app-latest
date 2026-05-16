@@ -94,7 +94,7 @@ export async function POST(request: Request) {
 
     await admin.from("email_verifications").delete().eq("user_id", userId)
 
-    return NextResponse.json({ ok: true, message: "Email verified. You can sign in." })
+    return NextResponse.json({ ok: true, message: "Email verified. Sign in enabled." })
   } catch (e) {
     console.error("verify-code:", e)
     const msg = e instanceof Error ? e.message : "Internal error"

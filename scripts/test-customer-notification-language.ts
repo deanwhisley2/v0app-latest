@@ -16,6 +16,6 @@ const approved = buildFundingApprovedCustomerCopy({
 })
 assert.match(approved.body, /UGX/)
 assert.ok(!/normalized|treasury|MAIN_TREASURY/i.test(approved.body))
-assert.match(approved.body, /Balance credited/)
+assert.match(approved.body, /Credited/)
 
 console.log("customer-notification-language: PASS")

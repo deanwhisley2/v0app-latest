@@ -297,7 +297,7 @@ export function SecurityCenter({ currentLevel, onLevelChange }: SecurityCenterPr
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="font-semibold">What you can do with Level 3:</h4>
+                    <h4 className="font-semibold">Level 3 features:</h4>
                     <ul className="space-y-1">
                       {securityLevels[2].unlocks.map((item, i) => (
                         <li key={i} className="flex items-center gap-2 text-sm">

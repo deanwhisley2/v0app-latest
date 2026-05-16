@@ -894,7 +894,7 @@ export function ContainerMode({
           createdAt?: string
         }
         if (!res.ok || out?.success === false) {
-          toastMutationError(out, "Could not reserve copy-trade allocation from Nexus Main.")
+          toastMutationError(out, "Allocation failed.")
           return
         }
 
@@ -1013,7 +1013,7 @@ export function ContainerMode({
           }
         }
         if (!res.ok || out?.success === false) {
-          toastMutationError(out, "Settlement could not complete. Refresh and try again.")
+          toastMutationError(out, "Close failed. Refresh and retry.")
           return
         }
 
@@ -1080,7 +1080,7 @@ export function ContainerMode({
           fees?: { insuranceFeeUsd?: number }
         }
         if (!res.ok || out?.success === false) {
-          toastMutationError(out, "Could not open fixed trade from Nexus Main.")
+          toastMutationError(out, "Fixed trade open failed.")
           return
         }
         const startTime = out.createdAt ? new Date(out.createdAt) : new Date()

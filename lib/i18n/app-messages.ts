@@ -7,6 +7,7 @@
 
 import type { AppLanguage } from "@/lib/user-preferences"
 import { resolveUiString } from "@/lib/i18n/resolver"
+import { financialStatusEn } from "@/lib/i18n/financial-status"
 import { fundingWithdrawalEn, fundingWithdrawalOverlays } from "@/lib/i18n/funding-withdrawal-copy"
 
 /** Flat key → English source of truth */
@@ -22,19 +23,19 @@ const en: Record<string, string> = {
 
   "bottom.assistantTitle": "Joelin",
   "bottom.assistantSubtitle": "Quick help",
-  "bottom.assistantWelcome": "Nexus assistant — ask a question.",
+  "bottom.assistantWelcome": "Nexus assistant. Enter query.",
   "bottom.askPlaceholder": "Ask something…",
   "bottom.send": "Send",
 
   "header.searchHint": "Search",
   "header.cantFind": "Can't find it?",
   "header.archivedTitle": "Saved for later",
-  "header.archivedSubtitle": "Things you moved out of your inbox.",
-  "header.archivedEmpty": "Nothing saved yet. Open Notifications, open an item, then tap Archive.",
+  "header.archivedSubtitle": "Archived notifications.",
+  "header.archivedEmpty": "Archive empty.",
 
   "notifications.center.subtitle": "Account and balance updates",
   "security.devices.title": "Device management",
-  "security.devices.hint": "Trust devices you recognize. Block unknown logins. New devices may require email verification and a 6-hour cooldown.",
+  "security.devices.hint": "Trust known devices. Block unknown logins. New devices: email verification + 6h cooldown.",
   "security.devices.ip": "IP",
   "security.devices.trust": "Trust",
   "security.devices.block": "Block",
@@ -49,54 +50,50 @@ const en: Record<string, string> = {
   "notifications.center.empty": "No new notifications.",
   "notifications.center.depositsTitle": "USDT deposits",
   "notifications.center.depositsEmptyInbox": "Your deposit updates appear above.",
-  "notifications.center.depositStatus.pending": "Deposit pending",
-  "notifications.center.depositStatus.verifying": "Deposit verifying",
-  "notifications.center.depositStatus.awaiting_confirmations": "Awaiting confirmations",
-  "notifications.center.depositStatus.verified": "Verified — crediting balance",
-  "notifications.center.depositCreditingDelay":
-    "Deposit confirmed. Balance update pending — contact support if delayed.",
-  "notifications.center.depositStatus.manual_review": "Deposit under review",
-  "notifications.center.depositStatus.failed": "Deposit failed",
-  "notifications.center.depositStatus.default": "In progress",
-  "notifications.center.depositVerifying": "On-chain verification in progress.",
-  "notifications.center.depositAmountComing": "~${{amount}} credit pending",
-  "notifications.center.depositFailed": "Deposit failed. Retry or contact support.",
-  "notifications.center.detailBalancePlain": "Balance transfer recorded.",
-  "notifications.trade.fixedFinishedTitle": "Fixed trade completed",
-  "notifications.trade.fixedFinishedMessage":
-    "Principal {{principal}} → main balance. Earnings {{pocket}} → pocket.",
-  "notifications.trade.fixedFinishedDetail": "Fixed trade closed. Funds allocated per schedule.",
-  "notifications.trade.scheduleActiveTitle": "Fixed trade active",
-  "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}}-month plan. Earnings accrue on schedule.",
-  "notifications.trade.copyCycleTitle": "Copy session closed",
-  "notifications.trade.copyCycleMessage":
-    "Session closed. Main +{{mainAdd}} · Pocket +{{pocketAdd}} (fees deducted).",
-  "notifications.trade.copySettlementFailTitle": "Copy settlement failed",
-  "notifications.trade.copySettlementFailMessage": "Settlement incomplete. Refresh or use force pull-out.",
+  "notifications.center.depositStatus.pending": "Pending",
+  "notifications.center.depositStatus.verifying": "Processing",
+  "notifications.center.depositStatus.awaiting_confirmations": "Awaiting confirmation",
+  "notifications.center.depositStatus.verified": "Confirmed",
+  "notifications.center.depositCreditingDelay": "Credit pending.",
+  "notifications.center.depositStatus.manual_review": "Under review",
+  "notifications.center.depositStatus.failed": "Failed",
+  "notifications.center.depositStatus.default": "Processing",
+  "notifications.center.depositVerifying": "Processing.",
+  "notifications.center.depositAmountComing": "Credit pending ~${{amount}}",
+  "notifications.center.depositFailed": "Failed.",
+  "notifications.center.detailBalancePlain": "Transfer completed.",
+  "notifications.trade.fixedFinishedTitle": "Completed",
+  "notifications.trade.fixedFinishedMessage": "Principal {{principal}} · Earnings {{pocket}}",
+  "notifications.trade.fixedFinishedDetail": "Fixed trade closed.",
+  "notifications.trade.scheduleActiveTitle": "Active",
+  "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}} mo",
+  "notifications.trade.copyCycleTitle": "Completed",
+  "notifications.trade.copyCycleMessage": "Main +{{mainAdd}} · Pocket +{{pocketAdd}}",
+  "notifications.trade.copySettlementFailTitle": "Failed",
+  "notifications.trade.copySettlementFailMessage": "Close incomplete. Refresh or force pull-out.",
 
-  "notifications.container.dayProgressShort": "Day {{current}} of {{total}}",
+  "notifications.container.dayProgressShort": "Day {{current}}/{{total}}",
   "notifications.container.earningsLabel": "Earnings",
-  "notifications.container.leaseSettling": "Plan ended. Settlement in progress.",
-  "notifications.container.maturingIn": "~{{n}} day(s) remaining.",
-  "notifications.container.maturesToday": "Matures today.",
-  "notifications.container.rampingHint": "Earnings accruing.",
-  "notifications.container.earlyExitConfirm":
-    "Early exit? 10% fee plus insurance from protected amount. Accrued earnings transfer to main balance.",
+  "notifications.container.leaseSettling": "Processing.",
+  "notifications.container.maturingIn": "{{n}}d remaining",
+  "notifications.container.maturesToday": "Matures today",
+  "notifications.container.rampingHint": "Accruing",
+  "notifications.container.earlyExitConfirm": "Early exit: 10% fee + insurance on protected amount.",
 
   "settings.back": "Back to settings",
   "settings.languageTitle": "Language",
-  "settings.languageHint":
-    "Applies across the app after reload on some screens; more labels are added to the dictionary over time.",
+  "settings.languageHint": "Applies after reload on some screens.",
 
   "settings.currencyTitle": "Display currency",
   "settings.item.language": "Language",
   "settings.item.currency": "Display currency",
   "settings.item.region": "Operating country",
   "settings.regionTitle": "Operating country",
-  "settings.regionHint": "Local funding corridors and regional defaults.",
+  "settings.regionHint": "Local funding routes and regional defaults.",
   "settings.regionApplySuggestion": "Apply suggested language & display currency",
   "settings.regionSaved": "Country saved for funding match.",
-  "common.missingTranslation": "Translation unavailable. Switch to English or contact support.",
+  "common.missingTranslation": "Translation unavailable.",
+  ...financialStatusEn,
   ...fundingWithdrawalEn,
 }
 

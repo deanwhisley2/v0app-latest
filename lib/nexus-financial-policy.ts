@@ -28,7 +28,7 @@ export const NEXUS_HARD_PROTECTION_THRESHOLD = 0.09
 
 export const PROCESSING_COPY = {
   deposits: "Deposits typically post within minutes after confirmation.",
-  withdrawals: "Withdrawals pending review. Settlement timing depends on payout route.",
+  withdrawals: "Withdrawals pending review. Timing depends on payout route.",
 } as const
 
 export type FixInsuranceWithdrawFees = {

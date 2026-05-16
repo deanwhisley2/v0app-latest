@@ -15,7 +15,7 @@ export function traderEligibleForFixedTrade(
 
 export function fixedTradeTierHint(userLevel: UserLevelNum | number): string {
   const lv = Number(userLevel)
-  if (lv <= 1) return "Level 1: you can lock funds only on traders marked Low risk."
-  if (lv === 2) return "Level 2: you can fix on Low and Medium risk traders."
-  return "Fix trade: Low, Medium, and High risk traders."
+  if (lv <= 1) return "Level 1: Low risk traders only."
+  if (lv === 2) return "Level 2: Low and Medium risk."
+  return "Level 3+: Low, Medium, and High risk."
 }

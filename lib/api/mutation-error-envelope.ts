@@ -178,7 +178,7 @@ export function envelopeFromMaturityExceptionMessage(msg: string): MutationError
     return {
       success: false,
       error_code: "MATURITY_LIFECYCLE_RECONCILE",
-      user_message: "Settlement paused pending desk review. Contact support if persistent.",
+      user_message: "Close paused. Under review. Contact support if persistent.",
       technical_message: "settleFixedTradeMaturityForUser: daily bucket sum does not reconcile to target.",
       context: { suggested_action: "Contact support with your session approximate open time." },
     }
@@ -203,7 +203,7 @@ export function envelopeFromMaturityExceptionMessage(msg: string): MutationError
   return {
     success: false,
     error_code: "MATURITY_SETTLEMENT_FAILED",
-    user_message: "Maturity settlement could not complete. You can retry shortly or contact support.",
+    user_message: "Maturity close failed. Retry or contact support.",
     technical_message: msg,
     context: { suggested_action: "Use “Refresh settlement” again after a few minutes." },
   }

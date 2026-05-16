@@ -2197,10 +2197,10 @@ export default function DashboardPage() {
                 new Intl.NumberFormat(locale || "en-US", { style: "currency", currency: "USD" }).format(n)
               }
             />
-            <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-              <p>
-                <span className="font-medium text-foreground">Settlement timing:</span> {PROCESSING_COPY.deposits}{" "}
-                Institutional queues run from the Approval desk.
+            <div className="mt-3 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[10px] leading-snug text-muted-foreground">
+              <p className="line-clamp-2">
+                <span className="font-medium text-foreground">{t("deposit.timingLabel")}</span>{" "}
+                {PROCESSING_COPY.deposits}
               </p>
             </div>
           </>

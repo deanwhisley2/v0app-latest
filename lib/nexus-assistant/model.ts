@@ -192,55 +192,34 @@ function authReply(q: string, authStep?: string): string | null {
 }
 
 function greetingReply(surface: NexusAssistantSurface, isGuest: boolean): string {
-  const who = isGuest ? "You’re browsing as a guest — some funding paths stay read-only until you register." : "You’re signed in — I can point you to live tools on the dashboard."
+  const who = isGuest ? "Guest session. Register for full funding." : "Signed in."
   if (surface === "settings_learner") {
-    return [
-      "Hi — I’m Joelin, your in-app guide for Nexus PRO.",
-      "",
-      who,
-      "",
-      "Ask how earnings show up, how Container mode works, where to connect exchanges, or type help for a structured tour.",
-    ].join("\n")
+    return ["Nexus assistant.", who, "Topics: wallet, container, funding, security. Type: help"].join("\n")
   }
-  return [
-    "Hi — thanks for being here.",
-    "",
-    who,
-    "",
-    "Tell me what you’re trying to do on Nexus PRO (trade desk, wallet, settings, or Container) and I’ll walk you through the exact area of the app.",
-  ].join("\n")
+  return ["Nexus assistant.", who, "Query: wallet · trade · container · settings"].join("\n")
 }
 
 function helpTour(surface: NexusAssistantSurface): string {
   const tail =
     surface === "dashboard_wallstreet_assistant"
-      ? "From this desk: ask Joelin for platform questions, use Strategies for votes, and Container when you’re ready for fixed-term flows — always confirm numbers on-screen."
-      : "Settings order: Connected Exchanges, Security Center, Deposit & Withdraw, then Joelin assistant."
-  return [
-    "Quick tour — Nexus PRO is built as a stack:",
-    "",
-    "• Trade / Wallstreet — live context, signals workspace, automation helpers.",
-    "• Wallet — Nexus Main, pending withdrawals, Container-related balances, Add Funds / Withdraw.",
-    "• Profile menu (avatar) — your referral link and Referrals view after sign-in.",
-    "• Settings — exchanges, security, funding, notifications, About/legal.",
-    "",
-    tail,
-  ].join("\n")
+      ? "Desk: strategies · container · on-screen limits."
+      : "Settings: exchanges · security · wallet."
+  return ["Navigation:", NEXUS_UI_WHERE_TO_GO, tail].join("\n")
 }
 
 /** Welcome line for first bubble — keep short. */
 export function getNexusAssistantWelcome(surface: NexusAssistantSurface, isGuest: boolean): string {
   switch (surface) {
     case "settings_learner":
-      return `I’m Joelin — I only answer ${NEXUS_PRODUCT_NAME} product questions (nothing secret, nothing above your tier). Ask how a screen works or say help.`
+      return `Nexus assistant · ${NEXUS_PRODUCT_NAME}. Product help only.`
     case "auth_screen":
     case "floating_login":
-      return `I’m Joelin — your ${NEXUS_PRODUCT_NAME} sign-in helper for accounts, passwords, and verification.`
+      return `Nexus assistant · sign-in · verification.`
     case "floating_dashboard":
     case "bottom_nav_mini":
-      return `I’m Joelin — your ${NEXUS_PRODUCT_NAME} pocket guide for trades, wallet, Container, and settings.`
+      return `Nexus assistant · wallet · trade · container.`
     case "dashboard_wallstreet_assistant":
-      return `I’m Joelin on Wallstreet — desk tools plus ${NEXUS_PRODUCT_NAME} navigation so you never feel lost.`
+      return `Nexus assistant · desk navigation.`
     case "admin_desk_support_chat":
       return "Level-5 support copilot — appeals, investigations, and humane reply drafting. Outputs are drafts for you to review before any outbound message."
     default:
@@ -262,7 +241,7 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   }
 
   if (!q) {
-    return "Type a short question about Nexus PRO — for example: help, wallet, referral, container, withdrawal, funding, exchange, or security."
+    return "Enter query: help · wallet · funding · container · security"
   }
 
   if (isGreeting(q)) return greetingReply(surface, isGuest)
@@ -298,15 +277,11 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   }
 
   if (hasAny(q, ["thanks", "thank you", "thx", "appreciate"])) {
-    return [
-      "You’re very welcome.",
-      "",
-      "The best way to thank your future self on Nexus PRO is to finish Security Center and only connect exchanges with keys you understand — that’s how pros sleep at night.",
-    ].join("\n")
+    return "Acknowledged. Security Center recommended."
   }
 
   if (hasAny(q, ["bye", "goodbye", "see you"])) {
-    return "Whenever you’re back, I’m here for Nexus PRO navigation — stay safe and trade within what you can afford to learn."
+    return "Session ended. Nexus assistant available on return."
   }
 
   // “How much if I fix $X?” — trader-first story, optional illustrative micro bands
@@ -326,30 +301,13 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
       /\$\s*[\d]/.test(rawMsg))
 
   if (asksMoneyOutcome) {
-    const lines = [
-      "Great question — in a Container your outcome tracks the trader you choose and how many quality opportunities they take while your capital is fixed with the coin.",
-      "",
-      containerCustomerEarningsStory(),
-      "",
-      CONTAINER_WITHDRAWAL_SUMMARY,
-      "",
-    ]
+    const lines = [containerCustomerEarningsStory(), CONTAINER_WITHDRAWAL_SUMMARY]
     if (roughUsd != null && roughUsd >= 20 && roughUsd <= 50) {
       lines.push(CONTAINER_ILLUSTRATIVE_MICRO_USD30)
-      lines.push("")
     } else if (roughUsd != null) {
-      lines.push(
-        "For your amount, the live Container preview and post-lock dashboard show how the desk accrues day by day — longer fixes give your trader more runway to work the capital."
-      )
-      lines.push("")
+      lines.push("See Container screen for live accrual.")
     }
-    if (isGuest) {
-      lines.push(
-        "You’re in a guest session — registering unlocks the full funding, trader pick, and exchange linking flow when your team enables it."
-      )
-    } else {
-      lines.push("Open Wallstreet → Container, pick a trader you trust, then watch the screen after you lock — that view is built for momentum.")
-    }
+    lines.push(isGuest ? "Register for full container access." : "Open Container · select trader · confirm on-screen.")
     return lines.join("\n")
   }
 

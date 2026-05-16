@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       const next = new Date(last + 86_400_000).toISOString()
       return NextResponse.json(
         {
-          error: `You can submit one withdrawal every 24 hours. Next withdrawal is available after ${next}.`,
+          error: `Withdrawal limit: one per 24 hours. Next window: ${next}.`,
           nextEligibleAt: next,
         },
         { status: 429 }

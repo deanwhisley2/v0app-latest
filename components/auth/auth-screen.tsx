@@ -815,7 +815,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
                     className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
                   />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">You can use this to login instead of email</p>
+                <p className="mt-1 text-xs text-muted-foreground">Username login supported</p>
               </div>
 
               <div>
