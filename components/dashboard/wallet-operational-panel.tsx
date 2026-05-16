@@ -25,11 +25,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AdminSupportChatPanel } from "@/components/dashboard/admin-support-chat-panel"
 import { ledgerOperationalTraceLines } from "@/lib/formatting/ledger-operational-trace"
 import {
-  UGANDA_AIRTEL_LEGAL_PAYEE,
   UGANDA_AIRTEL_MERCHANT_ID,
   UGANDA_AIRTEL_MERCHANT_NAME,
   UGANDA_AIRTEL_USSD_PREFIX,
 } from "@/lib/server/admin-payment-config"
+import { formatFundingAmountDisplay } from "@/lib/formatting/funding-amount-display"
 
 function FundingFxOpsSummary({
   fx,
@@ -623,6 +623,30 @@ function formatPendingAge(ms: number | null): string {
   if (m < 120) return `${m} min`
   const h = Math.floor(m / 60)
   return `${h}h ${m % 60}m`
+}
+
+function FundingDeskAmountCell({ row }: { row: OperationsDeskApiRow }) {
+  if (row.kind !== "user_add_funds") {
+    const usd = Number(row.amount)
+    return (
+      <span className="font-mono">
+        ${Number.isFinite(usd) ? usd.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}
+      </span>
+    )
+  }
+  const lines = formatFundingAmountDisplay({
+    amount: row.amount,
+    l5_settlement_usd: row.l5_settlement_usd,
+    fx_middleware: row.fx_middleware,
+  })
+  return (
+    <div className="space-y-0.5">
+      <div className="font-mono font-semibold text-emerald-800 dark:text-emerald-200">{lines.primary}</div>
+      {lines.secondary ? (
+        <div className="font-mono text-[10px] font-normal text-muted-foreground">{lines.secondary}</div>
+      ) : null}
+    </div>
+  )
 }
 
 type DeskSnoozeEntry = { key: string; note: string; at: number }
@@ -1787,21 +1811,7 @@ export function AdminOperationalAssets({
                       </td>
                       <td className="p-2 align-top font-mono text-[10px] break-all">{row.tx_reference}</td>
                       <td className="p-2 align-top font-semibold">
-                        {row.kind === "user_add_funds" &&
-                        row.l5_settlement_usd != null &&
-                        Number.isFinite(Number(row.l5_settlement_usd)) ? (
-                          <div className="space-y-0.5">
-                            <div className="font-mono text-emerald-700 dark:text-emerald-300">
-                              ${Number(row.l5_settlement_usd).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              <span className="block text-[9px] font-normal text-muted-foreground">USD settle</span>
-                            </div>
-                            <div className="font-mono text-[10px] font-normal text-muted-foreground">
-                              Row ${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                        ) : (
-                          `$${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                        )}
+                        <FundingDeskAmountCell row={row} />
                       </td>
                       <td className="p-2 align-top font-mono text-[10px]">
                         Main ${Number(row.nexus_main_usd ?? 0).toFixed(0)}
@@ -2122,8 +2132,9 @@ export function AdminOperationalAssets({
                               <>
                                 <p className="mt-2 font-medium">Uganda · Airtel Money (company receive line)</p>
                                 <p className="mt-1 text-muted-foreground dark:text-violet-100/90">
-                                  Receipt payee must match <strong>{UGANDA_AIRTEL_LEGAL_PAYEE}</strong>. On the Airtel menu,
-                                  merchant may show as <strong>{UGANDA_AIRTEL_MERCHANT_NAME}</strong> or Venture Nexus Pro.
+                                  On the Airtel menu, merchant should show as{" "}
+                                  <strong>{UGANDA_AIRTEL_MERCHANT_NAME}</strong>. Pegasus Technologies is our retailer
+                                  brand on file — not the name customers must match on the MoMo receipt.
                                 </p>
                                 <ul className="mt-1 list-disc pl-4 text-muted-foreground dark:text-violet-100/90">
                                   <li>Dial {UGANDA_AIRTEL_USSD_PREFIX}</li>

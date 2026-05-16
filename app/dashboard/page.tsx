@@ -759,7 +759,11 @@ export default function DashboardPage() {
   }, [fundingCountryCodeInput])
 
   const fundingAmountLabelCurrency =
-    l1FundSource === "local" && localMmCorridorFiat ? localMmCorridorFiat : currency
+    l1FundSource === "local" && localMmCorridorFiat
+      ? localMmCorridorFiat
+      : l1FundSource === "airtel"
+        ? localMmCorridorFiat ?? corridorFiatForCountryIso2("UG") ?? "UGX"
+        : currency
 
   /** Step 2 desk matching — normalize ids so Tx fields + warning always align with selection. */
   const localMmSelectedDesk = useMemo(() => {
@@ -1791,6 +1795,13 @@ export default function DashboardPage() {
       ledgerUsd = localFiatUnitsToUsd(amountRaw, currency)
     } else if (showFundModal === "add" && l1FundSource === "local") {
       ledgerUsd = localFiatUnitsToUsd(amountRaw, localFundingFiat)
+    } else if (showFundModal === "add" && l1FundSource === "airtel") {
+      const ccAirtel = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+      const airtelFiat =
+        (ccAirtel.length === 2 ? corridorFiatForCountryIso2(ccAirtel) : null) ??
+        corridorFiatForCountryIso2("UG") ??
+        "UGX"
+      ledgerUsd = localFiatUnitsToUsd(amountRaw, airtelFiat)
     }
     const amount = ledgerUsd
     const level = currentUser?.level ?? 1
@@ -1894,15 +1905,26 @@ export default function DashboardPage() {
           if (l1FundSource === "airtel") {
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
-            if (!fundPaymentProofDataUrl) throw new Error(t("funding.error.proofRequired"))
+            if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
+              throw new Error(t("funding.error.senderIdentity"))
+            }
+            const ccAirtel = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+            const airtelFiat =
+              (ccAirtel.length === 2 ? corridorFiatForCountryIso2(ccAirtel) : null) ??
+              corridorFiatForCountryIso2("UG") ??
+              "UGX"
             const res = await fetch("/api/user/retailer-funding", {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
               body: JSON.stringify({
                 amount,
+                amountInputLocal: amountRaw,
+                inputCurrency: airtelFiat,
                 txReference: fundTxReference.trim(),
                 fundChannel: "admin_airtel_ug",
-                paymentProofDataUrl: fundPaymentProofDataUrl,
+                payerDisplayName: fundPayerName.trim(),
+                payerPhone: fundPayerPhone.trim(),
+                fundingCountryCode: ccAirtel.length === 2 ? ccAirtel : "UG",
                 note: fundNote.trim() || null,
               }),
             })
@@ -1914,8 +1936,8 @@ export default function DashboardPage() {
             showToast(t("funding.toast.adminAirtelQueued"), "success")
             setFundTxReference("")
             setFundNote("")
-            setFundPaymentProofDataUrl(null)
-            setFundPaymentProofPreview(null)
+            setFundPayerName("")
+            setFundPayerPhone("")
             setL1FundSource("crypto")
             setShowFundModal(null)
             setFundAmount("")
@@ -2279,7 +2301,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-24 px-3 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(7.75rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-32 px-3 pb-4 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(11rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
                 <FundingPaymentPanel
@@ -2300,21 +2322,10 @@ export default function DashboardPage() {
                   onFundAmountChange={setFundAmount}
                   fundTxReference={fundTxReference}
                   onTxReferenceChange={setFundTxReference}
-                  paymentProofPreview={fundPaymentProofPreview}
-                  onProofFile={(file) => {
-                    if (!file) {
-                      setFundPaymentProofPreview(null)
-                      setFundPaymentProofDataUrl(null)
-                      return
-                    }
-                    const reader = new FileReader()
-                    reader.onload = () => {
-                      const url = typeof reader.result === "string" ? reader.result : null
-                      setFundPaymentProofPreview(url)
-                      setFundPaymentProofDataUrl(url)
-                    }
-                    reader.readAsDataURL(file)
-                  }}
+                  fundPayerName={fundPayerName}
+                  onPayerNameChange={setFundPayerName}
+                  fundPayerPhone={fundPayerPhone}
+                  onPayerPhoneChange={setFundPayerPhone}
                   t={t}
                 />
 
@@ -2572,12 +2583,6 @@ export default function DashboardPage() {
                                   <li>{t("funding.payment.airtelStep4")}</li>
                                   <li>{t("funding.payment.airtelStep5")}</li>
                                 </ol>
-                                <p className="text-[10px] font-medium text-muted-foreground">
-                                  {t("funding.retailer.airtelLegalPayeeStep").replace(
-                                    "{{legalPayee}}",
-                                    localMmAirtelMerchant.payeeName,
-                                  )}
-                                </p>
                                 <p className="text-[10px] font-medium text-muted-foreground">
                                   {t("funding.retailer.airtelMerchantDisplayStep").replace(
                                     "{{merchantName}}",
@@ -2953,7 +2958,10 @@ export default function DashboardPage() {
                     ? t("withdrawal.amountLabel").replace("{{currency}}", currency)
                     : retailerCreditDesk
                       ? t("funding.amount.retailerTopup").replace("{{currency}}", currency)
-                      : t("funding.amount.matchSend").replace("{{currency}}", currency)}
+                      : t("funding.amount.matchSend").replace(
+                          "{{currency}}",
+                          l1FundSource === "airtel" ? fundingAmountLabelCurrency : currency,
+                        )}
                 </label>
                 <input
                   type="number"
@@ -3045,7 +3053,8 @@ export default function DashboardPage() {
                         (!fundTxReference.trim() || !(parseFloat(fundAmount) > 0))) ||
                       (l1FundSource === "airtel" &&
                         (!fundTxReference.trim() ||
-                          !fundPaymentProofDataUrl ||
+                          !fundPayerName.trim() ||
+                          !fundPayerPhone.trim() ||
                           !(parseFloat(fundAmount) > 0))))) ||
                   (showFundModal === "add" && retailerCreditDesk) ||
                   (showFundModal === "add" && (currentUser?.level ?? 1) === 5) ||

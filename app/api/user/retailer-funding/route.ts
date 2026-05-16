@@ -307,6 +307,69 @@ export async function POST(request: Request) {
     } else if (fundChannel === "legacy_admin") {
       insertRetailerId = retailerId || null
       insertOfficialRouteId = null
+    } else if (fundChannel === "admin_airtel_ug") {
+      insertRetailerId = null
+      insertOfficialRouteId = null
+      retailerResponseDeadlineAt = null
+
+      if (!payerDisplayName || !payerPhone) {
+        return NextResponse.json(
+          { error: "payerDisplayName and payerPhone are required for Uganda Airtel funding." },
+          { status: 400 },
+        )
+      }
+
+      const { data: prof } = await admin.from("profiles").select("funding_country_code").eq("id", user.id).maybeSingle()
+      const userCountry =
+        (countryUpdate.length === 2 ? countryUpdate : "") ||
+        String(prof?.funding_country_code ?? "")
+          .trim()
+          .toUpperCase()
+      const cc2 = (userCountry.length === 2 ? userCountry : "UG").slice(0, 2)
+      const corridorFiat = corridorFiatForCountryIso2(cc2) ?? "UGX"
+      const explicitLocal = body.amountInputLocal
+      const explicitCur = typeof body.inputCurrency === "string" ? body.inputCurrency.trim().toUpperCase() : ""
+      const hasExplicitFx =
+        explicitLocal !== undefined &&
+        explicitLocal !== null &&
+        Number.isFinite(Number(explicitLocal)) &&
+        Number(explicitLocal) > 0 &&
+        explicitCur.length > 0 &&
+        isSupportedFiat(explicitCur)
+
+      if (hasExplicitFx) {
+        amountInputLocalNum = Number(explicitLocal)
+        inputCurrencyStr = explicitCur
+      } else {
+        amountInputLocalNum = clientLedgerUsd
+        inputCurrencyStr = corridorFiat
+      }
+
+      const daily = await getDailyLocalPerUsd(admin, inputCurrencyStr)
+      fxRateSnapshotNum = daily.localPerUsd
+      fundingFxRateSourceTag = `internal_daily_fx_rates:${daily.fxTableSource}`
+      fxQuoteExpiresAt = dailyFxQuoteExpiresAt(daily.rateDate)
+      amountUsdLocked = localToUsdWithDailyRate(amountInputLocalNum, daily.localPerUsd)
+
+      const preAudit = auditFundingConversion({
+        amountInputLocal: amountInputLocalNum,
+        inputCurrency: inputCurrencyStr,
+        fxRateSnapshot: fxRateSnapshotNum,
+        amountUsdLocked,
+      })
+      if (!preAudit.ok) {
+        return NextResponse.json({ error: preAudit.message, code: preAudit.code }, { status: 400 })
+      }
+
+      if (!clientUsdMatchesServerLedger(clientLedgerUsd, amountUsdLocked)) {
+        return NextResponse.json(
+          {
+            error:
+              "Ledger USD does not match server FX conversion — refresh the page and re-enter your local funding amount.",
+          },
+          { status: 400 },
+        )
+      }
     } else if (isAdminDirectFundChannel(fundChannel)) {
       insertRetailerId = null
       insertOfficialRouteId = null
@@ -465,6 +528,27 @@ export async function POST(request: Request) {
           fundRequestId: reqIdStr,
           userId: user.id,
           routingLane: lane,
+          amountInputLocal: amountInputLocalNum,
+          inputCurrency: inputCurrencyStr,
+          localPerUsd: fxRateSnapshotNum,
+          rateDate,
+          rateSource: fundingFxRateSourceTag ?? undefined,
+          amountUsdNormalized: amountUsdLocked,
+          rateCapturedAtIso: fxLockedAtIso,
+        })
+      } else if (
+        fundChannel === "admin_airtel_ug" &&
+        amountInputLocalNum != null &&
+        amountInputLocalNum > 0 &&
+        inputCurrencyStr &&
+        fxRateSnapshotNum != null &&
+        fxRateSnapshotNum > 0
+      ) {
+        const rateDate = fxLockedAtIso.slice(0, 10)
+        await insertFundingFxNormalization(admin, {
+          fundRequestId: reqIdStr,
+          userId: user.id,
+          routingLane: "admin_direct",
           amountInputLocal: amountInputLocalNum,
           inputCurrency: inputCurrencyStr,
           localPerUsd: fxRateSnapshotNum,

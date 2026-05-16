@@ -42,8 +42,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
     "After you send USDT, paste your on-chain transaction hash here — the submit button stays off until this is filled.",
   "funding.payment.airtelIntro":
     "Dial the short code below, then complete each step on your handset.",
-  "funding.payment.airtelLegalPayee": "Payee name on your receipt must match: {{legalPayee}}.",
-  "funding.payment.airtelNetworkMerchantLine": "On the Airtel menu, merchant may show as {{names}}.",
+  "funding.payment.airtelNetworkMerchantLine":
+    "On the Airtel menu, look for merchant name {{names}} — do not search for a retailer brand on the receipt.",
+  "funding.payment.changeMethod": "Change payment method",
   "funding.payment.airtelStep1": "Dial: {{ussd}}",
   "funding.payment.airtelStep2": "Enter Merchant Code: {{merchantId}}",
   "funding.payment.airtelStep3": "Reference: {{email}} (your login email)",
@@ -66,8 +67,8 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.crypto.rowPendingTotal": "Expected credit when complete: ~{{total}} USD ({{principal}} + {{bonus}} bonus)",
   "funding.cta.submitCryptoDeposit": "Submit transaction hash",
   "funding.retailer.airtelMerchantTitle": "Airtel Money Uganda · merchant pay",
-  "funding.retailer.airtelLegalPayeeStep": "Payee name on your receipt must match: {{legalPayee}}.",
-  "funding.retailer.airtelMerchantDisplayStep": "On the Airtel menu, merchant may show as {{merchantName}}.",
+  "funding.retailer.airtelMerchantDisplayStep":
+    "On the Airtel menu, merchant should show as {{merchantName}} (retailer desks may show Nexus Pro2).",
   "funding.toast.adminAirtelQueued": "Airtel payment submitted — admin will verify and credit Nexus Main.",
   "funding.error.proofRequired": "Upload a payment screenshot so admin can verify your transfer.",
   "funding.cta.submitAdminPayment": "Submit for admin verification",

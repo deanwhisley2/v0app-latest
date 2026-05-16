@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       admin
         .from("retailer_fund_requests")
         .select(
-          "id,user_id,retailer_id,amount,amount_usd_locked,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,appeal_note,payer_display_name,payer_phone,escalated_to_admin,resolution_note"
+          "id,user_id,retailer_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,tx_reference,status,note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,appeal_note,payer_display_name,payer_phone,escalated_to_admin,resolution_note"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -269,7 +269,11 @@ export async function GET(request: Request) {
       const bal = balMap.get(custId)
       const basin = desk ? Number((desk as { credit_basin?: unknown }).credit_basin ?? 0) : null
       const deskProf = deskUid ? profMap.get(deskUid) : undefined
-      const amount = Number(raw.amount ?? 0)
+      const fxRow = fxByFundRequestId.get(id) ?? null
+      const amount = settlementUsdFromFundRequestRow(
+        raw as { amount_usd_locked?: unknown; amount?: unknown; amount_input_local?: unknown },
+        fxRow,
+      )
       const ch = String(raw.fund_channel ?? "local_mobile")
       const mob = String(raw.mobile_network ?? "").trim()
       const created_at = String(raw.created_at ?? "")
@@ -313,10 +317,8 @@ export async function GET(request: Request) {
         commission_rate: null,
         amount_credited: null,
         resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,
-        l5_settlement_usd: settlementUsdFromFundRequestRow(
-          raw as { amount_usd_locked?: unknown; amount?: unknown },
-        ),
-        fx_middleware: fxByFundRequestId.get(id) ?? null,
+        l5_settlement_usd: amount,
+        fx_middleware: fxRow,
       }
     }
 

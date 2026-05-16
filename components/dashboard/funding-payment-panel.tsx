@@ -34,8 +34,10 @@ type Props = {
   userEmail: string
   fundTxReference: string
   onTxReferenceChange: (v: string) => void
-  paymentProofPreview: string | null
-  onProofFile: (file: File | null) => void
+  fundPayerName?: string
+  onPayerNameChange?: (v: string) => void
+  fundPayerPhone?: string
+  onPayerPhoneChange?: (v: string) => void
   /** When set with onFundAmountChange, amount field is rendered in crypto flow (compact mobile layout). */
   fundAmount?: string
   onFundAmountChange?: (v: string) => void
@@ -54,8 +56,10 @@ export function FundingPaymentPanel({
   userEmail,
   fundTxReference,
   onTxReferenceChange,
-  paymentProofPreview,
-  onProofFile,
+  fundPayerName = "",
+  onPayerNameChange,
+  fundPayerPhone = "",
+  onPayerPhoneChange,
   fundAmount = "",
   onFundAmountChange,
   t,
@@ -141,21 +145,33 @@ export function FundingPaymentPanel({
 
   const cryptoUsdQuick = [50, 100, 250, 500]
 
-  const proofField = (
-    <div className="space-y-1">
-      <label className="block text-[10px] font-medium text-foreground">{t("funding.payment.proofLabel")}</label>
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={(e) => onProofFile(e.target.files?.[0] ?? null)}
-        className="w-full text-[11px] file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
-      />
-      {paymentProofPreview ? (
-        <img src={paymentProofPreview} alt="" className="mt-1 max-h-24 rounded-md border border-border object-contain" />
-      ) : null}
-    </div>
-  )
+  const payerFields =
+    onPayerNameChange && onPayerPhoneChange ? (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium text-foreground">{t("funding.field.senderName")}</label>
+          <input
+            type="text"
+            value={fundPayerName}
+            onChange={(e) => onPayerNameChange(e.target.value)}
+            placeholder={t("funding.placeholder.fullName")}
+            autoComplete="name"
+            className="w-full min-h-[44px] rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium text-foreground">{t("funding.field.senderPhone")}</label>
+          <input
+            type="tel"
+            value={fundPayerPhone}
+            onChange={(e) => onPayerPhoneChange(e.target.value)}
+            placeholder={t("funding.placeholder.phoneExample")}
+            autoComplete="tel"
+            className="w-full min-h-[44px] rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+    ) : null
 
   const methodTriggers = (
     <div className="space-y-1.5" role="tablist" aria-label={t("funding.payment.pickRail")}>
@@ -350,7 +366,7 @@ export function FundingPaymentPanel({
         <span className="rounded-md bg-[#ED1C24] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
           Airtel Money
         </span>
-        <p className="text-sm font-bold text-foreground">{config.ugandaAirtel.legalPayeeName}</p>
+        <p className="text-sm font-bold text-foreground">{config.ugandaAirtel.merchantName}</p>
       </div>
       <p className="text-[10px] leading-snug text-muted-foreground">
         {t("funding.payment.adminDirectNote")} {t("funding.payment.airtelIntro")}
@@ -369,11 +385,10 @@ export function FundingPaymentPanel({
           <li>{t("funding.payment.airtelStep5")}</li>
         </ol>
         <div className="space-y-1 border-t border-border/50 px-2 py-2 text-[10px] text-muted-foreground">
-          <p>{t("funding.payment.airtelLegalPayee").replace("{{legalPayee}}", config.ugandaAirtel.legalPayeeName)}</p>
           <p>
             {t("funding.payment.airtelNetworkMerchantLine").replace(
               "{{names}}",
-              `${config.ugandaAirtel.merchantName} — or ${config.ugandaAirtel.networkMerchantNamesHint}`,
+              `${config.ugandaAirtel.merchantName} (${config.ugandaAirtel.networkMerchantNamesHint})`,
             )}
           </p>
         </div>
@@ -388,7 +403,7 @@ export function FundingPaymentPanel({
           autoComplete="off"
           className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
         />
-        {proofField}
+        {payerFields}
       </div>
     </div>
   )
@@ -404,16 +419,35 @@ export function FundingPaymentPanel({
     <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.payment.pickRail")}</p>
   )
 
+  const changeMethod =
+    activeSource !== "pick" ? (
+      <button
+        type="button"
+        onClick={() => onSourceChange("pick")}
+        className="text-[11px] font-semibold text-primary underline-offset-2 hover:underline"
+      >
+        ← {t("funding.payment.changeMethod")}
+      </button>
+    ) : null
+
   return (
     <div className="mb-1 space-y-2 sm:mb-3 sm:space-y-3">
-      {methodTriggers}
-      {pickHint}
-      {cryptoExpanded}
-      {airtelExpanded}
-      {activeSource === "airtel" && !config ? (
-        <p className="text-[11px] text-muted-foreground">Loading Uganda payment corridor…</p>
-      ) : null}
-      {localExpanded}
+      {activeSource === "pick" ? (
+        <>
+          {methodTriggers}
+          {pickHint}
+        </>
+      ) : (
+        <>
+          {changeMethod}
+          {cryptoExpanded}
+          {airtelExpanded}
+          {activeSource === "airtel" && !config ? (
+            <p className="text-[11px] text-muted-foreground">Loading Uganda payment corridor…</p>
+          ) : null}
+          {localExpanded}
+        </>
+      )}
     </div>
   )
 }

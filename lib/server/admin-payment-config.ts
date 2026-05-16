@@ -18,11 +18,14 @@ export const ADMIN_USDT_BINANCE_DEEP_LINK =
   "https://app.binance.com/uni-qr/web3-token-details?utm_medium=share&tokenCA=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t&binanceChainId=CT_195&chain=undefined"
 
 export const UGANDA_AIRTEL_MERCHANT_ID = "7095287"
-/** Legal payee printed on the MoMo receipt (merchant name on network may differ). */
-export const UGANDA_AIRTEL_LEGAL_PAYEE =
-  (process.env.NEXUS_UG_AIRTEL_LEGAL_PAYEE ?? "").trim() || "Pegasus Technologies LTD"
+/** Retailer brand on file (not the Airtel menu merchant label customers see). */
+export const UGANDA_AIRTEL_RETAILER_BRAND =
+  (process.env.NEXUS_UG_AIRTEL_RETAILER_BRAND ?? "").trim() || "Pegasus Technologies LTD"
+/** @deprecated Use UGANDA_AIRTEL_RETAILER_BRAND — kept for env alias compatibility. */
+export const UGANDA_AIRTEL_LEGAL_PAYEE = UGANDA_AIRTEL_RETAILER_BRAND
+/** Merchant name shown on the Airtel Money menu for L5 admin direct receive. */
 export const UGANDA_AIRTEL_MERCHANT_NAME =
-  (process.env.NEXUS_UG_AIRTEL_MERCHANT_NAME ?? "").trim() || "Nexus Pro"
+  (process.env.NEXUS_UG_AIRTEL_MERCHANT_NAME ?? "").trim() || "Venture Nexus Pro"
 export const UGANDA_AIRTEL_USSD_PREFIX = "*185*9#"
 
 /** Retailer desk esknexuspro — Pegasus / Nexus Pro2 merchant (local_mobile responsibility). */

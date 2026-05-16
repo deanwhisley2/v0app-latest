@@ -6,14 +6,44 @@ const TABLE_REQUESTS = "retailer_fund_requests"
 const TABLE_BALANCES = "user_balances"
 const TABLE_RESERVATIONS = "retailer_liquidity_reservations"
 
-/** Settlement basis: immutable locked USD after migration; falls back to legacy `amount`. */
-export function settlementUsdFromFundRequestRow(row: {
+type FundRowUsdFields = {
   amount_usd_locked?: unknown
   amount?: unknown
-}): number {
-  const locked = Number((row as { amount_usd_locked?: unknown }).amount_usd_locked ?? 0)
-  if (Number.isFinite(locked) && locked > 0) return locked
-  return Number(row.amount ?? 0)
+  amount_input_local?: unknown
+}
+
+type FundFxUsdHint = {
+  amount_usd_normalized?: unknown
+  amount_input_local?: unknown
+} | null
+
+/** Settlement basis: immutable locked USD; corrects legacy admin_airtel rows that stored local as USD. */
+export function settlementUsdFromFundRequestRow(
+  row: FundRowUsdFields,
+  fx?: FundFxUsdHint,
+): number {
+  const locked = Number(row.amount_usd_locked ?? 0)
+  const legacy = Number(row.amount ?? 0)
+  const fxNorm = fx ? Number(fx.amount_usd_normalized ?? 0) : 0
+  const inputLocal = fx
+    ? Number(fx.amount_input_local ?? 0)
+    : Number(row.amount_input_local ?? 0)
+
+  if (Number.isFinite(locked) && locked > 0) {
+    if (
+      Number.isFinite(inputLocal) &&
+      inputLocal > 0 &&
+      Number.isFinite(fxNorm) &&
+      fxNorm > 0 &&
+      fxNorm < locked * 0.5 &&
+      Math.abs(locked - inputLocal) / Math.max(inputLocal, 1) < 0.02
+    ) {
+      return fxNorm
+    }
+    return locked
+  }
+  if (Number.isFinite(fxNorm) && fxNorm > 0) return fxNorm
+  return Number.isFinite(legacy) ? legacy : 0
 }
 
 /** True when fx_quote_expires_at is in the past (staleness policy). */

@@ -90,7 +90,8 @@ export async function GET(request: Request) {
           user_email: emailByUser.get(String(r.user_id ?? "")) ?? null,
           payment_proof_url,
           l5_settlement_usd: settlementUsdFromFundRequestRow(
-            row as { amount_usd_locked?: unknown; amount?: unknown },
+            row as { amount_usd_locked?: unknown; amount?: unknown; amount_input_local?: unknown },
+            fxByReq.get(rid) ?? null,
           ),
           fx_middleware: fxByReq.get(rid) ?? null,
         }
@@ -148,6 +149,18 @@ export async function PATCH(request: Request) {
     if (reqErr) return NextResponse.json({ error: reqErr.message }, { status: 500 })
     if (!reqRow) return NextResponse.json({ error: "Request not found" }, { status: 404 })
 
+    let fxSnap: Record<string, unknown> | null = null
+    try {
+      fxSnap = await getFundingFxSnapshotByRequestId(admin, body.requestId)
+    } catch {
+      fxSnap = null
+    }
+    const fundRowUsd = reqRow as {
+      amount_usd_locked?: unknown
+      amount?: unknown
+      amount_input_local?: unknown
+    }
+
     const customerId = (reqRow as { user_id: string }).user_id
     if (body.action === "approve" || body.action === "resolve") {
       const buyerLvl = await getTradingUserLevel(customerId)
@@ -165,9 +178,7 @@ export async function PATCH(request: Request) {
     const fundChannel = String((reqRow as { fund_channel?: string }).fund_channel ?? "legacy_admin")
 
     if (body.action === "approve") {
-      const settlementUsdPre = settlementUsdFromFundRequestRow(
-        reqRow as { amount_usd_locked?: unknown; amount?: unknown },
-      )
+      const settlementUsdPre = settlementUsdFromFundRequestRow(fundRowUsd, fxSnap)
       const risk = await assessFundingApprovalRisk(admin, {
         requestId: body.requestId,
         retailerId: (reqRow as { retailer_id?: string | null }).retailer_id ?? null,
@@ -221,7 +232,7 @@ export async function PATCH(request: Request) {
             : "resolved"
 
     if (isAdminDirectFundChannel(fundChannel)) {
-      const settlementUsd = settlementUsdFromFundRequestRow(reqRow as { amount_usd_locked?: unknown; amount?: unknown })
+      const settlementUsd = settlementUsdFromFundRequestRow(fundRowUsd, fxSnap)
       const custId = (reqRow as { user_id: string }).user_id
 
       if (body.action === "approve") {
@@ -308,7 +319,12 @@ export async function PATCH(request: Request) {
           actorType: "admin",
           actorId: user.id,
           transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
-          summary: `Admin ${nextStatus} admin direct ${fundChannel} funding request.`,
+          summary:
+            nextStatus === "rejected"
+              ? "Funding request rejected."
+              : nextStatus === "under_review"
+                ? "Funding request held for review."
+                : "Funding request updated.",
           metadata: { requestId: body.requestId, fundChannel },
         })
         await notifyFundingStatus(admin, custId, body.requestId!, nextStatus, resolutionNote)
@@ -326,7 +342,7 @@ export async function PATCH(request: Request) {
         ? body.overrideNote.trim().slice(0, 1200)
         : null
 
-      const settlementUsd = settlementUsdFromFundRequestRow(reqRow as { amount_usd_locked?: unknown; amount?: unknown })
+      const settlementUsd = settlementUsdFromFundRequestRow(fundRowUsd, fxSnap)
       const fxRow = reqRow as { fx_quote_expires_at?: string | null }
 
       if (body.action === "approve") {
@@ -559,7 +575,7 @@ export async function PATCH(request: Request) {
 
         await finalizeFundingFxOnApproval(admin, {
           fundRequestId: body.requestId!,
-          settledAmountUsd: settlementUsdFromFundRequestRow(reqMeta),
+          settledAmountUsd: settlementUsd,
           settledByUserId: user.id,
         })
 
@@ -568,7 +584,7 @@ export async function PATCH(request: Request) {
           userId: custIdSafe(reqRow),
           eventType: `funding_request_admin_${nextStatus}`,
           category: "admin",
-          amount: settlementUsdFromFundRequestRow(reqMeta),
+          amount: settlementUsd,
           balanceSource: isTreasury ? "main_treasury_pool" : "retail_balance",
           balanceDestination: "nexus_main_available",
           status: "approved",
@@ -603,7 +619,7 @@ export async function PATCH(request: Request) {
           await notifyRetailerOverrideDebit(admin, {
             retailerUserId: retailerDeskUserId,
             requestId: body.requestId!,
-            amountUsd: settlementUsdFromFundRequestRow(reqMeta),
+            amountUsd: settlementUsd,
           })
         }
       } else {
@@ -611,7 +627,7 @@ export async function PATCH(request: Request) {
           userId: custIdSafe(reqRow),
           eventType: `funding_request_admin_${nextStatus}`,
           category: "admin",
-          amount: Number((reqRow as { amount?: number }).amount ?? 0),
+          amount: settlementUsd,
           balanceSource: nextStatus === "approved" ? "retail_balance" : "nexus_main_pending",
           balanceDestination: nextStatus === "approved" ? "nexus_main_available" : "nexus_main_pending",
           status:
@@ -623,7 +639,12 @@ export async function PATCH(request: Request) {
           actorType: "admin",
           actorId: user.id,
           transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
-          summary: `Admin ${nextStatus} local mobile-money funding request (override / dispute desk).`,
+          summary:
+            nextStatus === "rejected"
+              ? "Funding request rejected."
+              : nextStatus === "under_review"
+                ? "Funding request held for review."
+                : "Local mobile-money funding request updated.",
           metadata: {
             requestId: (reqRow as { id: string }).id,
             retailerId: (reqRow as { retailer_id: string }).retailer_id,
@@ -659,7 +680,7 @@ export async function PATCH(request: Request) {
         .maybeSingle()
       if (retErr) return NextResponse.json({ error: retErr.message }, { status: 500 })
       const currentBasin = Number(retailer?.credit_basin ?? 0)
-      const amount = Number((reqRow as { amount?: number }).amount ?? 0)
+      const amount = settlementUsdFromFundRequestRow(fundRowUsd, fxSnap)
       if (currentBasin < amount) {
         await admin
           .from("retailer_profiles")
@@ -682,12 +703,12 @@ export async function PATCH(request: Request) {
       }
     }
 
+    const legacySettlementUsd = settlementUsdFromFundRequestRow(fundRowUsd, fxSnap)
+
     if (body.action === "approve") {
       await finalizeFundingFxOnApproval(admin, {
         fundRequestId: body.requestId!,
-        settledAmountUsd: settlementUsdFromFundRequestRow(
-          reqRow as { amount_usd_locked?: unknown; amount?: unknown },
-        ),
+        settledAmountUsd: legacySettlementUsd,
         settledByUserId: user.id,
       })
     }
@@ -699,7 +720,7 @@ export async function PATCH(request: Request) {
       userId: custIdSafe(reqRow),
       eventType: `funding_request_${nextStatus}`,
       category: "admin",
-      amount: Number((reqRow as { amount?: number }).amount ?? 0),
+      amount: legacySettlementUsd,
       balanceSource: nextStatus === "approved" ? "retailer_basin" : "nexus_main_pending",
       balanceDestination: nextStatus === "approved" ? "available_balance" : "nexus_main_pending",
       status:
@@ -711,7 +732,12 @@ export async function PATCH(request: Request) {
       actorType: "admin",
       actorId: user.id,
       transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
-      summary: `Admin ${nextStatus} retailer funding request (legacy basin workflow).`,
+      summary:
+        nextStatus === "rejected"
+          ? "Funding request rejected."
+          : nextStatus === "under_review"
+            ? "Funding request held for review."
+            : "Retailer funding request updated.",
       metadata: {
         requestId: (reqRow as { id: string }).id,
         retailerId: (reqRow as { retailer_id: string }).retailer_id,
