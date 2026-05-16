@@ -11,6 +11,7 @@ import {
   type FundingReferenceAdminHint,
 } from "@/lib/server/funding-reference-admin-hints"
 import { normalizeFundingPaymentReference } from "@/lib/server/funding-reference-normalize"
+import { resolveWithdrawalSettlementFromRow } from "@/lib/server/withdrawal-processing-fee"
 
 type ProfileLite = {
   id: string
@@ -57,6 +58,12 @@ export type OperationsDeskRow = {
   l5_settlement_usd?: number | null
   /** FX middleware audit row when present. */
   fx_middleware?: Record<string, unknown> | null
+  /** Cashout gross (frozen from user). */
+  withdrawal_gross_usd?: number | null
+  withdrawal_processing_fee_usd?: number | null
+  /** Net amount for payout handlers after 3% processing fee. */
+  withdrawal_payout_usd?: number | null
+  withdrawal_fee_rate?: number | null
 }
 
 function msSince(iso: string): number | null {
@@ -90,7 +97,7 @@ export async function GET(request: Request) {
       admin
         .from("withdrawal_requests")
         .select(
-          "id,user_id,amount,currency_context,status,transaction_ref,created_at,reviewed_at,resolution_note,payout_status,held_at,metadata"
+          "id,user_id,amount,processing_fee_amount,payout_amount,processing_fee_rate,currency_context,status,transaction_ref,created_at,reviewed_at,resolution_note,payout_status,held_at,metadata"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -357,7 +364,15 @@ export async function GET(request: Request) {
       const uid = String(raw.user_id ?? "")
       const prof = profMap.get(uid)
       const bal = balMap.get(uid)
-      const amount = Number(raw.amount ?? 0)
+      const wdSettlement = resolveWithdrawalSettlementFromRow(
+        raw as {
+          amount: number
+          processing_fee_amount?: number | null
+          payout_amount?: number | null
+          processing_fee_rate?: number | null
+        },
+      )
+      const amount = wdSettlement.grossAmount
       const meta = (raw.metadata as Record<string, unknown>) ?? {}
       const rail = meta.payout_rail != null ? String(meta.payout_rail).trim() : ""
       const dest =
@@ -403,6 +418,11 @@ export async function GET(request: Request) {
         amount_credited: null,
         resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,
         payout_status: ps,
+        l5_settlement_usd: wdSettlement.payoutAmount,
+        withdrawal_gross_usd: wdSettlement.grossAmount,
+        withdrawal_processing_fee_usd: wdSettlement.processingFeeAmount,
+        withdrawal_payout_usd: wdSettlement.payoutAmount,
+        withdrawal_fee_rate: wdSettlement.processingFeeRate,
       }
     }
 

@@ -6,6 +6,10 @@ import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { creditMasterLiquidityFromApprovedWithdrawal } from "@/lib/server/admin-retail-pool"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  assertWithdrawalSettlementConserved,
+  resolveWithdrawalSettlementFromRow,
+} from "@/lib/server/withdrawal-processing-fee"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -25,7 +29,7 @@ export async function GET(request: Request) {
     let q = admin
       .from("withdrawal_requests")
       .select(
-        "id,user_id,amount,currency_context,status,transaction_ref,created_at,reviewed_at,reviewed_by,resolution_note,payout_status,held_at,metadata"
+        "id,user_id,amount,processing_fee_amount,payout_amount,processing_fee_rate,currency_context,status,transaction_ref,created_at,reviewed_at,reviewed_by,resolution_note,payout_status,held_at,metadata"
       )
       .order("created_at", { ascending: false })
       .limit(200)
@@ -87,7 +91,9 @@ export async function PATCH(request: Request) {
     const admin = createAdminClient()
     const { data: row, error: fetchErr } = await admin
       .from("withdrawal_requests")
-      .select("id,user_id,amount,status,transaction_ref")
+      .select(
+        "id,user_id,amount,processing_fee_amount,payout_amount,processing_fee_rate,status,transaction_ref,metadata",
+      )
       .eq("id", requestId)
       .maybeSingle()
 
@@ -97,7 +103,18 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Request is not pending or under review" }, { status: 400 })
     }
 
-    const amount = round2(Number(row.amount ?? 0))
+    const settlement = resolveWithdrawalSettlementFromRow(
+      row as {
+        amount: number
+        processing_fee_amount?: number | null
+        payout_amount?: number | null
+        processing_fee_rate?: number | null
+      },
+    )
+    assertWithdrawalSettlementConserved(settlement)
+    const grossAmount = settlement.grossAmount
+    const payoutAmount = settlement.payoutAmount
+    const processingFeeAmount = settlement.processingFeeAmount
     const userId = row.user_id as string
     const txRef = (row.transaction_ref as string) ?? crypto.randomUUID()
     const now = new Date().toISOString()
@@ -118,8 +135,8 @@ export async function PATCH(request: Request) {
         userId,
         eventType: "withdrawal_operations_hold",
         category: "cashout",
-        amount,
-        feeAmount: 0,
+        amount: grossAmount,
+        feeAmount: processingFeeAmount,
         balanceSource: "withdrawal_pending_balance",
         balanceDestination: "withdrawal_pending_balance",
         status: "pending",
@@ -129,11 +146,19 @@ export async function PATCH(request: Request) {
         summary: resolutionNote
           ? `Withdrawal held for operations review. Note: ${resolutionNote.slice(0, 240)}`
           : "Withdrawal held for operations review (frozen balance unchanged).",
-        metadata: { requestId, heldAt: now },
+        metadata: {
+          requestId,
+          heldAt: now,
+          settlement: {
+            gross_usd: grossAmount,
+            processing_fee_usd: processingFeeAmount,
+            payout_usd: payoutAmount,
+          },
+        },
       })
       await notifyUserFundingDecision(admin, {
         userId,
-        headline: "Withdrawal held for review — funds remain frozen pending a decision.",
+        headline: "Withdrawal processing.",
         relatedId: requestId,
       })
 
@@ -148,18 +173,18 @@ export async function PATCH(request: Request) {
     if (balErr) throw new Error(balErr.message)
 
     const pendingNow = round2(Number((bal as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
-    if (pendingNow < amount) {
+    if (pendingNow < grossAmount) {
       return NextResponse.json(
         { error: "Pending withdrawal balance lower than request — reconcile before acting." },
         { status: 409 },
       )
     }
 
-    const nextPending = round2(pendingNow - amount)
+    const nextPending = round2(pendingNow - grossAmount)
 
     if (body.decision === "reject") {
       const available = round2(Number(bal?.available_balance ?? 0))
-      const nextAvailable = round2(available + amount)
+      const nextAvailable = round2(available + grossAmount)
 
       const { error: upErr } = await admin
         .from("user_balances")
@@ -188,7 +213,7 @@ export async function PATCH(request: Request) {
         userId,
         eventType: "withdrawal_rejected_refund",
         category: "cashout",
-        amount,
+        amount: grossAmount,
         feeAmount: 0,
         balanceSource: "withdrawal_pending_balance",
         balanceDestination: "available_balance",
@@ -197,16 +222,21 @@ export async function PATCH(request: Request) {
         actorType: "admin",
         actorId: actor.id,
         summary: resolutionNote
-          ? `Withdrawal rejected — frozen amount returned to Nexus Main. Note: ${resolutionNote.slice(0, 200)}`
-          : "Withdrawal rejected — frozen amount returned to Nexus Main.",
-        metadata: { requestId },
+          ? `Withdrawal rejected — gross returned to Nexus Main. Note: ${resolutionNote.slice(0, 200)}`
+          : "Withdrawal rejected — funds returned to Nexus Main.",
+        metadata: {
+          requestId,
+          settlement: {
+            gross_usd: grossAmount,
+            processing_fee_usd: 0,
+            payout_usd: 0,
+          },
+        },
       })
 
       await notifyUserFundingDecision(admin, {
         userId,
-        headline: resolutionNote
-          ? `Withdrawal rejected — funds returned to Nexus Main. ${resolutionNote.slice(0, 90)}`
-          : "Withdrawal rejected — funds returned to your Nexus Main Account.",
+        headline: resolutionNote ? `Withdrawal not completed. ${resolutionNote.slice(0, 90)}` : "Withdrawal not completed.",
         relatedId: requestId,
       })
 
@@ -217,8 +247,8 @@ export async function PATCH(request: Request) {
       })
     }
 
-    // approve → recycle liquidity into master operational account (pool user or approving operator Nexus Main), then external payout is manual/off-platform
-    const recycleTarget = await creditMasterLiquidityFromApprovedWithdrawal(admin, amount, actor.id)
+    // approve → recycle net payout to master pool; processing fee retained in platform liquidity (gross − payout)
+    const recycleTarget = await creditMasterLiquidityFromApprovedWithdrawal(admin, payoutAmount, actor.id)
     const payoutStatus = "recycled_pending_external"
 
     const { error: upErr } = await admin
@@ -245,7 +275,10 @@ export async function PATCH(request: Request) {
 
     await appendMetadata(admin, requestId, {
       master_liquidity_recycle_target: recycleTarget,
-      recycle_applied_usd: amount,
+      recycle_applied_usd: payoutAmount,
+      processing_fee_retained_usd: processingFeeAmount,
+      gross_usd: grossAmount,
+      payout_usd: payoutAmount,
       recycle_at: now,
     })
 
@@ -253,8 +286,8 @@ export async function PATCH(request: Request) {
       userId,
       eventType: "withdrawal_approved_master_recycle",
       category: "cashout",
-      amount,
-      feeAmount: 0,
+      amount: payoutAmount,
+      feeAmount: processingFeeAmount,
       balanceSource: "withdrawal_pending_balance",
       balanceDestination: "master_operational_pool",
       status: "completed",
@@ -263,15 +296,26 @@ export async function PATCH(request: Request) {
       actorId: actor.id,
       summary:
         recycleTarget === "pool"
-          ? `Withdrawal approved — ${amount.toFixed(2)} USD recycled to master operational pool (frozen bucket cleared); complete external payout off-platform.`
-          : `Withdrawal approved — ${amount.toFixed(2)} USD credited to approving operator Nexus Main (fallback recycle); configure NEXUS_ADMIN_RETAIL_POOL_USER_ID for pooled treasury.`,
-      metadata: { requestId, recycleTarget, payoutStatus },
+          ? `Withdrawal approved — gross $${grossAmount.toFixed(2)}, fee $${processingFeeAmount.toFixed(2)}, payout $${payoutAmount.toFixed(2)} recycled to master pool; forward payout amount to handler.`
+          : `Withdrawal approved — payout $${payoutAmount.toFixed(2)} credited to approver Nexus Main (fallback); gross $${grossAmount.toFixed(2)}, fee $${processingFeeAmount.toFixed(2)}.`,
+      metadata: {
+        requestId,
+        recycleTarget,
+        payoutStatus,
+        settlement: {
+          gross_usd: grossAmount,
+          processing_fee_usd: processingFeeAmount,
+          payout_usd: payoutAmount,
+          fee_rate: settlement.processingFeeRate,
+        },
+      },
     })
 
     await notifyUserFundingDecision(admin, {
       userId,
-      headline:
-        "Withdrawal approved internally — payout will complete through your payout channel once processed.",
+      headline: settlement.legacyNoProcessingFee
+        ? "Withdrawal completed."
+        : "Withdrawal completed. Processing fee applied.",
       relatedId: requestId,
     })
 
@@ -280,6 +324,13 @@ export async function PATCH(request: Request) {
       decision: "approve",
       recycleTarget,
       payoutStatus,
+      settlement: {
+        grossUsd: grossAmount,
+        processingFeeUsd: processingFeeAmount,
+        payoutUsd: payoutAmount,
+        processingFeeRate: settlement.processingFeeRate,
+        legacyNoProcessingFee: settlement.legacyNoProcessingFee,
+      },
       balances: {
         available_balance: round2(Number(bal?.available_balance ?? 0)),
         withdrawal_pending_balance: nextPending,

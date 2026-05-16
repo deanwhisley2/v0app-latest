@@ -615,6 +615,10 @@ type OperationsDeskApiRow = {
   withdrawal_pending_usd?: number | null
   l5_settlement_usd?: number | null
   fx_middleware?: Record<string, unknown> | null
+  withdrawal_gross_usd?: number | null
+  withdrawal_processing_fee_usd?: number | null
+  withdrawal_payout_usd?: number | null
+  withdrawal_fee_rate?: number | null
 }
 
 function formatPendingAge(ms: number | null): string {
@@ -626,6 +630,19 @@ function formatPendingAge(ms: number | null): string {
 }
 
 function FundingDeskAmountCell({ row }: { row: OperationsDeskApiRow }) {
+  if (row.kind === "user_withdrawal") {
+    const gross = row.withdrawal_gross_usd ?? row.amount
+    const fee = row.withdrawal_processing_fee_usd ?? 0
+    const payout = row.withdrawal_payout_usd ?? gross
+    const fmt = (n: number) => (Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—")
+    return (
+      <div className="space-y-0.5 font-mono text-[10px]">
+        <div className="font-semibold text-foreground">Gross ${fmt(Number(gross))}</div>
+        <div className="text-amber-800 dark:text-amber-200">Fee ${fmt(Number(fee))}</div>
+        <div className="font-bold text-emerald-800 dark:text-emerald-200">Payout ${fmt(Number(payout))}</div>
+      </div>
+    )
+  }
   if (row.kind !== "user_add_funds") {
     const usd = Number(row.amount)
     return (
@@ -1924,9 +1941,27 @@ export function AdminOperationalAssets({
                     </p>
                     <p className="mt-2 text-muted-foreground">{reviewRow.request_type_label}</p>
                     <p className="mt-2 font-mono break-all">Ref · {reviewRow.tx_reference}</p>
-                    {reviewRow.kind === "user_add_funds" &&
-                    reviewRow.l5_settlement_usd != null &&
-                    Number.isFinite(Number(reviewRow.l5_settlement_usd)) ? (
+                    {reviewRow.kind === "user_withdrawal" ? (
+                      <div className="mt-2 space-y-1 rounded border border-amber-500/30 bg-amber-500/5 p-2 font-mono text-[11px]">
+                        <p className="font-semibold text-foreground">
+                          Gross (frozen) · $
+                          {Number(reviewRow.withdrawal_gross_usd ?? reviewRow.amount).toFixed(2)}
+                        </p>
+                        <p className="text-amber-900 dark:text-amber-100">
+                          Processing fee · $
+                          {Number(reviewRow.withdrawal_processing_fee_usd ?? 0).toFixed(2)}
+                          {reviewRow.withdrawal_fee_rate != null && reviewRow.withdrawal_fee_rate > 0
+                            ? ` (${(Number(reviewRow.withdrawal_fee_rate) * 100).toFixed(1)}%)`
+                            : " (legacy — no fee)"}
+                        </p>
+                        <p className="text-base font-bold text-emerald-800 dark:text-emerald-200">
+                          Forward to payout handler · $
+                          {Number(reviewRow.withdrawal_payout_usd ?? reviewRow.amount).toFixed(2)}
+                        </p>
+                      </div>
+                    ) : reviewRow.kind === "user_add_funds" &&
+                      reviewRow.l5_settlement_usd != null &&
+                      Number.isFinite(Number(reviewRow.l5_settlement_usd)) ? (
                       <div className="mt-1 space-y-1">
                         <p className="font-mono text-sm font-bold text-emerald-800 dark:text-emerald-200">
                           L5 settlement (USD) · ${Number(reviewRow.l5_settlement_usd).toFixed(2)}

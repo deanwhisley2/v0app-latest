@@ -6,6 +6,10 @@ import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { formatLocalFiatAmount, isSupportedFiat } from "@/lib/currency-display"
 import { minWithdrawUsdOk, minWithdrawUsdFloor, usdToLocalUnits } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
+import {
+  assertWithdrawalSettlementConserved,
+  computeWithdrawalProcessingSettlement,
+} from "@/lib/server/withdrawal-processing-fee"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -29,8 +33,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Amount must be greater than 0" }, { status: 400 })
     }
 
+    let settlement
+    try {
+      settlement = computeWithdrawalProcessingSettlement(amount)
+      assertWithdrawalSettlementConserved(settlement)
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid withdrawal amount." },
+        { status: 400 },
+      )
+    }
+    const grossAmount = settlement.grossAmount
+
     const minFloor = roundUsd2(minWithdrawUsdFloor())
-    if (!minWithdrawUsdOk(amount)) {
+    if (!minWithdrawUsdOk(grossAmount)) {
       const ccyRaw = String(body.currencyContext ?? "").trim().toUpperCase()
       const ccy = isSupportedFiat(ccyRaw) ? ccyRaw : "USD"
       const local = usdToLocalUnits(minFloor, ccy)
@@ -84,7 +100,7 @@ export async function POST(request: Request) {
 
     const pendingWas = round2(Number((row as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
 
-    if (amount > maxAllowed + 1e-6) {
+    if (grossAmount > maxAllowed + 1e-6) {
       return NextResponse.json(
         {
           error: `For security, each withdrawal is capped at 50% of your total balance (about ${roundUsd2(maxAllowed)} USD right now).`,
@@ -95,15 +111,15 @@ export async function POST(request: Request) {
       )
     }
 
-    if (amount > available) {
+    if (grossAmount > available) {
       return NextResponse.json(
         { error: "Insufficient Nexus Main balance for this withdrawal." },
         { status: 400 }
       )
     }
 
-    const nextAvailable = round2(available - amount)
-    const nextPending = round2(pendingWas + amount)
+    const nextAvailable = round2(available - grossAmount)
+    const nextPending = round2(pendingWas + grossAmount)
 
     const { error: upErr } = await admin
       .from("user_balances")
@@ -129,12 +145,21 @@ export async function POST(request: Request) {
       .from("withdrawal_requests")
       .insert({
         user_id: user.id,
-        amount,
+        amount: grossAmount,
+        processing_fee_amount: settlement.processingFeeAmount,
+        payout_amount: settlement.payoutAmount,
+        processing_fee_rate: settlement.processingFeeRate,
         currency_context: (body.currencyContext ?? "USD").slice(0, 12),
         status: "pending",
         transaction_ref: txRef,
         metadata: {
           source: "user_withdrawal_request",
+          settlement: {
+            gross_usd: settlement.grossAmount,
+            processing_fee_usd: settlement.processingFeeAmount,
+            payout_usd: settlement.payoutAmount,
+            fee_rate: settlement.processingFeeRate,
+          },
           ...(rail ? { payout_rail: rail } : {}),
           ...(destHint ? { destination_hint: destHint } : {}),
         },
@@ -148,16 +173,23 @@ export async function POST(request: Request) {
       userId: user.id,
       eventType: "withdrawal_pending",
       category: "cashout",
-      amount,
-      feeAmount: 0,
+      amount: grossAmount,
+      feeAmount: settlement.processingFeeAmount,
       balanceSource: "available_balance",
       balanceDestination: "withdrawal_pending_balance",
       status: "pending",
       transactionRef: txRef,
       actorType: "user",
       actorId: user.id,
-      summary: "Withdrawal initiated — Nexus Main debited; funds frozen pending Level 5 review.",
-      metadata: { requestId: ins?.id },
+      summary: "Withdrawal submitted.",
+      metadata: {
+        requestId: ins?.id,
+        settlement: {
+          gross_usd: settlement.grossAmount,
+          processing_fee_usd: settlement.processingFeeAmount,
+          payout_usd: settlement.payoutAmount,
+        },
+      },
     })
 
     return NextResponse.json({

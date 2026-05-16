@@ -20,6 +20,9 @@ export const NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT = 0.035
 /** Container extract fee (existing product path). */
 export const NEXUS_CONTAINER_EXTRACT_FEE_RATE = 0.01
 
+/** Fixed processing fee on successful Nexus Main cashout (treasury / payout routing). */
+export const WITHDRAWAL_PROCESSING_FEE_RATE = 0.03
+
 /** Emergency drawdown — soft warning zone (fraction of principal / session baseline). */
 export const NEXUS_EMERGENCY_PULLOUT_THRESHOLD = 0.07
 

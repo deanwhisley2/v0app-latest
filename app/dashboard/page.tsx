@@ -1896,10 +1896,7 @@ export default function DashboardPage() {
           if (!res.ok) throw new Error(localizeFundingWithdrawalApiMessage(out.error, t))
           setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
           setWithdrawalPendingBalance(Number(out.balances?.withdrawal_pending_balance ?? withdrawalPendingBalance))
-          showToast(
-            t("withdrawal.toast.success").replace("{{amount}}", formatUserMoney(amount)),
-            "success",
-          )
+          showToast(t("withdrawal.toast.success"), "success")
           setShowFundModal(null)
           setFundAmount("")
           setFundTxReference("")
