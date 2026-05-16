@@ -16,6 +16,8 @@ import {
   normalizeCorridorNetworkToken,
 } from "@/lib/server/retailer-qualification"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
+import { buildFundingSubmittedCustomerCopy } from "@/lib/notifications/customer-notification-language"
+import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { corridorFiatForCountryIso2, isSupportedFiat } from "@/lib/currency-display"
 import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } from "@/lib/server/daily-fx-rate"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
@@ -652,9 +654,20 @@ export async function POST(request: Request) {
         inputCurrency: inputCurrencyStr,
       },
     })
+    const submitted = buildFundingSubmittedCustomerCopy()
+    await appendUserAccountNotification(admin, {
+      userId: user.id,
+      sourceKind: "funding_status",
+      sourceId: `${String(data.id)}:submitted`,
+      notificationType: "financial",
+      title: submitted.title,
+      body: submitted.body,
+      nav: { kind: "notifications" },
+      metadata: { requestId: data.id, ops_audit: { status: "submitted", fund_channel: fundChannel } },
+    })
     await notifyUserFundingDecision(admin, {
       userId: user.id,
-      headline: "Funding request submitted — pending review",
+      headline: "Funding submitted",
       relatedId: data.id as string,
     })
     return NextResponse.json({ ok: true, request: data })

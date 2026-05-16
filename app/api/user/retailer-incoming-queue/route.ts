@@ -3,6 +3,7 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { getTradingUserLevel } from "@/lib/server/security-authz"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
+import { notifyCustomerFundingDeclined } from "@/lib/server/l5-funding-notify"
 import {
   finalizeRetailerLiquidityReservation,
   getUserRetailBalance,
@@ -140,6 +141,11 @@ export async function PATCH(request: Request) {
         relatedTradeId: requestId,
         summary: "Retailer rejected local mobile-money funding after review.",
         metadata: { retailerProfileId: desk.id, requestId },
+      })
+      await notifyCustomerFundingDeclined(admin, {
+        userId: String(row.user_id),
+        requestId,
+        resolutionNote: null,
       })
       return NextResponse.json({ ok: true })
     }

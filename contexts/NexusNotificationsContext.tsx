@@ -23,6 +23,7 @@ import {
   coerceOperationalPreferences,
   type OperationalPreferencesV1,
 } from "@/lib/operational-preferences-types"
+import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 import { supabase } from "@/lib/supabaseClient"
 import {
   isServerNotificationId,
@@ -92,12 +93,17 @@ function mapServerAccountRow(r: {
     r.metadata && typeof r.metadata === "object" && r.metadata !== null
       ? (r.metadata as Record<string, unknown>)
       : null
-  const detailText = typeof meta?.friendly_detail === "string" ? meta.friendly_detail : undefined
+  const fallbackDetail = "See your account balance for the latest status."
+  const rawDetail = typeof meta?.friendly_detail === "string" ? meta.friendly_detail : undefined
+  const detailText = rawDetail
+    ? sanitizeCustomerNotificationText(rawDetail, fallbackDetail)
+    : undefined
+  const fallbackMsg = "Your account was updated."
   return {
     id: r.id,
     type,
-    title: r.title,
-    message: r.body,
+    title: sanitizeCustomerNotificationText(r.title, fallbackMsg),
+    message: sanitizeCustomerNotificationText(r.body, fallbackMsg),
     timestamp: r.created_at,
     read: !!r.read_at,
     archived: !!r.user_archived_at,

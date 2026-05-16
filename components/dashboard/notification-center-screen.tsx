@@ -8,6 +8,7 @@ import { useNexusNotifications, type NexusNotificationItem } from "@/contexts/Ne
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { supabase } from "@/lib/supabaseClient"
 import { cn } from "@/lib/utils"
+import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 
 type CryptoDepositRow = {
   id: string
@@ -36,13 +37,10 @@ function previewText(message: string) {
 
 /** Short, plain-language detail when we do not have a dedicated `detailText` from the server. */
 function friendlyExplanation(n: NexusNotificationItem, t: (key: string) => string): string {
+  const plain = t("notifications.center.detailBalancePlain")
   const d = n.detailText?.trim()
-  if (d) return d
-  const m = n.message
-  if (/book entry|retail_balance|nexus_main|→|debited|credited/i.test(m)) {
-    return t("notifications.center.detailBalancePlain")
-  }
-  return m
+  if (d) return sanitizeCustomerNotificationText(d, plain)
+  return sanitizeCustomerNotificationText(n.message, plain)
 }
 
 function depositStatusLabel(status: string, t: (key: string) => string): string {

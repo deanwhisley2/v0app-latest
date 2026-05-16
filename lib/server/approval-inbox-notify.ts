@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 
 /** Lightweight in-app inbox row for approvals (reuses NotificationRecord schema). */
 export async function notifyUserFundingDecision(
@@ -17,7 +18,7 @@ export async function notifyUserFundingDecision(
       userId: params.userId,
       analysisId: params.relatedId,
       symbol: "NEXUS_OPS",
-      action: params.headline.slice(0, 120),
+      action: sanitizeCustomerNotificationText(params.headline, "Account update").slice(0, 120),
       confidence: 0,
       read: false,
       deleted: false,

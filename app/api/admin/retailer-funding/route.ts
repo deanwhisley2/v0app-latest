@@ -6,7 +6,17 @@ import { getTradingUserLevel, requireLiquidityAdminLevel5 } from "@/lib/server/s
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { treasury } from "@/lib/financial/treasury-authority"
 import { creditCustomerMainFromTreasuryUsd } from "@/lib/server/l5-funding-settlement"
-import { notifyCustomerFundingOperational, notifyRetailerOverrideDebit } from "@/lib/server/l5-funding-notify"
+import {
+  notifyCustomerFundingDeclined,
+  notifyCustomerFundingOperational,
+  notifyRetailerOverrideDebit,
+} from "@/lib/server/l5-funding-notify"
+import {
+  buildFundingHeldCustomerCopy,
+  buildFundingResolvedCustomerCopy,
+  buildFundingStatusHeadline,
+} from "@/lib/notifications/customer-notification-language"
+import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import {
   attachProfileEmailsToRetailers,
   finalizeRetailerLiquidityReservation,
@@ -782,12 +792,39 @@ async function notifyFundingStatus(
       requestId,
       viaTreasury: false,
     })
+    return
   }
-  let headline = ""
-  if (nextStatus === "approved") headline = "Add-funds request approved — balance updated."
-  else if (nextStatus === "rejected") headline = note ? `Add-funds rejected: ${note.slice(0, 80)}` : "Add-funds request rejected."
-  else if (nextStatus === "under_review") headline = note ? `Add-funds held: ${note.slice(0, 80)}` : "Add-funds request held for operations review."
-  else if (nextStatus === "resolved") headline = "Add-funds request resolved."
-  else return
+
+  if (nextStatus === "rejected") {
+    await notifyCustomerFundingDeclined(admin, { userId: customerId, requestId, resolutionNote: note })
+  } else if (nextStatus === "under_review") {
+    const held = buildFundingHeldCustomerCopy(note)
+    await appendUserAccountNotification(admin, {
+      userId: customerId,
+      sourceKind: "funding_status",
+      sourceId: `${requestId}:under_review`,
+      notificationType: "financial",
+      title: held.title,
+      body: held.body,
+      nav: { kind: "notifications" },
+      metadata: { requestId, ops_audit: { status: "under_review", fund_request_id: requestId } },
+    })
+  } else if (nextStatus === "resolved") {
+    const resolved = buildFundingResolvedCustomerCopy()
+    await appendUserAccountNotification(admin, {
+      userId: customerId,
+      sourceKind: "funding_status",
+      sourceId: `${requestId}:resolved`,
+      notificationType: "financial",
+      title: resolved.title,
+      body: resolved.body,
+      nav: { kind: "notifications" },
+      metadata: { requestId, ops_audit: { status: "resolved", fund_request_id: requestId } },
+    })
+  } else {
+    return
+  }
+
+  const headline = buildFundingStatusHeadline(nextStatus, note)
   await notifyUserFundingDecision(admin, { userId: customerId, headline, relatedId: requestId })
 }
