@@ -360,7 +360,7 @@ const arFw: Partial<Record<string, string>> = {
   "withdrawal.cta.withdraw": "سحب",
   "withdrawal.error.enterAmount": "أدخل مبلغاً.",
   "withdrawal.error.insufficientBalance": "رصيد غير كافٍ",
-  "withdrawal.toast.success": "تم تقديم السحب. المبلغ: {{amount}}.",
+  "withdrawal.toast.success": "تم تقديم السحب.",
   "withdrawal.apiErr.minimumUsd": "الحد الأدنى للسحب: {{min}}.",
   "withdrawal.apiErr.insufficientMain": "رصيد Nexus Main غير كافٍ لهذا السحب.",
   "withdrawal.apiErr.genericFailed": "تعذّر إتمام السحب.",
