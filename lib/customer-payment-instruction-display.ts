@@ -10,6 +10,7 @@ export const CUSTOMER_AIRTEL_MENU_DISPLAY_NAME = "Nexus Pro2"
 export function customerInstructionPayeeDisplay(raw: string | null | undefined): string {
   const trimmed = String(raw ?? "").trim()
   if (!trimmed) return CUSTOMER_AIRTEL_MENU_DISPLAY_NAME
+  if (/nankwanga|azizza/i.test(trimmed)) return trimmed
   if (/pegasus\s*technologies/i.test(trimmed)) return CUSTOMER_AIRTEL_MENU_DISPLAY_NAME
   return trimmed
 }

@@ -4,6 +4,7 @@ import {
   CUSTOMER_AIRTEL_MENU_DISPLAY_NAME,
   customerInstructionPayeeDisplay,
 } from "@/lib/customer-payment-instruction-display"
+import type { UgMtnMobileTemplate } from "@/lib/retailer-payment-templates"
 
 const PANEL_CLASS =
   "max-w-full space-y-2 overflow-x-hidden rounded-lg border border-border/70 bg-background/80 p-2.5 sm:p-3"
@@ -30,6 +31,32 @@ export function AirtelPaymentSteps({ ussdPrefix, merchantId, payerEmail, t }: Ai
       </ol>
       <p className="border-t border-border/50 px-2.5 py-2 text-[10px] leading-snug text-muted-foreground break-words">
         {t("funding.payment.airtelMenuMayShow").replace("{{name}}", CUSTOMER_AIRTEL_MENU_DISPLAY_NAME)}
+      </p>
+    </details>
+  )
+}
+
+type MtnStepsProps = {
+  mtn: UgMtnMobileTemplate
+  t: (key: string) => string
+}
+
+export function MtnPaymentSteps({ mtn, t }: MtnStepsProps) {
+  return (
+    <details className="rounded-md border border-border/60 bg-muted/20" open>
+      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold text-foreground">
+        {t("funding.payment.mtnStepsToggle")}
+      </summary>
+      <ol className="list-decimal space-y-1 border-t border-border/50 px-2.5 py-2 pl-5 text-[11px] leading-snug text-foreground break-words">
+        <li>{t("funding.payment.mtnStep1").replace("{{ussd}}", mtn.ussdPrefix)}</li>
+        <li>{t("funding.payment.mtnStep2").replace("{{msisdn}}", mtn.msisdn)}</li>
+        <li>{t("funding.payment.mtnStep3")}</li>
+        <li>{t("funding.payment.mtnStep4")}</li>
+      </ol>
+      <p className="border-t border-border/50 px-2.5 py-2 text-[10px] leading-snug text-foreground break-words">
+        {t("funding.payment.mtnPayeeLine")
+          .replace("{{payee}}", mtn.payeeName)
+          .replace("{{brand}}", mtn.payeeBrand)}
       </p>
     </details>
   )
@@ -79,6 +106,7 @@ export function PaymentReferenceFields({
 
 type RetailerPaymentInstructionPanelProps = {
   airtel: { ussdPrefix: string; merchantId: string } | null
+  mtn: UgMtnMobileTemplate | null
   instructionPayeeRaw?: string | null
   payerEmail: string
   fundTxReference: string
@@ -93,6 +121,7 @@ type RetailerPaymentInstructionPanelProps = {
 
 export function RetailerPaymentInstructionPanel({
   airtel,
+  mtn,
   instructionPayeeRaw,
   payerEmail,
   fundTxReference,
@@ -111,7 +140,8 @@ export function RetailerPaymentInstructionPanel({
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {t("funding.payment.instructionPanelTitle")}
       </p>
-      {airtel ? (
+      {mtn ? <MtnPaymentSteps mtn={mtn} t={t} /> : null}
+      {airtel && !mtn ? (
         <>
           <AirtelPaymentSteps
             ussdPrefix={airtel.ussdPrefix}

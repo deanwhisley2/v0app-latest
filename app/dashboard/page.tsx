@@ -55,7 +55,7 @@ import {
 } from "@/components/dashboard/mobile-money-payment-instructions"
 import { TreasuryPoolsPanel } from "@/components/dashboard/treasury-pools-panel"
 import { getOperationalRoleHint } from "@/lib/operational-role-hint"
-import { parseUgAirtelMerchantDesk } from "@/lib/retailer-payment-templates"
+import { parseUgAirtelMerchantDesk, parseUgMtnMobileDesk } from "@/lib/retailer-payment-templates"
 
 interface CurrentUser {
   email: string
@@ -778,13 +778,21 @@ export default function DashboardPage() {
     return officialCorridorFallback.id === selectedOfficialRouteId ? officialCorridorFallback : null
   }, [officialCorridorFallback, selectedOfficialRouteId])
 
+  const localMmMtnMobile = useMemo(() => {
+    if (!localMmSelectedDesk || fundMobileNetwork !== "MTN") return null
+    return parseUgMtnMobileDesk(
+      localMmSelectedDesk.payment_numbers,
+      localMmSelectedDesk.registered_payee_names,
+    )
+  }, [localMmSelectedDesk, fundMobileNetwork])
+
   const localMmAirtelMerchant = useMemo(() => {
-    if (!localMmSelectedDesk) return null
+    if (!localMmSelectedDesk || fundMobileNetwork === "MTN") return null
     return parseUgAirtelMerchantDesk(
       localMmSelectedDesk.payment_numbers,
       localMmSelectedDesk.registered_payee_names,
     )
-  }, [localMmSelectedDesk])
+  }, [localMmSelectedDesk, fundMobileNetwork])
 
   useEffect(() => {
     if (isGuestSession) return
@@ -2583,7 +2591,26 @@ export default function DashboardPage() {
                           <>
                             <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] leading-snug sm:p-3 sm:text-xs">
                               <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
-                              {localMmAirtelMerchant ? (
+                              {localMmMtnMobile ? (
+                                <>
+                                  <p className="break-words">
+                                    {t("funding.numbersLabel")}{" "}
+                                    {t("funding.retailer.mtnDeskNumbersLine").replace(
+                                      "{{msisdn}}",
+                                      localMmMtnMobile.msisdn,
+                                    )}
+                                  </p>
+                                  <p className="break-words">
+                                    {t("funding.registeredPayeeNames")}{" "}
+                                    {t("funding.retailer.mtnDeskPayeeLine")
+                                      .replace("{{payee}}", localMmMtnMobile.payeeName)
+                                      .replace("{{brand}}", localMmMtnMobile.payeeBrand)}
+                                  </p>
+                                  <p className="break-words font-mono text-[10px]">
+                                    {t("funding.payment.mtnStep1").replace("{{ussd}}", localMmMtnMobile.ussdPrefix)}
+                                  </p>
+                                </>
+                              ) : localMmAirtelMerchant ? (
                                 <>
                                   <p className="break-words">
                                     {t("funding.numbersLabel")}{" "}
@@ -2617,6 +2644,7 @@ export default function DashboardPage() {
                               <p className="font-medium text-destructive break-words">{t("funding.wrongDestinationWarning")}</p>
                             </div>
                             <RetailerPaymentInstructionPanel
+                              mtn={localMmMtnMobile}
                               airtel={
                                 localMmAirtelMerchant
                                   ? {

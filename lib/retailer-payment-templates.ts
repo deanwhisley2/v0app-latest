@@ -1,9 +1,17 @@
+import {
+  ESKNEXUSPRO_MTN_MSISDN,
+  ESKNEXUSPRO_MTN_USSD_PREFIX,
+  ESKNEXUSPRO_PAYEE_BRAND,
+  ESKNEXUSPRO_REGISTERED_PAYEE,
+} from "@/lib/server/admin-payment-config"
+
 export type RetailerPaymentLine = {
   label?: string
   value?: string
   payment_type?: string
   merchant_id?: string
   merchant_name?: string
+  ussd_prefix?: string
 }
 
 export type UgAirtelMerchantTemplate = {
@@ -14,9 +22,16 @@ export type UgAirtelMerchantTemplate = {
   ussdPrefix: string
 }
 
-const DEFAULT_USSD = "*185*9#"
-const DEFAULT_MERCHANT_NAME = "Nexus Pro2"
-const DEFAULT_PAYEE = "Pegasus Technologies"
+export type UgMtnMobileTemplate = {
+  kind: "ug_mtn_mobile"
+  msisdn: string
+  payeeName: string
+  payeeBrand: string
+  ussdPrefix: string
+}
+
+const DEFAULT_AIRTEL_USSD = "*185*9#"
+const DEFAULT_AIRTEL_MERCHANT_NAME = "Nexus Pro2"
 
 export function parseUgAirtelMerchantDesk(
   paymentNumbers: unknown,
@@ -32,12 +47,47 @@ export function parseUgAirtelMerchantDesk(
         return {
           kind: "ug_airtel_merchant",
           merchantId,
-          merchantName: String(row.merchant_name ?? DEFAULT_MERCHANT_NAME).trim(),
-          payeeName: String(registeredPayeeNames ?? DEFAULT_PAYEE).trim(),
-          ussdPrefix: DEFAULT_USSD,
+          merchantName: String(row.merchant_name ?? DEFAULT_AIRTEL_MERCHANT_NAME).trim(),
+          payeeName: String(registeredPayeeNames ?? ESKNEXUSPRO_PAYEE_BRAND).trim(),
+          ussdPrefix: DEFAULT_AIRTEL_USSD,
         }
       }
     }
   }
   return null
+}
+
+export function parseUgMtnMobileDesk(
+  paymentNumbers: unknown,
+  registeredPayeeNames: string | null | undefined,
+): UgMtnMobileTemplate | null {
+  const rows = Array.isArray(paymentNumbers) ? (paymentNumbers as RetailerPaymentLine[]) : []
+  for (const row of rows) {
+    const pt = String(row.payment_type ?? "").toLowerCase()
+    const lab = String(row.label ?? "").toLowerCase()
+    if (pt === "mtn_mobile_ug" || lab.includes("mtn")) {
+      const msisdn = String(row.value ?? "").trim()
+      if (msisdn) {
+        return {
+          kind: "ug_mtn_mobile",
+          msisdn,
+          payeeName: String(registeredPayeeNames ?? ESKNEXUSPRO_REGISTERED_PAYEE).trim(),
+          payeeBrand: ESKNEXUSPRO_PAYEE_BRAND,
+          ussdPrefix: String(row.ussd_prefix ?? ESKNEXUSPRO_MTN_USSD_PREFIX).trim() || ESKNEXUSPRO_MTN_USSD_PREFIX,
+        }
+      }
+    }
+  }
+  return null
+}
+
+/** Canonical ESK desk MTN line when DB row is missing (should not happen after migration). */
+export function eskNexusProMtnFallback(): UgMtnMobileTemplate {
+  return {
+    kind: "ug_mtn_mobile",
+    msisdn: ESKNEXUSPRO_MTN_MSISDN,
+    payeeName: ESKNEXUSPRO_REGISTERED_PAYEE,
+    payeeBrand: ESKNEXUSPRO_PAYEE_BRAND,
+    ussdPrefix: ESKNEXUSPRO_MTN_USSD_PREFIX,
+  }
 }

@@ -150,7 +150,7 @@ export function ugandaPhoneInfersNetwork(msisdn: string): "mtn" | "airtel" | nul
   else if (d.startsWith("0")) d = d.slice(1)
   if (d.length < 9) return null
   const p2 = d.slice(0, 2)
-  if (p2 === "77" || p2 === "78" || p2 === "76") return "mtn"
+  if (p2 === "77" || p2 === "78" || p2 === "76" || p2 === "79") return "mtn"
   if (p2 === "70" || p2 === "74" || p2 === "75") return "airtel"
   return null
 }

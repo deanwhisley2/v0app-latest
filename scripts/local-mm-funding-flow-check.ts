@@ -28,8 +28,12 @@ function main() {
     "without country hint generic labels do not infer MTN",
   )
   assert(
-    retailerDeskSupportsNetwork([{ label: "primary", value: "0770001001" }], "MTN", "UG"),
-    "UG: generic label + 077… matches MTN via prefix",
+    retailerDeskSupportsNetwork(
+      [{ label: "MTN Mobile Money Uganda", value: "+256794152339", payment_type: "mtn_mobile_ug" }],
+      "MTN",
+      "UG",
+    ),
+    "UG: ESK MTN line matches MTN selection",
   )
   assert(
     retailerDeskSupportsNetwork([{ label: "primary", value: "0750001002" }], "Airtel", "UG"),

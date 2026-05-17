@@ -28,10 +28,17 @@ export const UGANDA_AIRTEL_MERCHANT_NAME =
   (process.env.NEXUS_UG_AIRTEL_MERCHANT_NAME ?? "").trim() || "Venture Nexus Pro"
 export const UGANDA_AIRTEL_USSD_PREFIX = "*185*9#"
 
-/** Retailer desk esknexuspro — Pegasus / Nexus Pro2 merchant (local_mobile responsibility). */
+/** Retailer desk esknexuspro (ESK) — Uganda local mobile receive rails. */
 export const ESKNEXUSPRO_AIRTEL_MERCHANT_ID = "7095290"
 export const ESKNEXUSPRO_AIRTEL_MERCHANT_NAME = "Nexus Pro2"
-export const ESKNEXUSPRO_PAYEE_NAME = "Pegasus Technologies LTD"
+/** Legal / brand entity on file for Uganda MoMo. */
+export const ESKNEXUSPRO_PAYEE_BRAND = "Pegasus Technologies LTD"
+/** @deprecated Use ESKNEXUSPRO_PAYEE_BRAND */
+export const ESKNEXUSPRO_PAYEE_NAME = ESKNEXUSPRO_PAYEE_BRAND
+/** Registered payee name customers must match on MTN send. */
+export const ESKNEXUSPRO_REGISTERED_PAYEE = "AZIZZA NANKWANGA"
+export const ESKNEXUSPRO_MTN_MSISDN = "+256794152339"
+export const ESKNEXUSPRO_MTN_USSD_PREFIX = "*165*1#"
 
 export const MAX_RETAILERS_ON_PAYMENT_PAGE = 2
 
