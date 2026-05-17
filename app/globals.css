@@ -193,14 +193,16 @@ html, body {
   animation: ticker 30s linear infinite;
 }
 
-.animate-ticker:hover {
-  animation-play-state: paused;
+@media (min-width: 768px) {
+  .animate-ticker:hover {
+    animation-play-state: paused;
+  }
 }
 
 /* Pulse animation for live indicator */
 @keyframes pulse-glow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 8px currentColor; }
-  50% { opacity: 0.5; box-shadow: 0 0 4px currentColor; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .animate-pulse-glow {
@@ -209,8 +211,8 @@ html, body {
 
 /* Number counter animation */
 @keyframes count-up {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .animate-count {
@@ -309,25 +311,13 @@ html {
 
 /* Toast entry/exit animations */
 @keyframes toast-slide-in {
-  from {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes toast-slide-out {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .nexus-toast-enter {
@@ -354,15 +344,212 @@ html {
   border: 1px solid oklch(0.75 0.18 85 / 0.3);
 }
 
-/* Low-end Android: reduce compositor-heavy effects on dashboard home */
+/* ============================================================
+   Android / mobile dashboard — flat compositor-safe mode
+   Applied on /dashboard root: .nexus-mobile-stable
+   ============================================================ */
 @media (max-width: 767px) {
-  .nexus-dashboard-surface {
-    isolation: isolate;
+  .nexus-mobile-stable {
+    overflow-x: hidden;
   }
 
-  .nexus-dashboard-surface [class*="backdrop-blur"],
-  .nexus-dashboard-surface [class*="backdrop-filter"] {
+  /* --- Motion / GPU animations off --- */
+  .nexus-mobile-stable [class*="animate-"],
+  .nexus-mobile-stable .animate-ticker {
+    animation: none !important;
+  }
+
+  .nexus-mobile-stable [class*="animate-in"],
+  .nexus-mobile-stable [class*="slide-in-from"],
+  .nexus-mobile-stable [class*="fade-in"],
+  .nexus-mobile-stable [class*="zoom-in"] {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .nexus-mobile-stable .animate-ticker {
+    transform: none !important;
+    will-change: auto !important;
+  }
+
+  .nexus-mobile-stable .nexus-scroll-deadend {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  /* --- Filters / glass --- */
+  .nexus-mobile-stable [class*="backdrop-blur"],
+  .nexus-mobile-stable [class*="backdrop-filter"],
+  .nexus-mobile-stable [class*="blur-"],
+  .nexus-mobile-stable [style*="backdrop-filter"] {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+    filter: none !important;
+  }
+
+  /* --- Gradients → flat card surfaces --- */
+  .nexus-mobile-stable [class*="bg-gradient"],
+  .nexus-mobile-stable [class*="from-"],
+  .nexus-mobile-stable [class*="via-"],
+  .nexus-mobile-stable [class*="to-"] {
+    background-image: none !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode [class*="bg-gradient"],
+  .nexus-mobile-stable .nexus-container-mode [class*="from-"],
+  .nexus-mobile-stable .nexus-container-mode [class*="via-"],
+  .nexus-mobile-stable .nexus-container-mode [class*="to-"],
+  .nexus-mobile-stable header [class*="bg-gradient"],
+  .nexus-mobile-stable .nexus-home-wallet-stack [class*="bg-gradient"] {
+    background-color: var(--card) !important;
+    background-image: none !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode button[class*="bg-gradient"] {
+    background-color: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+  }
+
+  /* --- Shadows / glow --- */
+  .nexus-mobile-stable [class*="shadow-["],
+  .nexus-mobile-stable .shadow-2xl,
+  .nexus-mobile-stable .shadow-xl,
+  .nexus-mobile-stable .shadow-lg,
+  .nexus-mobile-stable .shadow-md:not(nav.fixed) {
+    box-shadow: none !important;
+  }
+
+  .nexus-mobile-stable nav.fixed {
+    box-shadow: none !important;
+    border-top: 1px solid var(--border);
+  }
+
+  /* --- Transforms / compositor hacks --- */
+  .nexus-mobile-stable [class*="hover:scale"],
+  .nexus-mobile-stable [class*="scale-105"],
+  .nexus-mobile-stable [class*="scale-110"],
+  .nexus-mobile-stable [class*="active:scale"],
+  .nexus-mobile-stable [class*="transform-gpu"],
+  .nexus-mobile-stable [class*="translate-z"],
+  .nexus-mobile-stable [class*="translate-x"],
+  .nexus-mobile-stable [class*="translate-y"]:not(.nexus-toast-stable) {
+    transform: none !important;
+  }
+
+  .nexus-mobile-stable [class*="transition-all"],
+  .nexus-mobile-stable [class*="transition-transform"],
+  .nexus-mobile-stable [class*="transition-[width]"],
+  .nexus-mobile-stable [class*="duration-"] {
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .nexus-mobile-stable [class*="will-change"] {
+    will-change: auto !important;
+  }
+
+  .nexus-mobile-stable [class*="mix-blend"] {
+    mix-blend-mode: normal !important;
+  }
+
+  /* --- Sticky / fixed chrome: simple opaque layers --- */
+  .nexus-mobile-stable header.sticky {
+    position: relative !important;
+    top: auto !important;
+  }
+
+  .nexus-mobile-stable header,
+  .nexus-mobile-stable nav.fixed {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .nexus-mobile-stable header {
+    background-color: var(--background) !important;
+  }
+
+  .nexus-mobile-stable nav.fixed {
+    background-color: var(--card) !important;
+  }
+
+  .nexus-mobile-stable .nexus-flat-card,
+  .nexus-mobile-stable .nexus-home-panel {
+    background-color: var(--card) !important;
+    background-image: none !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+  }
+
+  /* --- Wallet stack isolation --- */
+  .nexus-mobile-stable .nexus-home-wallet-stack {
+    background-color: var(--background);
+    border-bottom: 3px solid var(--border);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.25rem;
+    position: relative;
+    z-index: 2;
+  }
+
+  .nexus-mobile-stable .nexus-home-wallet-stack * {
+    transition-property: color, background-color, border-color !important;
+    transition-duration: 0ms !important;
+  }
+
+  .nexus-mobile-stable .nexus-home-guide-summary {
+    transition: none !important;
+  }
+
+  .nexus-mobile-stable .nexus-testimonial-in-flow {
+    position: relative !important;
+    inset: auto !important;
+    z-index: auto !important;
+    max-width: none !important;
+    margin-bottom: 0.75rem;
+  }
+
+  /* --- Trading desk (when expanded) --- */
+  .nexus-mobile-stable .nexus-container-desk {
+    position: relative;
+    z-index: 1;
+    background-color: var(--background);
+  }
+
+  .nexus-mobile-stable .nexus-container-mode [class*="text-emerald-100"],
+  .nexus-mobile-stable .nexus-container-mode [class*="text-emerald-200"] {
+    color: var(--foreground) !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode [class*="isolate"] {
+    isolation: auto !important;
+  }
+
+  /* --- Hidden QA overlays (FAB etc.) --- */
+  .nexus-mobile-stable .nexus-mobile-hide-fab {
+    display: none !important;
+  }
+
+  .nexus-mobile-stable [class*="content-visibility"],
+  .nexus-mobile-stable [class*="contain-intrinsic"] {
+    content-visibility: visible !important;
+    contain-intrinsic-size: auto !important;
+  }
+
+  /* --- Toast: no transform slide on mobile --- */
+  .nexus-mobile-stable .nexus-toast-stable {
+    left: 1rem !important;
+    right: 1rem !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ticker {
+    animation: none !important;
+    transform: none !important;
   }
 }

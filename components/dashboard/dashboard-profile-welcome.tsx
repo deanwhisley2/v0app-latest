@@ -18,7 +18,7 @@ export function DashboardProfileWelcome({ fullName, t, className }: Props) {
   return (
     <header
       className={cn(
-        "rounded-2xl border border-border/80 bg-card px-4 py-4 shadow-sm sm:px-5 sm:py-5",
+        "rounded-2xl border border-border bg-card px-4 py-4 sm:px-5 sm:py-5",
         className
       )}
     >

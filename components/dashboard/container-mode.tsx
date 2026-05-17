@@ -28,6 +28,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
+import { cn } from "@/lib/utils"
+import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -306,9 +308,22 @@ export function ContainerMode({
 
   /** Re-render fixed-trade policy accrual between server hydrates (smooth schedule is time-based). */
   const [earnDisplayTick, setEarnDisplayTick] = useState(0)
+  const deskRootRef = useRef<HTMLDivElement>(null)
+  const [deskInView, setDeskInView] = useState(true)
 
   // Countdown timer effect
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const el = deskRootRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setDeskInView(entry?.isIntersecting ?? false),
+      { root: null, threshold: 0.02 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const [copyDeskCatalog, setCopyDeskCatalog] = useState<MasterTrader[]>([])
   const [fixDeskCatalog, setFixDeskCatalog] = useState<MasterTrader[]>([])
@@ -547,10 +562,11 @@ export function ContainerMode({
       setCountdowns(newCountdowns)
     }
 
+    if (!deskInView) return
     updateCountdowns()
     const interval = setInterval(updateCountdowns, 1000)
     return () => clearInterval(interval)
-  }, [activeCopyTrades, activeFixTrades])
+  }, [activeCopyTrades, activeFixTrades, deskInView])
 
   const notifyCopy = useCallback(
     (title: string, message: string) => {
@@ -1255,12 +1271,12 @@ export function ContainerMode({
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={deskRootRef} className="nexus-container-mode space-y-4">
       {/* Live Stats Banner */}
-      <Card className="border-accent/30 bg-gradient-to-r from-accent/5 via-primary/5 to-success/5 p-3">
+      <Card className={cn("border-accent/30 bg-gradient-to-r from-accent/5 via-primary/5 to-success/5 p-3", MOBILE_FLAT_SURFACE)}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-2 w-2 animate-pulse rounded-full bg-success" />
+            <div className={cn("flex h-2 w-2 rounded-full bg-success", MOBILE_STATIC_MOTION, "animate-pulse")} />
             <span className="text-sm font-medium">LIVE Platform Stats</span>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -1402,7 +1418,7 @@ export function ContainerMode({
           onClick={() => setActiveTab("dashboard")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "dashboard"
-              ? "bg-gradient-to-r from-primary to-accent text-white"
+              ? cn("bg-gradient-to-r from-primary to-accent text-white", "max-md:bg-primary max-md:text-primary-foreground")
               : "bg-muted text-muted-foreground hover:bg-muted/80"
           }`}
         >
@@ -1434,7 +1450,7 @@ export function ContainerMode({
       </div>
 
       {/* Live BTC reference — Binance spot (display only; not ledger settlement) */}
-      <Card className="border border-emerald-500/50 bg-gradient-to-r from-emerald-950/40 via-slate-900/80 to-slate-900/90 p-3 shadow-md sm:p-4">
+      <Card className={cn("border border-emerald-500/50 bg-gradient-to-r from-emerald-950/40 via-slate-900/80 to-slate-900/90 p-3 shadow-md sm:p-4", MOBILE_FLAT_SURFACE)}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-emerald-100">
             <BarChart3 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
@@ -2270,7 +2286,7 @@ export function ContainerMode({
                     </ul>
                     <label
                       htmlFor="container-copy-risk-ack"
-                      className="flex min-h-[52px] cursor-pointer items-start gap-3 rounded-xl border-2 border-slate-800 bg-white p-3.5 text-slate-900 shadow-[0_2px_12px_rgba(0,0,0,0.35)] dark:border-slate-200 dark:bg-white dark:text-slate-900"
+                      className="flex min-h-[52px] cursor-pointer items-start gap-3 rounded-xl border-2 border-slate-800 bg-white p-3.5 text-slate-900 max-md:shadow-none dark:border-slate-200 dark:bg-white dark:text-slate-900"
                     >
                       <Checkbox
                         id="container-copy-risk-ack"
@@ -2393,7 +2409,7 @@ export function ContainerMode({
             </div>
             </div>
 
-            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-lg max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:px-6 sm:pb-6 sm:pt-3">
+            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-lg max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-none max-sm:border-t sm:relative sm:px-6 sm:pb-6 sm:pt-3">
               <div className="flex gap-3">
               <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setSelectedTrader(null)}>
                 Cancel
@@ -2485,7 +2501,7 @@ export function ContainerMode({
               })()}
             </div>
             </div>
-            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-[0_-12px_40px_rgba(0,0,0,0.38)] sm:relative sm:px-6 sm:pb-6 sm:pt-3">
+            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-none max-sm:border-t sm:relative sm:px-6 sm:pb-6 sm:pt-3">
               <div className="flex gap-3">
                 <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setShowCancelConfirm(null)}>
                   Keep Trading

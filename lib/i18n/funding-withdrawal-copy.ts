@@ -206,6 +206,8 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "home.walletInfra.trustLine": "Read-only or trade-scoped keys · revoke anytime",
   "home.walletInfra.ctaConnect": "Open connection settings",
   "home.walletInfra.ctaManage": "Manage connections",
+  "home.trading.expand": "Open trading workspace (copy & fixed)",
+  "home.trading.collapse": "Hide trading workspace",
   "funding.balance.mainTitle": "Nexus Main",
   "funding.balance.mainHint": "Withdraw, fund trades, or transfer.",
   "funding.balance.activeEarningsTitle": "Container earnings accruing",

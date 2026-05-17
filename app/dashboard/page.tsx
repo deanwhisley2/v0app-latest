@@ -18,6 +18,7 @@ import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
 import { ContainerMode } from "@/components/dashboard/container-mode"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
+import { ContainerDeskSection } from "@/components/dashboard/container-desk-section"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
 import type { Coin } from "@/lib/coins-data"
@@ -2089,7 +2090,7 @@ export default function DashboardPage() {
     )
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-0">
+    <div className="nexus-mobile-stable min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
       {/* Header */}
       <Header
         activeTab={activeTab}
@@ -2112,7 +2113,11 @@ export default function DashboardPage() {
         />
       )}
 
-      {showRetailBalancePanels ? <Ticker coins={tickerCoins} /> : null}
+      {showRetailBalancePanels ? (
+        <div className="hidden md:block">
+          <Ticker coins={tickerCoins} mobileStatic />
+        </div>
+      ) : null}
 
       {/* Operational / desk balance headers only (retail balances live on Container tab). */}
       {(level5Operational && activeTab === "desk") || (retailerOperationalHeader && activeTab === "desk") ? (
@@ -3155,7 +3160,7 @@ export default function DashboardPage() {
       {/* Main Content — Container desk + Wallstreet assistant only (no legacy live/markets decks). */}
       <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:pb-4 ${activeTab === "container" ? "" : "pt-3"}`}>
         {activeTab === "container" && (
-          <div className="nexus-dashboard-surface space-y-4">
+          <div className="space-y-4">
             {showRetailBalancePanels ? (
               <RetailBalanceHomePanels
                 t={t}
@@ -3199,19 +3204,26 @@ export default function DashboardPage() {
                 }}
               />
             ) : null}
-            <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">
-              {sidebarPanel ? (
-                <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebarPanel}</div>
-              ) : null}
-              <main className="min-w-0 flex-1">
-                <ContainerMode
-                  userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
-                  retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
-                  retailerLiquidityOpsBlocked={retailerOpsBlocked}
-                  containerLiquidEarningsUsd={containerWithdrawableEarnings}
-                />
-              </main>
-            </div>
+            {!operationalWorkspace ? (
+              <DashboardTestimonialStrip
+                visible={testimonialNotif.visible}
+                text={testimonialNotif.text}
+                onDismiss={testimonialNotif.dismiss}
+                inFlowOnMobile
+              />
+            ) : null}
+            <ContainerDeskSection
+              sidebar={sidebarPanel}
+              expandLabel={t("home.trading.expand")}
+              collapseLabel={t("home.trading.collapse")}
+            >
+              <ContainerMode
+                userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
+                retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
+                retailerLiquidityOpsBlocked={retailerOpsBlocked}
+                containerLiquidEarningsUsd={containerWithdrawableEarnings}
+              />
+            </ContainerDeskSection>
           </div>
         )}
 
@@ -3317,13 +3329,6 @@ export default function DashboardPage() {
         onClose={hideToast}
       />
 
-      {!operationalWorkspace && (
-        <DashboardTestimonialStrip
-          visible={testimonialNotif.visible}
-          text={testimonialNotif.text}
-          onDismiss={testimonialNotif.dismiss}
-        />
-      )}
     </div>
   )
 }

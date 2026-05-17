@@ -23,13 +23,13 @@ export function WalletInfrastructureCard({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-border/90 bg-card p-4 shadow-sm sm:p-5",
+        "rounded-2xl border border-border bg-card p-4 sm:p-5",
         className
       )}
       aria-label={t("home.walletInfra.title")}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
           <Link2 className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">

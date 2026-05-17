@@ -18,7 +18,7 @@ export function LaunchStatusBanner() {
 
   return (
     <div
-      className="border-b border-primary/20 bg-primary/5 px-3 py-2 text-center text-xs text-foreground sm:px-4"
+      className="border-b border-border bg-muted px-3 py-2 text-center text-xs text-foreground max-md:bg-muted sm:border-primary/20 sm:bg-primary/5 sm:px-4"
       role="status"
     >
       <span className="font-medium">{label}</span>

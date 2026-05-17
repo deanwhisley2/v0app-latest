@@ -27,13 +27,13 @@ export function LiveMarketFeedBar({
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2">
         {status === "loading" && (
           <>
-            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" aria-hidden />
+            <span className="h-2 w-2 rounded-full bg-amber-400 max-md:animate-none md:animate-pulse" aria-hidden />
             <span className="text-muted-foreground">Connecting to market feed…</span>
           </>
         )}
         {status === "live" && (
           <>
-            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.7)]" aria-hidden />
+            <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
             <span className="font-medium text-foreground">Live feed</span>
             {source ? <span className="text-muted-foreground">· {source}</span> : null}
             {time && <span className="text-muted-foreground">· updated {time}</span>}

@@ -189,7 +189,7 @@ export function Header({
             >
               <Search className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
               <span className="hidden sm:inline text-muted-foreground group-hover:text-foreground">
-                <span className="animate-pulse">{t("header.cantFind")}</span>
+                <span className="max-md:animate-none md:animate-pulse">{t("header.cantFind")}</span>
               </span>
               <kbd className="hidden lg:inline-flex items-center rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 /
@@ -227,15 +227,15 @@ export function Header({
                   setShowArchivedNotifications(false)
                 }}
                 title="View Profile"
-                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary/80 to-accent font-semibold text-primary-foreground transition-all hover:scale-105 ${showProfileMenu ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground max-md:hover:scale-100 md:bg-gradient-to-br md:from-primary/80 md:to-accent md:transition-all md:hover:scale-105 ${showProfileMenu ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
                 <span className="text-sm font-bold">{userInitials}</span>
               </button>
 
               {/* Floating Profile Menu */}
               {showProfileMenu && (
-                <div className="absolute right-0 top-12 z-50 w-80 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
+                <div className="absolute right-0 top-12 z-50 w-80 max-md:animate-none md:animate-in md:fade-in md:slide-in-from-top-2 md:duration-200">
+                  <div className="overflow-hidden rounded-2xl border border-border bg-card max-md:shadow-none md:shadow-2xl">
                     
                     {/* Main Profile View */}
                     {profileView === "main" && (

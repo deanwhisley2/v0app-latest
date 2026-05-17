@@ -13,6 +13,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
+import { isDashboardMobileFabEnabled } from "@/lib/dashboard-mobile-render-policy"
 
 interface BottomNavProps {
   activeTab: string
@@ -83,19 +84,19 @@ export function BottomNav({
 
   return (
     <>
-      {/* Joelin floating entry — hidden for operational finance roles */}
-      {!operationalWorkspace && (
-      <button
-        onClick={() => setShowJoelinPanel(!showJoelinPanel)}
-        className="fixed bottom-[5.75rem] right-4 z-[48] md:hidden flex h-12 w-12 items-center justify-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-md touch-manipulation"
-      >
-        <Zap className="h-5 w-5 text-white" />
-      </button>
+      {/* Joelin FAB — off on mobile by default (compositor QA). Wallstreet tab = full assistant. */}
+      {!operationalWorkspace && isDashboardMobileFabEnabled() && (
+        <button
+          type="button"
+          onClick={() => setShowJoelinPanel(!showJoelinPanel)}
+          className="nexus-mobile-hide-fab fixed bottom-[5.75rem] right-4 z-[48] md:hidden flex h-12 w-12 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground touch-manipulation"
+        >
+          <Zap className="h-5 w-5 text-primary-foreground" />
+        </button>
       )}
 
-      {/* Joelin mini panel */}
-      {!operationalWorkspace && showJoelinPanel && (
-        <div className="fixed bottom-36 right-4 z-50 w-72 rounded-2xl border border-border bg-card p-4 shadow-2xl md:hidden">
+      {!operationalWorkspace && isDashboardMobileFabEnabled() && showJoelinPanel && (
+        <div className="fixed bottom-36 right-4 z-50 w-72 rounded-2xl border border-border bg-card p-4 shadow-md md:hidden">
           <div className="flex items-center gap-2 mb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
               <Zap className="h-4 w-4 text-white" />
