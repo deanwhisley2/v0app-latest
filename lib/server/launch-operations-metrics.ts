@@ -87,6 +87,13 @@ export async function buildLaunchOperationsSnapshot(): Promise<LaunchOperationsS
   const duplicateFundingReferences = dupRes.count ?? 0
 
   const health = getMarketPriceHealthSnapshot()
+  const consecutiveRefreshFailures =
+    "observability" in health &&
+    health.observability &&
+    typeof health.observability === "object" &&
+    "consecutiveRefreshFailures" in health.observability
+      ? Number((health.observability as { consecutiveRefreshFailures: number }).consecutiveRefreshFailures)
+      : 0
 
   return {
     launch,
@@ -105,7 +112,7 @@ export async function buildLaunchOperationsSnapshot(): Promise<LaunchOperationsS
       stale: health.stale,
       alertLevel: health.alertLevel,
       activeProvider: health.activeProvider,
-      consecutiveRefreshFailures: health.observability.consecutiveRefreshFailures,
+      consecutiveRefreshFailures,
     },
   }
 }
