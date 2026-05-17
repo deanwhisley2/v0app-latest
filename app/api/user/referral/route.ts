@@ -3,6 +3,8 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { buildRegisterReferralLink, referralCodeForUserId } from "@/lib/referral-code"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
+import { loadReferralSnapshot } from "@/lib/server/container-governance"
+import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
 
 /**
  * Returns stable referral code + share link + referee counts.
@@ -55,11 +57,17 @@ export async function GET(request: Request) {
 
     if (cErr) throw new Error(cErr.message)
 
+    const launch = await getPlatformLaunchStatus()
+    const snapshot = await loadReferralSnapshot(admin, user.id)
+
     return NextResponse.json({
       referralCode: code,
       referralLink,
       refereeCount: count ?? 0,
+      validReferralCount: snapshot.validReferralCount,
       referredByUserId: row?.referred_by ?? null,
+      launchActive: launch.active,
+      launchEndsAt: launch.endsAt,
     })
   } catch (e) {
     return NextResponse.json(

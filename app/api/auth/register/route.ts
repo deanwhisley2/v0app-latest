@@ -8,6 +8,12 @@ import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compr
 import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
+import { isReferralAttributionBlocked } from "@/lib/server/referral-attribution-guard"
+import {
+  notifyLaunchWelcome,
+  notifyReferrerNewReferee,
+} from "@/lib/server/launch-notifications"
+import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
 
 /** Supabase rejects a second signUp for the same email even if the first account never completed in-app verification. */
 function isAuthDuplicateSignupError(err: { message?: string | null; code?: string | null }): boolean {
@@ -173,8 +179,16 @@ export async function POST(request: Request) {
           .eq("referral_code", referralInvite)
           .maybeSingle()
         const rid = refProfile?.id as string | undefined
-        if (rid && rid !== newUserId) referredByUserId = rid
+        if (rid && rid !== newUserId) {
+          const blocked = await isReferralAttributionBlocked(admin, rid)
+          if (!blocked) referredByUserId = rid
+        }
       }
+
+      const launch = await getPlatformLaunchStatus()
+      const countryForProfile =
+        funding_country_code ||
+        (launch.active && launch.programs.onboarding?.default_country === "UG" ? "UG" : "")
 
       for (let attempt = 0; attempt < 8; attempt++) {
         const seed = attempt === 0 ? newUserId : `${newUserId}:${attempt}`
@@ -194,15 +208,20 @@ export async function POST(request: Request) {
         }
       }
 
-      if (funding_country_code) {
+      if (countryForProfile) {
         const { error: fcErr } = await admin
           .from("profiles")
-          .update({ funding_country_code, updated_at: nowIso })
+          .update({ funding_country_code: countryForProfile, updated_at: nowIso })
           .eq("id", newUserId)
         if (fcErr) {
           console.warn("[register] funding_country_code profile update:", fcErr.message)
         }
       }
+
+      if (referredByUserId) {
+        void notifyReferrerNewReferee(admin, referredByUserId, newUserId)
+      }
+      void notifyLaunchWelcome(admin, newUserId, countryForProfile || funding_country_code || "UG")
 
       if (hasCompleteSelfiePayload) {
         const { error: profileAvatarErr } = await admin

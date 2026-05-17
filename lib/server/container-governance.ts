@@ -9,6 +9,10 @@ import {
   CONTAINER_VALID_REFEREE_MIN_FUNDED_USD,
 } from "@/lib/container-policy"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
+import {
+  getLaunchValidRefereeMinFundedUsd,
+  getPlatformLaunchStatus,
+} from "@/lib/server/platform-launch"
 
 export type ContainerPersonaRow = {
   id: string
@@ -117,7 +121,11 @@ export async function loadFundingSnapshot(admin: SupabaseClient, userId: string)
   }
 }
 
-async function refereeIsValid(admin: SupabaseClient, refereeId: string): Promise<boolean> {
+async function refereeIsValid(
+  admin: SupabaseClient,
+  refereeId: string,
+  minFundedUsd: number = CONTAINER_VALID_REFEREE_MIN_FUNDED_USD,
+): Promise<boolean> {
   const funded = await sumCompletedFunding(admin, refereeId)
   const { count: fxCount, error: fxErr } = await admin
     .from("fixed_trade_sessions")
@@ -125,16 +133,20 @@ async function refereeIsValid(admin: SupabaseClient, refereeId: string): Promise
     .eq("user_id", refereeId)
   if (fxErr) throw new Error(fxErr.message)
   const hasFix = (fxCount ?? 0) > 0
-  return funded >= CONTAINER_VALID_REFEREE_MIN_FUNDED_USD && hasFix
+  return funded >= minFundedUsd && hasFix
 }
 
-export async function loadReferralSnapshot(admin: SupabaseClient, userId: string): Promise<ReferralSnapshot> {
+export async function loadReferralSnapshot(
+  admin: SupabaseClient,
+  userId: string,
+  minFundedUsd: number = CONTAINER_VALID_REFEREE_MIN_FUNDED_USD,
+): Promise<ReferralSnapshot> {
   const { data: refs, error } = await admin.from("profiles").select("id").eq("referred_by", userId)
   if (error) throw new Error(error.message)
   const ids = (refs ?? []).map((r: { id: string }) => r.id).filter(Boolean)
   let valid = 0
   for (const rid of ids) {
-    if (await refereeIsValid(admin, rid)) valid += 1
+    if (await refereeIsValid(admin, rid, minFundedUsd)) valid += 1
   }
   return { refereeCount: ids.length, validReferralCount: valid }
 }
@@ -302,7 +314,12 @@ export async function buildUnlockContext(
   tenureParams: { minPrincipalUsd: number; minDaysActive: number },
 ): Promise<UnlockCtx> {
   const funding = await loadFundingSnapshot(admin, userId)
-  const referrals = await loadReferralSnapshot(admin, userId)
+  const launch = await getPlatformLaunchStatus()
+  const minRefUsd =
+    launch.active && launch.programs.onboarding?.enabled
+      ? getLaunchValidRefereeMinFundedUsd(launch.programs, CONTAINER_VALID_REFEREE_MIN_FUNDED_USD)
+      : CONTAINER_VALID_REFEREE_MIN_FUNDED_USD
+  const referrals = await loadReferralSnapshot(admin, userId, minRefUsd)
   const bandMax = await computeEffectiveFixBandMax(admin, userId, funding, referrals)
   await persistFixBandIfEligible(admin, userId, bandMax)
   const withdrawal = await loadWithdrawalSignals(admin, userId)

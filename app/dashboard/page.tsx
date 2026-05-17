@@ -36,6 +36,7 @@ import {
 } from "@/lib/dashboard-activity-session"
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
+import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -2100,6 +2101,8 @@ export default function DashboardPage() {
         retailerCreditDesk={retailerCreditDesk}
         operationalWorkspace={operationalWorkspace}
       />
+
+      <LaunchStatusBanner />
 
       {showRetailBalancePanels && (
         <LiveMarketFeedBar

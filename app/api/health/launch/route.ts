@@ -3,6 +3,7 @@ import { join } from "path"
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { NEXUS_TIER_MATRIX_PUBLIC } from "@/lib/nexus-tier-matrix"
+import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +14,16 @@ function readPackageVersion(): string {
     return typeof p.version === "string" ? p.version : "0.0.0"
   } catch {
     return "0.0.0"
+  }
+}
+
+/** Written by scripts/deploy-vps-git-archive.sh on the VPS (no .git in extract dir). */
+function readDeployRevision(): string | null {
+  try {
+    const sha = readFileSync(join(process.cwd(), ".deploy-revision"), "utf8").trim()
+    return sha.length >= 7 ? sha : null
+  } catch {
+    return null
   }
 }
 
@@ -45,15 +56,27 @@ export async function GET() {
 
   const coreReady = url && srk && anon && databasePing
 
+  let platformLaunch: Awaited<ReturnType<typeof getPlatformLaunchStatus>> | null = null
+  if (databasePing) {
+    try {
+      platformLaunch = await getPlatformLaunchStatus(true)
+    } catch {
+      platformLaunch = null
+    }
+  }
+
   /** Optional: registration / password flows need Brevo; core app shell works without. */
   const optionalServices = {
     brevo_api_configured: Boolean(process.env.BREVO_API_KEY?.trim()),
     next_public_site_url: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
   }
 
+  const launchReady = Boolean(platformLaunch?.active)
+
   return NextResponse.json({
-    ok: coreReady,
+    ok: coreReady && (launchReady || !databasePing),
     service: "nexus-launch",
+    platform_launch: platformLaunch,
     time: new Date().toISOString(),
     version: readPackageVersion(),
     checks,
@@ -65,6 +88,7 @@ export async function GET() {
         process.env.GITHUB_SHA?.trim() ||
         process.env.GIT_COMMIT?.trim() ||
         process.env.RAILWAY_GIT_COMMIT_SHA?.trim() ||
+        readDeployRevision() ||
         null,
     },
     /** What each trading tier is supposed to include (aligned with app gating). */

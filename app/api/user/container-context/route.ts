@@ -14,6 +14,7 @@ import {
   personaUnlocked,
   type ContainerPersonaRow,
 } from "@/lib/server/container-governance"
+import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
 
 function serializePersona(p: ContainerPersonaRow, locked: boolean, lockReason?: string) {
   const strategies = Array.isArray(p.strategies)
@@ -66,7 +67,10 @@ export async function GET(request: Request) {
     }
 
     const tenureParams = { minPrincipalUsd: 100, minDaysActive: 30 }
-    const ctx = await buildUnlockContext(admin, user.id, tenureParams)
+    const [ctx, launch] = await Promise.all([
+      buildUnlockContext(admin, user.id, tenureParams),
+      getPlatformLaunchStatus(),
+    ])
 
     const copyRows = personas.filter((p) => p.kind === "copy")
     const fixRows = personas.filter((p) => p.kind === "fix")
@@ -94,6 +98,11 @@ export async function GET(request: Request) {
         fundingWindowUsd: CONTAINER_FIX_BAND2_WINDOW_FUNDING_USD,
         windowDays: CONTAINER_FIX_BAND2_WINDOW_DAYS,
         validReferralsAlternate: CONTAINER_FIX_BAND2_VALID_REF_PATH_MIN,
+      },
+      launch: {
+        active: launch.active,
+        endsAt: launch.endsAt,
+        starterFixUnlock: Boolean(launch.programs.onboarding?.starter_fix_unlock),
       },
       traders: {
         copy: copyOut,

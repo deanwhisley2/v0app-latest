@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT, roundUsd2 } from "@/lib/nexus-financial-policy"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
+import {
+  getLaunchReferralFirstDepositRate,
+  getPlatformLaunchStatus,
+} from "@/lib/server/platform-launch"
 
 /**
  * When a referee receives a qualifying credit to Nexus Main (first tracked deposit),
@@ -27,7 +31,13 @@ export async function tryCreditReferrerFirstDepositBonus(
 
     if (referee.referrer_first_deposit_bonus_at) return
 
-    const bonus = roundUsd2(depositAmountUsd * NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT)
+    const launch = await getPlatformLaunchStatus()
+    const rate =
+      launch.active && launch.programs.referrals?.enabled
+        ? getLaunchReferralFirstDepositRate(launch.programs, NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT)
+        : NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT
+
+    const bonus = roundUsd2(depositAmountUsd * rate)
     if (!(bonus > 0)) return
 
     const now = new Date().toISOString()
@@ -63,11 +73,12 @@ export async function tryCreditReferrerFirstDepositBonus(
       balanceDestination: "available_balance",
       status: "completed",
       actorType: "system",
-      summary: `Referral reward (${(NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT * 100).toFixed(1)}% of referee deposit) — treasury credit.`,
+      summary: `Referral reward (${(rate * 100).toFixed(1)}% of referee deposit) — treasury credit.`,
       metadata: {
         refereeUserId,
         depositUsd: depositAmountUsd,
-        rate: NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT,
+        rate,
+        launchActive: launch.active,
       },
     })
   } catch (e) {
