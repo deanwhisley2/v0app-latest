@@ -518,6 +518,16 @@ html {
     background-color: var(--background);
   }
 
+  /* Container copy/fix modals (portaled) — keep action bar visible on mobile */
+  .nexus-container-desk-modal-actions {
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.14) !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-desk-modal-actions button {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
   .nexus-mobile-stable .nexus-container-mode [class*="text-emerald-100"],
   .nexus-mobile-stable .nexus-container-mode [class*="text-emerald-200"] {
     color: var(--foreground) !important;

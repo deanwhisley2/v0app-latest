@@ -11,7 +11,6 @@ import {
   type ReactNode,
 } from "react"
 import { useAuth } from "@/contexts/AuthContext"
-import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
 import type {
   NexusNotificationItem,
@@ -19,10 +18,7 @@ import type {
 } from "@/lib/nexus-notification-models"
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
-import {
-  coerceOperationalPreferences,
-  type OperationalPreferencesV1,
-} from "@/lib/operational-preferences-types"
+import type { OperationalPreferencesV1 } from "@/lib/operational-preferences-types"
 import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 import { supabase } from "@/lib/supabaseClient"
 import {
@@ -31,6 +27,11 @@ import {
   sameInboxSignature,
   upsertServerNotificationRows,
 } from "@/lib/nexus-notifications-merge"
+import {
+  clearLegacyGlobalNotificationStorage,
+  loadPersistedNotifications,
+  savePersistedNotifications,
+} from "@/lib/nexus-notifications-storage"
 
 export type {
   NexusNotificationType,
@@ -39,9 +40,6 @@ export type {
 } from "@/lib/nexus-notification-models"
 
 export type UiChromePreferences = OperationalPreferencesV1["uiChrome"]
-
-/** Bump when persistence shape changes (v3: server-backed account feed + local overlay). */
-const STORAGE_KEY = "nexus_notifications_v3"
 
 /** Placeholder inbox rows shown only for guest / demo sessions — not real account activity. */
 export function isDemoNotificationId(id: string): boolean {
@@ -179,31 +177,6 @@ function seedHistory(): NexusNotificationItem[] {
   return []
 }
 
-function loadPersisted(): { inbox: NexusNotificationItem[]; history: NexusNotificationItem[] } | null {
-  if (typeof window === "undefined") return null
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const j = JSON.parse(raw) as { inbox?: NexusNotificationItem[]; history?: NexusNotificationItem[] }
-    if (!Array.isArray(j.inbox)) return null
-    return {
-      inbox: j.inbox,
-      history: Array.isArray(j.history) ? j.history : [],
-    }
-  } catch {
-    return null
-  }
-}
-
-function savePersisted(inbox: NexusNotificationItem[], history: NexusNotificationItem[]) {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ inbox, history }))
-  } catch {
-    /* ignore */
-  }
-}
-
 type NavigatorFn = (nav: NexusNotificationNav) => void
 
 type NexusNotificationsContextValue = {
@@ -227,7 +200,6 @@ const NexusNotificationsContext = createContext<NexusNotificationsContextValue |
 
 export function NexusNotificationsProvider({ children }: { children: ReactNode }) {
   const { user, isGuestSession } = useAuth()
-  const { snapshot, isLoading: bootLoading } = useOperationalBootstrap()
   const [inbox, setInbox] = useState<NexusNotificationItem[]>([])
   const [history, setHistory] = useState<NexusNotificationItem[]>([])
   const [hydrated, setHydrated] = useState(false)
@@ -241,41 +213,54 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
   const persistLocalTimerRef = useRef<number | null>(null)
   /** When true, account rows load from `/api/user/account-notifications` and skip operational-preferences inbox mirror. */
   const [accountNotifFeedOn, setAccountNotifFeedOn] = useState(false)
+  const notificationsUserKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const persisted = loadPersisted()
+    clearLegacyGlobalNotificationStorage()
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    const key = isGuestSession ? "guest" : (user?.id ?? "anonymous")
+    if (notificationsUserKeyRef.current === key) return
+    notificationsUserKeyRef.current = key
+
+    clearLegacyGlobalNotificationStorage()
+    setAccountNotifFeedOn(false)
+    serverNotifSerializedRef.current = ""
+    lastPostedJsonRef.current = ""
+    seedCapturedRef.current = false
+    hadLocalPersistedRef.current = false
+
+    if (isGuestSession) {
+      setInbox(seedInbox())
+      setHistory(seedHistory())
+      return
+    }
+
+    const persisted = loadPersistedNotifications(user?.id ?? null, false)
     hadLocalPersistedRef.current = !!persisted
     if (persisted) {
       setInbox(withoutDemoNotifications(persisted.inbox))
       setHistory(withoutDemoNotifications(persisted.history))
     } else {
       setInbox([])
-      setHistory(seedHistory())
+      setHistory([])
     }
-    setHydrated(true)
-  }, [])
-
-  useEffect(() => {
-    if (!hydrated) return
-    if (isGuestSession) {
-      setInbox((prev) => (prev.length > 0 ? prev : seedInbox()))
-      return
-    }
-    setInbox((prev) => withoutDemoNotifications(prev))
-    setHistory((prev) => withoutDemoNotifications(prev))
-  }, [hydrated, isGuestSession])
+  }, [hydrated, user?.id, isGuestSession])
 
   useEffect(() => {
     if (!hydrated) return
     if (persistLocalTimerRef.current) window.clearTimeout(persistLocalTimerRef.current)
     persistLocalTimerRef.current = window.setTimeout(() => {
-      savePersisted(inbox, history)
+      savePersistedNotifications(user?.id ?? null, isGuestSession, inbox, history)
       persistLocalTimerRef.current = null
     }, 1400)
     return () => {
       if (persistLocalTimerRef.current) window.clearTimeout(persistLocalTimerRef.current)
     }
-  }, [inbox, history, hydrated])
+  }, [inbox, history, hydrated, user?.id, isGuestSession])
 
   useEffect(() => {
     if (!hydrated) return
@@ -283,23 +268,6 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     seedCapturedRef.current = true
     initialSeedSigRef.current = JSON.stringify({ inbox, history })
   }, [hydrated, inbox, history])
-
-  useEffect(() => {
-    if (!hydrated) return
-    if (!user?.id || isGuestSession || isDevLocalOnly()) return
-    if (bootLoading) return
-    if (accountNotifFeedOn) return
-    const prefs = coerceOperationalPreferences(snapshot?.operationalPreferences ?? null)
-    const n = prefs?.notifications
-    const count = (n?.inbox?.length ?? 0) + (n?.history?.length ?? 0)
-    if (!n || count === 0) return
-    const ser = JSON.stringify(n)
-    if (ser === serverNotifSerializedRef.current) return
-    serverNotifSerializedRef.current = ser
-    lastPostedJsonRef.current = ser
-    setInbox(withoutDemoNotifications(n.inbox ?? []))
-    setHistory(withoutDemoNotifications(n.history ?? []))
-  }, [hydrated, user?.id, isGuestSession, bootLoading, snapshot?.operationalPreferences, accountNotifFeedOn])
 
   useEffect(() => {
     if (!hydrated) return
@@ -376,7 +344,12 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         setAccountNotifFeedOn(true)
         const serverItems = rows.map(mapServerAccountRow)
         setInbox((prev) => {
-          const merged = withoutDemoNotifications(mergeServerAccountWithLocals(prev, serverItems))
+          const locals = prev.filter((p) => !isServerNotificationId(p.id) && !p.id.startsWith("fin-"))
+          const merged = withoutDemoNotifications(
+            serverItems.length === 0
+              ? locals
+              : mergeServerAccountWithLocals(locals, serverItems),
+          )
           if (sameInboxSignature(prev, merged)) return prev
           return merged
         })

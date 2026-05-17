@@ -7,6 +7,33 @@ export type FixedTradeEligibilityOpts = {
   launchStarterDesk?: boolean
 }
 
+export type ContainerLaunchEligibility = {
+  promotionsActive?: boolean
+  starterFixUnlock?: boolean
+  starterFixPersonaId?: string
+}
+
+export function isLaunchStarterFixPersona(
+  launch: ContainerLaunchEligibility | null | undefined,
+  personaId: string,
+): boolean {
+  if (!launch?.promotionsActive || !launch.starterFixUnlock) return false
+  const id = (launch.starterFixPersonaId ?? "fix_l1_t1").trim()
+  return personaId === id
+}
+
+/** Client + server aligned fixed-desk eligibility (includes launch starter unlock). */
+export function traderFixedDeskEligible(
+  userLevel: UserLevelNum | number,
+  riskLevel: FixTradeRiskLevel,
+  launch: ContainerLaunchEligibility | null | undefined,
+  personaId: string,
+): boolean {
+  return traderEligibleForFixedTrade(userLevel, riskLevel, {
+    launchStarterDesk: isLaunchStarterFixPersona(launch, personaId),
+  })
+}
+
 /** Fixed-trade desk: L1 → Low only; L2 → Low + Medium; L3+ → all tiers. */
 export function traderEligibleForFixedTrade(
   userLevel: UserLevelNum | number,

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { createPortal } from "react-dom"
 import toast from "react-hot-toast"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { supabase } from "@/lib/supabaseClient"
@@ -25,7 +26,7 @@ import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { computePlatformLiveStats } from "@/lib/platform-live-stats"
 import { Checkbox } from "@/components/ui/checkbox"
-import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
+import { fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
 import { cn } from "@/lib/utils"
@@ -295,6 +296,7 @@ export function ContainerMode({
   const [isProcessing, setIsProcessing] = useState(false)
   const [fixTradeActionId, setFixTradeActionId] = useState<string | null>(null)
   const [copyRiskAcknowledged, setCopyRiskAcknowledged] = useState(false)
+  const [deskModalMounted, setDeskModalMounted] = useState(false)
 
   const [activeCopyTrades, setActiveCopyTrades] = useState<ActiveCopyTrade[]>([])
 
@@ -315,6 +317,23 @@ export function ContainerMode({
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    setDeskModalMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!selectedTrader && !showCancelConfirm) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [selectedTrader, showCancelConfirm])
+
+  useEffect(() => {
+    if (selectedTrader) setCopyRiskAcknowledged(false)
+  }, [selectedTrader?.id])
+
+  useEffect(() => {
     const el = deskRootRef.current
     if (!el) return
     const observer = new IntersectionObserver(
@@ -329,6 +348,11 @@ export function ContainerMode({
   const [fixDeskCatalog, setFixDeskCatalog] = useState<MasterTrader[]>([])
   const [copyMinUsdPolicy, setCopyMinUsdPolicy] = useState(7)
   const [fixMinUsdPolicy, setFixMinUsdPolicy] = useState(5)
+  const [containerLaunch, setContainerLaunch] = useState<{
+    promotionsActive?: boolean
+    starterFixUnlock?: boolean
+    starterFixPersonaId?: string
+  } | null>(null)
 
   const { btc: btcSpotRef, getSymbolPrice, authorityRevision } = useMarketPriceAuthority()
 
@@ -360,12 +384,18 @@ export function ContainerMode({
           traders?: { copy?: ApiContainerDesk[]; fix?: ApiContainerDesk[] }
           copyMinUsd?: number
           fixMinUsd?: number
+          launch?: {
+            promotionsActive?: boolean
+            starterFixUnlock?: boolean
+            starterFixPersonaId?: string
+          }
         }
         if (cancelled || !res.ok || !out.ok || !out.traders) return
         setCopyDeskCatalog((out.traders.copy ?? []).map(mapApiDesk))
         setFixDeskCatalog((out.traders.fix ?? []).map(mapApiDesk))
         if (typeof out.copyMinUsd === "number") setCopyMinUsdPolicy(out.copyMinUsd)
         if (typeof out.fixMinUsd === "number") setFixMinUsdPolicy(out.fixMinUsd)
+        setContainerLaunch(out.launch ?? null)
       } catch {
         /* ignore */
       }
@@ -797,12 +827,8 @@ export function ContainerMode({
   const lockedTraders = copyDeskCatalog.filter((t) => t.locked)
 
   const fixLiquidityGate = userLevel === 2 && retailerLiquidityOpsBlocked
-  const fixAvailableTraders = fixDeskCatalog.filter(
-    (t) => !t.locked && traderEligibleForFixedTrade(userLevel, t.riskLevel),
-  )
-  const fixTierLockedTraders = fixDeskCatalog.filter(
-    (t) => t.locked || !traderEligibleForFixedTrade(userLevel, t.riskLevel),
-  )
+  const fixAvailableTraders = fixDeskCatalog.filter((t) => !t.locked)
+  const fixTierLockedTraders = fixDeskCatalog.filter((t) => t.locked)
 
   const totalCryptoAllocationUsd = useMemo(
     () =>
@@ -1004,7 +1030,7 @@ export function ContainerMode({
         toast.error(`Minimum fixed allocation is $${fixMinUsdPolicy} USD equivalent in your currency.`, { duration: 6000 })
         return
       }
-      if (!traderEligibleForFixedTrade(userLevel, trader.riskLevel)) return
+      if (trader.locked || fixLiquidityGate) return
 
       setIsProcessing(true)
       try {
@@ -2189,15 +2215,23 @@ export function ContainerMode({
         </div>
       )}
 
-      {/* ============ TRADER SELECTION MODAL ============ */}
-      {selectedTrader && (
-        <div
-          className="fixed inset-0 z-[100] flex flex-col bg-black/70 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="container-trader-modal-title"
-        >
-          <Card className="flex min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden rounded-t-2xl border-border bg-card p-0 shadow-2xl sm:max-h-[min(92dvh,760px)] sm:flex-none sm:rounded-2xl">
+      {/* ============ TRADER SELECTION MODAL (portaled — avoids desk overflow clipping actions) ============ */}
+      {deskModalMounted &&
+        selectedTrader &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex flex-col bg-black/75 pt-[max(0px,env(safe-area-inset-top,0px))] sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="container-trader-modal-title"
+          >
+            <div
+              className={cn(
+                "flex min-h-0 w-full max-w-lg flex-1 flex-col gap-0 overflow-hidden rounded-t-2xl border border-border bg-card py-0 shadow-2xl",
+                "max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))]",
+                "sm:max-h-[min(92dvh,760px)] sm:flex-none sm:rounded-2xl",
+              )}
+            >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 pb-3 pt-4 sm:px-6 sm:pt-6">
               <div className="flex min-w-0 items-center gap-3">
                 <TraderPersonaAvatar
@@ -2224,7 +2258,7 @@ export function ContainerMode({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-2 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pb-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 [-webkit-overflow-scrolling:touch] sm:px-6">
             <p className="text-sm text-muted-foreground mb-4">{selectedTrader.description}</p>
 
             {/* Stats Grid */}
@@ -2407,10 +2441,9 @@ export function ContainerMode({
                 </>
               )}
             </div>
-            </div>
 
-            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-lg max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-none max-sm:border-t sm:relative sm:px-6 sm:pb-6 sm:pt-3">
-              <div className="flex gap-3">
+              <div className="nexus-container-desk-modal-actions sticky bottom-0 z-20 -mx-4 mt-4 border-t border-border/80 bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] sm:-mx-6 sm:px-6">
+                <div className="flex gap-3">
               <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setSelectedTrader(null)}>
                 Cancel
               </Button>
@@ -2420,8 +2453,7 @@ export function ContainerMode({
                 disabled={
                   isProcessing ||
                   (activeTab === "copy" && !copyRiskAcknowledged) ||
-                  (activeTab === "fix" &&
-                    (!traderEligibleForFixedTrade(userLevel, selectedTrader.riskLevel) || fixLiquidityGate))
+                  (activeTab === "fix" && (fixLiquidityGate || selectedTrader.locked))
                 }
               >
                 {isProcessing ? (
@@ -2438,22 +2470,32 @@ export function ContainerMode({
                   </>
                 )}
               </Button>
+                </div>
               </div>
             </div>
-          </Card>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body,
+        )}
 
-      {/* ============ CANCEL CONFIRMATION MODAL ============ */}
-      {showCancelConfirm && (
-        <div
-          className="fixed inset-0 z-[100] flex flex-col bg-black/70 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="container-copy-cancel-title"
-        >
-          <Card className="flex min-h-0 w-full max-w-md flex-1 flex-col overflow-hidden rounded-t-2xl border-destructive/30 bg-card p-0 shadow-2xl sm:max-h-[min(88dvh,560px)] sm:flex-none sm:rounded-2xl">
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-2 pt-5 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pb-4 sm:pt-6">
+      {/* ============ CANCEL CONFIRMATION MODAL (portaled) ============ */}
+      {deskModalMounted &&
+        showCancelConfirm &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex flex-col bg-black/75 pt-[max(0px,env(safe-area-inset-top,0px))] sm:items-center sm:justify-center sm:bg-black/60 sm:p-4 sm:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="container-copy-cancel-title"
+          >
+            <div
+              className={cn(
+                "flex min-h-0 w-full max-w-md flex-1 flex-col gap-0 overflow-hidden rounded-t-2xl border border-destructive/30 bg-card py-0 shadow-2xl",
+                "max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))]",
+                "sm:max-h-[min(88dvh,560px)] sm:flex-none sm:rounded-2xl",
+              )}
+            >
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-5 [-webkit-overflow-scrolling:touch] sm:px-6 sm:pt-6">
             <div className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
                 <AlertCircle className="h-8 w-8 text-destructive" />
@@ -2500,25 +2542,27 @@ export function ContainerMode({
                 )
               })()}
             </div>
-            </div>
-            <div className="shrink-0 border-t border-border/80 bg-card px-3 pt-3 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px),20px)] max-sm:pt-3 max-sm:shadow-none max-sm:border-t sm:relative sm:px-6 sm:pb-6 sm:pt-3">
-              <div className="flex gap-3">
-                <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setShowCancelConfirm(null)}>
-                  Keep Trading
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="min-h-[48px] flex-1"
-                  onClick={() => handleForcePullOutCopy(showCancelConfirm)}
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm pull out"}
-                </Button>
+
+              <div className="nexus-container-desk-modal-actions sticky bottom-0 z-20 -mx-4 mt-4 border-t border-border/80 bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] sm:-mx-6 sm:px-6">
+                <div className="flex gap-3">
+                  <Button variant="outline" className="min-h-[48px] flex-1" onClick={() => setShowCancelConfirm(null)}>
+                    Keep Trading
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="min-h-[48px] flex-1"
+                    onClick={() => handleForcePullOutCopy(showCancelConfirm)}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm pull out"}
+                  </Button>
+                </div>
               </div>
             </div>
-          </Card>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
