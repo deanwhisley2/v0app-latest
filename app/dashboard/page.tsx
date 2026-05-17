@@ -14,6 +14,7 @@ import { ToastNotification, useToast } from "@/components/dashboard/toast-notifi
 import { WalletScreen } from "@/components/dashboard/wallet-screen"
 import { SettingsScreen, type SettingsView } from "@/components/dashboard/settings-screen"
 import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
+import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
 import { ContainerMode } from "@/components/dashboard/container-mode"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
@@ -277,70 +278,17 @@ export default function DashboardPage() {
   } | null>(null)
   const { toast, showToast, hideToast } = useToast()
 
-  const [marketFeed, setMarketFeed] = useState<MarketFeedState>(initialMarketFeed)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch("/api/binance/live-market", { cache: "no-store" })
-        const data = (await res.json()) as {
-          ok?: boolean
-          source?: string
-          updatedAt?: number
-          gainers?: Coin[]
-          volumeLeaders?: Coin[]
-          catalog?: Coin[]
-          error?: string
-        }
-        if (cancelled) return
-        if (res.status === 503) {
-          setMarketFeed((prev) => ({
-            status: "disabled",
-            error: data.error,
-            gainers: prev.gainers,
-            volumeLeaders: prev.volumeLeaders,
-            catalog: prev.catalog,
-          }))
-          return
-        }
-        if (!res.ok || !data.ok || !data.catalog?.length) {
-          setMarketFeed((prev) => ({
-            status: "error",
-            error: data.error || `HTTP ${res.status}`,
-            gainers: prev.gainers,
-            volumeLeaders: prev.volumeLeaders,
-            catalog: prev.catalog,
-            updatedAt: prev.updatedAt,
-          }))
-          return
-        }
-        setMarketFeed({
-          status: "live",
-          gainers: data.gainers ?? [],
-          volumeLeaders: data.volumeLeaders ?? [],
-          catalog: data.catalog,
-          updatedAt: data.updatedAt,
-        })
-      } catch (e) {
-        if (!cancelled) {
-          setMarketFeed((prev) => ({
-            status: "error",
-            error: e instanceof Error ? e.message : "Network error",
-            gainers: prev.gainers,
-            volumeLeaders: prev.volumeLeaders,
-            catalog: prev.catalog,
-          }))
-        }
-      }
-    }
-    void load()
-    const id = window.setInterval(load, 45_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(id)
-    }
-  }, [])
+  const { marketFeed: authorityFeed } = useMarketPriceAuthority()
+  const marketFeed: MarketFeedState = useMemo(
+    () => ({
+      status: authorityFeed.status,
+      gainers: authorityFeed.gainers,
+      volumeLeaders: authorityFeed.volumeLeaders,
+      catalog: authorityFeed.catalog,
+      updatedAt: authorityFeed.updatedAt,
+    }),
+    [authorityFeed]
+  )
 
   const offlineGainers = useMemo(
     () => [...coinsData].sort((a, b) => b.change24h - a.change24h).slice(0, 28),

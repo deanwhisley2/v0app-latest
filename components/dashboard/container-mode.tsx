@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
+import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -160,8 +161,10 @@ interface ActiveFixTrade {
   dailyWithdrawUsed: number // legacy field (unused)
   coinSymbol: string // The coin this trade is fixed on
   fixedPrice: number // Lock reference level (USD); may mirror live spot at open when server omits snapshot
-  /** When true, fixedPrice was filled from Binance spot reference at open (server omitted fixedPriceUsd). */
+  /** When true, fixedPrice was filled from live authority at open (server omitted fixedPriceUsd). */
   fixedPriceFromLiveFeed?: boolean
+  /** Current authority reference for desk coin (display only). */
+  liveReferenceUsd?: number
   /** Platform-deposit container: random positive daily buckets that sum to an internal schedule target (server-side). */
   dailySchedule?: number[]
   /** When true, `earned` is hydrated from the server accrual engine — do not recompute from local schedule. */
@@ -244,13 +247,6 @@ function FixEarnedDisplay({
 
 /** Trader personas load from GET /api/user/container-context (Supabase-backed catalog). */
 
-const LIVE_BTC_REFRESH_MS = 45_000
-
-type BtcSpotRefState =
-  | { status: "idle" | "loading" }
-  | { status: "live"; priceUsd: number; change24hPct: number; updatedAt: number; source: string }
-  | { status: "error"; message: string }
-
 const levelRequirements = {
   1: { name: "Starter", minDeposit: 100, minTrades: 0, badge: "bronze", color: "#CD7F32" },
   2: { name: "Trader", minDeposit: 1000, minTrades: 10, badge: "silver", color: "#C0C0C0" },
@@ -319,60 +315,7 @@ export function ContainerMode({
   const [copyMinUsdPolicy, setCopyMinUsdPolicy] = useState(7)
   const [fixMinUsdPolicy, setFixMinUsdPolicy] = useState(5)
 
-  /** Canonical BTC/USDT reference (server multi-provider authority). */
-  const [btcSpotRef, setBtcSpotRef] = useState<BtcSpotRefState>({ status: "idle" })
-
-  useEffect(() => {
-    let cancelled = false
-    const loadBtc = async () => {
-      setBtcSpotRef((prev) => {
-        if (prev.status === "live") return prev
-        return { status: "loading" }
-      })
-      try {
-        const res = await fetch("/api/market/btc", { cache: "no-store" })
-        const data = (await res.json().catch(() => ({}))) as {
-          ok?: boolean
-          priceUsd?: number
-          change24hPct?: number
-          updatedAt?: number
-          provider?: string
-          stale?: boolean
-          error?: string
-        }
-        if (cancelled) return
-        if (!res.ok || !data.ok || typeof data.priceUsd !== "number") {
-          setBtcSpotRef((prev) =>
-            prev.status === "live"
-              ? prev
-              : { status: "error", message: data.error || `HTTP ${res.status}` }
-          )
-          return
-        }
-        setBtcSpotRef({
-          status: "live",
-          priceUsd: data.priceUsd,
-          change24hPct: data.change24hPct ?? 0,
-          updatedAt: data.updatedAt ?? Date.now(),
-          source: data.provider ? `authority:${data.provider}` : "authority",
-        })
-      } catch (e) {
-        if (!cancelled) {
-          setBtcSpotRef((prev) =>
-            prev.status === "live"
-              ? prev
-              : { status: "error", message: e instanceof Error ? e.message : "Network error" }
-          )
-        }
-      }
-    }
-    void loadBtc()
-    const id = window.setInterval(loadBtc, LIVE_BTC_REFRESH_MS)
-    return () => {
-      cancelled = true
-      window.clearInterval(id)
-    }
-  }, [])
+  const { btc: btcSpotRef, getSymbolPrice } = useMarketPriceAuthority()
 
   useEffect(() => {
     let cancelled = false
@@ -476,6 +419,7 @@ export function ContainerMode({
             leaseEndAt: string
             coinSymbol: string
             fixedPriceUsd: number
+            liveReferenceUsd?: number | null
             earnedUsd: number
             insuranceFeeUsd?: number
             totalWithdrawnUsd: number
@@ -530,6 +474,8 @@ export function ContainerMode({
             dailyWithdrawUsed: 0,
             coinSymbol: row.coinSymbol,
             fixedPrice: row.fixedPriceUsd,
+            liveReferenceUsd:
+              typeof row.liveReferenceUsd === "number" ? row.liveReferenceUsd : undefined,
             serverAccrued: true,
             serverSessionId: row.sessionId,
             daysUntilMaturity: typeof row.daysUntilMaturity === "number" ? row.daysUntilMaturity : undefined,
@@ -1087,21 +1033,14 @@ export function ContainerMode({
         let fixedPriceFromLiveFeed = false
         if (typeof out.fixedPriceUsd === "number" && Number.isFinite(out.fixedPriceUsd)) {
           fixedPrice = out.fixedPriceUsd
-        } else if (coinSymbol === "BTC") {
-          if (btcSpotRef.status !== "live") {
-            toast.error(
-              "BTC market reference loading. Wait and retry.",
-              { duration: 7500 },
-            )
+        } else {
+          const livePx = getSymbolPrice(coinSymbol)
+          if (livePx == null) {
+            toast.error("Market reference loading. Wait and retry.", { duration: 7500 })
             return
           }
-          fixedPrice = Math.round(btcSpotRef.priceUsd)
+          fixedPrice = Math.round(livePx)
           fixedPriceFromLiveFeed = true
-        } else {
-          toast.error("Desk did not return a lock reference price for this coin. Try again or contact support.", {
-            duration: 6500,
-          })
-          return
         }
 
         const nowOpen = new Date()
@@ -1491,14 +1430,12 @@ export function ContainerMode({
             <BarChart3 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">BTC / USDT · live reference</p>
-              <p className="text-[10px] text-emerald-100/70">Binance public spot feed — for context in Container; not a price guarantee for locks.</p>
+              <p className="text-[10px] text-emerald-100/70">Multi-provider market authority — display reference only; locks use spot at open.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-            {btcSpotRef.status === "loading" || btcSpotRef.status === "idle" ? (
+            {btcSpotRef.status === "loading" ? (
               <span className="text-sm text-emerald-100/80">Loading spot…</span>
-            ) : btcSpotRef.status === "error" ? (
-              <span className="text-sm text-amber-200">Reference unavailable ({btcSpotRef.message})</span>
             ) : btcSpotRef.status === "live" ? (
               <>
                 <span className="font-mono text-xl font-bold tabular-nums text-white sm:text-2xl">
@@ -1830,16 +1767,25 @@ export function ContainerMode({
                           Commission accrues per policy when <strong className="text-foreground">{trade.coinSymbol}</strong>{" "}
                           clears the lock reference{" "}
                           <strong className="font-mono text-foreground">${trade.fixedPrice?.toLocaleString()}</strong>.
-                          {trade.coinSymbol === "BTC" && btcSpotRef.status === "live" ? (
-                            <>
-                              {" "}
-                              Live Binance spot (reference):{" "}
-                              <strong className="font-mono text-foreground">
-                                ${btcSpotRef.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                              </strong>
-                              .
-                            </>
-                          ) : null}{" "}
+                          {(() => {
+                            const livePx =
+                              trade.liveReferenceUsd ??
+                              getSymbolPrice(trade.coinSymbol) ??
+                              (trade.coinSymbol === "BTC" && btcSpotRef.status === "live"
+                                ? btcSpotRef.priceUsd
+                                : null)
+                            if (livePx == null) return null
+                            return (
+                              <>
+                                {" "}
+                                Live market reference:{" "}
+                                <strong className="font-mono text-foreground">
+                                  ${livePx.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </strong>
+                                .
+                              </>
+                            )
+                          })()}{" "}
                           <span className="text-muted-foreground">Settlement follows Nexus policy, not this headline.</span>
                         </p>
                       </div>

@@ -1,16 +1,28 @@
 import { stringSeed } from "@/lib/container-earnings-schedule"
 
-const DISPLAY_OPTIONS = [
-  { coinSymbol: "BTC", fixedPriceUsd: 67_500 },
-  { coinSymbol: "ETH", fixedPriceUsd: 3_450 },
-  { coinSymbol: "SOL", fixedPriceUsd: 142 },
-  { coinSymbol: "AVAX", fixedPriceUsd: 35 },
-  { coinSymbol: "BNB", fixedPriceUsd: 580 },
-] as const
+const DISPLAY_COIN_SYMBOLS = ["BTC", "ETH", "SOL", "AVAX", "BNB"] as const
 
-/** Deterministic desk display (not spot oracle) — stable across refresh for a given seed. */
-export function displayCoinForFixedSession(seedKey: string): { coinSymbol: string; fixedPriceUsd: number } {
-  const idx = stringSeed(seedKey) % DISPLAY_OPTIONS.length
-  const row = DISPLAY_OPTIONS[idx]!
-  return { coinSymbol: row.coinSymbol, fixedPriceUsd: row.fixedPriceUsd }
+/** Deterministic desk coin symbol for a session seed (price comes from market authority). */
+export function displayCoinSymbolForFixedSession(seedKey: string): string {
+  const idx = stringSeed(seedKey) % DISPLAY_COIN_SYMBOLS.length
+  return DISPLAY_COIN_SYMBOLS[idx]!
+}
+
+/**
+ * @deprecated Use displayCoinSymbolForFixedSession + market authority spot at open.
+ * Kept for backward-compatible fallbacks when authority is temporarily unavailable.
+ */
+export function displayCoinForFixedSession(seedKey: string): {
+  coinSymbol: string
+  fixedPriceUsd: number
+} {
+  const coinSymbol = displayCoinSymbolForFixedSession(seedKey)
+  const legacyPrices: Record<string, number> = {
+    BTC: 67_500,
+    ETH: 3_450,
+    SOL: 142,
+    AVAX: 35,
+    BNB: 580,
+  }
+  return { coinSymbol, fixedPriceUsd: legacyPrices[coinSymbol] ?? 100 }
 }

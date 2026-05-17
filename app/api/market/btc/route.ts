@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
-import { getAuthoritativeBtcQuote } from "@/lib/server/market-price-authority"
+import { getMarketPriceAuthorityPayload } from "@/lib/server/market-price-authority"
 
 /**
  * Canonical BTC/USDT reference quote (multi-provider failover, server cache).
@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   const force = new URL(request.url).searchParams.get("force") === "1"
 
   try {
-    const quote = await getAuthoritativeBtcQuote({ force })
+    const payload = await getMarketPriceAuthorityPayload({ force })
+    const quote = payload.btc
     return NextResponse.json(
       {
         ok: true,
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
         priceUsd: quote.priceUsd,
         change24hPct: quote.change24hPct,
         updatedAt: quote.updatedAt,
+        authorityRevision: payload.authorityRevision,
+        refreshedAt: payload.refreshedAt,
         provider: quote.provider,
         stale: quote.stale,
         source: `authority:${quote.provider}`,

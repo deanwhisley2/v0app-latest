@@ -7,7 +7,7 @@ type RiskLevel = "Low" | "Medium" | "High" | string
 function hashHue(input: string): number {
   let h = 0
   for (let i = 0; i < input.length; i++) h = (h * 31 + input.charCodeAt(i)) >>> 0
-  return h % 360
+  return 210 + (h % 28)
 }
 
 function initialsFrom(name: string, fallback: string): string {
@@ -21,9 +21,9 @@ function initialsFrom(name: string, fallback: string): string {
 }
 
 const RISK_RING: Record<string, string> = {
-  Low: "from-emerald-500/80 to-emerald-600/40",
-  Medium: "from-amber-500/80 to-amber-600/40",
-  High: "from-rose-500/80 to-rose-600/40",
+  Low: "from-slate-400/70 to-slate-500/30",
+  Medium: "from-slate-500/80 to-slate-600/35",
+  High: "from-slate-600/85 to-slate-700/40",
 }
 
 type TraderPersonaAvatarProps = {
@@ -64,9 +64,9 @@ export function TraderPersonaAvatar({
       aria-label={`${name} desk`}
     >
       <span
-        className="flex h-full w-full items-center justify-center rounded-full font-semibold tracking-tight text-white shadow-inner"
+        className="flex h-full w-full items-center justify-center rounded-full font-semibold tracking-tight text-slate-100 shadow-inner"
         style={{
-          background: `linear-gradient(145deg, hsl(${hue} 42% 32%) 0%, hsl(${hue} 48% 22%) 100%)`,
+          background: `linear-gradient(160deg, hsl(${hue} 18% 28%) 0%, hsl(${hue} 22% 18%) 100%)`,
         }}
       >
         {label}

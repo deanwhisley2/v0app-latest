@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
-import { getAuthoritativeLiveMarket } from "@/lib/server/market-price-authority"
+import { getMarketPriceAuthorityPayload } from "@/lib/server/market-price-authority"
 
 /**
  * Live market snapshot — resilient multi-provider (legacy path; prefer /api/market/live).
@@ -12,14 +12,18 @@ export async function GET(request: Request) {
   const force = new URL(request.url).searchParams.get("force") === "1"
 
   try {
-    const snap = await getAuthoritativeLiveMarket({ force })
+    const payload = await getMarketPriceAuthorityPayload({ force })
+    const snap = payload.live
     return NextResponse.json(
       {
         ok: true,
         source: snap.source,
         updatedAt: snap.updatedAt,
-        stale: snap.stale,
+        authorityRevision: payload.authorityRevision,
+        refreshedAt: payload.refreshedAt,
+        stale: snap.stale || payload.btc.stale,
         providerChain: snap.providerChain,
+        btc: payload.btc,
         gainers: snap.gainers,
         volumeLeaders: snap.volumeLeaders,
         catalog: snap.catalog,

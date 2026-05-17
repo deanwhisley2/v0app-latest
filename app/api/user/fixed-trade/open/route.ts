@@ -6,7 +6,7 @@ import { traderEligibleForFixedTrade } from "@/lib/fix-trade-access"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
 import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees, roundUsd2 } from "@/lib/nexus-financial-policy"
 import { casOpenFixedTradeDebit } from "@/lib/server/nexus-main-enforcement"
-import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
+import { resolveFixedTradeMarketLock } from "@/lib/server/fixed-trade-market-lock"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import {
   assertFixPrincipalUsd,
@@ -173,7 +173,7 @@ export async function POST(request: Request) {
       body.seedKey?.trim() ||
       `${user.id}-${persona.id}-${principalUsd}-${fixPeriodMonths}-${Date.now()}`
 
-    const display = displayCoinForFixedSession(seedKey)
+    const display = await resolveFixedTradeMarketLock(seedKey)
 
     const { data: sessionRow, error: sErr } = await admin
       .from("fixed_trade_sessions")
@@ -190,6 +190,8 @@ export async function POST(request: Request) {
           v: 1,
           coin_symbol: display.coinSymbol,
           fixed_price_usd: display.fixedPriceUsd,
+          price_provider: display.provider,
+          live_at_open: display.liveAtOpen,
         },
       })
       .select("id,created_at,seed_key")
@@ -215,6 +217,8 @@ export async function POST(request: Request) {
           v: 1,
           coin_symbol: display.coinSymbol,
           fixed_price_usd: display.fixedPriceUsd,
+          price_provider: display.provider,
+          live_at_open: display.liveAtOpen,
           lifecycle,
         },
       })

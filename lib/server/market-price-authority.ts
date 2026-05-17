@@ -1,6 +1,6 @@
 /**
- * Canonical server-side BTC + live-market pricing (multi-provider failover).
- * Frontend must read /api/market/btc and /api/market/live — never external exchanges.
+ * Canonical server-side market pricing authority (ONLY backend source for spot reference).
+ * Frontends read /api/market/authority — never external exchange APIs.
  */
 
 import type { Coin } from "@/lib/coins-data"
@@ -9,14 +9,26 @@ import {
   buildLiveMarketFromBinance,
   type LiveMarketBuild,
 } from "@/lib/binance-live-market-server"
+import {
+  MARKET_PRICE_ADMIN_ALERT_MS,
+  MARKET_PRICE_CACHE_REFRESH_MS,
+  MARKET_PRICE_EMERGENCY_MAX_AGE_MS,
+  MARKET_PRICE_PROVIDER_RETRY_COOLDOWN_MS,
+  MARKET_PRICE_PROVIDER_TIMEOUT_MS,
+  MARKET_PRICE_SOFT_STALE_MS,
+} from "@/lib/market-price-constants"
+import {
+  BTC_PROVIDER_ORDER,
+  type MarketPriceProviderId,
+} from "@/lib/server/market-price-governance"
+import {
+  getMarketPriceHealthSnapshot,
+  recordProviderFailure,
+  recordProviderSuccess,
+  updateMarketPriceHealth,
+} from "@/lib/server/market-price-health"
 
-export type MarketPriceProviderId =
-  | "coingecko"
-  | "kraken"
-  | "coinbase"
-  | "okx"
-  | "binance"
-  | "cache-emergency"
+export type { MarketPriceProviderId } from "@/lib/server/market-price-governance"
 
 export type BtcSpotQuote = {
   symbol: "BTC"
@@ -34,19 +46,35 @@ export type LiveMarketSnapshot = LiveMarketBuild & {
   providerChain: string[]
 }
 
-const REFRESH_INTERVAL_MS = 20_000
-const STALE_AFTER_MS = 90_000
-const EMERGENCY_MAX_AGE_MS = 15 * 60_000
-const PROVIDER_TIMEOUT_MS = 8_000
+export type SymbolSpotQuote = {
+  symbol: string
+  priceUsd: number
+  change24hPct: number
+  updatedAt: number
+  provider: MarketPriceProviderId | string
+  stale: boolean
+}
+
+export type MarketPriceAuthorityPayload = {
+  authorityRevision: number
+  refreshedAt: number
+  btc: BtcSpotQuote
+  live: LiveMarketSnapshot
+  pricesBySymbol: Record<string, SymbolSpotQuote>
+  health: ReturnType<typeof getMarketPriceHealthSnapshot>
+}
 
 type AuthorityCache = {
   btc: BtcSpotQuote
   liveMarket: LiveMarketSnapshot
+  pricesBySymbol: Record<string, SymbolSpotQuote>
   refreshedAt: number
+  authorityRevision: number
 }
 
 let cache: AuthorityCache | null = null
 let refreshInFlight: Promise<AuthorityCache> | null = null
+let lastProviderFailAt = 0
 
 function symbolHue(symbol: string): number {
   let h = 0
@@ -58,10 +86,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
     headers: { Accept: "application/json", ...(init?.headers ?? {}) },
-    signal: init?.signal ?? AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    signal: init?.signal ?? AbortSignal.timeout(MARKET_PRICE_PROVIDER_TIMEOUT_MS),
     cache: "no-store",
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return (await res.json()) as T
 }
 
@@ -72,9 +100,7 @@ function isBinanceGeoBlock(status: number): boolean {
 async function providerCoinGeckoBtc(): Promise<BtcSpotQuote | null> {
   const url =
     "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
-  const data = await fetchJson<{
-    bitcoin?: { usd?: number; usd_24h_change?: number }
-  }>(url)
+  const data = await fetchJson<{ bitcoin?: { usd?: number; usd_24h_change?: number } }>(url)
   const row = data.bitcoin
   const price = row?.usd
   if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return null
@@ -125,9 +151,9 @@ async function providerCoinbaseBtc(): Promise<BtcSpotQuote | null> {
 }
 
 async function providerOkxBtc(): Promise<BtcSpotQuote | null> {
-  const data = await fetchJson<{
-    data?: Array<{ last?: string; open24h?: string }>
-  }>("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT")
+  const data = await fetchJson<{ data?: Array<{ last?: string; open24h?: string }> }>(
+    "https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT"
+  )
   const row = data.data?.[0]
   const price = parseFloat(row?.last ?? "")
   const open = parseFloat(row?.open24h ?? "")
@@ -146,14 +172,11 @@ async function providerOkxBtc(): Promise<BtcSpotQuote | null> {
 
 async function providerBinanceBtc(): Promise<BtcSpotQuote | null> {
   try {
-    const res = await fetch(
-      "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT",
-      {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-        cache: "no-store",
-      }
-    )
+    const res = await fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT", {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(MARKET_PRICE_PROVIDER_TIMEOUT_MS),
+      cache: "no-store",
+    })
     if (!res.ok) {
       if (isBinanceGeoBlock(res.status)) return null
       throw new Error(`Binance BTC HTTP ${res.status}`)
@@ -175,43 +198,65 @@ async function providerBinanceBtc(): Promise<BtcSpotQuote | null> {
   }
 }
 
-const BTC_PROVIDER_CHAIN: Array<{
-  id: MarketPriceProviderId
-  run: () => Promise<BtcSpotQuote | null>
-}> = [
-  { id: "coingecko", run: providerCoinGeckoBtc },
-  { id: "kraken", run: providerKrakenBtc },
-  { id: "coinbase", run: providerCoinbaseBtc },
-  { id: "okx", run: providerOkxBtc },
-  { id: "binance", run: providerBinanceBtc },
-]
+const BTC_RUNNERS: Record<
+  (typeof BTC_PROVIDER_ORDER)[number],
+  () => Promise<BtcSpotQuote | null>
+> = {
+  coingecko: providerCoinGeckoBtc,
+  kraken: providerKrakenBtc,
+  coinbase: providerCoinbaseBtc,
+  okx: providerOkxBtc,
+  binance: providerBinanceBtc,
+}
 
 export async function fetchBtcSpotWithFailover(): Promise<{
   quote: BtcSpotQuote
   tried: string[]
+  fallbackLevel: number
 }> {
   const tried: string[] = []
-  for (const { id, run } of BTC_PROVIDER_CHAIN) {
+  let level = 0
+  const prevProvider = cache?.btc.provider
+
+  for (const id of BTC_PROVIDER_ORDER) {
     tried.push(id)
+    level += 1
     try {
-      const q = await run()
-      if (q) return { quote: q, tried }
-    } catch {
-      /* next provider */
+      const q = await BTC_RUNNERS[id]()
+      if (q) {
+        lastProviderFailAt = 0
+        recordProviderSuccess(id)
+        if (prevProvider && prevProvider !== id && prevProvider !== "cache-emergency") {
+          updateMarketPriceHealth({
+            event: `recovery provider=${id} (was ${prevProvider})`,
+          })
+        }
+        return { quote: q, tried, fallbackLevel: level - 1 }
+      }
+      recordProviderFailure(id, "empty quote")
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "provider error"
+      recordProviderFailure(id, msg)
     }
   }
 
+  lastProviderFailAt = Date.now()
+
   if (cache?.btc) {
     const age = Date.now() - cache.btc.updatedAt
-    if (age < EMERGENCY_MAX_AGE_MS) {
+    if (age < MARKET_PRICE_EMERGENCY_MAX_AGE_MS) {
+      updateMarketPriceHealth({
+        event: `emergency-cache ageMs=${age} providers=${tried.join(">")}`,
+        emergencyCacheActive: true,
+      })
       return {
         quote: {
           ...cache.btc,
           stale: true,
           provider: "cache-emergency",
-          updatedAt: cache.btc.updatedAt,
         },
         tried: [...tried, "cache-emergency"],
+        fallbackLevel: BTC_PROVIDER_ORDER.length,
       }
     }
   }
@@ -229,8 +274,35 @@ function coinFromQuote(symbol: string, price: number, change24h: number, volume 
     change7d: change24h,
     volume,
     marketCap: 0,
-    color: `hsl(${hue} 58% 46%)`,
+    color: `hsl(${hue} 42% 38%)`,
   }
+}
+
+function catalogToPricesBySymbol(
+  catalog: Coin[],
+  btc: BtcSpotQuote,
+  provider: string
+): Record<string, SymbolSpotQuote> {
+  const out: Record<string, SymbolSpotQuote> = {}
+  for (const c of catalog) {
+    out[c.symbol] = {
+      symbol: c.symbol,
+      priceUsd: c.price,
+      change24hPct: c.change24h,
+      updatedAt: Date.now(),
+      provider,
+      stale: false,
+    }
+  }
+  out.BTC = {
+    symbol: "BTC",
+    priceUsd: btc.priceUsd,
+    change24hPct: btc.change24hPct,
+    updatedAt: btc.updatedAt,
+    provider: btc.provider,
+    stale: btc.stale,
+  }
+  return out
 }
 
 async function buildLiveMarketFromCoinGecko(btc: BtcSpotQuote): Promise<LiveMarketSnapshot> {
@@ -255,9 +327,9 @@ async function buildLiveMarketFromCoinGecko(btc: BtcSpotQuote): Promise<LiveMark
   url.searchParams.set("vs_currencies", "usd")
   url.searchParams.set("include_24hr_change", "true")
 
-  const data = await fetchJson<
-    Record<string, { usd?: number; usd_24h_change?: number }>
-  >(url.toString())
+  const data = await fetchJson<Record<string, { usd?: number; usd_24h_change?: number }>>(
+    url.toString()
+  )
 
   const coins: Coin[] = []
   for (const [id, row] of Object.entries(data)) {
@@ -265,15 +337,11 @@ async function buildLiveMarketFromCoinGecko(btc: BtcSpotQuote): Promise<LiveMark
     if (!sym) continue
     const price = row.usd
     if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) continue
-    coins.push(
-      coinFromQuote(sym, price, Number(row.usd_24h_change ?? 0), sym === "BTC" ? 1e9 : 0)
-    )
+    coins.push(coinFromQuote(sym, price, Number(row.usd_24h_change ?? 0), sym === "BTC" ? 1e9 : 0))
   }
 
   if (!coins.some((c) => c.symbol === "BTC")) {
-    coins.unshift(
-      coinFromQuote("BTC", btc.priceUsd, btc.change24hPct, 1e9)
-    )
+    coins.unshift(coinFromQuote("BTC", btc.priceUsd, btc.change24hPct, 1e9))
   }
 
   const gainers = [...coins]
@@ -281,11 +349,13 @@ async function buildLiveMarketFromCoinGecko(btc: BtcSpotQuote): Promise<LiveMark
     .sort((a, b) => b.change24h - a.change24h)
     .slice(0, 36)
 
-  const volumeLeaders = [...coins].sort((a, b) => {
-    if (a.symbol === "BTC") return -1
-    if (b.symbol === "BTC") return 1
-    return Math.abs(b.change24h) - Math.abs(a.change24h)
-  }).slice(0, 36)
+  const volumeLeaders = [...coins]
+    .sort((a, b) => {
+      if (a.symbol === "BTC") return -1
+      if (b.symbol === "BTC") return 1
+      return Math.abs(b.change24h) - Math.abs(a.change24h)
+    })
+    .slice(0, 36)
 
   const catalogMap = new Map<string, Coin>()
   for (const c of volumeLeaders) catalogMap.set(c.symbol, c)
@@ -312,6 +382,7 @@ async function buildLiveMarketResilient(btc: BtcSpotQuote): Promise<LiveMarketSn
   try {
     const binance = await buildLiveMarketFromBinance()
     chain.push("binance-spot-usdt")
+    recordProviderSuccess("binance-catalog")
     return {
       ...binance,
       source: "binance-spot-usdt",
@@ -322,9 +393,12 @@ async function buildLiveMarketResilient(btc: BtcSpotQuote): Promise<LiveMarketSn
   } catch (e) {
     const msg = e instanceof Error ? e.message : "binance-failed"
     chain.push(`binance-failed:${msg}`)
+    recordProviderFailure("binance-catalog", msg)
+    updateMarketPriceHealth({ event: `failover catalog→coingecko (${msg})` })
   }
 
   const cg = await buildLiveMarketFromCoinGecko(btc)
+  recordProviderSuccess("coingecko-catalog")
   return {
     ...cg,
     providerChain: [...chain, ...cg.providerChain],
@@ -332,14 +406,72 @@ async function buildLiveMarketResilient(btc: BtcSpotQuote): Promise<LiveMarketSn
 }
 
 async function refreshAuthorityCache(): Promise<AuthorityCache> {
-  const { quote: btc, tried } = await fetchBtcSpotWithFailover()
+  const prevRevision = cache?.authorityRevision ?? 0
+  const now = Date.now()
+  if (
+    cache &&
+    now - lastProviderFailAt < MARKET_PRICE_PROVIDER_RETRY_COOLDOWN_MS &&
+    lastProviderFailAt > 0
+  ) {
+    return { ...cache, authorityRevision: prevRevision }
+  }
+
+  let btc: BtcSpotQuote
+  let tried: string[]
+  let fallbackLevel: number
+  try {
+    ;({ quote: btc, tried, fallbackLevel } = await fetchBtcSpotWithFailover())
+  } catch (e) {
+    lastProviderFailAt = Date.now()
+    if (cache) return cache
+    throw e
+  }
   const liveMarket = await buildLiveMarketResilient(btc)
   liveMarket.providerChain = [...tried, ...liveMarket.providerChain]
+
+  const pricesBySymbol = catalogToPricesBySymbol(
+    liveMarket.catalog,
+    btc,
+    liveMarket.source
+  )
+
+  const refreshedAt = Date.now()
+  const authorityRevision = prevRevision + 1
+  const btcAge = refreshedAt - btc.updatedAt
+  const stale =
+    btc.stale ||
+    btcAge > MARKET_PRICE_SOFT_STALE_MS ||
+    refreshedAt - liveMarket.updatedAt > MARKET_PRICE_SOFT_STALE_MS
+
+  const adminAlert =
+    btc.provider === "cache-emergency" && btcAge >= MARKET_PRICE_ADMIN_ALERT_MS
+
+  if (fallbackLevel > 0 && btc.provider !== "cache-emergency") {
+    updateMarketPriceHealth({
+      event: `failover level=${fallbackLevel} active=${btc.provider}`,
+    })
+  }
+  if (adminAlert) {
+    updateMarketPriceHealth({ event: "admin-alert emergency-cache exceeded soft threshold" })
+  }
+
+  updateMarketPriceHealth({
+    activeProvider: btc.provider,
+    fallbackLevel,
+    authorityRevision,
+    lastRefreshAt: refreshedAt,
+    lastBtcUpdatedAt: btc.updatedAt,
+    stale,
+    emergencyCacheActive: btc.provider === "cache-emergency",
+    adminAlert,
+  })
 
   const next: AuthorityCache = {
     btc,
     liveMarket,
-    refreshedAt: Date.now(),
+    pricesBySymbol,
+    refreshedAt,
+    authorityRevision,
   }
   cache = next
   return next
@@ -347,11 +479,17 @@ async function refreshAuthorityCache(): Promise<AuthorityCache> {
 
 function withStaleFlags(entry: AuthorityCache): AuthorityCache {
   const age = Date.now() - entry.refreshedAt
-  const stale = age > STALE_AFTER_MS
+  const stale = age > MARKET_PRICE_SOFT_STALE_MS
   return {
     ...entry,
     btc: { ...entry.btc, stale: stale || entry.btc.stale },
     liveMarket: { ...entry.liveMarket, stale: stale || entry.liveMarket.stale },
+    pricesBySymbol: Object.fromEntries(
+      Object.entries(entry.pricesBySymbol).map(([k, v]) => [
+        k,
+        { ...v, stale: stale || v.stale },
+      ])
+    ),
   }
 }
 
@@ -361,7 +499,7 @@ export async function getMarketPriceAuthority(opts?: {
   const force = opts?.force === true
   const now = Date.now()
 
-  if (!force && cache && now - cache.refreshedAt < REFRESH_INTERVAL_MS) {
+  if (!force && cache && now - cache.refreshedAt < MARKET_PRICE_CACHE_REFRESH_MS) {
     return withStaleFlags(cache)
   }
 
@@ -378,14 +516,69 @@ export async function getMarketPriceAuthority(opts?: {
   return withStaleFlags(await refreshInFlight)
 }
 
-export async function getAuthoritativeBtcQuote(opts?: { force?: boolean }): Promise<BtcSpotQuote> {
+export async function getMarketPriceAuthorityPayload(opts?: {
+  force?: boolean
+}): Promise<MarketPriceAuthorityPayload> {
   const entry = await getMarketPriceAuthority(opts)
-  return entry.btc
+  return {
+    authorityRevision: entry.authorityRevision,
+    refreshedAt: entry.refreshedAt,
+    btc: entry.btc,
+    live: entry.liveMarket,
+    pricesBySymbol: entry.pricesBySymbol,
+    health: getMarketPriceHealthSnapshot(),
+  }
+}
+
+export async function getAuthoritativeBtcQuote(opts?: { force?: boolean }): Promise<BtcSpotQuote> {
+  return (await getMarketPriceAuthority(opts)).btc
 }
 
 export async function getAuthoritativeLiveMarket(opts?: {
   force?: boolean
 }): Promise<LiveMarketSnapshot> {
-  const entry = await getMarketPriceAuthority(opts)
-  return entry.liveMarket
+  return (await getMarketPriceAuthority(opts)).liveMarket
+}
+
+/** Live spot for a symbol from the unified authority cache (future multi-asset ready). */
+export async function getSymbolSpotUsd(symbol: string): Promise<SymbolSpotQuote> {
+  const sym = symbol.toUpperCase().trim()
+  const entry = await getMarketPriceAuthority()
+  const hit = entry.pricesBySymbol[sym]
+  if (hit && hit.priceUsd > 0) return hit
+
+  if (sym === "BTC") return entry.btc
+
+  const id = COINGECKO_SYMBOL_IDS[sym]
+  if (id) {
+    try {
+      const data = await fetchJson<Record<string, { usd?: number; usd_24h_change?: number }>>(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd&include_24hr_change=true`
+      )
+      const row = data[id]
+      const price = row?.usd
+      if (typeof price === "number" && Number.isFinite(price) && price > 0) {
+        recordProviderSuccess("coingecko-symbol")
+        return {
+          symbol: sym,
+          priceUsd: price,
+          change24hPct: Number(row?.usd_24h_change ?? 0),
+          updatedAt: Date.now(),
+          provider: "coingecko",
+          stale: false,
+        }
+      }
+    } catch (e) {
+      recordProviderFailure(
+        "coingecko-symbol",
+        e instanceof Error ? e.message : "symbol fetch failed"
+      )
+    }
+  }
+
+  if (cache?.pricesBySymbol[sym]) {
+    return { ...cache.pricesBySymbol[sym], stale: true }
+  }
+
+  throw new Error(`No authority price for ${sym}`)
 }

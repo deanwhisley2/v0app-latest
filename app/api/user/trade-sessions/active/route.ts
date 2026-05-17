@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import { displayCoinForFixedSession } from "@/lib/fixed-trade-display-coin"
+import { getMarketPriceAuthorityPayload } from "@/lib/server/market-price-authority"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { computeFixedSessionPolicyGrossUsd, type FixedSessionEarnedRow } from "@/lib/server/fixed-trade-earnings-snapshot"
 import {
@@ -70,6 +71,23 @@ export async function GET(request: Request) {
     if (cErr) throw new Error(cErr.message)
     if (fErr) throw new Error(fErr.message)
 
+    let authorityPrices: Record<string, { priceUsd: number; change24hPct: number; updatedAt: number }> =
+      {}
+    let authorityRevision = 0
+    try {
+      const auth = await getMarketPriceAuthorityPayload()
+      authorityRevision = auth.authorityRevision
+      for (const [sym, row] of Object.entries(auth.pricesBySymbol)) {
+        authorityPrices[sym] = {
+          priceUsd: row.priceUsd,
+          change24hPct: row.change24hPct,
+          updatedAt: row.updatedAt,
+        }
+      }
+    } catch {
+      authorityPrices = {}
+    }
+
     const now = new Date()
     const copySessions = (copyRows ?? []).map((r: CopyRow) => {
       const md = (r.metadata ?? {}) as { ui?: { autoAdjust?: boolean } }
@@ -108,6 +126,8 @@ export async function GET(request: Request) {
         typeof md.fixed_price_usd === "number" && Number.isFinite(md.fixed_price_usd)
           ? md.fixed_price_usd
           : fallback.fixedPriceUsd
+      const liveRef = authorityPrices[coinSymbol]
+      const liveReferenceUsd = liveRef?.priceUsd ?? null
       const insuranceFee = roundUsd2(Number(r.insurance_fee_amount ?? 0))
       const earnedUsd = computeFixedSessionPolicyGrossUsd(r as FixedSessionEarnedRow, now)
       const leaseEnd = officialLeaseEndDate(r.created_at, months)
@@ -134,6 +154,8 @@ export async function GET(request: Request) {
         leaseEndAt: leaseEnd.toISOString(),
         coinSymbol,
         fixedPriceUsd,
+        liveReferenceUsd,
+        liveReferenceUpdatedAt: liveRef?.updatedAt ?? null,
         earnedUsd,
         totalWithdrawnUsd,
         lastWithdrawalAt,
@@ -145,6 +167,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      authorityRevision,
       copySessions,
       fixedSessions,
     })
