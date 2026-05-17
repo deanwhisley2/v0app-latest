@@ -3155,7 +3155,7 @@ export default function DashboardPage() {
       {/* Main Content — Container desk + Wallstreet assistant only (no legacy live/markets decks). */}
       <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:pb-4 ${activeTab === "container" ? "" : "pt-3"}`}>
         {activeTab === "container" && (
-          <div className="space-y-4">
+          <div className="nexus-dashboard-surface space-y-4">
             {showRetailBalancePanels ? (
               <RetailBalanceHomePanels
                 t={t}

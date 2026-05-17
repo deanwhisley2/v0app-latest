@@ -1485,12 +1485,12 @@ export function ContainerMode({
       {activeTab === "dashboard" && (
         <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {/* Balance Overview */}
-          <Card className="overflow-hidden border-border/90 bg-gradient-to-br from-card via-card to-primary/[0.06] p-0">
+          <Card className="overflow-hidden border-border/90 bg-card p-0">
             <div className="border-b border-border/60 px-5 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Container desk</p>
               <h3 className="mt-1 text-lg font-semibold tracking-tight">Balance overview</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Allocation, earnings, and open sessions — ledger-normalized display.
+                Allocation, earnings, and open sessions in one overview.
               </p>
             </div>
             <div className="grid gap-px bg-border/50 sm:grid-cols-3">

@@ -87,7 +87,7 @@ export function BottomNav({
       {!operationalWorkspace && (
       <button
         onClick={() => setShowJoelinPanel(!showJoelinPanel)}
-        className="fixed bottom-[5.75rem] right-4 z-[48] md:hidden flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-lg active:scale-95 touch-manipulation"
+        className="fixed bottom-[5.75rem] right-4 z-[48] md:hidden flex h-12 w-12 items-center justify-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-md touch-manipulation"
       >
         <Zap className="h-5 w-5 text-white" />
       </button>
@@ -97,7 +97,7 @@ export function BottomNav({
       {!operationalWorkspace && showJoelinPanel && (
         <div className="fixed bottom-36 right-4 z-50 w-72 rounded-2xl border border-border bg-card p-4 shadow-2xl md:hidden">
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
               <Zap className="h-4 w-4 text-white" />
             </div>
             <div>
@@ -158,14 +158,12 @@ export function BottomNav({
                 {/* Icon Container */}
                 <div
                   className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                    isActive
-                      ? `bg-gradient-to-br ${item.color} shadow-md -translate-y-1`
-                      : "bg-transparent"
+                    isActive ? "bg-primary text-primary-foreground" : "bg-transparent"
                   }`}
                 >
                   <item.icon
                     className={`h-5 w-5 ${
-                      isActive ? "text-white" : "text-muted-foreground"
+                      isActive ? "text-primary-foreground" : "text-muted-foreground"
                     }`}
                   />
                 </div>

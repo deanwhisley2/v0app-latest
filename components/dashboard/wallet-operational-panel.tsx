@@ -81,7 +81,7 @@ function FundingFxOpsSummary({
         <span className="font-mono">{Number.isFinite(lp) ? lp.toFixed(6) : "—"}</span>
       </p>
       <p>
-        <span className="text-muted-foreground">Normalized at submission · </span>
+        <span className="text-muted-foreground">USD at submission · </span>
         <span className="font-mono font-semibold">${Number.isFinite(norm) ? norm.toFixed(2) : "—"} USD</span>
       </p>
       {settled != null && Number.isFinite(settled) ? (

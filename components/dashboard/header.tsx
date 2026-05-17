@@ -152,7 +152,7 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-border bg-background max-md:[backdrop-filter:none] md:bg-background/95 md:backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4">
           {/* Brand Name */}
           <div className="flex items-center">

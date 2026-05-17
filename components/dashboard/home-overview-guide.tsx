@@ -44,7 +44,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
   return (
     <section
       className={cn(
-        "rounded-2xl border border-border/80 bg-card/90 shadow-sm transition-shadow",
+        "rounded-2xl border border-border/80 bg-card shadow-sm",
         className
       )}
       aria-label={t("home.overview.title")}
@@ -70,13 +70,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
         />
       </button>
 
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows] duration-200 ease-out",
-          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        )}
-      >
-        <div className="overflow-hidden">
+      {expanded ? (
           <div className="border-t border-border/60 px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
             <ol className="grid gap-2 sm:grid-cols-3">
               {steps.map((step) => {
@@ -106,8 +100,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
             </ol>
             <p className="mt-3 text-[11px] text-muted-foreground">{t("home.overview.trustLine")}</p>
           </div>
-        </div>
-      </div>
+      ) : null}
     </section>
   )
 }

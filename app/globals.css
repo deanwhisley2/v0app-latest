@@ -353,3 +353,16 @@ html {
   color: oklch(0.75 0.18 85);
   border: 1px solid oklch(0.75 0.18 85 / 0.3);
 }
+
+/* Low-end Android: reduce compositor-heavy effects on dashboard home */
+@media (max-width: 767px) {
+  .nexus-dashboard-surface {
+    isolation: isolate;
+  }
+
+  .nexus-dashboard-surface [class*="backdrop-blur"],
+  .nexus-dashboard-surface [class*="backdrop-filter"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

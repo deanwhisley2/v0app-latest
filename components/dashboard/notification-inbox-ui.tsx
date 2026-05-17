@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
-export const INBOX_CARD = "rounded-2xl border border-border/90 bg-card/95 shadow-sm"
+export const INBOX_CARD = "rounded-2xl border border-border/90 bg-card shadow-sm"
 
 export type InboxFilter = "all" | "unread" | "read"
 
@@ -165,8 +165,7 @@ export const NotificationInboxRow = memo(function NotificationInboxRow({
       onClick={onOpen}
       className={cn(
         "flex w-full gap-2.5 px-3 py-3 text-start transition-[background,box-shadow,opacity] duration-200 active:bg-muted/30",
-        !item.read &&
-          "bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] ring-1 ring-inset ring-primary/[0.06]",
+        !item.read && "bg-card ring-1 ring-inset ring-border/80",
         item.read && "bg-transparent opacity-[0.82] hover:bg-muted/15 hover:opacity-95",
         className
       )}
@@ -246,7 +245,7 @@ export function NotificationDetailSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col bg-black/55 backdrop-blur-[2px] sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[120] flex flex-col bg-black/50 sm:items-center sm:justify-center sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}

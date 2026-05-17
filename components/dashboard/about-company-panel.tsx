@@ -32,11 +32,11 @@ export function AboutCompanyPanel({ className }: { className?: string }) {
   return (
     <Card className={cn("overflow-hidden border-border/90 bg-card p-0 shadow-sm", className)}>
       <div className="border-b border-border/60 bg-muted/20 px-5 py-6 sm:px-6">
-        <img src="/logo.jpg" alt="Nexus Pro FX" className="h-14 w-14 rounded-xl border border-border/60 object-cover" />
+        <img src="/logo.jpg" alt="Nexus Pro" className="h-14 w-14 rounded-xl border border-border/60 object-cover" />
         <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           {t("about.tagline")}
         </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">Nexus Pro FX</h2>
+        <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">Nexus Pro</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t("about.positioning")}</p>
         <p className="mt-4 text-xs font-medium text-foreground/90">{t("about.marketsIntro")}</p>
         <ul className="mt-2 flex flex-wrap gap-2">

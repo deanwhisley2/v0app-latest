@@ -9,14 +9,14 @@ export const COMPANY_CONTACT = {
   whatsappHref: "https://wa.me/19708681977",
   email: "esknexuspro@gmail.com",
   website: "https://nexuspro.it.com",
-  twitter: "https://x.com/nexusprofx",
-  linkedIn: "https://www.linkedin.com/company/nexus-pro-fx",
+  twitter: "https://x.com/nexuspro",
+  linkedIn: "https://www.linkedin.com/company/nexus-pro",
 } as const
 
 export const companyMessagesEn: Record<string, string> = {
   "about.tagline": "Institutional multi-asset trading access",
   "about.positioning":
-    "Nexus Pro FX provides access to global financial markets through a modern multi-asset trading ecosystem built for stability, operational trust, and mobile-first execution.",
+    "Nexus Pro provides access to global financial markets through a modern multi-asset trading ecosystem built for stability, operational trust, and mobile-first execution.",
   "about.marketsIntro": "Market access includes:",
   "about.market.forex": "Forex",
   "about.market.commodities": "Commodities",

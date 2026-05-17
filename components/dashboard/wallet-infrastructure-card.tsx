@@ -23,7 +23,7 @@ export function WalletInfrastructureCard({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-border/90 bg-gradient-to-br from-muted/30 via-card to-card p-4 shadow-sm sm:p-5",
+        "rounded-2xl border border-border/90 bg-card p-4 shadow-sm sm:p-5",
         className
       )}
       aria-label={t("home.walletInfra.title")}

@@ -89,7 +89,7 @@ function PanelDetailOverlay({ detail, onClose }: { detail: NexusNotificationItem
   const { t } = useUserPreferences()
   const p = presentNotification(detail, t)
   return (
-    <div className="absolute inset-0 z-[110] flex flex-col bg-card/98 backdrop-blur-sm">
+    <div className="absolute inset-0 z-[110] flex flex-col bg-card">
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2.5">
         <h4 className="truncate pr-2 text-sm font-semibold tracking-tight">{p.title}</h4>
         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose} aria-label="Close">
@@ -273,15 +273,15 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[104] bg-black/35 backdrop-blur-[1px] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+        className="fixed inset-0 z-[104] bg-black/40"
         aria-hidden
         onClick={onClose}
       />
       <div
         ref={panelRef}
-        className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border/90 bg-card/95 shadow-xl shadow-black/15 motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-200 sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
+        className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border/90 bg-card shadow-lg sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
       >
-      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <Bell className="h-5 w-5 shrink-0 text-muted-foreground" />

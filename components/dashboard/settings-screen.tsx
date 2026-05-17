@@ -504,7 +504,7 @@ export function SettingsScreen({
     { key: "wire-currency", icon: <Banknote className="h-5 w-5" />, label: "Direct Wire Currency", description: wireCurrency },
     { key: "payment-methods", icon: <CreditCard className="h-5 w-5" />, label: "Payment Methods", description: "Cards and bank accounts" },
     { key: "privacy", icon: <Lock className="h-5 w-5" />, label: "Privacy Center", description: "Data and privacy settings" },
-    { key: "about", icon: <Info className="h-5 w-5" />, label: "About Us", description: "App info and legal" },
+    { key: "about", icon: <Info className="h-5 w-5" />, label: "About Us", description: "Company identity and institutional contact" },
   ]
 
   const renderBackButton = () => (

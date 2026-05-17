@@ -49,7 +49,7 @@ type RetailBalanceHomePanelsProps = {
   onManageExchanges?: () => void
 }
 
-const cardShell = "rounded-2xl border border-border/90 bg-card/95 shadow-sm"
+const cardShell = "rounded-2xl border border-border/90 bg-card shadow-sm"
 
 function MetricCard({
   label,
@@ -93,7 +93,7 @@ function MetricCard({
 }
 
 const ctaClass =
-  "min-h-12 flex-1 basis-[calc(50%-0.25rem)] font-semibold transition-colors active:scale-[0.99] sm:min-h-11 sm:basis-auto sm:flex-initial"
+  "min-h-12 flex-1 basis-[calc(50%-0.25rem)] font-semibold sm:min-h-11 sm:basis-auto sm:flex-initial"
 
 export function RetailBalanceHomePanels({
   t,
@@ -128,7 +128,7 @@ export function RetailBalanceHomePanels({
 
       {/* Nexus Main hero — balance first, then equal CTAs */}
       <section className={cn(cardShell, "overflow-hidden")}>
-        <div className="border-b border-border/60 bg-gradient-to-br from-muted/25 via-card to-primary/[0.04] px-4 py-3.5 sm:px-5">
+        <div className="border-b border-border/60 bg-muted/20 px-4 py-3.5 sm:px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
               <Wallet className="h-5 w-5 text-primary" aria-hidden />
@@ -177,12 +177,7 @@ export function RetailBalanceHomePanels({
       </section>
 
       {/* Pocket balance */}
-      <section
-        className={cn(
-          cardShell,
-          "border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.07] via-card to-card p-4 sm:p-5"
-        )}
-      >
+      <section className={cn(cardShell, "border-emerald-500/20 bg-card p-4 sm:p-5")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700/90 dark:text-emerald-400/90">

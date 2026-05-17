@@ -4,6 +4,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { OperationalBootstrapProvider } from '@/contexts/OperationalBootstrapContext'
 import { NexusNotificationsProvider } from '@/contexts/NexusNotificationsContext'
 import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext'
+import { brandAsset, SITE_BRAND } from '@/lib/site-branding'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
@@ -23,36 +24,69 @@ const spaceMono = Space_Mono({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  /** Notch / home indicator — enables `env(safe-area-inset-*)` in CSS */
   viewportFit: 'cover',
-  /**
-   * When the virtual keyboard opens (MoMo receipt / transaction ID fields),
-   * resize the layout viewport so fixed modals shrink and bottom actions stay reachable.
-   * Without this, Android/Chrome often leaves the primary button under the keyboard.
-   */
+  themeColor: SITE_BRAND.themeColor,
   interactiveWidget: 'resizes-content',
 }
 
 export const metadata: Metadata = {
-  title: 'Nexus Pro - Crypto Trading Dashboard',
-  description: 'Professional crypto trading dashboard with Joelin-guided analysis, real-time market data, and automated trading strategies.',
-  generator: 'v0.app',
+  metadataBase: new URL(SITE_BRAND.siteUrl),
+  title: {
+    default: SITE_BRAND.name,
+    template: `%s | ${SITE_BRAND.name}`,
+  },
+  description:
+    'Nexus Pro — institutional multi-asset trading workspace with funding controls, market continuity, and mobile-first operations.',
+  applicationName: SITE_BRAND.name,
+  manifest: brandAsset('/manifest.webmanifest'),
+  appleWebApp: {
+    capable: true,
+    title: SITE_BRAND.name,
+    statusBarStyle: 'black-translucent',
+  },
   icons: {
     icon: [
+      { url: brandAsset('/favicon.ico'), sizes: 'any' },
+      { url: brandAsset('/brand/icons/icon-32.png'), sizes: '32x32', type: 'image/png' },
+      { url: brandAsset('/brand/icons/icon-64.png'), sizes: '64x64', type: 'image/png' },
+      { url: brandAsset('/icon.svg'), type: 'image/svg+xml' },
+    ],
+    apple: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
+        url: brandAsset('/brand/icons/apple-touch-icon.png'),
+        sizes: '180x180',
+        type: 'image/png',
       },
     ],
-    apple: '/apple-icon.png',
+    shortcut: brandAsset('/favicon.ico'),
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: SITE_BRAND.siteUrl,
+    siteName: SITE_BRAND.name,
+    title: SITE_BRAND.name,
+    description:
+      'Institutional multi-asset trading workspace — funding, markets, and operational controls.',
+    images: [
+      {
+        url: brandAsset('/brand/og-image.png'),
+        width: 1200,
+        height: 630,
+        alt: `${SITE_BRAND.name} logo`,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_BRAND.name,
+    description:
+      'Institutional multi-asset trading workspace — funding, markets, and operational controls.',
+    images: [brandAsset('/brand/og-image.png')],
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-title': SITE_BRAND.name,
   },
 }
 

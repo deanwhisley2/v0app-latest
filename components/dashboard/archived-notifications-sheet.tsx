@@ -160,13 +160,13 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex justify-end bg-black/50 backdrop-blur-[1px] p-0 sm:p-4"
+      className="fixed inset-0 z-[130] flex justify-end bg-black/45 p-0 sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <Card
-        className="flex h-full w-full max-w-md flex-col rounded-none border-l border-border/90 bg-card/95 shadow-xl motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200 sm:h-[min(92dvh,640px)] sm:rounded-2xl sm:border"
+        className="flex h-full w-full max-w-md flex-col rounded-none border-l border-border/90 bg-card shadow-xl sm:h-[min(92dvh,640px)] sm:rounded-2xl sm:border"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
