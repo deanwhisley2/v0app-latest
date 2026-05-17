@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Area,
   AreaChart,
@@ -20,38 +20,64 @@ interface PriceChartProps {
   coins: Coin[]
 }
 
-// Generate mock chart data
-function generateChartData(basePrice: number, volatility: number = 0.02) {
-  const data = []
-  let price = basePrice * 0.95
-  const now = Date.now()
+type ChartPoint = { time: string; price: number }
 
-  for (let i = 0; i < 48; i++) {
-    const change = (Math.random() - 0.45) * basePrice * volatility
-    price = Math.max(price + change, basePrice * 0.8)
-    data.push({
-      time: new Date(now - (48 - i) * 3600000).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      price: price,
-    })
-  }
-  return data
+function formatBarTime(ts: number) {
+  return new Date(ts).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 export function PriceChart({ selectedCoin, onCoinSelect, coins }: PriceChartProps) {
   const [timeframe, setTimeframe] = useState("1D")
   const timeframes = ["1H", "4H", "1D", "1W", "1M"]
+  const [chartData, setChartData] = useState<ChartPoint[]>([])
+  const [anchorPrice, setAnchorPrice] = useState(selectedCoin.price)
 
   const quickCoins = coins.slice(0, 6)
-
-  const chartData = useMemo(
-    () => generateChartData(selectedCoin.price),
-    [selectedCoin.price]
+  const displayCoin = useMemo(
+    () => ({ ...selectedCoin, price: anchorPrice > 0 ? anchorPrice : selectedCoin.price }),
+    [selectedCoin, anchorPrice]
   )
 
-  const isPositive = selectedCoin.change24h >= 0
+  const days =
+    timeframe === "1H" || timeframe === "4H" ? 1 : timeframe === "1W" ? 7 : timeframe === "1M" ? 30 : 1
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(
+          `/api/market/ohlcv?symbol=${encodeURIComponent(selectedCoin.symbol)}&days=${days}`,
+          { cache: "no-store" }
+        )
+        const data = (await res.json()) as {
+          ok?: boolean
+          bars?: Array<{ timestamp: number; close: number }>
+          anchorUsd?: number
+        }
+        if (cancelled || !res.ok || !data.ok || !data.bars?.length) return
+        setChartData(
+          data.bars.map((b) => ({
+            time: formatBarTime(b.timestamp),
+            price: b.close,
+          }))
+        )
+        if (typeof data.anchorUsd === "number" && data.anchorUsd > 0) {
+          setAnchorPrice(data.anchorUsd)
+        }
+      } catch {
+        /* keep prior chart for continuity */
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCoin.symbol, days])
+
+  const isPositive = displayCoin.change24h >= 0
 
   return (
     <Card className="border-border bg-card p-5">
@@ -79,7 +105,7 @@ export function PriceChart({ selectedCoin, onCoinSelect, coins }: PriceChartProp
             </div>
             <div className="mt-1 flex items-center gap-3">
               <span className="font-mono text-2xl font-bold">
-                ${formatPrice(selectedCoin.price)}
+                ${formatPrice(displayCoin.price)}
               </span>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm font-semibold ${

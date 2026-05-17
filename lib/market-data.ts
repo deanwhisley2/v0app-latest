@@ -252,24 +252,21 @@ export async function fetchHistoricalData(
   if (cached !== null) return cached
 
   try {
-    const data = await rateLimitedFetch(
-      `${COINGECKO_BASE}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`
+    const res = await fetch(
+      `/api/market/ohlcv?symbol=${encodeURIComponent(symbol)}&days=${days}`,
+      { cache: "no-store" }
     )
-
-    if (Array.isArray(data) && data.length > 0) {
-      const ohlcv: OHLCV[] = data.map((item: number[]) => ({
-        timestamp: item[0],
-        open: item[1],
-        high: item[2],
-        low: item[3],
-        close: item[4],
-        volume: 0, // CoinGecko OHLC doesn't include volume
-      }))
-      setCache(cacheKey, ohlcv, 60_000) // Cache for 1 minute
+    const data = (await res.json()) as {
+      ok?: boolean
+      bars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>
+    }
+    if (res.ok && data.ok && data.bars?.length) {
+      const ohlcv = data.bars
+      setCache(cacheKey, ohlcv, 60_000)
       return ohlcv
     }
   } catch {
-    // Fall back to simulated data
+    /* simulated fallback */
   }
 
   return generateSimulatedOHLCV(symbol, days)
@@ -286,28 +283,27 @@ export async function fetchMarketSnapshots(): Promise<MarketSnapshot[]> {
   const ids = Object.values(COINGECKO_IDS).join(",")
 
   try {
-    const data = await rateLimitedFetch(
-      `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=50&page=1&sparkline=false`
-    )
-
-    if (Array.isArray(data)) {
-      const snapshots: MarketSnapshot[] = data.map((coin: any) => ({
-        symbol:
-          Object.entries(COINGECKO_IDS).find(([, v]) => v === coin.id)?.[0] ??
-          coin.symbol.toUpperCase(),
-        price: coin.current_price,
-        change24h: coin.price_change_percentage_24h ?? 0,
-        high24h: coin.high_24h ?? coin.current_price,
-        low24h: coin.low_24h ?? coin.current_price,
-        volume24h: coin.total_volume ?? 0,
-        marketCap: coin.market_cap ?? 0,
+    const res = await fetch("/api/market/authority", { cache: "no-store" })
+    const data = (await res.json()) as {
+      ok?: boolean
+      live?: { catalog?: Array<{ symbol: string; price: number; change24h: number; volume: number; marketCap: number }> }
+    }
+    if (res.ok && data.ok && data.live?.catalog?.length) {
+      const snapshots: MarketSnapshot[] = data.live.catalog.map((c) => ({
+        symbol: c.symbol,
+        price: c.price,
+        change24h: c.change24h,
+        high24h: c.price,
+        low24h: c.price,
+        volume24h: c.volume,
+        marketCap: c.marketCap,
         timestamp: Date.now(),
       }))
-      setCache(cacheKey, snapshots, 60_000) // Cache for 1 minute
+      setCache(cacheKey, snapshots, 60_000)
       return snapshots
     }
   } catch {
-    // Fall back to static data
+    /* static fallback */
   }
 
   // Fallback: return from static coinsData

@@ -46,7 +46,7 @@ fi
 
 echo ""
 echo "== Referral API (auth required — smoke structure only) =="
-ref_code="$(curl -fsS -o /dev/null -w "%{http_code}" "${BASE}/api/user/referral")"
+ref_code="$(curl -sS -o /dev/null -w "%{http_code}" "${BASE}/api/user/referral")"
 if [ "$ref_code" = "401" ]; then
   pass "referral route reachable (401 without token)"
 else

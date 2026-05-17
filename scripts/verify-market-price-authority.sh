@@ -14,6 +14,22 @@ if ! echo "$auth" | grep -q '"ok":true'; then
 fi
 
 echo ""
+echo "== OHLCV (chart authority) =="
+ohlcv_code="$(curl -sS -o /tmp/nexus-ohlcv.json -w "%{http_code}" "${BASE}/api/market/ohlcv?symbol=BTC&days=1")"
+ohlcv="$(cat /tmp/nexus-ohlcv.json 2>/dev/null || true)"
+if [ "$ohlcv_code" = "404" ]; then
+  echo "WARN: /api/market/ohlcv not deployed yet (404) — ship continuity slice"
+elif [ "$ohlcv_code" != "200" ] || ! echo "$ohlcv" | grep -q '"ok":true'; then
+  echo "FAIL: /api/market/ohlcv (HTTP $ohlcv_code)"
+  exit 1
+elif ! echo "$ohlcv" | grep -q '"bars"'; then
+  echo "FAIL: ohlcv missing bars"
+  exit 1
+else
+  echo "OK: ohlcv bars present"
+fi
+
+echo ""
 echo "== Compare (authority reference slot) =="
 cmp="$(curl -fsS "${BASE}/api/market/compare?symbol=BTCUSDT")"
 if ! echo "$cmp" | grep -q 'market-price-authority'; then
