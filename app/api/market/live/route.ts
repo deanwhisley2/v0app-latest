@@ -3,7 +3,7 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { getAuthoritativeLiveMarket } from "@/lib/server/market-price-authority"
 
 /**
- * Live market snapshot — resilient multi-provider (legacy path; prefer /api/market/live).
+ * Resilient live market catalog (Binance when reachable, CoinGecko fallback).
  */
 export async function GET(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json(
-      { ok: false, source: "authority", error: message, updatedAt: Date.now() },
+      { ok: false, error: message, updatedAt: Date.now() },
       { status: 502 }
     )
   }

@@ -27,6 +27,7 @@ import { computePlatformLiveStats } from "@/lib/platform-live-stats"
 import { Checkbox } from "@/components/ui/checkbox"
 import { traderEligibleForFixedTrade, fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
+import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -250,17 +251,6 @@ type BtcSpotRefState =
   | { status: "live"; priceUsd: number; change24hPct: number; updatedAt: number; source: string }
   | { status: "error"; message: string }
 
-function btcFromLiveMarketCatalog(catalog: unknown): Coin | null {
-  if (!Array.isArray(catalog)) return null
-  for (const row of catalog) {
-    const c = row as Partial<Coin>
-    if (c?.symbol === "BTC" && typeof c.price === "number" && Number.isFinite(c.price)) {
-      return c as Coin
-    }
-  }
-  return null
-}
-
 const levelRequirements = {
   1: { name: "Starter", minDeposit: 100, minTrades: 0, badge: "bronze", color: "#CD7F32" },
   2: { name: "Trader", minDeposit: 1000, minTrades: 10, badge: "silver", color: "#C0C0C0" },
@@ -329,7 +319,7 @@ export function ContainerMode({
   const [copyMinUsdPolicy, setCopyMinUsdPolicy] = useState(7)
   const [fixMinUsdPolicy, setFixMinUsdPolicy] = useState(5)
 
-  /** Binance spot BTC/USDT — reference display only (same feed as dashboard live-market). */
+  /** Canonical BTC/USDT reference (server multi-provider authority). */
   const [btcSpotRef, setBtcSpotRef] = useState<BtcSpotRefState>({ status: "idle" })
 
   useEffect(() => {
@@ -340,15 +330,18 @@ export function ContainerMode({
         return { status: "loading" }
       })
       try {
-        const res = await fetch("/api/binance/live-market", { cache: "no-store" })
+        const res = await fetch("/api/market/btc", { cache: "no-store" })
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean
-          catalog?: unknown
-          source?: string
+          priceUsd?: number
+          change24hPct?: number
+          updatedAt?: number
+          provider?: string
+          stale?: boolean
           error?: string
         }
         if (cancelled) return
-        if (!res.ok || !data.ok) {
+        if (!res.ok || !data.ok || typeof data.priceUsd !== "number") {
           setBtcSpotRef((prev) =>
             prev.status === "live"
               ? prev
@@ -356,19 +349,12 @@ export function ContainerMode({
           )
           return
         }
-        const btc = btcFromLiveMarketCatalog(data.catalog)
-        if (!btc) {
-          setBtcSpotRef((prev) =>
-            prev.status === "live" ? prev : { status: "error", message: "BTC not in catalog" }
-          )
-          return
-        }
         setBtcSpotRef({
           status: "live",
-          priceUsd: btc.price,
-          change24hPct: btc.change24h,
-          updatedAt: Date.now(),
-          source: data.source ?? "binance-spot-usdt",
+          priceUsd: data.priceUsd,
+          change24hPct: data.change24hPct ?? 0,
+          updatedAt: data.updatedAt ?? Date.now(),
+          source: data.provider ? `authority:${data.provider}` : "authority",
         })
       } catch (e) {
         if (!cancelled) {
@@ -1593,19 +1579,11 @@ export function ContainerMode({
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className="relative">
-                            <div
-                              className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                              style={{
-                                backgroundColor:
-                                  trader.riskLevel === "Low"
-                                    ? "#22C55E"
-                                    : trader.riskLevel === "Medium"
-                                      ? "#EAB308"
-                                      : "#EF4444",
-                              }}
-                            >
-                              {trader.avatar}
-                            </div>
+                            <TraderPersonaAvatar
+                              name={trader.name}
+                              initials={trader.avatar}
+                              riskLevel={trader.riskLevel}
+                            />
                             {trade.isTrading && (
                               <span className="absolute -top-1 -right-1 flex h-4 w-4">
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
@@ -1703,12 +1681,11 @@ export function ContainerMode({
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div 
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                            style={{ backgroundColor: trader.riskLevel === "Low" ? "#22C55E" : trader.riskLevel === "Medium" ? "#EAB308" : "#EF4444" }}
-                          >
-                            {trader.avatar}
-                          </div>
+                          <TraderPersonaAvatar
+                            name={trader.name}
+                            initials={trader.avatar}
+                            riskLevel={trader.riskLevel}
+                          />
                           <div>
                             <p className="font-semibold">{trader.name}</p>
                             <div className="flex items-center gap-2">
@@ -1721,7 +1698,7 @@ export function ContainerMode({
                               </span>
                               {trade.fixedPriceFromLiveFeed ? (
                                 <span className="text-[10px] font-normal leading-tight text-emerald-700 dark:text-emerald-800">
-                                  Lock snapshot from Binance spot at open (reference).
+                                  Lock snapshot from live market authority at open (reference).
                                 </span>
                               ) : null}
                             </div>
@@ -1991,12 +1968,12 @@ export function ContainerMode({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <div 
-                          className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white"
-                          style={{ backgroundColor: trader.riskLevel === "Low" ? "#22C55E" : trader.riskLevel === "Medium" ? "#EAB308" : "#EF4444" }}
-                        >
-                          {trader.avatar}
-                        </div>
+                        <TraderPersonaAvatar
+                          name={trader.name}
+                          initials={trader.avatar}
+                          riskLevel={trader.riskLevel}
+                          size="lg"
+                        />
                         {isActive && (
                           <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-success text-white">
                             <CheckCircle2 className="h-3 w-3" />
@@ -2128,12 +2105,12 @@ export function ContainerMode({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <div 
-                          className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white"
-                          style={{ backgroundColor: trader.riskLevel === "Low" ? "#22C55E" : trader.riskLevel === "Medium" ? "#EAB308" : "#EF4444" }}
-                        >
-                          {trader.avatar}
-                        </div>
+                        <TraderPersonaAvatar
+                          name={trader.name}
+                          initials={trader.avatar}
+                          riskLevel={trader.riskLevel}
+                          size="lg"
+                        />
                         {isActive && (
                           <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-warning text-white">
                             <Lock className="h-3 w-3" />
@@ -2240,19 +2217,13 @@ export function ContainerMode({
           <Card className="flex min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden rounded-t-2xl border-border bg-card p-0 shadow-2xl sm:max-h-[min(92dvh,760px)] sm:flex-none sm:rounded-2xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 pb-3 pt-4 sm:px-6 sm:pt-6">
               <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white"
-                  style={{
-                    backgroundColor:
-                      selectedTrader.riskLevel === "Low"
-                        ? "#22C55E"
-                        : selectedTrader.riskLevel === "Medium"
-                          ? "#EAB308"
-                          : "#EF4444",
-                  }}
-                >
-                  {selectedTrader.avatar}
-                </div>
+                <TraderPersonaAvatar
+                  name={selectedTrader.name}
+                  initials={selectedTrader.avatar}
+                  riskLevel={selectedTrader.riskLevel}
+                  size="lg"
+                  className="h-14 w-14 text-lg"
+                />
                 <div className="min-w-0">
                   <h3 id="container-trader-modal-title" className="text-lg font-semibold">
                     {selectedTrader.name}

@@ -15,6 +15,16 @@ function requireAdmin() {
 }
 
 async function fetchTicker24h(symbol: string) {
+  if (symbol === "BTCUSDT") {
+    const { getAuthoritativeBtcQuote } = await import("@/lib/server/market-price-authority")
+    const q = await getAuthoritativeBtcQuote()
+    return {
+      priceChangePercent: String(q.change24hPct),
+      quoteVolume: "0",
+      bidPrice: String(q.priceUsd),
+      askPrice: String(q.priceUsd),
+    }
+  }
   const u = new URL("https://api.binance.com/api/v3/ticker/24hr")
   u.searchParams.set("symbol", symbol)
   const res = await fetch(u.toString(), { cache: "no-store", signal: AbortSignal.timeout(12_000) })
