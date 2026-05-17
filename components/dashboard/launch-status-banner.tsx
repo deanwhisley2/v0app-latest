@@ -11,10 +11,10 @@ export function LaunchStatusBanner() {
   const days = launch.daysRemaining
   const label =
     days > 1
-      ? `Uganda launch · ${days} days left`
+      ? `Launch · ${days}d left · 20% 1st deposit + $0.53 referral`
       : days === 1
-        ? "Uganda launch · final day"
-        : "Uganda launch · active"
+        ? "Launch · final day · 20% 1st deposit + $0.53 referral"
+        : "Launch active · 20% 1st deposit + $0.53 referral"
 
   return (
     <div

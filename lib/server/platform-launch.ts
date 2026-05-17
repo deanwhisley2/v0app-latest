@@ -162,6 +162,33 @@ export function getLaunchReferralFirstDepositRate(
   return defaultRate
 }
 
+export function getLaunchReferrerFlatUsd(
+  programs: LaunchProgramsConfig,
+  defaultUsd: number,
+): number {
+  const v = programs.referrals?.referrer_flat_usd
+  if (typeof v === "number" && v > 0 && v <= 50) return v
+  return defaultUsd
+}
+
+export function getLaunchRefereeFirstDepositRate(
+  programs: LaunchProgramsConfig,
+  defaultRate: number,
+): number {
+  const r = programs.referrals?.referee_first_deposit_rate
+  if (typeof r === "number" && r > 0 && r <= 0.5) return r
+  return defaultRate
+}
+
+export function getLaunchStarterFixPersonaId(programs: LaunchProgramsConfig): string {
+  const id = String(programs.onboarding?.starter_fix_persona_id ?? "").trim()
+  return id.length ? id : "fix_l1_t1"
+}
+
+export function launchPromotionsActive(status: PlatformLaunchPublicStatus): boolean {
+  return Boolean(status.active && status.programs.referrals?.enabled)
+}
+
 export function getLaunchValidRefereeMinFundedUsd(
   programs: LaunchProgramsConfig,
   defaultUsd: number,

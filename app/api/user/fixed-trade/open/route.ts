@@ -14,6 +14,7 @@ import {
   personaUnlocked,
   resolvePersonaId,
 } from "@/lib/server/container-governance"
+import { getLaunchStarterFixPersonaId, getPlatformLaunchStatus, launchPromotionsActive } from "@/lib/server/platform-launch"
 import { buildFixedTradeLifecycleV2 } from "@/lib/server/fixed-trade-lifecycle-v2"
 import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
@@ -139,7 +140,13 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!traderEligibleForFixedTrade(userLevel, riskClass)) {
+    const launch = await getPlatformLaunchStatus()
+    const launchStarterDesk =
+      launchPromotionsActive(launch) &&
+      Boolean(launch.programs.onboarding?.starter_fix_unlock) &&
+      traderPersonaIdRaw === getLaunchStarterFixPersonaId(launch.programs)
+
+    if (!traderEligibleForFixedTrade(userLevel, riskClass, { launchStarterDesk })) {
       return jsonMutationError(
         403,
         "TIER_DESK_NOT_ALLOWED",

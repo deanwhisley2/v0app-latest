@@ -10,8 +10,10 @@ import {
 } from "@/lib/container-policy"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
 import {
+  getLaunchStarterFixPersonaId,
   getLaunchValidRefereeMinFundedUsd,
   getPlatformLaunchStatus,
+  launchPromotionsActive,
 } from "@/lib/server/platform-launch"
 
 export type ContainerPersonaRow = {
@@ -300,12 +302,19 @@ export async function resolvePersonaId(
   )
 }
 
+type LaunchUnlockCtx = {
+  promotionsActive: boolean
+  starterFixUnlock: boolean
+  starterFixPersonaId: string
+}
+
 type UnlockCtx = {
   funding: FundingSnapshot
   referrals: ReferralSnapshot
   bandMax: 1 | 2
   withdrawal: WithdrawalSignal
   tenure: FixTenureSignal
+  launch: LaunchUnlockCtx
 }
 
 export async function buildUnlockContext(
@@ -324,10 +333,29 @@ export async function buildUnlockContext(
   await persistFixBandIfEligible(admin, userId, bandMax)
   const withdrawal = await loadWithdrawalSignals(admin, userId)
   const tenure = await loadFixTenureSignal(admin, userId, tenureParams.minPrincipalUsd, tenureParams.minDaysActive)
-  return { funding, referrals, bandMax, withdrawal, tenure }
+  const launchUnlock: LaunchUnlockCtx = {
+    promotionsActive: launchPromotionsActive(launch),
+    starterFixUnlock: Boolean(launch.active && launch.programs.onboarding?.starter_fix_unlock),
+    starterFixPersonaId: getLaunchStarterFixPersonaId(launch.programs),
+  }
+  return { funding, referrals, bandMax, withdrawal, tenure, launch: launchUnlock }
 }
 
 export function personaUnlocked(persona: ContainerPersonaRow, ctx: UnlockCtx): { ok: boolean; reason?: string } {
+  if (
+    persona.kind === "fix" &&
+    ctx.launch.promotionsActive &&
+    ctx.launch.starterFixUnlock &&
+    persona.id === ctx.launch.starterFixPersonaId
+  ) {
+    return ctx.funding.isAccountFunded
+      ? { ok: true }
+      : {
+          ok: false,
+          reason: "Fund Nexus Main during the launch window to unlock your starter fixed-trade desk.",
+        }
+  }
+
   if (persona.fix_band_required > ctx.bandMax) {
     return { ok: false, reason: "Advance fixed-trade band (Level 2 structures) is not unlocked yet." }
   }

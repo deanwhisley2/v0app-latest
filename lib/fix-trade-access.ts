@@ -2,11 +2,18 @@ export type UserLevelNum = 1 | 2 | 3 | 4 | 5
 
 export type FixTradeRiskLevel = "Low" | "Medium" | "High"
 
+export type FixedTradeEligibilityOpts = {
+  /** Launch-window starter desk (Low risk only). */
+  launchStarterDesk?: boolean
+}
+
 /** Fixed-trade desk: L1 → Low only; L2 → Low + Medium; L3+ → all tiers. */
 export function traderEligibleForFixedTrade(
   userLevel: UserLevelNum | number,
-  riskLevel: FixTradeRiskLevel
+  riskLevel: FixTradeRiskLevel,
+  opts?: FixedTradeEligibilityOpts,
 ): boolean {
+  if (opts?.launchStarterDesk) return riskLevel === "Low"
   const lv = Number(userLevel)
   if (lv <= 1) return riskLevel === "Low"
   if (lv === 2) return riskLevel === "Low" || riskLevel === "Medium"

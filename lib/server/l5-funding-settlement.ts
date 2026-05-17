@@ -4,6 +4,7 @@ import {
   emitTreasuryStreamEvent,
   parseFundRequestIdFromDebitReference,
 } from "@/lib/server/treasury-operation-stream"
+import { applyLaunchFundingPromotions } from "@/lib/server/launch-funding-promotions"
 
 const TABLE_BALANCES = "user_balances"
 
@@ -132,6 +133,10 @@ export async function creditCustomerMainFromTreasuryUsd(
       userId: params.customerUserId,
       payload: { reference_id: params.referenceId, amount_usd: amt },
     })
+  }
+
+  if (!/\:comp:/i.test(params.referenceId)) {
+    await applyLaunchFundingPromotions(admin, params.customerUserId, amt, params.referenceId)
   }
 
   return { treasuryTransactionId: tr.transactionId }

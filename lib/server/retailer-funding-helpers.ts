@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isEnvListedAdminContact } from "@/lib/server/security-authz"
-import { tryCreditReferrerFirstDepositBonus } from "@/lib/server/referral-first-deposit"
+import { applyLaunchFundingPromotions } from "@/lib/server/launch-funding-promotions"
 
 const TABLE_REQUESTS = "retailer_fund_requests"
 const TABLE_BALANCES = "user_balances"
@@ -330,7 +330,12 @@ export async function transferRetailCreditToCustomer(
 
     if (!resErr && resData !== null && resData !== undefined) {
       console.info("[transferRetailCreditToCustomer] rpc with reservation ok", { ...opts, resData })
-      await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
+      await applyLaunchFundingPromotions(
+        sb,
+        opts.customerUserId,
+        amt,
+        opts.requestId ? `fund_req:${opts.requestId}` : "retail_settlement",
+      )
       return
     }
 
@@ -364,7 +369,12 @@ export async function transferRetailCreditToCustomer(
 
   if (!rpcErr && rpcData !== null && rpcData !== undefined) {
     console.info("[transferRetailCreditToCustomer] rpc ok", { ...opts, rpcData })
-    await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
+    await applyLaunchFundingPromotions(
+      sb,
+      opts.customerUserId,
+      amt,
+      opts.requestId ? `fund_req:${opts.requestId}` : "retail_settlement",
+    )
     return
   }
 
@@ -380,7 +390,12 @@ export async function transferRetailCreditToCustomer(
   }
 
   await transferRetailCreditToCustomerLegacy(sb, opts)
-  await tryCreditReferrerFirstDepositBonus(sb, opts.customerUserId, amt)
+  await applyLaunchFundingPromotions(
+    sb,
+    opts.customerUserId,
+    amt,
+    opts.requestId ? `fund_req:${opts.requestId}` : "retail_settlement",
+  )
 }
 
 /** Credit Retail Balance after admin verifies crypto (+ commission). */

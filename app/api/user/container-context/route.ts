@@ -14,7 +14,12 @@ import {
   personaUnlocked,
   type ContainerPersonaRow,
 } from "@/lib/server/container-governance"
-import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
+import {
+  getLaunchStarterFixPersonaId,
+  getPlatformLaunchStatus,
+  launchPromotionsActive,
+} from "@/lib/server/platform-launch"
+import { LAUNCH_REFEREE_FIRST_DEPOSIT_RATE, LAUNCH_REFERRER_FLAT_USD } from "@/lib/platform-launch-config"
 
 function serializePersona(p: ContainerPersonaRow, locked: boolean, lockReason?: string) {
   const strategies = Array.isArray(p.strategies)
@@ -102,7 +107,12 @@ export async function GET(request: Request) {
       launch: {
         active: launch.active,
         endsAt: launch.endsAt,
+        daysRemaining: launch.daysRemaining,
+        promotionsActive: launchPromotionsActive(launch),
         starterFixUnlock: Boolean(launch.programs.onboarding?.starter_fix_unlock),
+        starterFixPersonaId: getLaunchStarterFixPersonaId(launch.programs),
+        referrerFlatUsd: LAUNCH_REFERRER_FLAT_USD,
+        refereeFirstDepositRate: LAUNCH_REFEREE_FIRST_DEPOSIT_RATE,
       },
       traders: {
         copy: copyOut,
