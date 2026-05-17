@@ -3162,6 +3162,7 @@ export default function DashboardPage() {
                 formatUserMoney={formatUserMoney}
                 showBalance={showBalance}
                 onToggleShowBalance={() => setShowBalance((v) => !v)}
+                fullName={currentUser?.fullName}
                 mainBalance={mainBalance}
                 totalEarnings={totalEarnings}
                 containerWithdrawableEarnings={containerWithdrawableEarnings}
@@ -3172,6 +3173,7 @@ export default function DashboardPage() {
                   (sum, ex) => sum + Number(ex.balance ?? 0),
                   0,
                 )}
+                connectedExchangeCount={connectedExchanges.length}
                 isContainerFlowBusy={isContainerFlowBusy}
                 withdrawalEligibility={withdrawalEligibility}
                 onAddFunds={() => {
@@ -3191,6 +3193,10 @@ export default function DashboardPage() {
                 }}
                 onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
                 onExtract={() => void runContainerFlowAction("extract")}
+                onManageExchanges={() => {
+                  setSettingsRequestedView("exchanges")
+                  setActiveTab("settings")
+                }}
               />
             ) : null}
             <div className="flex flex-col gap-4 rounded-2xl bg-[#020308]/80 p-2 ring-1 ring-white/[0.04] lg:flex-row lg:p-3">

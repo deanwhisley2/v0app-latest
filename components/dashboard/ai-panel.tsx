@@ -47,7 +47,7 @@ import { runFullTradingPipeline } from "@/lib/full-trading-pipeline"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { runNexusAssistant } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
-import { detectHumanEscalationIntent } from "@/lib/nexus-assistant/human-escalation"
+import { evaluateAssistantEscalation } from "@/lib/nexus-assistant/escalation-governance"
 import { supabase } from "@/lib/supabaseClient"
 import type { UserLevel } from "./container-mode"
 import { StrategyAnalyzer } from "./strategy-analyzer"
@@ -291,21 +291,28 @@ export function AIPanel({
       precomputedDraft: draft,
     })
     let assistantText = response
-    if (!isGuestSession && detectHumanEscalationIntent(raw)) {
-      const { data: s } = await supabase.auth.getSession()
-      const token = s.session?.access_token
-      if (token) {
-        const esc = await fetch("/api/user/operational-escalation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            body: `Assistant escalation: ${raw}`,
-            category: "assistant_escalation",
-            source: "assistant",
-          }),
-        })
-        if (esc.ok) {
-          assistantText = `${response}\n\nEscalated · Under review. Status: Wallet → Support.`
+    if (!isGuestSession) {
+      const priorUserTurns = chatMessages.filter((m) => m.role === "user").map((m) => m.content)
+      const gov = evaluateAssistantEscalation({ userMessage: raw, priorUserTurns })
+      if (gov.shouldEscalate) {
+        const { data: s } = await supabase.auth.getSession()
+        const token = s.session?.access_token
+        if (token) {
+          const esc = await fetch("/api/user/operational-escalation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              body: `Assistant escalation: ${raw}`,
+              category: gov.suggestedCategory,
+              source: "assistant",
+              priority: gov.immediate ? "high" : "normal",
+            }),
+          })
+          if (esc.ok) {
+            assistantText = gov.immediate
+              ? `${response}\n\nEscalated · Under review. Wallet → Support.`
+              : `${response}\n\nEscalated · Under review.`
+          }
         }
       }
     }

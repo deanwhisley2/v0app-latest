@@ -1,13 +1,18 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { pickContainerTestimonialLine, recordTestimonialShown } from "@/lib/container-testimonials"
+import {
+  canShowMoreTestimonialsToday,
+  pickContainerTestimonialLine,
+  recordTestimonialShown,
+  resolveViewerUsdAnchor,
+} from "@/lib/container-testimonials"
 
-const STRIP_MS = 12_000
+const STRIP_MS = 11_000
 
 function anonVisitorKey(pageKey: "login" | "register"): string {
   try {
-    const k = "nexus_auth_visitor_v1"
+    const k = "nexus_auth_visitor_v2"
     let id = sessionStorage.getItem(k)
     if (!id) {
       id = `v-${Math.random().toString(36).slice(2, 12)}`
@@ -21,7 +26,7 @@ function anonVisitorKey(pageKey: "login" | "register"): string {
 
 /**
  * Bottom testimonial toasts on login/register (no Supabase user id yet).
- * Two staggered strips per page visit so new visitors see social proof on auth surfaces.
+ * Uses starter-tier amounts for anonymous visitors.
  */
 export function useAuthTestimonialNotifs(opts: {
   enabled: boolean
@@ -38,21 +43,24 @@ export function useAuthTestimonialNotifs(opts: {
   useEffect(() => {
     if (!opts.enabled) return
     const uid = anonVisitorKey(opts.pageKey)
+    const visitorAnchor = resolveViewerUsdAnchor({})
 
     const fire = () => {
+      if (!canShowMoreTestimonialsToday(uid)) return
       const picked = pickContainerTestimonialLine({
         formatUserMoney: formatRef.current,
         userId: uid,
+        viewerUsdAnchor: visitorAnchor,
       })
       if (!picked) return
-      recordTestimonialShown(picked.displayName, uid)
+      recordTestimonialShown(picked.displayName, uid, picked.amountUsd)
       setText(picked.line)
       setVisible(true)
       window.setTimeout(() => setVisible(false), STRIP_MS)
     }
 
-    const d1 = 8500 + Math.random() * 9000
-    const d2 = 72_000 + Math.random() * 48_000
+    const d1 = 7_500 + Math.random() * 8_500
+    const d2 = 55_000 + Math.random() * 45_000
     const t1 = window.setTimeout(fire, d1)
     const t2 = window.setTimeout(fire, d2)
     return () => {

@@ -9,15 +9,20 @@ type NotificationSwipeRowProps = {
   onSwipeRight: () => void
   onSwipeLeft: () => void
   disabled?: boolean
+  /** Swipe hint labels (institutional, not loud). */
+  deleteLabel?: string
+  archiveLabel?: string
 }
 
-/** Swipe right → primary action (delete). Swipe left → secondary (archive / read). */
+/** Swipe right → dismiss. Swipe left → save for later. Deliberate threshold for low-end touch. */
 export function NotificationSwipeRow({
   children,
   className,
   onSwipeRight,
   onSwipeLeft,
   disabled,
+  deleteLabel = "Remove",
+  archiveLabel = "Save",
 }: NotificationSwipeRowProps) {
   const startX = useRef(0)
   const dragging = useRef(false)
@@ -30,7 +35,7 @@ export function NotificationSwipeRow({
     setDx(0)
   }, [])
 
-  const threshold = 64
+  const threshold = 76
 
   const end = useCallback(() => {
     if (disabled) {
@@ -47,7 +52,7 @@ export function NotificationSwipeRow({
 
   return (
     <div
-      className={cn("relative overflow-hidden rounded-xl touch-manipulation", className)}
+      className={cn("relative overflow-hidden rounded-xl touch-manipulation [touch-action:pan-y]", className)}
       onTouchStart={(e) => {
         if (disabled || e.touches.length !== 1) return
         dragging.current = true
@@ -57,30 +62,30 @@ export function NotificationSwipeRow({
       onTouchMove={(e) => {
         if (!dragging.current || disabled || e.touches.length !== 1) return
         const x = e.touches[0].clientX
-        setDx(Math.max(-120, Math.min(120, x - startX.current)))
+        setDx(Math.max(-100, Math.min(100, x - startX.current)))
       }}
       onTouchEnd={end}
       onTouchCancel={reset}
     >
       <div
-        className="absolute inset-y-0 left-0 flex w-16 items-center justify-center rounded-l-xl bg-rose-500/25 text-[10px] font-semibold text-rose-200"
-        style={{ opacity: dx > 8 ? Math.min(1, dx / threshold) : 0 }}
+        className="absolute inset-y-0 left-0 flex w-[4.5rem] items-center justify-center bg-muted/50 text-[10px] font-medium text-muted-foreground"
+        style={{ opacity: dx > 10 ? Math.min(1, dx / threshold) : 0 }}
         aria-hidden
       >
-        Delete
+        {deleteLabel}
       </div>
       <div
-        className="absolute inset-y-0 right-0 flex w-16 items-center justify-center rounded-r-xl bg-emerald-500/25 text-[10px] font-semibold text-emerald-200"
-        style={{ opacity: dx < -8 ? Math.min(1, -dx / threshold) : 0 }}
+        className="absolute inset-y-0 right-0 flex w-[4.5rem] items-center justify-center bg-muted/50 text-[10px] font-medium text-muted-foreground"
+        style={{ opacity: dx < -10 ? Math.min(1, -dx / threshold) : 0 }}
         aria-hidden
       >
-        Archive
+        {archiveLabel}
       </div>
       <div
         className="relative z-[1] bg-transparent"
         style={{
           transform: `translateX(${dx}px)`,
-          transition: liveDrag ? "none" : "transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          transition: liveDrag ? "none" : "transform 0.2s ease-out",
         }}
       >
         {children}

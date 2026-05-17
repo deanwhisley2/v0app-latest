@@ -20,19 +20,38 @@ export type OperationalRealtimeConfig = {
   onSupportMessages?: () => void
 }
 
+const DEBOUNCE_MS = 280
+
 /**
  * Supabase Realtime `postgres_changes` — row visibility follows RLS for the current JWT.
+ * Debounces burst events; reconnects on tab focus and channel errors.
  */
 export function useOperationalRealtime(config: OperationalRealtimeConfig): void {
   const cfgRef = useRef(config)
   cfgRef.current = config
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const channelGen = useRef(0)
 
   useEffect(() => {
     const c = cfgRef.current
     if (!c.enabled || !c.userId) return
 
-    const channelName = `operational_${c.role}_${c.userId.slice(0, 8)}`
+    const gen = ++channelGen.current
+    const channelName = `operational_${c.role}_${c.userId.slice(0, 8)}_${gen}`
     const ch = supabase.channel(channelName)
+
+    const fireDebounced = (key: string, fn?: () => void) => {
+      if (!fn) return
+      const existing = debounceTimers.current.get(key)
+      if (existing) clearTimeout(existing)
+      debounceTimers.current.set(
+        key,
+        setTimeout(() => {
+          debounceTimers.current.delete(key)
+          fn()
+        }, DEBOUNCE_MS),
+      )
+    }
 
     const bind = (table: string, fire: () => void, filter?: string) => {
       const opts: {
@@ -42,7 +61,7 @@ export function useOperationalRealtime(config: OperationalRealtimeConfig): void 
         filter?: string
       } = { event: "*", schema: "public", table }
       if (filter) opts.filter = filter
-      ch.on("postgres_changes", opts, () => fire())
+      ch.on("postgres_changes", opts, () => fireDebounced(table + (filter ?? ""), fire))
     }
 
     if (c.role === "admin") {
@@ -80,13 +99,33 @@ export function useOperationalRealtime(config: OperationalRealtimeConfig): void 
       bind("container_balance_events", () => cfgRef.current.onContainerEvents?.())
     }
 
+    const refreshAll = () => {
+      cfgRef.current.onSupportThreads?.()
+      cfgRef.current.onSupportMessages?.()
+      cfgRef.current.onAccountNotifications?.()
+    }
+
     void ch.subscribe((status) => {
       if (status === "CHANNEL_ERROR") {
-        console.warn("[realtime] operational channel error:", channelName)
+        console.warn("[realtime] operational channel error, resubscribing:", channelName)
+        void supabase.removeChannel(ch)
+        channelGen.current += 1
+        refreshAll()
+      }
+      if (status === "SUBSCRIBED") {
+        refreshAll()
       }
     })
 
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshAll()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisibility)
+      for (const t of debounceTimers.current.values()) clearTimeout(t)
+      debounceTimers.current.clear()
       void supabase.removeChannel(ch)
     }
   }, [config.enabled, config.role, config.userId, config.retailerProfileId])

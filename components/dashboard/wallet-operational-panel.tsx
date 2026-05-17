@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeftRight,
   Bookmark,
@@ -860,9 +860,14 @@ export function AdminOperationalAssets({
     }
   }, [])
 
+  const adminQueueRafRef = useRef<number | null>(null)
   const bumpAdminQueues = useCallback(() => {
-    void refreshApproval()
-    void refreshHistory()
+    if (adminQueueRafRef.current != null) return
+    adminQueueRafRef.current = window.requestAnimationFrame(() => {
+      adminQueueRafRef.current = null
+      void refreshApproval()
+      void refreshHistory()
+    })
   }, [refreshApproval, refreshHistory])
 
   useEffect(() => {

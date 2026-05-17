@@ -1,6 +1,23 @@
 "use client"
 
+import type { ComponentType, ReactNode } from "react"
+import {
+  ArrowDownLeft,
+  ArrowRightLeft,
+  Eye,
+  EyeOff,
+  Link2,
+  Lock,
+  Plus,
+  TrendingUp,
+  Wallet,
+} from "lucide-react"
+import { DashboardProfileWelcome } from "@/components/dashboard/dashboard-profile-welcome"
+import { HomeOverviewGuide } from "@/components/dashboard/home-overview-guide"
+import { WalletInfrastructureCard } from "@/components/dashboard/wallet-infrastructure-card"
+import { Button } from "@/components/ui/button"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
+import { cn } from "@/lib/utils"
 
 export type WithdrawalEligibilityHint = {
   minUsd: number
@@ -14,6 +31,7 @@ type RetailBalanceHomePanelsProps = {
   formatUserMoney: (usd: number) => string
   showBalance: boolean
   onToggleShowBalance: () => void
+  fullName?: string | null
   mainBalance: number
   totalEarnings: number
   containerWithdrawableEarnings: number
@@ -21,19 +39,68 @@ type RetailBalanceHomePanelsProps = {
   activeContainerEarnings: number
   containerFeesPaid: number
   connectedExchangeTotalUsd: number
+  connectedExchangeCount?: number
   isContainerFlowBusy: boolean
   withdrawalEligibility: WithdrawalEligibilityHint | null
   onAddFunds: () => void
   onWithdraw: () => void
   onTransferToMain: () => void
   onExtract: () => void
+  onManageExchanges?: () => void
 }
+
+const cardShell = "rounded-2xl border border-border/90 bg-card/95 shadow-sm"
+
+function MetricCard({
+  label,
+  value,
+  hint,
+  children,
+  className,
+  icon: Icon,
+  iconClassName,
+}: {
+  label: string
+  value: string
+  hint?: string
+  children?: ReactNode
+  className?: string
+  icon: ComponentType<{ className?: string }>
+  iconClassName?: string
+}) {
+  return (
+    <div className={cn(cardShell, "p-3.5 sm:p-4", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-2 font-mono text-lg font-bold tabular-nums leading-none text-foreground sm:text-xl">
+            {value}
+          </p>
+          {hint ? <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{hint}</p> : null}
+        </div>
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background/60 ring-1 ring-border/60",
+            iconClassName
+          )}
+        >
+          <Icon className="h-4 w-4" aria-hidden />
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+const ctaClass =
+  "min-h-12 flex-1 basis-[calc(50%-0.25rem)] font-semibold transition-colors active:scale-[0.99] sm:min-h-11 sm:basis-auto sm:flex-initial"
 
 export function RetailBalanceHomePanels({
   t,
   formatUserMoney,
   showBalance,
   onToggleShowBalance,
+  fullName,
   mainBalance,
   totalEarnings,
   containerWithdrawableEarnings,
@@ -41,188 +108,177 @@ export function RetailBalanceHomePanels({
   activeContainerEarnings,
   containerFeesPaid,
   connectedExchangeTotalUsd,
+  connectedExchangeCount = 0,
   isContainerFlowBusy,
   withdrawalEligibility,
   onAddFunds,
   onWithdraw,
   onTransferToMain,
   onExtract,
+  onManageExchanges,
 }: RetailBalanceHomePanelsProps) {
+  const masked = "••••••••"
+  const mainDisplay = showBalance ? formatUserMoney(mainBalance) : masked
+
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={onAddFunds}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90 sm:w-auto"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {t("funding.button.addFunds")}
-            </button>
-            <button
-              type="button"
-              onClick={onWithdraw}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 sm:w-auto"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4l-8 8 8 8" />
-              </svg>
-              {t("funding.button.withdraw")}
-            </button>
-          </div>
-          <div className="flex min-w-0 items-start gap-4">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10"
-              aria-hidden
-            >
-              <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                />
-              </svg>
+    <div className="space-y-4 pb-1">
+      <DashboardProfileWelcome fullName={fullName} t={t} />
+
+      <HomeOverviewGuide t={t} />
+
+      {/* Nexus Main hero — balance first, then equal CTAs */}
+      <section className={cn(cardShell, "overflow-hidden")}>
+        <div className="border-b border-border/60 bg-gradient-to-br from-muted/25 via-card to-primary/[0.04] px-4 py-3.5 sm:px-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+              <Wallet className="h-5 w-5 text-primary" aria-hidden />
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm text-muted-foreground">Available balance</p>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  Bot earnings (total): {showBalance ? formatUserMoney(totalEarnings) : "••••"}
-                </span>
-                <button
-                  type="button"
-                  onClick={onToggleShowBalance}
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  title={showBalance ? "Hide balance" : "Show balance"}
-                >
-                  {showBalance ? (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                      />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p className="mt-1 break-words font-mono text-2xl font-bold leading-tight text-foreground sm:text-3xl">
-                {showBalance ? formatUserMoney(mainBalance) : "••••••••"}
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {t("funding.balance.mainTitle")}
               </p>
+              <p className="text-xs leading-snug text-muted-foreground">{t("funding.balance.mainHint")}</p>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="rounded-xl border border-success/35 bg-success/10 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="px-4 py-5 sm:px-5 sm:py-6">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-sm font-medium text-muted-foreground">{t("home.overview.availableLabel")}</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/30 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <TrendingUp className="h-3 w-3 text-primary/80" aria-hidden />
+              {t("home.overview.earningsBadge")}: {showBalance ? formatUserMoney(totalEarnings) : "••••"}
+            </span>
+            <button
+              type="button"
+              onClick={onToggleShowBalance}
+              className="ms-auto inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              title={showBalance ? "Hide balance" : "Show balance"}
+              aria-label={showBalance ? "Hide balance" : "Show balance"}
+            >
+              {showBalance ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <p className="mt-3 break-all font-mono text-[clamp(1.75rem,7vw,2.25rem)] font-bold leading-tight tabular-nums tracking-tight text-foreground">
+            {mainDisplay}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-t border-border/60 bg-muted/10 px-4 py-3.5 sm:px-5">
+          <Button type="button" size="lg" className={ctaClass} onClick={onAddFunds}>
+            <Plus className="h-4 w-4 shrink-0" aria-hidden />
+            {t("funding.button.addFunds")}
+          </Button>
+          <Button type="button" size="lg" variant="outline" className={ctaClass} onClick={onWithdraw}>
+            <ArrowDownLeft className="h-4 w-4 shrink-0" aria-hidden />
+            {t("funding.button.withdraw")}
+          </Button>
+        </div>
+      </section>
+
+      {/* Pocket balance */}
+      <section
+        className={cn(
+          cardShell,
+          "border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.07] via-card to-card p-4 sm:p-5"
+        )}
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700/90 dark:text-emerald-400/90">
               {t("funding.balance.liquidTitle")}
             </p>
-            <p className="mt-1 font-mono text-2xl font-bold text-foreground">
-              {showBalance ? formatUserMoney(containerWithdrawableEarnings) : "••••"}
+            <p className="mt-2 font-mono text-2xl font-bold tabular-nums leading-none text-foreground sm:text-3xl">
+              {showBalance ? formatUserMoney(containerWithdrawableEarnings) : masked}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">{t("funding.balance.pocketHint")}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t("funding.balance.pocketHint")}</p>
           </div>
-          <button
+          <Button
             type="button"
+            size="lg"
+            className="min-h-12 w-full shrink-0 bg-emerald-700 font-semibold hover:bg-emerald-700/90 dark:bg-emerald-600 dark:hover:bg-emerald-600/90 sm:min-w-[12rem]"
             onClick={onTransferToMain}
             disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
-            className="w-full shrink-0 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
           >
+            <ArrowRightLeft className="h-4 w-4 shrink-0" aria-hidden />
             {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
-          </button>
+          </Button>
         </div>
-      </div>
+      </section>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("withdrawal.card.frozenTitle")}</p>
-          <p className="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-400">
-            {showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
-          </p>
-          <p className="text-[11px] text-muted-foreground">{t("withdrawal.card.frozenBody")}</p>
-        </div>
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {t("funding.balance.activeEarningsTitle")}
-          </p>
-          <p className="mt-1 font-mono text-lg font-bold">
-            {showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
-          </p>
-          <button
+      <WalletInfrastructureCard
+        t={t}
+        connectedCount={connectedExchangeCount}
+        onManageConnections={onManageExchanges}
+      />
+
+      {/* Metrics */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <MetricCard
+          label={t("withdrawal.card.frozenTitle")}
+          value={showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
+          hint={t("withdrawal.card.frozenBody")}
+          icon={Lock}
+          iconClassName="text-amber-700/90 dark:text-amber-400"
+          className="border-amber-500/20 bg-amber-500/[0.04] sm:col-span-1"
+        />
+        <MetricCard
+          label={t("funding.balance.activeEarningsTitle")}
+          value={showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
+          icon={TrendingUp}
+          iconClassName="text-primary"
+          className="border-primary/20 bg-primary/[0.04]"
+        >
+          <Button
             type="button"
+            size="sm"
+            className="mt-3 min-h-11 w-full font-semibold"
             onClick={onExtract}
             disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
-            className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
           >
             {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.extractCta")}
-          </button>
-        </div>
-        <div className="rounded-xl border border-border bg-background/60 p-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("funding.balance.exchangeTitle")}</p>
-          <p className="mt-1 font-mono text-lg font-bold">
-            {showBalance ? formatUserMoney(connectedExchangeTotalUsd) : "••••"}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {t("funding.balance.exchangeHint").replace(
-              "{{fees}}",
-              showBalance ? formatUserMoney(containerFeesPaid) : "••••",
-            )}
-          </p>
-        </div>
+          </Button>
+        </MetricCard>
+        <MetricCard
+          label={t("funding.balance.exchangeTitle")}
+          value={showBalance ? formatUserMoney(connectedExchangeTotalUsd) : "••••"}
+          hint={t("funding.balance.exchangeHint").replace(
+            "{{fees}}",
+            showBalance ? formatUserMoney(containerFeesPaid) : "••••"
+          )}
+          icon={Link2}
+          iconClassName="text-muted-foreground"
+          className="bg-muted/15 sm:col-span-2 lg:col-span-1"
+        />
       </div>
 
       {withdrawalEligibility ? (
-        <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px] leading-snug text-muted-foreground">
+        <div className={cn(cardShell, "border-primary/15 bg-primary/[0.04] px-4 py-3.5 text-sm leading-relaxed text-muted-foreground")}>
           <p className="font-medium text-foreground">{t("withdrawal.modal.ruleOnce")}</p>
-          <p className="mt-1">
-            {t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))}
-          </p>
-          <p className="mt-0.5">
-            {t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}
-          </p>
-          {withdrawalEligibility.cooldownActive ? (
-            <p className="mt-1 text-foreground">
-              {t("withdrawal.modal.waitHours").replace(
-                "{{hours}}",
-                String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
-              )}
-            </p>
-          ) : (
-            <p className="mt-1 text-success">{t("withdrawal.modal.readyNow")}</p>
-          )}
+          <ul className="mt-2 space-y-1.5 text-[13px]">
+            <li>{t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))}</li>
+            <li>{t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}</li>
+            <li
+              className={
+                withdrawalEligibility.cooldownActive ? "text-foreground" : "text-emerald-700 dark:text-emerald-400"
+              }
+            >
+              {withdrawalEligibility.cooldownActive
+                ? t("withdrawal.modal.waitHours").replace(
+                    "{{hours}}",
+                    String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000)))
+                  )
+                : t("withdrawal.modal.readyNow")}
+            </li>
+          </ul>
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+      <div className={cn(cardShell, "bg-muted/20 px-4 py-3.5 text-[12px] leading-relaxed text-muted-foreground")}>
         <p>
           <span className="font-medium text-foreground">{t("deposit.timingLabel")}</span> {PROCESSING_COPY.deposits}
         </p>
-        <p className="mt-1">
+        <p className="mt-2">
           <span className="font-medium text-foreground">{t("withdrawal.timingLabel")}</span>{" "}
           {PROCESSING_COPY.withdrawals}
         </p>

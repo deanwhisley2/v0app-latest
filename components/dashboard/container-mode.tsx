@@ -1485,26 +1485,37 @@ export function ContainerMode({
       {activeTab === "dashboard" && (
         <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {/* Balance Overview */}
-          <Card className="border-border bg-gradient-to-br from-card to-primary/5 p-6">
-            <h3 className="mb-4 text-lg font-semibold">Container Balance</h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-xl bg-background/50 p-4 text-center">
-                <p className="text-sm text-muted-foreground">Total crypto allocation</p>
-                <p className="mt-1 font-mono text-2xl font-bold">{formatUserMoney(totalCryptoAllocationUsd)}</p>
+          <Card className="overflow-hidden border-border/90 bg-gradient-to-br from-card via-card to-primary/[0.06] p-0">
+            <div className="border-b border-border/60 px-5 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Container desk</p>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight">Balance overview</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Allocation, earnings, and open sessions — ledger-normalized display.
+              </p>
+            </div>
+            <div className="grid gap-px bg-border/50 sm:grid-cols-3">
+              <div className="bg-card p-4 sm:p-5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total allocation</p>
+                <p className="mt-2 font-mono text-2xl font-bold tabular-nums">{formatUserMoney(totalCryptoAllocationUsd)}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Crypto committed to strategies</p>
               </div>
-              <div className="rounded-xl bg-success/10 p-4 text-center">
-                <p className="text-sm text-muted-foreground">Total earnings so far</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/90">
-                  Projected session accruals + realized container liquid (separate buckets)
+              <div className="bg-card p-4 sm:p-5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Earnings (display)</p>
+                <p className="mt-2 font-mono text-2xl font-bold tabular-nums text-success">
+                  +{formatUserMoney(totalEarnedDisplayUsd)}
                 </p>
-                <p className="mt-1 font-mono text-2xl font-bold text-success">+{formatUserMoney(totalEarnedDisplayUsd)}</p>
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                  Session accruals + realized liquid (separate buckets)
+                </p>
               </div>
-              <div className="rounded-xl bg-primary/10 p-4 text-center">
-                <p className="text-sm text-muted-foreground">Active Trades</p>
-                <p className="mt-1 font-mono text-2xl font-bold text-primary">
+              <div className="bg-card p-4 sm:p-5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Active trades</p>
+                <p className="mt-2 font-mono text-2xl font-bold tabular-nums text-primary">
                   {activeCopyTrades.length + activeFixTrades.length}
                 </p>
-                <p className="text-xs text-muted-foreground">{activeCopyTrades.length} copy, {activeFixTrades.length} fixed</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {activeCopyTrades.length} copy · {activeFixTrades.length} fixed
+                </p>
               </div>
             </div>
           </Card>

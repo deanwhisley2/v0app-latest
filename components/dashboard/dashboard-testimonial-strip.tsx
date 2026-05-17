@@ -15,7 +15,7 @@ export function DashboardTestimonialStrip({ visible, text, onDismiss, subtitle =
   if (!visible || !text) return null
 
   return (
-    <div className="pointer-events-none fixed bottom-28 left-4 right-4 z-[55] max-w-[min(22rem,calc(100%-2rem))] animate-in slide-in-from-left duration-300 md:bottom-24 md:right-auto">
+    <div className="pointer-events-none fixed bottom-[7.25rem] left-4 right-4 z-[45] max-w-[min(22rem,calc(100%-2rem))] animate-in slide-in-from-left duration-300 md:bottom-24 md:right-auto">
       <div className="pointer-events-auto flex items-start gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3 shadow-lg">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20">
           <MessageSquare className="h-4 w-4 text-primary" />

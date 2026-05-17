@@ -1,19 +1,25 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Fingerprint, Loader2 } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
+import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
+import { markFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
+import { getAuthMessages } from "@/lib/i18n/auth-messages"
+const REMEMBER_KEY = "nexus_auth_remember_id"
 
 const LOGIN_JOELIN_CHIPS = [
   { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
@@ -25,10 +31,14 @@ const LOGIN_JOELIN_CHIPS = [
   { label: "Forgot password flow", prompt: "How does password recovery work if I lose access?" },
 ]
 
+const inputClass =
+  "min-h-12 text-base sm:text-sm touch-manipulation"
+
 export default function LoginPage() {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
-  const { formatUserMoney } = useUserPreferences()
+  const { language, formatUserMoney } = useUserPreferences()
+  const t = getAuthMessages(language)
   const testimonialNotif = useAuthTestimonialNotifs({
     enabled: true,
     pageKey: "login",
@@ -36,14 +46,25 @@ export default function LoginPage() {
   })
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
   const resetSuccess =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("reset") === "success"
 
   const sessionCleared =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("reason") === "session_cleared"
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(REMEMBER_KEY)
+      if (saved) setIdentifier(saved)
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const goGuestDashboard = useCallback(() => {
     try {
@@ -111,6 +132,13 @@ export default function LoginPage() {
         return
       }
 
+      try {
+        if (rememberMe) localStorage.setItem(REMEMBER_KEY, rawIdentifier)
+        else localStorage.removeItem(REMEMBER_KEY)
+      } catch {
+        /* ignore */
+      }
+
       const { data: profile, error: profileErr } = await supabase
         .from("profiles")
         .select("is_verified")
@@ -127,6 +155,7 @@ export default function LoginPage() {
         return
       }
 
+      markFreshLoginLanding()
       router.replace("/dashboard")
       router.refresh()
     } catch (err) {
@@ -151,37 +180,44 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 pb-28 sm:pb-24">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl">
-        <div className="text-center">
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">Sign in</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Use your email, username, or phone and password.</p>
-          {isDevLocalOnly() ? (
-            <p className="mt-3 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200">
-              <strong>Local dev mode:</strong> Supabase is off. <strong>Sign in</strong> skips password and opens the guest
-              dashboard. Remove <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY</code> when you are
-              ready for real auth.
-            </p>
-          ) : null}
-        </div>
+    <>
+      <AuthLayoutShell language={language} showBrand={false} showTrustStrip={false}>
+        <header className="mb-6 text-center">
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{t.login.welcomeBack}</h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t.login.subtitle}</p>
+        </header>
 
-        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+        {isDevLocalOnly() ? (
+          <p className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2.5 text-xs text-cyan-100">
+            <strong>Local dev:</strong> Sign in opens guest dashboard. Disable{" "}
+            <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY</code> for real auth.
+          </p>
+        ) : null}
+
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">
-            <Label htmlFor="login-identifier">Email, username, or phone</Label>
+            <Label htmlFor="login-identifier" className="text-sm font-medium">
+              {t.login.identifier}
+            </Label>
             <Input
               id="login-identifier"
               type="text"
               autoComplete="username"
+              inputMode="email"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="you@example.com / username / +2567..."
+              placeholder={t.login.identifierPlaceholder}
               required
               disabled={isSubmitting}
+              className={inputClass}
               aria-invalid={!!error}
             />
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="login-password">Password</Label>
+            <Label htmlFor="login-password" className="text-sm font-medium">
+              {t.login.password}
+            </Label>
             <Input
               id="login-password"
               type="password"
@@ -190,74 +226,99 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isSubmitting}
+              className={inputClass}
               aria-invalid={!!error}
             />
-            <div className="text-right">
-              <button
-                type="button"
-                className="text-xs text-primary underline-offset-4 hover:underline disabled:opacity-50"
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+              <Checkbox
+                checked={rememberMe}
+                onCheckedChange={(v) => setRememberMe(v === true)}
                 disabled={isSubmitting}
-                onClick={() => router.push("/auth/recovery")}
-              >
-                Forgot password?
-              </button>
-            </div>
+              />
+              {t.login.rememberMe}
+            </label>
+            <Link
+              href="/auth/recovery"
+              className="inline-flex min-h-[44px] items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t.login.forgotPassword}
+            </Link>
           </div>
 
           {sessionCleared ? (
-            <p className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100" role="status">
-              Your browser session was reset because the cookies were too large to load safely (often after a large security
-              selfie). Sign in again — your account data is intact.
+            <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-100" role="status">
+              Session reset — sign in again. Your account data is intact.
             </p>
           ) : null}
-
           {resetSuccess ? (
-            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
-              Password updated successfully. Sign in with your new password.
+            <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-300" role="status">
+              Password updated. Sign in with your new password.
             </p>
           ) : null}
-
           {info ? (
-            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
+            <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-300" role="status">
               {info}
             </p>
           ) : null}
-
           {error ? (
-            <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+            <p className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive" role="alert">
               {error}
             </p>
           ) : null}
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in…" : "Sign in"}
+          <Button type="submit" className="min-h-12 w-full text-base font-semibold" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden />
+                {t.login.signingIn}
+              </>
+            ) : (
+              t.login.accessDashboard
+            )}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 w-full gap-2 text-sm"
+            disabled
+            title="Biometric sign-in will be enabled in a future release"
+          >
+            <Fingerprint className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+            {t.login.biometricSoon}
           </Button>
         </form>
 
         {isGuestLoginEnabled() ? (
-          <div className="space-y-2">
-            <div className="relative py-2 text-center text-xs text-muted-foreground">
-              <span className="bg-card px-2">or</span>
-              <div className="absolute inset-x-0 top-1/2 -z-10 h-px bg-border" aria-hidden />
-            </div>
-            <Button type="button" variant="secondary" className="w-full" disabled={isSubmitting} onClick={() => goGuestDashboard()}>
-              Continue without email or password
+          <div className="mt-6 space-y-2 border-t border-border pt-6">
+            <p className="text-center text-xs text-muted-foreground">{t.login.orDivider}</p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-12 w-full"
+              disabled={isSubmitting}
+              onClick={() => goGuestDashboard()}
+            >
+              {t.login.guestContinue}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">Local guest session only — not a registered account.</p>
+            <p className="text-center text-xs text-muted-foreground">{t.login.guestHint}</p>
           </div>
         ) : null}
 
-        <p className="text-center text-sm text-muted-foreground">
-          No account?{" "}
-          <Link href="/auth/register" className="font-medium text-primary underline-offset-4 hover:underline">
-            Register
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          {t.login.noAccount}{" "}
+          <Link href="/auth/register" className="font-semibold text-primary underline-offset-4 hover:underline">
+            {t.login.register}
           </Link>
           {" · "}
           <Link href="/" className="underline-offset-4 hover:underline">
-            Home
+            {t.login.home}
           </Link>
         </p>
-      </div>
+      </AuthLayoutShell>
 
       <AuthAssistantPanel
         scope="login"
@@ -277,6 +338,6 @@ export default function LoginPage() {
         onDismiss={testimonialNotif.dismiss}
         subtitle="Community"
       />
-    </div>
+    </>
   )
 }

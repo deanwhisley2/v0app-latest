@@ -1,64 +1,37 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Bell, Compass, Gift, Info, Landmark, Shield, TrendingUp, Zap, Trash2 } from "lucide-react"
+import { ArrowLeft, Bell } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
-import { Card } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { useNexusNotifications, type NexusNotificationItem } from "@/contexts/NexusNotificationsContext"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import {
+  INBOX_CARD,
+  NotificationDetailSheet,
+  NotificationInboxEmpty,
+  NotificationInboxFilters,
+  NotificationInboxRow,
+  type InboxFilter,
+} from "@/components/dashboard/notification-inbox-ui"
+import { filterInboxNotifications, usePresentedNotifications } from "@/hooks/use-presented-notifications"
+import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
-
-const PENDING_KEY = "nexus_pending_nav"
-
-const icon = (type: NexusNotificationType) => {
-  switch (type) {
-    case "price":
-      return <TrendingUp className="h-4 w-4 text-success" />
-    case "trade":
-      return <Zap className="h-4 w-4 text-primary" />
-    case "security":
-      return <Shield className="h-4 w-4 text-warning" />
-    case "promo":
-      return <Gift className="h-4 w-4 text-accent" />
-    case "system":
-      return <Info className="h-4 w-4 text-muted-foreground" />
-    case "analysis":
-      return <Compass className="h-4 w-4 text-cyan-400" />
-    case "financial":
-      return <Landmark className="h-4 w-4 text-emerald-400" />
-  }
-}
-
-const border = (type: NexusNotificationType) => {
-  switch (type) {
-    case "price":
-      return "border-l-success"
-    case "trade":
-      return "border-l-primary"
-    case "security":
-      return "border-l-warning"
-    case "promo":
-      return "border-l-accent"
-    case "system":
-      return "border-l-muted-foreground"
-    case "analysis":
-      return "border-l-cyan-400"
-    case "financial":
-      return "border-l-emerald-400"
-  }
-}
-
-function formatWhen(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-}
+import { storeUserInitiatedPendingNav } from "@/lib/dashboard-navigation-policy"
+import { Button } from "@/components/ui/button"
 
 export default function NotificationsHistoryPage() {
   const router = useRouter()
+  const { t } = useUserPreferences()
   const { user, isLoading: authLoading, isGuestSession } = useAuth()
   const { inbox, history, markRead, deleteFromHistory, clearHistory } = useNexusNotifications()
+
+  const [filter, setFilter] = useState<InboxFilter>("all")
+  const [search, setSearch] = useState("")
+  const deferredSearch = useDeferredValue(search)
+  const [selected, setSelected] = useState<NexusNotificationItem | null>(null)
+  const [listLimit, setListLimit] = useState(80)
 
   useEffect(() => {
     if (isGuestSession) return
@@ -67,133 +40,150 @@ export default function NotificationsHistoryPage() {
     }
   }, [authLoading, user, isGuestSession, router])
 
-  const [listLimit, setListLimit] = useState(100)
-
   const merged = useMemo(() => {
     const map = new Map<string, NexusNotificationItem>()
     for (const n of [...inbox, ...history]) map.set(n.id, n)
     return [...map.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
   }, [inbox, history])
 
-  const visibleMerged = useMemo(() => merged.slice(0, listLimit), [merged, listLimit])
+  const presentedMap = usePresentedNotifications(merged, t)
 
-  const openLinked = (n: NexusNotificationItem) => {
-    markRead(n.id)
-    if (!n.nav || n.nav.kind === "detail") return
-    try {
-      sessionStorage.setItem(PENDING_KEY, JSON.stringify(n.nav as NexusNotificationNav))
-    } catch {
-      /* ignore */
-    }
-    router.push("/dashboard")
-  }
+  const filtered = useMemo(
+    () => filterInboxNotifications(merged, filter, deferredSearch, presentedMap),
+    [merged, filter, deferredSearch, presentedMap]
+  )
+
+  const visible = useMemo(() => filtered.slice(0, listLimit), [filtered, listLimit])
+
+  const openItem = useCallback(
+    (n: NexusNotificationItem) => {
+      setSelected(n)
+      markRead(n.id)
+    },
+    [markRead]
+  )
+
+  const openLinked = useCallback(
+    (n: NexusNotificationItem) => {
+      if (!n.nav || n.nav.kind === "detail") return
+      storeUserInitiatedPendingNav(n.nav as NexusNotificationNav)
+      router.push("/dashboard")
+    },
+    [router]
+  )
+
+  const closeDetail = useCallback(() => setSelected(null), [])
+  const selectedPresented = selected ? presentNotification(selected, t) : null
 
   if (authLoading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="min-h-[100dvh] bg-background pb-8">
+      <div className="mx-auto w-full max-w-lg px-4 py-6 md:max-w-2xl">
         <Link
           href="/dashboard"
-          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+          className="mb-5 inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to dashboard
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+          {t("notifications.history.back")}
         </Link>
 
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
-            <Bell className="h-6 w-6 text-primary" />
+        <header className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+              <Bell className="h-5 w-5 text-primary" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">{t("notifications.history.title")}</h1>
+              <p className="text-sm text-muted-foreground">
+                {t("notifications.history.subtitle")} · {merged.length}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Notification history</h1>
-            <p className="text-sm text-muted-foreground">
-              Inbox and archived items on this device ({merged.length} total
-              {merged.length > visibleMerged.length ? `, showing ${visibleMerged.length}` : ""})
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={clearHistory}
-            className="ml-auto inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Clear history
-          </button>
-        </div>
+          {merged.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-10 shrink-0 text-xs"
+              onClick={clearHistory}
+            >
+              {t("notifications.history.clear")}
+            </Button>
+          ) : null}
+        </header>
 
-        <Card className="divide-y divide-border border-border">
-          {merged.length === 0 ? (
-            <div className="p-12 text-center text-sm text-muted-foreground">No notifications yet.</div>
+        <NotificationInboxFilters
+          filter={filter}
+          onFilterChange={setFilter}
+          search={search}
+          onSearchChange={setSearch}
+          searchPending={search !== deferredSearch}
+          t={t}
+          className="mb-4"
+        />
+
+        <section className={`${INBOX_CARD} overflow-hidden`}>
+          {visible.length === 0 ? (
+            <NotificationInboxEmpty
+              message={
+                deferredSearch.trim() || filter !== "all"
+                  ? t("notifications.inbox.searchEmpty")
+                  : t("notifications.center.empty")
+              }
+              hint={deferredSearch.trim() ? t("notifications.inbox.searchEmptyHint") : undefined}
+            />
           ) : (
-            <>
-              {visibleMerged.map((n) => (
-              <div
-                key={n.id}
-                className={cn(
-                  "flex w-full gap-3 border-l-4 p-4 text-left transition-colors hover:bg-muted/40 [content-visibility:auto] [contain-intrinsic-size:120px_1px]",
-                  border(n.type),
-                  !n.read && "bg-primary/[0.04]"
-                )}
-              >
-                <button
-                  type="button"
-                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted"
-                  onClick={() => {
-                    if (n.nav && n.nav.kind !== "detail") openLinked(n)
-                    else markRead(n.id)
-                  }}
-                >
-                  {icon(n.type)}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (n.nav && n.nav.kind !== "detail") openLinked(n)
-                      else markRead(n.id)
-                    }}
-                    className="text-left"
-                  >
-                    <p className="font-semibold text-foreground">{n.title}</p>
-                  </button>
-                  <p className="mt-1 text-sm text-muted-foreground">{n.message}</p>
-                  <p className="mt-2 text-xs text-muted-foreground/80">{formatWhen(n.timestamp)}</p>
-                  {n.nav && n.nav.kind !== "detail" && (
-                    <p className="mt-1 text-xs font-medium text-primary">Tap to open linked screen</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => deleteFromHistory(n.id)}
-                  className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted"
-                  aria-label="Delete notification"
-                >
-                  <Trash2 className="mx-auto h-4 w-4" />
-                </button>
-              </div>
-            ))}
-              {merged.length > visibleMerged.length ? (
-                <div className="p-4 text-center">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-primary hover:bg-muted/50"
-                    onClick={() => setListLimit((x: number) => x + 100)}
-                  >
-                    Load more ({merged.length - visibleMerged.length} remaining)
-                  </button>
-                </div>
-              ) : null}
-            </>
+            <ul className="divide-y divide-border/50">
+              {visible.map((n) => {
+                const p = presentedMap.get(n.id)!
+                return (
+                  <li key={n.id} className="[content-visibility:auto] [contain-intrinsic-size:80px_1px]">
+                    <NotificationInboxRow item={n} presented={p} onOpen={() => openItem(n)} />
+                  </li>
+                )
+              })}
+            </ul>
           )}
-        </Card>
+          {filtered.length > visible.length ? (
+            <div className="border-t border-border/50 p-3 text-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11"
+                onClick={() => setListLimit((x) => x + 80)}
+              >
+                {t("notifications.inbox.loadMore").replace("{{n}}", String(filtered.length - visible.length))}
+              </Button>
+            </div>
+          ) : null}
+        </section>
       </div>
+
+      {selected && selectedPresented ? (
+        <NotificationDetailSheet
+          item={selected}
+          presented={selectedPresented}
+          t={t}
+          onClose={closeDetail}
+          showArchive={false}
+          onArchive={() => {}}
+          onDelete={() => {
+            deleteFromHistory(selected.id)
+            closeDetail()
+          }}
+          onOpenLinked={
+            selected.nav && selected.nav.kind !== "detail" ? () => openLinked(selected) : undefined
+          }
+        />
+      ) : null}
     </div>
   )
 }

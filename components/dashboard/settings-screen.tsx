@@ -43,6 +43,7 @@ import type { FiatCurrencyCode } from "@/lib/currency-display"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
+import { AboutCompanyPanel } from "@/components/dashboard/about-company-panel"
 
 type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
 type WhitelistItem = {
@@ -1151,49 +1152,7 @@ export function SettingsScreen({
     return (
       <div className="space-y-4">
         {renderBackButton()}
-        <Card className="overflow-hidden border-border bg-card p-0">
-          <div className="border-b border-border bg-gradient-to-br from-primary/10 to-accent/5 px-6 py-8 text-center">
-            <img
-              src="/logo.jpg"
-              alt="Nexus Pro"
-              className="mx-auto h-20 w-20 rounded-2xl shadow-lg shadow-primary/20"
-            />
-            <h3 className="mt-4 text-2xl font-black text-primary">NEXUS PRO</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Version 2.4.1</p>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Trading intelligence, container earnings, and secure funding — built for clarity.
-            </p>
-          </div>
-          <div className="space-y-1 p-4">
-            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
-              <a href="/legal/terms">
-                Terms of Service
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </a>
-            </Button>
-            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
-              <a href="/legal/privacy">
-                Privacy Policy
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </a>
-            </Button>
-            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
-              <a href="mailto:esknexuspro@gmail.com?subject=Nexus%20PRO%20Support">
-                Contact Support
-                <ExternalLink className="h-4 w-4 text-muted-foreground" />
-              </a>
-            </Button>
-            <Button variant="ghost" className="h-12 w-full justify-between px-4" asChild>
-              <a href="https://nexuspro.it.com" target="_blank" rel="noopener noreferrer">
-                nexuspro.it.com
-                <ExternalLink className="h-4 w-4 text-muted-foreground" />
-              </a>
-            </Button>
-          </div>
-          <p className="border-t border-border px-6 py-4 text-center text-[11px] text-muted-foreground">
-            © {new Date().getFullYear()} NEXUS CRYPTO INTELLIGENCE. All rights reserved.
-          </p>
-        </Card>
+        <AboutCompanyPanel />
       </div>
     )
   }

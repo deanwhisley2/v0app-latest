@@ -48,6 +48,11 @@ export async function POST(request: Request) {
       "assistant_escalation",
       "transaction_review",
       "operational_complaint",
+      "payout_dispute",
+      "stuck_trade",
+      "settlement_failure",
+      "locked_balance",
+      "verification_complaint",
     ] as const
     const category = (allowed as readonly string[]).includes(catRaw) ? catRaw : "general"
 
@@ -55,7 +60,9 @@ export async function POST(request: Request) {
     const linked_kind =
       lk === "retailer_fund_request" ||
       lk === "withdrawal_request" ||
-      lk === "crypto_deposit_request"
+      lk === "crypto_deposit_request" ||
+      lk === "trade_session" ||
+      lk === "copy_trade_session"
         ? lk
         : null
     const linked_id =

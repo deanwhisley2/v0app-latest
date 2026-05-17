@@ -27,7 +27,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
 import { NotificationSwipeRow } from "./notification-swipe-row"
+import { formatNotificationTimeAgo, presentNotification } from "@/lib/notifications/notification-inbox-presenter"
+import { NotificationInboxEmpty, NotificationInboxRow } from "@/components/dashboard/notification-inbox-ui"
 import { cn } from "@/lib/utils"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 
 interface NotificationPanelProps {
   isOpen: boolean
@@ -72,18 +75,7 @@ const getTypeColor = (type: NexusNotificationType) => {
   }
 }
 
-const formatTimeAgo = (iso: string) => {
-  const date = new Date(iso)
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (seconds < 60) return "Just now"
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
-const INBOX_ROW_EST = 96
+const INBOX_ROW_EST = 80
 const INBOX_WINDOW_OVERSCAN = 8
 
 type InboxRowProps = {
@@ -93,49 +85,66 @@ type InboxRowProps = {
   onSwipeLeft: () => void
 }
 
-const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight, onSwipeLeft }: InboxRowProps) {
+function PanelDetailOverlay({ detail, onClose }: { detail: NexusNotificationItem; onClose: () => void }) {
+  const { t } = useUserPreferences()
+  const p = presentNotification(detail, t)
   return (
-    <NotificationSwipeRow className="mb-2" onSwipeRight={onSwipeRight} onSwipeLeft={onSwipeLeft}>
-      <button
-        type="button"
-        onClick={() => onActivate(notification)}
-        className={cn(
-          "group relative min-h-[88px] w-full rounded-xl border-l-4 bg-muted/30 p-3 text-left transition-colors hover:bg-muted/50 [content-visibility:auto] [contain-intrinsic-size:88px_1px]",
-          getTypeColor(notification.type),
-          !notification.read && "bg-primary/5",
-        )}
-      >
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-            {getTypeIcon(notification.type)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p
-                className={cn(
-                  "text-sm font-semibold",
-                  !notification.read ? "text-foreground" : "text-muted-foreground",
-                )}
-              >
-                {notification.title}
-              </p>
-              {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-            </div>
-            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground/70">
-              {formatTimeAgo(notification.timestamp)}
-              {notification.nav && notification.nav.kind !== "detail" && (
-                <span className="ml-2 text-primary/90">· Open</span>
-              )}
-            </p>
-          </div>
+    <div className="absolute inset-0 z-[110] flex flex-col bg-card/98 backdrop-blur-sm">
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2.5">
+        <h4 className="truncate pr-2 text-sm font-semibold tracking-tight">{p.title}</h4>
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose} aria-label="Close">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-sm">
+        <div className="rounded-xl border border-border/45 bg-muted/12 px-3 py-3">
+          <p className="text-[13px] font-medium leading-snug text-foreground">{p.summary}</p>
         </div>
-      </button>
+        <p className="mt-4 text-sm leading-[1.6] text-foreground/90">{p.detail}</p>
+        <div className="mt-5 border-t border-border/35 pt-3">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/65">
+            {t("notifications.inbox.detailRecorded")}
+          </p>
+          <p className="mt-1 text-[11px] tabular-nums text-muted-foreground/85">
+            {new Date(detail.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+          </p>
+        </div>
+        {p.metaLine ? (
+          <div className="mt-4 rounded-lg border border-border/35 bg-muted/10 px-3 py-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+              {t("notifications.inbox.detailContext")}
+            </p>
+            <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-muted-foreground/75">{p.metaLine}</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight, onSwipeLeft }: InboxRowProps) {
+  const { t } = useUserPreferences()
+  const p = presentNotification(notification, t)
+  return (
+    <NotificationSwipeRow
+      className="mb-1.5"
+      onSwipeRight={onSwipeRight}
+      onSwipeLeft={onSwipeLeft}
+      deleteLabel={t("notifications.center.delete")}
+      archiveLabel={t("notifications.center.archive")}
+    >
+      <NotificationInboxRow
+        item={notification}
+        presented={p}
+        onOpen={() => onActivate(notification)}
+        className="rounded-xl [contain-intrinsic-size:76px_1px]"
+      />
     </NotificationSwipeRow>
   )
 })
 
 export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
+  const { t } = useUserPreferences()
   const {
     inbox,
     unreadCount,
@@ -262,20 +271,29 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   if (!isOpen || !mounted) return null
 
   return createPortal(
-    <div
-      ref={panelRef}
-      className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
-    >
+    <>
+      <div
+        className="fixed inset-0 z-[104] bg-black/35 backdrop-blur-[1px] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+        aria-hidden
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border/90 bg-card/95 shadow-xl shadow-black/15 motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-200 sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
+      >
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <Bell className="h-5 w-5 shrink-0 text-primary" />
-            <h3 className="truncate font-semibold">Notifications</h3>
-            {unreadCount > 0 && (
-              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
-                {unreadCount}
+            <Bell className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <h3 className="truncate font-semibold leading-tight">{t("nav.notifications")}</h3>
+              <p className="truncate text-[10px] text-muted-foreground">{t("notifications.inbox.panelSubtitle")}</p>
+            </div>
+            {unreadCount > 0 ? (
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold tabular-nums text-primary">
+                {unreadCount > 99 ? "99+" : unreadCount}
               </span>
-            )}
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSettings(!showSettings)}>
@@ -295,7 +313,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               className="inline-flex items-center gap-1 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <CheckCheck className="h-3 w-3" />
-              Mark read
+              {t("notifications.center.markAllRead")}
             </button>
             <button
               type="button"
@@ -303,7 +321,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               className="inline-flex items-center gap-1 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-3 w-3" />
-              Clear
+              {t("notifications.center.clearInbox")}
             </button>
           </div>
         )}
@@ -437,20 +455,11 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
           >
             <div className="p-2 pb-1">
               {inbox.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Bell className="mb-3 h-12 w-12 text-muted-foreground/30" />
-                  <p className="text-sm font-medium text-muted-foreground">No notifications</p>
-                  <p className="text-xs text-muted-foreground/70">You&apos;re all caught up</p>
-                  <Link
-                    href="/dashboard/notifications"
-                    onClick={onClose}
-                    className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    View all notifications
-                    <ChevronRight className="h-3 w-3 opacity-70" />
-                  </Link>
-                </div>
+                <NotificationInboxEmpty
+                  message={t("notifications.inbox.panelEmpty")}
+                  hint={t("notifications.inbox.panelEmptyHint")}
+                  className="py-10"
+                />
               ) : (
                 <>
                   {topPad > 0 ? <div className="w-full" style={{ height: topPad }} aria-hidden /> : null}
@@ -473,7 +482,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               <Link
                 href="/dashboard/notifications"
                 onClick={onClose}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-muted/40"
               >
                 <History className="h-3.5 w-3.5 shrink-0" />
                 View all notifications
@@ -485,21 +494,9 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
         </>
       )}
 
-      {detail && (
-        <div className="absolute inset-0 z-[110] flex flex-col bg-card">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <h4 className="truncate pr-2 text-sm font-semibold">{detail.title}</h4>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDetail(null)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 text-sm text-muted-foreground">
-            <p className="whitespace-pre-wrap text-foreground/90">{detail.message}</p>
-            <p className="mt-4 text-xs">{formatTimeAgo(detail.timestamp)}</p>
-          </div>
-        </div>
-      )}
-    </div>,
+      {detail ? <PanelDetailOverlay detail={detail} onClose={() => setDetail(null)} /> : null}
+    </div>
+    </>,
     document.body
   )
 }

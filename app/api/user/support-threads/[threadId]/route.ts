@@ -22,12 +22,19 @@ export async function GET(request: Request, ctx: { params: Promise<{ threadId: s
     if (te) return NextResponse.json({ error: te.message }, { status: 500 })
     if (!thread) return NextResponse.json({ error: "Not found." }, { status: 404 })
 
-    const { data: messages, error: me } = await admin
+    const { searchParams } = new URL(request.url)
+    const limit = Math.min(500, Math.max(1, Number(searchParams.get("limit") ?? 200)))
+    const before = searchParams.get("before")?.trim()
+
+    let mq = admin
       .from("operational_support_messages")
       .select("id,sender_user_id,sender_role,body,created_at")
       .eq("thread_id", tid)
       .order("created_at", { ascending: true })
-      .limit(500)
+      .limit(limit)
+    if (before) mq = mq.lt("created_at", before)
+
+    const { data: messages, error: me } = await mq
     if (me) return NextResponse.json({ error: me.message }, { status: 500 })
 
     return NextResponse.json({ thread, messages: messages ?? [] })

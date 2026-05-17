@@ -217,7 +217,8 @@ export function UserSupportDeskPanel(props: {
                     {t.unread_for_user ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
-                    {operationalThreadCategoryLabel(t.category)} · {operationalThreadStatusLabel(t.status)}
+                    {operationalThreadCategoryLabel(t.category)} ·{" "}
+                    {operationalThreadStatusLabel(t.status, (t as { escalated?: boolean }).escalated)}
                   </p>
                 </button>
               </li>
@@ -232,7 +233,7 @@ export function UserSupportDeskPanel(props: {
         ) : (
           <>
             <div className="mb-3 border-b border-border pb-2 font-mono text-[10px] text-muted-foreground break-all">{selectedId}</div>
-            <div className="mb-4 max-h-[min(320px,45vh)] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3">
+            <div className="mb-4 max-h-[min(320px,45vh)] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3 touch-pan-y overscroll-contain">
               {loadingThread ? (
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (

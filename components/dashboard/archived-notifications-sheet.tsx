@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
-import { ArchiveRestore, Trash2, X } from "lucide-react"
+import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -11,6 +11,14 @@ import { supabase } from "@/lib/supabaseClient"
 import { isServerNotificationId } from "@/lib/nexus-notifications-merge"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
 import type { NexusNotificationType } from "@/lib/nexus-notification-models"
+import {
+  INBOX_CARD,
+  NotificationDetailSheet,
+  NotificationInboxEmpty,
+  NotificationInboxRow,
+} from "@/components/dashboard/notification-inbox-ui"
+import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
+import { usePresentedNotifications } from "@/hooks/use-presented-notifications"
 
 const KNOWN: NexusNotificationType[] = [
   "price",
@@ -51,10 +59,6 @@ function mapRow(r: {
   }
 }
 
-function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-}
-
 interface ArchivedNotificationsSheetProps {
   isOpen: boolean
   onClose: () => void
@@ -65,6 +69,7 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
   const { history, deleteFromHistory, unarchiveFromHistory } = useNexusNotifications()
   const [serverArchived, setServerArchived] = useState<NexusNotificationItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [selected, setSelected] = useState<NexusNotificationItem | null>(null)
 
   const pullServer = useCallback(async () => {
     setLoading(true)
@@ -107,9 +112,15 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
     void pullServer()
   }, [isOpen, pullServer])
 
-  const merged = [...serverArchived, ...history].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  const merged = useMemo(
+    () =>
+      [...serverArchived, ...history].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      ),
+    [serverArchived, history]
   )
+
+  const presentedMap = usePresentedNotifications(merged, t)
 
   const patch = async (body: Record<string, unknown>) => {
     const {
@@ -143,63 +154,75 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
     deleteFromHistory(n.id)
   }
 
+  const selectedPresented = selected ? presentNotification(selected, t) : null
+
   if (!isOpen || typeof document === "undefined") return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[130] flex justify-end bg-black/50 p-0 sm:p-4" role="dialog" aria-modal="true">
-      <Card className="flex h-full w-full max-w-md flex-col rounded-none border-l border-border bg-card shadow-2xl sm:h-[min(92dvh,640px)] sm:rounded-xl sm:border">
+    <div
+      className="fixed inset-0 z-[130] flex justify-end bg-black/50 backdrop-blur-[1px] p-0 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <Card
+        className="flex h-full w-full max-w-md flex-col rounded-none border-l border-border/90 bg-card/95 shadow-xl motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200 sm:h-[min(92dvh,640px)] sm:rounded-2xl sm:border"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
           <div>
             <h2 className="text-base font-semibold">{t("header.archivedTitle")}</h2>
             <p className="text-xs text-muted-foreground">{t("header.archivedSubtitle")}</p>
           </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+          <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={onClose} aria-label="Close">
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="nexus-scroll-isolated min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : merged.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t("header.archivedEmpty")}</p>
+            <NotificationInboxEmpty
+              message={t("header.archivedEmpty")}
+              hint={t("header.archivedEmptyHint")}
+              className="py-16"
+            />
           ) : (
-            <ul className="divide-y divide-border">
-              {merged.map((n) => (
-                <li key={n.id} className="px-4 py-3">
-                  <p className="font-medium text-foreground">{n.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{formatWhen(n.timestamp)}</p>
-                  <div className="mt-2 flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1 text-xs"
-                      onClick={() => void handleUnarchive(n)}
-                    >
-                      <ArchiveRestore className="h-3.5 w-3.5" />
-                      {t("notifications.center.unarchive")}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 gap-1 text-xs text-destructive hover:text-destructive"
-                      onClick={() => void handleDelete(n)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {t("notifications.center.delete")}
-                    </Button>
-                  </div>
-                </li>
-              ))}
+            <ul className={`${INBOX_CARD} mx-2 my-2 divide-y divide-border/50 overflow-hidden border-0`}>
+              {merged.map((n) => {
+                const p = presentedMap.get(n.id)!
+                return (
+                  <li key={n.id}>
+                    <NotificationInboxRow item={n} presented={p} onOpen={() => setSelected(n)} />
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
       </Card>
+
+      {selected && selectedPresented ? (
+        <NotificationDetailSheet
+          item={selected}
+          presented={selectedPresented}
+          t={t}
+          onClose={() => setSelected(null)}
+          showArchive
+          archiveLabel={t("notifications.center.unarchive")}
+          onArchive={() => {
+            void handleUnarchive(selected)
+            setSelected(null)
+          }}
+          onDelete={() => {
+            void handleDelete(selected)
+            setSelected(null)
+          }}
+        />
+      ) : null}
     </div>,
-    document.body,
+    document.body
   )
 }

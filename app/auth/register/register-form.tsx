@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,13 +17,19 @@ import {
 } from "@/components/ui/select"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
+import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
+import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter"
+import { RegisterStepIndicator } from "@/components/auth/register-step-indicator"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
+import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
+import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
 import { OPERATING_COUNTRY_OPTIONS } from "@/lib/i18n/region-defaults"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
+import { cn } from "@/lib/utils"
 import {
   imageDataUrlToFaceTemplate,
   imageDataUrlToHash,
@@ -40,6 +47,8 @@ const REGISTER_JOELIN_CHIPS = [
   { label: "Trust & fees", prompt: "What should a new member know about deposits and Container Mode fees?" },
 ]
 
+const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
+
 export default function RegisterPage() {
   const router = useRouter()
   const { language: ctxLang, currency: ctxCur, setPreferences, formatUserMoney } = useUserPreferences()
@@ -48,6 +57,8 @@ export default function RegisterPage() {
     pageKey: "register",
     formatUserMoney,
   })
+
+  const [step, setStep] = useState(1)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -60,9 +71,21 @@ export default function RegisterPage() {
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
   const [referralCode, setReferralCode] = useState("")
-  const [operatingCountry, setOperatingCountry] = useState("")
+  const [operatingCountry, setOperatingCountry] = useState("UG")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const authT = getAuthMessages(language)
+  const reg = getRegisterMessages(language)
+
+  const steps = useMemo(
+    () => [
+      { id: 1, label: authT.register.stepPersonal },
+      { id: 2, label: authT.register.stepRegion },
+      { id: 3, label: authT.register.stepSecurity },
+    ],
+    [authT]
+  )
 
   useEffect(() => {
     setLanguage(ctxLang)
@@ -82,7 +105,36 @@ export default function RegisterPage() {
     }
   }, [])
 
-  const reg = getRegisterMessages(language)
+  function validateStep(s: number): string | null {
+    if (s === 1) {
+      if (!fullName.trim()) return "Enter your full name."
+      if (!phone.trim()) return "Enter your phone number."
+      if (!email.trim() || !email.includes("@")) return "Enter a valid email."
+      return null
+    }
+    if (s === 2) return null
+    if (s === 3) {
+      if (password.length < 6) return reg.passwordHint
+      if (password !== confirmPassword) return "Passwords do not match."
+      return null
+    }
+    return null
+  }
+
+  function goNext() {
+    const err = validateStep(step)
+    if (err) {
+      setError(err)
+      return
+    }
+    setError(null)
+    setStep((s) => Math.min(3, s + 1))
+  }
+
+  function goBack() {
+    setError(null)
+    setStep((s) => Math.max(1, s - 1))
+  }
 
   async function handleSelfieFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -101,15 +153,17 @@ export default function RegisterPage() {
     setSelfiePreview(result)
     setSelfieHash(hash)
     setSelfieTemplate(template)
+    setError(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError(null)
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.")
+    const err = validateStep(3)
+    if (err) {
+      setError(err)
       return
     }
+    setError(null)
     setIsSubmitting(true)
     setPreferences({
       language,
@@ -172,244 +226,302 @@ export default function RegisterPage() {
 
   if (isDevLocalOnly()) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-        <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl text-center">
-          <h1 className="mt-2 text-xl font-semibold text-foreground">Local dev mode</h1>
-          <p className="text-sm text-muted-foreground">
-            <code className="rounded bg-muted px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY=1</code> is on. Sign-up and external APIs are
-            disabled. Use the guest dashboard only.
-          </p>
-          <Button
-            className="w-full"
-            onClick={() => {
-              try {
-                sessionStorage.setItem("nexus_guest_enter", "1")
-              } catch {
-                /* ignore */
-              }
-              router.push("/dashboard")
-            }}
-          >
-            Open dashboard (guest)
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            <Link href="/auth/login" className="text-primary underline-offset-4 hover:underline">
-              Login page
-            </Link>
-            {" · "}
-            <Link href="/" className="underline-offset-4 hover:underline">
-              Home
-            </Link>
-          </p>
-        </div>
-      </div>
+      <AuthLayoutShell language={language} showTrustStrip={false}>
+        <h2 className="text-center text-xl font-semibold">{reg.title}</h2>
+        <p className="mt-3 text-center text-sm text-muted-foreground">
+          Local dev mode — registration disabled. Use guest dashboard.
+        </p>
+        <Button
+          className="mt-6 min-h-12 w-full"
+          onClick={() => {
+            try {
+              sessionStorage.setItem("nexus_guest_enter", "1")
+            } catch {
+              /* ignore */
+            }
+            router.push("/dashboard")
+          }}
+        >
+          Open dashboard (guest)
+        </Button>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          <Link href="/auth/login" className="text-primary underline-offset-4 hover:underline">
+            {reg.signInLink}
+          </Link>
+        </p>
+      </AuthLayoutShell>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 pb-28 sm:pb-24">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl">
-        <div className="text-center">
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">{reg.title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{reg.subtitle}</p>
-        </div>
+    <>
+      <AuthLayoutShell language={language}>
+        <header className="mb-2 text-center">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{authT.register.title}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{authT.register.subtitle}</p>
+        </header>
 
-        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>{reg.language}</Label>
-              <Select value={language} onValueChange={(v) => setLanguage(v as AppLanguage)} disabled={isSubmitting}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGE_OPTIONS.map((o) => (
-                    <SelectItem key={o.code} value={o.code}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{reg.currency}</Label>
-              <Select value={currency} onValueChange={(v) => setCurrency(v as FiatCurrencyCode)} disabled={isSubmitting}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCY_OPTIONS.map((o) => (
-                    <SelectItem key={o.code} value={o.code}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>{reg.operatingCountry ?? "Operating country (optional)"}</Label>
-            <Select
-              value={operatingCountry || "none"}
-              onValueChange={(v) => setOperatingCountry(v === "none" ? "" : v)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">—</SelectItem>
-                {OPERATING_COUNTRY_OPTIONS.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Local funding route. Editable in Settings.</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-full-name">{reg.fullName}</Label>
-            <Input
-              id="register-full-name"
-              type="text"
-              autoComplete="name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              disabled={isSubmitting}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-phone">{reg.phone}</Label>
-            <Input
-              id="register-phone"
-              type="tel"
-              autoComplete="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              disabled={isSubmitting}
-              placeholder="+1 555 0100"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-referral">{reg.referralCodeOptional ?? "Referral ID (optional)"}</Label>
-            <Input
-              id="register-referral"
-              type="text"
-              autoComplete="off"
-              value={referralCode}
-              onChange={(e) => setReferralCode(e.target.value)}
-              disabled={isSubmitting}
-              placeholder="NX…"
-            />
-            <p className="text-xs text-muted-foreground">
-              If someone invited you, paste their referral id or use their signup link.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-email">{reg.email}</Label>
-            <Input
-              id="register-email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isSubmitting}
-              placeholder="you@example.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-selfie">Security Selfie (optional, recommended)</Label>
-            <Input
-              id="register-selfie"
-              type="file"
-              accept="image/*"
-              capture="user"
-              disabled={isSubmitting}
-              onChange={async (e) => {
-                setError(null)
-                const file = e.target.files?.[0]
-                if (!file) return
-                try {
-                  await handleSelfieFile(file)
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Could not process selfie.")
-                }
-              }}
-            />
-            {selfiePreview ? (
+        <RegisterStepIndicator steps={steps} current={step} />
+
+        <form
+          className="space-y-4"
+          onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}
+          noValidate
+        >
+          {step === 1 ? (
+            <div className="space-y-4 animate-in fade-in duration-200" key="step1">
               <div className="space-y-2">
-                <img
-                  src={selfiePreview}
-                  alt="Selfie preview"
-                  className="h-24 w-24 rounded-xl border border-border object-cover"
+                <Label htmlFor="register-full-name">{reg.fullName}</Label>
+                <Input
+                  id="register-full-name"
+                  type="text"
+                  autoComplete="name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  className={inputClass}
                 />
-                <p className="text-xs text-emerald-400">
-                  Face added. A compact selfie fingerprint is encoded for secure recovery checks.
-                </p>
               </div>
-            ) : (
-              <p className="text-xs text-warning">
-                Optional at signup. Add later in Security Center.
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-password">{reg.password}</Label>
-            <Input
-              id="register-password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              disabled={isSubmitting}
-            />
-            <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="register-confirm-password">Confirm password</Label>
-            <Input
-              id="register-confirm-password"
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={6}
-              disabled={isSubmitting}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="register-phone">{reg.phone}</Label>
+                <Input
+                  id="register-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  placeholder="+256 7XX XXX XXX"
+                  className={inputClass}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="register-email">{reg.email}</Label>
+                <Input
+                  id="register-email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  placeholder="you@example.com"
+                  className={inputClass}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="register-referral">{reg.referralCodeOptional ?? "Referral ID (optional)"}</Label>
+                <Input
+                  id="register-referral"
+                  type="text"
+                  autoComplete="off"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="NX…"
+                  className={inputClass}
+                />
+                <p className="text-xs text-muted-foreground">{authT.register.referralHint}</p>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="space-y-4 animate-in fade-in duration-200" key="step2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>{reg.language}</Label>
+                  <Select
+                    value={language}
+                    onValueChange={(v) => setLanguage(v as AppLanguage)}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger className={cn("w-full", inputClass)}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((o) => (
+                        <SelectItem key={o.code} value={o.code}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{reg.currency}</Label>
+                  <Select
+                    value={currency}
+                    onValueChange={(v) => setCurrency(v as FiatCurrencyCode)}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger className={cn("w-full", inputClass)}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map((o) => (
+                        <SelectItem key={o.code} value={o.code}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{reg.operatingCountry ?? "Operating country"}</Label>
+                <Select
+                  value={operatingCountry || "none"}
+                  onValueChange={(v) => {
+                    const code = v === "none" ? "" : v
+                    setOperatingCountry(code)
+                    if (code) {
+                      const hint = suggestPreferencesForCountry(code)
+                      if (hint.language) setLanguage(hint.language)
+                      if (hint.currency) setCurrency(hint.currency as FiatCurrencyCode)
+                    }
+                  }}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger className={cn("w-full", inputClass)}>
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {OPERATING_COUNTRY_OPTIONS.map((o) => (
+                      <SelectItem key={o.code} value={o.code}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{authT.register.countryHint}</p>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="space-y-4 animate-in fade-in duration-200" key="step3">
+              <div className="space-y-2">
+                <Label htmlFor="register-password">{reg.password}</Label>
+                <Input
+                  id="register-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  disabled={isSubmitting}
+                  className={inputClass}
+                />
+                <PasswordStrengthMeter password={password} language={language} />
+                <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="register-confirm-password">{authT.register.confirmPassword}</Label>
+                <Input
+                  id="register-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  disabled={isSubmitting}
+                  className={inputClass}
+                />
+              </div>
+              <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/20 p-3">
+                <Label htmlFor="register-selfie">{authT.register.selfieLabel}</Label>
+                <Input
+                  id="register-selfie"
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  disabled={isSubmitting}
+                  className="min-h-11 text-sm"
+                  onChange={async (e) => {
+                    setError(null)
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    try {
+                      await handleSelfieFile(file)
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Could not process selfie.")
+                    }
+                  }}
+                />
+                {selfiePreview ? (
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={selfiePreview}
+                      alt=""
+                      className="h-16 w-16 rounded-xl border border-border object-cover"
+                    />
+                    <p className="text-xs text-emerald-500">{authT.register.selfieAdded}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{authT.register.selfieHint}</p>
+                )}
+              </div>
+            </div>
+          ) : null}
 
           {error ? (
-            <p
-              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
+            <p className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive" role="alert">
               {error}
             </p>
           ) : null}
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? reg.submitting : reg.submit}
-          </Button>
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+            {step > 1 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 flex-1 gap-1"
+                disabled={isSubmitting}
+                onClick={goBack}
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+                {authT.register.back}
+              </Button>
+            ) : null}
+            {step < 3 ? (
+              <Button type="button" className="min-h-12 flex-1 gap-1 font-semibold" disabled={isSubmitting} onClick={goNext}>
+                {authT.register.next}
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </Button>
+            ) : (
+              <Button type="submit" className="min-h-12 flex-1 font-semibold" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden />
+                    {authT.register.submitting}
+                  </>
+                ) : (
+                  authT.register.submit
+                )}
+              </Button>
+            )}
+          </div>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
-            {reg.signInLink}
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          {authT.register.alreadyHave}{" "}
+          <Link href="/auth/login" className="font-semibold text-primary underline-offset-4 hover:underline">
+            {authT.register.signIn}
           </Link>
           {" · "}
           <Link href="/" className="underline-offset-4 hover:underline">
-            {reg.homeLink}
+            {authT.register.home}
           </Link>
         </p>
-      </div>
+      </AuthLayoutShell>
 
       <AuthAssistantPanel
         scope="register"
@@ -429,6 +541,6 @@ export default function RegisterPage() {
         onDismiss={testimonialNotif.dismiss}
         subtitle="Community"
       />
-    </div>
+    </>
   )
 }

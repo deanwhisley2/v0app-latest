@@ -25,6 +25,8 @@ type ThreadRow = {
   user_email: string | null
   user_name: string | null
   unread_for_admin: boolean
+  escalated?: boolean
+  priority?: string
   last_message_at: string
   created_at: string
 }
@@ -56,6 +58,9 @@ export function AdminSupportChatPanel(props: {
   const [unreadCount, setUnreadCount] = useState(0)
   const [categoryFilter, setCategoryFilter] = useState("")
   const [unreadOnly, setUnreadOnly] = useState(false)
+  const [unresolvedOnly, setUnresolvedOnly] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchDraft, setSearchDraft] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<MsgRow[]>([])
   const [loadingList, setLoadingList] = useState(true)
@@ -85,6 +90,8 @@ export function AdminSupportChatPanel(props: {
       const qs = new URLSearchParams()
       if (categoryFilter) qs.set("category", categoryFilter)
       if (unreadOnly) qs.set("unread", "1")
+      if (unresolvedOnly) qs.set("unresolved", "1")
+      if (searchQuery.trim()) qs.set("q", searchQuery.trim())
       const res = await fetch(`/api/admin/support-threads?${qs.toString()}`, {
         headers: h,
         cache: "no-store",
@@ -102,7 +109,7 @@ export function AdminSupportChatPanel(props: {
     } finally {
       setLoadingList(false)
     }
-  }, [categoryFilter, unreadOnly, props])
+  }, [categoryFilter, unreadOnly, unresolvedOnly, searchQuery, props])
 
   const loadMessages = useCallback(
     async (tid: string) => {
@@ -186,6 +193,26 @@ export function AdminSupportChatPanel(props: {
   }
 
   const selected = useMemo(() => threads.find((t) => t.id === selectedId), [threads, selectedId])
+
+  const manageThread = async (action: string, extra?: Record<string, unknown>) => {
+    const tid = selectedId
+    if (!tid) return
+    const h = await authHeaders()
+    if (!h) return
+    const res = await fetch(`/api/admin/support-threads/${tid}/manage`, {
+      method: "PATCH",
+      headers: { ...h, "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...extra }),
+    })
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string }
+      setError(j.error ?? "Action failed")
+      return
+    }
+    await loadThreads()
+    if (selectedId) await loadMessages(selectedId)
+  }
+
   return (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,300px)_1fr]">
       <Card className="border-border bg-card p-3">
@@ -217,10 +244,30 @@ export function AdminSupportChatPanel(props: {
             </button>
           ))}
         </div>
-        <label className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground">
-          <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
-          Unread only
-        </label>
+                <div className="mb-2 flex flex-col gap-2">
+          <Input
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            placeholder="User ID, tx ref, email…"
+            className="h-8 text-xs"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setSearchQuery(searchDraft)
+            }}
+          />
+          <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSearchQuery(searchDraft)}>
+            Search
+          </Button>
+        </div>
+        <div className="mb-2 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
+            Unread
+          </label>
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={unresolvedOnly} onChange={(e) => setUnresolvedOnly(e.target.checked)} />
+            Unresolved
+          </label>
+        </div>
         {loadingList ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : (
@@ -245,7 +292,7 @@ export function AdminSupportChatPanel(props: {
                     </div>
                     <p className="truncate text-[10px] text-muted-foreground">
                       {t.category_label ?? operationalThreadCategoryLabel(t.category)} ·{" "}
-                      {operationalThreadStatusLabel(t.status)}
+                      {operationalThreadStatusLabel(t.status, t.escalated)}
                     </p>
                     {t.linked_summary ? (
                       <p className="truncate font-mono text-[10px] text-muted-foreground">{t.linked_summary}</p>
@@ -267,14 +314,38 @@ export function AdminSupportChatPanel(props: {
               <span className="break-all text-xs font-mono text-muted-foreground">{selectedId}</span>
               {selected ? (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase">
-                  {operationalThreadStatusLabel(selected.status)}
+                  {operationalThreadStatusLabel(selected.status, selected.escalated)}
                 </span>
               ) : null}
             </div>
             {selected?.linked_summary ? (
               <p className="mb-2 font-mono text-[11px] text-muted-foreground">{selected.linked_summary}</p>
             ) : null}
-            <div className="mb-4 max-h-[min(380px,50vh)] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3">
+            <div className="mb-2 flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("assign")}>
+                Assign to me
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("priority", { priority: "urgent" })}>
+                Urgent
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => {
+                  const note = window.prompt("Resolution note (optional)")
+                  if (note === null) return
+                  void manageThread("resolve", { resolutionNote: note })
+                }}
+              >
+                Resolve
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void manageThread("reopen")}>
+                Reopen
+              </Button>
+            </div>
+            <div className="mb-4 max-h-[min(380px,50vh)] touch-pan-y overscroll-contain space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3">
               {loadingThread ? (
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (

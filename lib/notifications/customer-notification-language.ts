@@ -16,11 +16,19 @@ function formatLocalAmount(amount: number, currency: string): string {
 }
 
 /** Strip or replace text that leaks backend mechanics into customer UI. */
+const RAW_LOGIN_BODY =
+  /new\s+login|login\s+detected|sign[- ]?in\s+detected/i
+
+/** Raw IP + user-agent blobs belong in metadata, not headline copy. */
+const IP_UA_BLOB =
+  /\b\d{1,3}(?:\.\d{1,3}){3}\b.*(?:webkit|chrome|safari|firefox|edge)/i
+
 export function sanitizeCustomerNotificationText(text: string, fallback: string): string {
   const t = text.trim()
   if (!t) return fallback
   if (INTERNAL_PHRASE.test(t)) return fallback
   if (CONVERSATIONAL_PHRASE.test(t)) return fallback
+  if (RAW_LOGIN_BODY.test(t) || IP_UA_BLOB.test(t)) return fallback
   if (/_[a-z]{2,}/.test(t) && /admin|treasury|corridor|settlement|normalized/i.test(t)) return fallback
   return t
 }

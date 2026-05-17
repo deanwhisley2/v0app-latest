@@ -9,6 +9,7 @@ import type { AppLanguage } from "@/lib/user-preferences"
 import { resolveUiString } from "@/lib/i18n/resolver"
 import { financialStatusEn } from "@/lib/i18n/financial-status"
 import { fundingWithdrawalEn, fundingWithdrawalOverlays } from "@/lib/i18n/funding-withdrawal-copy"
+import { companyMessagesEn } from "@/lib/i18n/company-messages"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -30,10 +31,42 @@ const en: Record<string, string> = {
   "header.searchHint": "Search",
   "header.cantFind": "Can't find it?",
   "header.archivedTitle": "Saved for later",
-  "header.archivedSubtitle": "Archived notifications.",
-  "header.archivedEmpty": "Archive empty.",
+  "header.archivedSubtitle": "Organized for review — restore anytime to your inbox.",
+  "header.archivedEmpty": "Nothing saved for later.",
+  "header.archivedEmptyHint": "Use Save for later on any message to keep it here.",
 
-  "notifications.center.subtitle": "Account and balance updates",
+  "notifications.center.subtitle": "Account activity inbox",
+  "notifications.inbox.filterAll": "All",
+  "notifications.inbox.filterUnread": "Unread",
+  "notifications.inbox.filterRead": "Read",
+  "notifications.inbox.searchPlaceholder": "Search title, category, or summary",
+  "notifications.inbox.searchEmpty": "No messages match this filter.",
+  "notifications.inbox.searchEmptyHint": "Try another keyword or clear the filter.",
+  "notifications.inbox.detailRecorded": "Recorded",
+  "notifications.inbox.detailContext": "Session context",
+  "notifications.inbox.archivedEmptyHint": "Saved items stay here until restored to your inbox.",
+  "notifications.inbox.fallbackBody": "Account update recorded.",
+  "notifications.inbox.moreActions": "More actions",
+  "notifications.inbox.securitySignInTitle": "New sign-in detected",
+  "notifications.inbox.securitySignInSummary": "Account access recorded. Review if unexpected.",
+  "notifications.inbox.securitySignInDetail": "If this was not you, review devices in Settings → Security.",
+  "notifications.inbox.securitySignInMetaDefault": "Web session",
+  "notifications.inbox.category.security": "Security",
+  "notifications.inbox.category.funding": "Funding",
+  "notifications.inbox.category.withdrawals": "Withdrawals",
+  "notifications.inbox.category.trading": "Trading",
+  "notifications.inbox.category.support": "Support",
+  "notifications.inbox.category.system": "System",
+  "notifications.inbox.noMatches": "No messages match this filter.",
+  "notifications.history.title": "Notification history",
+  "notifications.history.subtitle": "Inbox and saved items on this device",
+  "notifications.history.clear": "Clear history",
+  "notifications.history.back": "Back to dashboard",
+  "notifications.inbox.panelSubtitle": "Account activity inbox",
+  "notifications.inbox.panelEmpty": "Inbox is clear",
+  "notifications.inbox.panelEmptyHint": "New account activity will appear here.",
+  "notifications.center.clearInbox": "Clear inbox",
+  "notifications.inbox.loadMore": "Load more ({{n}})",
   "security.devices.title": "Device management",
   "security.devices.hint": "Trust known devices. Block unknown logins. New devices: email verification + 6h cooldown.",
   "security.devices.ip": "IP",
@@ -95,6 +128,7 @@ const en: Record<string, string> = {
   "common.missingTranslation": "Translation unavailable.",
   ...financialStatusEn,
   ...fundingWithdrawalEn,
+  ...companyMessagesEn,
 }
 
 const fr: Partial<Record<string, string>> = {

@@ -87,7 +87,7 @@ export function BottomNav({
       {!operationalWorkspace && (
       <button
         onClick={() => setShowJoelinPanel(!showJoelinPanel)}
-        className="fixed bottom-20 right-4 z-50 md:hidden flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-lg active:scale-95"
+        className="fixed bottom-[5.75rem] right-4 z-[48] md:hidden flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-lg active:scale-95 touch-manipulation"
       >
         <Zap className="h-5 w-5 text-white" />
       </button>
@@ -145,7 +145,7 @@ export function BottomNav({
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border bg-card md:hidden touch-manipulation">
         <div className="flex items-center justify-around px-2 py-2 safe-area-pb">
           {navItems.map((item) => {
             const isActive = resolvedActiveTab === item.id

@@ -2,21 +2,24 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  canShowMoreTestimonialsToday,
   nextTestimonialDelayMs,
   pickContainerTestimonialLine,
   readDailyTestimonialState,
   recordTestimonialShown,
+  resolveViewerUsdAnchor,
+  TESTIMONIAL_VISIBILITY_GATE_MS,
 } from "@/lib/container-testimonials"
 
 function sessionLoginKey(userId?: string | null) {
-  return `nexus_login_testimonial_strip_v1:${userId ?? ""}`
+  return `nexus_login_testimonial_strip_v2:${userId ?? ""}`
 }
 
 function sessionAccumKey(userId?: string | null) {
-  return `nexus_dash_visible_ms_v1:${userId ?? ""}`
+  return `nexus_dash_visible_ms_v2:${userId ?? ""}`
 }
-const HOUR_MS = 60 * 60 * 1000
-const STRIP_MS = 12_000
+
+const STRIP_MS = 11_000
 
 type State = {
   visible: boolean
@@ -24,38 +27,73 @@ type State = {
 }
 
 /**
- * Dashboard-wide bottom testimonial strip: one after login load (tab session),
- * then only after ~1h cumulative visible time on this page, spaced ~40–90 min
- * (compressed toward end of day until 10/day).
+ * Dashboard bottom testimonial strip — client-only social proof (no server broadcast).
+ * Welcome strip after login, then recurring strips after ~14 min visible time, spaced ~28–65 min.
  */
 export function useDashboardTestimonialNotifs(opts: {
   enabled: boolean
   userId?: string | null
   formatUserMoney: (amountUsd: number) => string
+  /** Liquid USD anchor for relatable amount tiers. */
+  viewerUsdAnchor?: number
 }) {
   const [state, setState] = useState<State>({ visible: false, text: "" })
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const accumRef = useRef(0)
   const lastTickRef = useRef<number | null>(null)
-  const hourGateRef = useRef(false)
+  const scheduleOpenRef = useRef(false)
   const formatRef = useRef(opts.formatUserMoney)
   formatRef.current = opts.formatUserMoney
+  const anchorRef = useRef(opts.viewerUsdAnchor ?? 0)
+  anchorRef.current = opts.viewerUsdAnchor ?? 0
+
+  useEffect(() => {
+    if (!opts.enabled || !opts.userId) return
+    if (typeof opts.viewerUsdAnchor === "number" && opts.viewerUsdAnchor > 0) {
+      anchorRef.current = opts.viewerUsdAnchor
+      return
+    }
+    let cancelled = false
+    const load = () => {
+      fetch("/api/user/balance", { credentials: "include", cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (cancelled || !json) return
+          anchorRef.current = resolveViewerUsdAnchor({
+            mainBalanceUsd: json.available_balance,
+            retailBalanceUsd: json.retail_balance,
+            activeContainerEarningsUsd: json.active_container_earnings,
+          })
+        })
+        .catch(() => {})
+    }
+    load()
+    const id = window.setInterval(load, 5 * 60 * 1000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [opts.enabled, opts.userId, opts.viewerUsdAnchor])
+  const userIdRef = useRef(opts.userId)
+  userIdRef.current = opts.userId
 
   const dismiss = useCallback(() => {
     setState((s) => (s.visible ? { ...s, visible: false } : s))
   }, [])
 
   const showOneRef = useRef<() => void>(() => {})
-  const userIdRef = useRef(opts.userId)
-  userIdRef.current = opts.userId
 
   showOneRef.current = () => {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+    if (!canShowMoreTestimonialsToday(userIdRef.current)) return
+
     const picked = pickContainerTestimonialLine({
       formatUserMoney: formatRef.current,
       userId: userIdRef.current,
+      viewerUsdAnchor: anchorRef.current,
     })
     if (!picked) return
-    recordTestimonialShown(picked.displayName, userIdRef.current)
+    recordTestimonialShown(picked.displayName, userIdRef.current, picked.amountUsd)
     setState({ visible: true, text: picked.line })
     window.setTimeout(() => setState((s) => ({ ...s, visible: false })), STRIP_MS)
   }
@@ -63,6 +101,7 @@ export function useDashboardTestimonialNotifs(opts: {
   const scheduleNextRef = useRef<() => void>(() => {})
   scheduleNextRef.current = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (!canShowMoreTestimonialsToday(userIdRef.current)) return
     const st = readDailyTestimonialState(userIdRef.current)
     const delay = nextTestimonialDelayMs({ shownToday: st.shownCount })
     timeoutRef.current = setTimeout(() => {
@@ -71,9 +110,9 @@ export function useDashboardTestimonialNotifs(opts: {
     }, delay)
   }
 
-  const openHourGate = useCallback(() => {
-    if (hourGateRef.current) return
-    hourGateRef.current = true
+  const openSchedule = useCallback(() => {
+    if (scheduleOpenRef.current) return
+    scheduleOpenRef.current = true
     scheduleNextRef.current()
   }, [])
 
@@ -82,13 +121,13 @@ export function useDashboardTestimonialNotifs(opts: {
     const accKey = sessionAccumKey(opts.userId)
     try {
       const raw = sessionStorage.getItem(accKey)
-      accumRef.current = raw ? Math.min(Number(raw) || 0, 48 * HOUR_MS) : 0
+      accumRef.current = raw ? Math.min(Number(raw) || 0, 48 * TESTIMONIAL_VISIBILITY_GATE_MS) : 0
     } catch {
       accumRef.current = 0
     }
 
-    if (accumRef.current >= HOUR_MS) {
-      openHourGate()
+    if (accumRef.current >= TESTIMONIAL_VISIBILITY_GATE_MS) {
+      openSchedule()
     }
 
     const tick = () => {
@@ -111,15 +150,15 @@ export function useDashboardTestimonialNotifs(opts: {
           /* ignore */
         }
       }
-      if (!hourGateRef.current && accumRef.current >= HOUR_MS) {
-        openHourGate()
+      if (!scheduleOpenRef.current && accumRef.current >= TESTIMONIAL_VISIBILITY_GATE_MS) {
+        openSchedule()
       }
     }
 
     const id = window.setInterval(tick, 2000)
     tick()
     return () => window.clearInterval(id)
-  }, [opts.enabled, opts.userId, openHourGate])
+  }, [opts.enabled, opts.userId, openSchedule])
 
   useEffect(() => {
     if (!opts.enabled || !opts.userId) return
@@ -130,32 +169,10 @@ export function useDashboardTestimonialNotifs(opts: {
       return
     }
 
-    const delay = 14_000 + Math.random() * 22_000
+    const delay = 9_000 + Math.random() * 16_000
     const t = window.setTimeout(() => {
       try {
         sessionStorage.setItem(lk, "1")
-      } catch {
-        /* ignore */
-      }
-      showOneRef.current()
-    }, delay)
-    return () => clearTimeout(t)
-  }, [opts.enabled, opts.userId])
-
-  /** Second onboarding strip later in the same tab session (dashboard only). */
-  useEffect(() => {
-    if (!opts.enabled || !opts.userId) return
-    const pairKey = `nexus_dash_welcome_second_v1:${opts.userId}`
-    try {
-      if (sessionStorage.getItem(pairKey)) return
-    } catch {
-      return
-    }
-
-    const delay = 210_000 + Math.random() * 120_000
-    const t = window.setTimeout(() => {
-      try {
-        sessionStorage.setItem(pairKey, "1")
       } catch {
         /* ignore */
       }

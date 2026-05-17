@@ -37,6 +37,38 @@ export async function notifyLiquidityAdminsSupportQueue(
   admin: SupabaseClient,
   params: { threadId: string; title: string; body: string },
 ) {
+  await notifyLiquidityAdminsSupportQueueInternal(admin, {
+    ...params,
+    sourceKind: "support_thread_queue",
+    metadata: {},
+  })
+}
+
+/** High-risk operational events: repeated disputes, crypto mismatch, urgent priority. */
+export async function notifyLiquidityAdminsSupportQueueHighRisk(
+  admin: SupabaseClient,
+  params: { threadId: string; title: string; body: string; repeatCount?: number },
+) {
+  const prefix = params.repeatCount && params.repeatCount >= 3 ? `[Repeat x${params.repeatCount}] ` : "[Priority] "
+  await notifyLiquidityAdminsSupportQueueInternal(admin, {
+    threadId: params.threadId,
+    title: `${prefix}${params.title}`,
+    body: params.body,
+    sourceKind: "support_thread_queue_high",
+    metadata: { repeat_count: params.repeatCount ?? 0, high_risk: true },
+  })
+}
+
+async function notifyLiquidityAdminsSupportQueueInternal(
+  admin: SupabaseClient,
+  params: {
+    threadId: string
+    title: string
+    body: string
+    sourceKind: string
+    metadata: Record<string, unknown>
+  },
+) {
   const { data: admins, error } = await admin.from("profiles").select("id").eq("trading_user_level", 5).limit(500)
   if (error) throw error
   const nav = navSupport(params.threadId)
@@ -44,13 +76,13 @@ export async function notifyLiquidityAdminsSupportQueue(
     const { error: ie } = await admin.from("user_account_notifications").upsert(
       {
         user_id: row.id,
-        source_kind: "support_thread_queue",
+        source_kind: params.sourceKind,
         source_id: params.threadId,
         notification_type: "system",
         title: params.title,
         body: truncateBody(params.body, 900),
         nav,
-        metadata: {},
+        metadata: params.metadata,
       },
       { onConflict: "user_id,source_kind,source_id" },
     )
