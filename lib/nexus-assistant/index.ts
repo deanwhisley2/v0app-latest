@@ -7,6 +7,8 @@ export {
   containerCustomerEarningsStory,
   containerReturnFormulaLine,
   LEVEL_HINT,
+  nexusPlatformOverviewForAssistant,
+  NEXUS_ASSISTANT_EXPLANATION_RULES,
 } from "./knowledge"
 export { requestNexusAssistantReply } from "./client"
 export type { NexusAssistantApiBody } from "./client"

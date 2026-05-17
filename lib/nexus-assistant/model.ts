@@ -11,6 +11,8 @@ import {
   NEXUS_FIXED_EARLY_EXIT_GUIDE,
   NEXUS_FIXED_ACCESS_TIER_HINT,
   NEXUS_UI_WHERE_TO_GO,
+  nexusPlatformOverviewForAssistant,
+  NEXUS_ASSISTANT_EXPLANATION_RULES,
 } from "./knowledge"
 
 function norm(s: string) {
@@ -245,6 +247,39 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   }
 
   if (isGreeting(q)) return greetingReply(surface, isGuest)
+
+  if (
+    hasAny(q, [
+      "what is nexus",
+      "what is nexus pro",
+      "who is nexus",
+      "about nexus",
+      "about us",
+      "tell me about nexus",
+      "what do you do",
+      "what does nexus",
+      "who are you",
+      "what is this platform",
+      "what is this app",
+      "why nexus pro",
+      "why should i trust",
+      "trust nexus",
+      "is nexus legit",
+      "is nexus safe",
+    ]) ||
+    (hasToken(q, "nexus") &&
+      hasAny(q, ["what", "who", "about", "platform", "company", "app", "trust", "legit", "safe"]))
+  ) {
+    return [
+      nexusPlatformOverviewForAssistant(),
+      "",
+      NEXUS_ASSISTANT_EXPLANATION_RULES,
+      "",
+      isGuest
+        ? "Register to explore Wallet, Container, and Referrals. Settings → About for institutional contact."
+        : "Settings → About for company channels. Say wallet, container, or referral for how-to.",
+    ].join("\n")
+  }
 
   if (
     hasAny(q, [

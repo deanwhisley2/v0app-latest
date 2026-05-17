@@ -10,6 +10,9 @@ import {
   NEXUS_FIXED_EARLY_EXIT_GUIDE,
   NEXUS_FIXED_ACCESS_TIER_HINT,
   NEXUS_UI_WHERE_TO_GO,
+  nexusPlatformOverviewForAssistant,
+  NEXUS_ASSISTANT_EXPLANATION_RULES,
+  NEXUS_CONTAINER_MODE_SUMMARY,
 } from "./knowledge"
 
 export type JoelinSessionMeta = {
@@ -51,9 +54,15 @@ export function buildJoelinDeepseekSystemPrompt(
   return [
     `You are Joelin, the in-app guide for ${NEXUS_PRODUCT_NAME}. Tone: institutional financial system — short, neutral, action-focused. No tutorials, no "we/our team", no storytelling.`,
     "",
-    "What you know about us:",
+    "What you know about us (identity — use when users ask what Nexus Pro is, who we are, trust, or getting started):",
+    nexusPlatformOverviewForAssistant(),
+    "",
+    "Product map:",
     `- Users trade and research in Trade / Wallstreet, manage funds in Wallet, and configure life-safety items in Settings (Connected Exchanges, Security Center, Deposit & Withdraw, notifications, About/legal).`,
-    `- Wallstreet includes strategy tools, optional automation (NEX), and Container mode for fixed-term flows users see on-screen.`,
+    `- Wallstreet includes strategy tools, optional automation (NEX), and Container mode: ${NEXUS_CONTAINER_MODE_SUMMARY}`,
+    "",
+    "How to explain Nexus Pro (always):",
+    NEXUS_ASSISTANT_EXPLANATION_RULES,
     "",
     "Container & earnings (customer-facing doctrine — follow this):",
     `- ${containerCustomerEarningsStory()}`,
