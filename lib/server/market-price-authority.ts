@@ -27,6 +27,11 @@ import {
   recordProviderSuccess,
   updateMarketPriceHealth,
 } from "@/lib/server/market-price-health"
+import {
+  evaluateMarketPriceAlerts,
+  recordAuthorityRefreshFailure,
+  recordAuthorityRefreshSuccess,
+} from "@/lib/server/market-price-alerts"
 
 export type { MarketPriceProviderId } from "@/lib/server/market-price-governance"
 
@@ -455,7 +460,7 @@ async function refreshAuthorityCache(): Promise<AuthorityCache> {
     updateMarketPriceHealth({ event: "admin-alert emergency-cache exceeded soft threshold" })
   }
 
-  updateMarketPriceHealth({
+  const healthBase = {
     activeProvider: btc.provider,
     fallbackLevel,
     authorityRevision,
@@ -464,7 +469,25 @@ async function refreshAuthorityCache(): Promise<AuthorityCache> {
     stale,
     emergencyCacheActive: btc.provider === "cache-emergency",
     adminAlert,
+  }
+  updateMarketPriceHealth(healthBase)
+
+  const alerts = evaluateMarketPriceAlerts({
+    health: getMarketPriceHealthSnapshot(),
+    btc,
+    refreshedAt,
   })
+  if (alerts.level !== "ok") {
+    updateMarketPriceHealth({
+      alertLevel: alerts.level,
+      alertCodes: alerts.codes,
+      event: `alerts level=${alerts.level} codes=${alerts.codes.join(",")}`,
+    })
+  } else {
+    updateMarketPriceHealth({ alertLevel: "ok", alertCodes: [] })
+  }
+
+  recordAuthorityRefreshSuccess()
 
   const next: AuthorityCache = {
     btc,
@@ -509,6 +532,10 @@ export async function getMarketPriceAuthority(opts?: {
 
   refreshInFlight = refreshAuthorityCache()
     .then((c) => c)
+    .catch((e) => {
+      recordAuthorityRefreshFailure()
+      throw e
+    })
     .finally(() => {
       refreshInFlight = null
     })

@@ -315,7 +315,17 @@ export function ContainerMode({
   const [copyMinUsdPolicy, setCopyMinUsdPolicy] = useState(7)
   const [fixMinUsdPolicy, setFixMinUsdPolicy] = useState(5)
 
-  const { btc: btcSpotRef, getSymbolPrice } = useMarketPriceAuthority()
+  const { btc: btcSpotRef, getSymbolPrice, authorityRevision } = useMarketPriceAuthority()
+
+  useEffect(() => {
+    if (!authorityRevision) return
+    setActiveFixTrades((prev) =>
+      prev.map((t) => {
+        const live = getSymbolPrice(t.coinSymbol)
+        return live != null ? { ...t, liveReferenceUsd: live } : t
+      })
+    )
+  }, [authorityRevision, getSymbolPrice])
 
   useEffect(() => {
     let cancelled = false

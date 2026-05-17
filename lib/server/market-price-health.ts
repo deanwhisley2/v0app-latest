@@ -18,6 +18,8 @@ export type MarketPriceHealthSnapshot = {
   stale: boolean
   emergencyCacheActive: boolean
   adminAlert: boolean
+  alertLevel: "ok" | "warn" | "critical"
+  alertCodes: string[]
   providers: ProviderHealthRow[]
   recentEvents: string[]
 }
@@ -33,6 +35,8 @@ let health: MarketPriceHealthSnapshot = {
   stale: false,
   emergencyCacheActive: false,
   adminAlert: false,
+  alertLevel: "ok",
+  alertCodes: [],
   providers: [],
   recentEvents: [],
 }

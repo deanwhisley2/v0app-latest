@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
+import { getSymbolSpotUsd } from "@/lib/server/market-price-authority"
 
 function toKuCoinSymbol(unified: string): string {
   const u = unified.toUpperCase().replace(/-/g, "")
@@ -35,20 +36,20 @@ export async function GET(request: NextRequest) {
     return { ms: Date.now() - s, result }
   }
 
+  const baseSymbol = symbol.endsWith("USDT") ? symbol.slice(0, -4) : symbol.split("-")[0] ?? symbol
+
   const [binRes, bitRes, kcRes] = await Promise.allSettled([
     timedFetch(async () => {
-      const r = await fetch(
-        `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`,
-        {
-          headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(12000),
-        }
-      )
-      const j = (await r.json()) as Record<string, unknown>
-      if (!r.ok) throw new Error(typeof j.msg === "string" ? j.msg : `HTTP ${r.status}`)
-      if (typeof j.price !== "string")
-        throw new Error(typeof j.msg === "string" ? j.msg : "Binance: no price in response")
-      return { http: r.status, body: j }
+      const spot = await getSymbolSpotUsd(baseSymbol)
+      return {
+        http: 200,
+        body: {
+          price: String(spot.priceUsd),
+          source: "market-price-authority",
+          provider: spot.provider,
+          stale: spot.stale,
+        },
+      }
     }),
     timedFetch(async () => {
       const r = await fetch(

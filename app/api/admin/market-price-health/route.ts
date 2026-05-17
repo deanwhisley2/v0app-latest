@@ -12,9 +12,14 @@ export async function GET(request: Request) {
     await requireLiquidityAdminLevel5(actor)
 
     const payload = await getMarketPriceAuthorityPayload()
+    const health = getMarketPriceHealthSnapshot()
     return NextResponse.json({
       ok: true,
-      health: getMarketPriceHealthSnapshot(),
+      health,
+      alerts: {
+        level: health.alertLevel,
+        codes: health.alertCodes,
+      },
       authorityRevision: payload.authorityRevision,
       refreshedAt: payload.refreshedAt,
       btc: payload.btc,

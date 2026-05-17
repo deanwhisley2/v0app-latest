@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { MARKET_PRICE_DISPLAY_BLEND_MS } from "@/lib/market-price-constants"
 import {
-  getMarketPriceAuthorityClientState,
+  getLiveSymbolPrice,
   subscribeMarketPriceAuthority,
-  type MarketAuthorityClientState,
 } from "@/lib/client/market-price-authority-bus"
+import { useMarketAuthoritySelector } from "@/hooks/use-market-authority-selector"
 import type { Coin } from "@/lib/coins-data"
 
 function blendPrice(from: number, to: number, t: number): number {
@@ -15,16 +15,17 @@ function blendPrice(from: number, to: number, t: number): number {
 }
 
 /**
- * Single canonical client subscription to /api/market/authority (shared bus — one poll).
+ * Canonical market authority hook (useSyncExternalStore — isolated from navigation state).
  */
 export function useMarketPriceAuthority() {
-  const [snap, setSnap] = useState<MarketAuthorityClientState>(() =>
-    getMarketPriceAuthorityClientState()
-  )
+  const snap = useMarketAuthoritySelector((s) => s)
   const [displayBtcUsd, setDisplayBtcUsd] = useState<number | null>(snap.btc?.priceUsd ?? null)
   const blendRef = useRef<number | null>(null)
 
-  useEffect(() => subscribeMarketPriceAuthority(() => setSnap(getMarketPriceAuthorityClientState())), [])
+  useEffect(() => {
+    const unsub = subscribeMarketPriceAuthority(() => {})
+    return unsub
+  }, [])
 
   const targetBtc = snap.btc?.priceUsd ?? null
 
@@ -46,7 +47,7 @@ export function useMarketPriceAuthority() {
     return () => {
       if (blendRef.current) cancelAnimationFrame(blendRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- blend from prior display value
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- blend from prior display
   }, [targetBtc, snap.authorityRevision])
 
   const getSymbolPrice = useCallback(
@@ -66,16 +67,14 @@ export function useMarketPriceAuthority() {
       status:
         snap.status === "idle" || snap.status === "loading"
           ? ("loading" as const)
-          : snap.status === "live"
-            ? ("live" as const)
-            : ("live" as const),
-      catalog: snap.catalog,
+          : ("live" as const),
+      catalog: applyDisplayPrices(snap.catalog, displayBtcUsd),
       gainers: snap.gainers,
       volumeLeaders: snap.volumeLeaders,
       updatedAt: snap.refreshedAt || snap.btc?.updatedAt,
       source: snap.source,
     }),
-    [snap]
+    [snap, displayBtcUsd]
   )
 
   const btcLive = useMemo(() => {
@@ -102,6 +101,11 @@ export function useMarketPriceAuthority() {
     authorityRevision: snap.authorityRevision,
     refreshedAt: snap.refreshedAt,
   }
+}
+
+function applyDisplayPrices(catalog: Coin[], blendedBtc: number | null): Coin[] {
+  if (blendedBtc == null) return catalog
+  return catalog.map((c) => (c.symbol === "BTC" ? { ...c, price: blendedBtc } : c))
 }
 
 export type MarketFeedFromAuthority = ReturnType<typeof useMarketPriceAuthority>["marketFeed"]

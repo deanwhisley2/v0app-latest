@@ -7,56 +7,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { kucoinPrivateGet } from "@/lib/kucoin-request"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
-
-let pricesCache: Record<string, number> = {}
-let lastPriceFetch = 0
+import { getExchangeBalanceUsdPrices } from "@/lib/server/exchange-balance-usd-prices"
 
 async function getUsdPrices(): Promise<Record<string, number>> {
-  const now = Date.now()
-  if (now - lastPriceFetch < 60000 && Object.keys(pricesCache).length > 0) return pricesCache
   try {
-    const response = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,ripple,cardano,polkadot,dogecoin,avalanche-2,chainlink,matic-network,tron,litecoin,uniswap,cosmos,stellar,filecoin,aptos,arbitrum,optimism,pepe,shiba-inu&vs_currencies=usd",
-      { signal: AbortSignal.timeout(5000) }
-    )
-    const data = await response.json()
-    const coinToSymbol: Record<string, string> = {
-      bitcoin: "BTC",
-      ethereum: "ETH",
-      solana: "SOL",
-      ripple: "XRP",
-      cardano: "ADA",
-      polkadot: "DOT",
-      dogecoin: "DOGE",
-      "avalanche-2": "AVAX",
-      chainlink: "LINK",
-      "matic-network": "MATIC",
-      tron: "TRX",
-      litecoin: "LTC",
-      uniswap: "UNI",
-      cosmos: "ATOM",
-      stellar: "XLM",
-      filecoin: "FIL",
-      aptos: "APT",
-      arbitrum: "ARB",
-      optimism: "OP",
-      pepe: "PEPE",
-      "shiba-inu": "SHIB",
-    }
-    const prices: Record<string, number> = {}
-    for (const [coinId, sym] of Object.entries(coinToSymbol)) {
-      if (data[coinId]?.usd) prices[sym] = data[coinId].usd
-    }
-    prices.USDT = 1
-    prices.USDC = 1
-    prices.DAI = 1
-    prices.BUSD = 1
-    prices.TUSD = 1
-    pricesCache = prices
-    lastPriceFetch = now
-    return prices
+    const prices = await getExchangeBalanceUsdPrices()
+    return { ...prices, USDT: 1, USDC: 1, DAI: 1, BUSD: 1, TUSD: 1 }
   } catch {
-    return pricesCache
+    return { USDT: 1, USDC: 1 }
   }
 }
 

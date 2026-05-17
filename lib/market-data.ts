@@ -166,24 +166,27 @@ async function rateLimitedFetch(url: string): Promise<any> {
 // ============================================================
 
 /**
- * Fetch current price for a single coin from CoinGecko
+ * Fetch current price for a single coin via canonical market authority API.
  */
 export async function fetchCoinPrice(symbol: string): Promise<number | null> {
-  const coinId = COINGECKO_IDS[symbol.toUpperCase()]
-  if (!coinId) return null
-
-  const cacheKey = `price_${symbol}`
+  const sym = symbol.toUpperCase()
+  const cacheKey = `price_${sym}`
   const cached = getCached<number>(cacheKey)
   if (cached !== null) return cached
 
   try {
-    const data = await rateLimitedFetch(
-      `${COINGECKO_BASE}/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true`
-    )
-    const price = data[coinId]?.usd ?? null
-    if (price !== null) {
-      setCache(cacheKey, price, 30_000) // Cache for 30 seconds
+    const res = await fetch("/api/market/authority", { cache: "no-store" })
+    const data = (await res.json()) as {
+      ok?: boolean
+      pricesBySymbol?: Record<string, { priceUsd?: number }>
+      btc?: { priceUsd?: number }
     }
+    if (!res.ok || !data.ok) return null
+    const price =
+      data.pricesBySymbol?.[sym]?.priceUsd ??
+      (sym === "BTC" ? data.btc?.priceUsd : undefined) ??
+      null
+    if (price != null) setCache(cacheKey, price, 30_000)
     return price
   } catch {
     return null
@@ -208,27 +211,27 @@ export async function fetchMultiplePrices(symbols: string[]): Promise<Record<str
 
   if (uncached.length === 0) return result
 
-  const ids = uncached
-    .map((s) => COINGECKO_IDS[s.toUpperCase()])
-    .filter(Boolean)
-    .join(",")
-
-  if (!ids) return result
-
   try {
-    const data = await rateLimitedFetch(
-      `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd`
-    )
+    const res = await fetch("/api/market/authority", { cache: "no-store" })
+    const data = (await res.json()) as {
+      ok?: boolean
+      pricesBySymbol?: Record<string, { priceUsd?: number }>
+      btc?: { priceUsd?: number }
+    }
+    if (!res.ok || !data.ok) return result
 
     for (const symbol of uncached) {
-      const id = COINGECKO_IDS[symbol.toUpperCase()]
-      if (id && data[id]?.usd) {
-        result[symbol] = data[id].usd
-        setCache(`price_${symbol}`, data[id].usd, 30_000)
+      const sym = symbol.toUpperCase()
+      const price =
+        data.pricesBySymbol?.[sym]?.priceUsd ??
+        (sym === "BTC" ? data.btc?.priceUsd : undefined)
+      if (typeof price === "number" && price > 0) {
+        result[symbol] = price
+        setCache(`price_${symbol}`, price, 30_000)
       }
     }
   } catch {
-    // Return whatever we have
+    /* return partial */
   }
 
   return result
