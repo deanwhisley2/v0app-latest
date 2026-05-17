@@ -29,7 +29,50 @@ import {
   UGANDA_AIRTEL_MERCHANT_NAME,
   UGANDA_AIRTEL_USSD_PREFIX,
 } from "@/lib/server/admin-payment-config"
-import { formatFundingAmountDisplay } from "@/lib/formatting/funding-amount-display"
+import {
+  formatFundingAmountDisplay,
+  type FundingAmountDisplayInput,
+} from "@/lib/formatting/funding-amount-display"
+
+function fundingApprovalAmountInput(row: {
+  amount?: string | number | null
+  amount_usd_locked?: number | null
+  amount_input_local?: number | null
+  input_currency?: string | null
+  fx_rate_snapshot?: number | null
+  l5_settlement_usd?: number | null
+  fx_middleware?: Record<string, unknown> | null
+}): FundingAmountDisplayInput {
+  return {
+    amount: row.amount != null ? Number(row.amount) : null,
+    amount_usd_locked: row.amount_usd_locked ?? null,
+    amount_input_local: row.amount_input_local ?? null,
+    input_currency: row.input_currency ?? null,
+    fx_rate_snapshot: row.fx_rate_snapshot ?? null,
+    l5_settlement_usd: row.l5_settlement_usd ?? null,
+    fx_middleware: row.fx_middleware ?? null,
+  }
+}
+
+function FundingApprovalAmountBlock({
+  input,
+  size = "sm",
+}: {
+  input: FundingAmountDisplayInput
+  size?: "sm" | "md"
+}) {
+  const lines = formatFundingAmountDisplay(input, { perspective: "approval" })
+  const primaryClass =
+    size === "md" ? "font-mono text-sm font-bold text-emerald-800 dark:text-emerald-200" : "font-mono font-semibold"
+  const secondaryClass =
+    size === "md" ? "font-mono text-[11px] text-muted-foreground" : "font-mono text-[11px] text-muted-foreground"
+  return (
+    <div className="space-y-0.5">
+      <p className={primaryClass}>{lines.primary}</p>
+      {lines.secondary ? <p className={secondaryClass}>{lines.secondary}</p> : null}
+    </div>
+  )
+}
 
 function FundingFxOpsSummary({
   fx,
@@ -124,6 +167,12 @@ type IncomingReq = {
   id: string
   user_id: string
   amount: string | number
+  amount_usd_locked?: number | null
+  amount_input_local?: number | null
+  input_currency?: string | null
+  fx_rate_snapshot?: number | null
+  l5_settlement_usd?: number | null
+  fx_middleware?: Record<string, unknown> | null
   tx_reference: string
   status: string
   note?: string | null
@@ -397,9 +446,12 @@ export function RetailerOperationalAssets({ isGuest }: { isGuest?: boolean }) {
                         Over SLA — user may appeal / escalate
                       </span>
                     ) : null}
-                    <p className="font-semibold">
-                      ${Number(r.amount).toFixed(2)} · {String(r.mobile_network ?? "network ?")}
-                    </p>
+                    <div className="font-semibold">
+                      <FundingApprovalAmountBlock input={fundingApprovalAmountInput(r)} />
+                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                        {String(r.mobile_network ?? "network ?")}
+                      </p>
+                    </div>
                     <p className="truncate text-muted-foreground">
                       From: {r.payer_display_name ?? "—"} · {r.payer_phone ?? "—"}
                     </p>
@@ -530,8 +582,8 @@ export function RetailerOperationalAssets({ isGuest }: { isGuest?: boolean }) {
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <p className="text-muted-foreground">Amount</p>
-                  <p className="font-mono font-semibold">${Number(reviewRow.amount).toFixed(2)}</p>
+                  <p className="text-muted-foreground">Amount (settlement)</p>
+                  <FundingApprovalAmountBlock input={fundingApprovalAmountInput(reviewRow)} size="md" />
                 </div>
                 <div>
                   <p className="text-muted-foreground">Network</p>
@@ -651,19 +703,7 @@ function FundingDeskAmountCell({ row }: { row: OperationsDeskApiRow }) {
       </span>
     )
   }
-  const lines = formatFundingAmountDisplay({
-    amount: row.amount,
-    l5_settlement_usd: row.l5_settlement_usd,
-    fx_middleware: row.fx_middleware,
-  })
-  return (
-    <div className="space-y-0.5">
-      <div className="font-mono font-semibold text-emerald-800 dark:text-emerald-200">{lines.primary}</div>
-      {lines.secondary ? (
-        <div className="font-mono text-[10px] font-normal text-muted-foreground">{lines.secondary}</div>
-      ) : null}
-    </div>
-  )
+  return <FundingApprovalAmountBlock input={fundingApprovalAmountInput(row)} />
 }
 
 type DeskSnoozeEntry = { key: string; note: string; at: number }
@@ -1970,16 +2010,9 @@ export function AdminOperationalAssets({
                           {Number(reviewRow.withdrawal_payout_usd ?? reviewRow.amount).toFixed(2)}
                         </p>
                       </div>
-                    ) : reviewRow.kind === "user_add_funds" &&
-                      reviewRow.l5_settlement_usd != null &&
-                      Number.isFinite(Number(reviewRow.l5_settlement_usd)) ? (
-                      <div className="mt-1 space-y-1">
-                        <p className="font-mono text-sm font-bold text-emerald-800 dark:text-emerald-200">
-                          L5 settlement (USD) · ${Number(reviewRow.l5_settlement_usd).toFixed(2)}
-                        </p>
-                        <p className="font-mono text-[10px] text-muted-foreground">
-                          Request row amount field · ${Number(reviewRow.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </p>
+                    ) : reviewRow.kind === "user_add_funds" ? (
+                      <div className="mt-1">
+                        <FundingApprovalAmountBlock input={fundingApprovalAmountInput(reviewRow)} size="md" />
                       </div>
                     ) : (
                       <p className="mt-1 font-mono">

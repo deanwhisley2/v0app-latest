@@ -56,7 +56,28 @@ export type FundingAmountDisplayLines = {
   localPerUsd: number | null
 }
 
-export function formatFundingAmountDisplay(input: FundingAmountDisplayInput): FundingAmountDisplayLines {
+export type FundingAmountDisplayOptions = {
+  /** Approval queues: USD settlement first, local user intent second. Customer views: local first. */
+  perspective?: "approval" | "customer"
+  /** Prefix for local leg on approval rows (e.g. "Intent: 50,000 UGX"). */
+  intentLabel?: string
+}
+
+function formatLocalFundingAmount(local: number, ccy: string): string {
+  const digits = ccy === "UGX" || ccy === "TZS" || ccy === "RWF" || ccy === "MWK" ? 0 : 2
+  return `${local.toLocaleString(undefined, { maximumFractionDigits: digits })} ${ccy}`
+}
+
+function formatUsdSettlementPrimary(settlementUsd: number): string {
+  return `$${settlementUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+export function formatFundingAmountDisplay(
+  input: FundingAmountDisplayInput,
+  options?: FundingAmountDisplayOptions,
+): FundingAmountDisplayLines {
+  const perspective = options?.perspective ?? "approval"
+  const intentLabel = options?.intentLabel ?? "Intent"
   const fx = input.fx_middleware
   const local =
     num(fx?.amount_input_local) > 0
@@ -74,11 +95,26 @@ export function formatFundingAmountDisplay(input: FundingAmountDisplayInput): Fu
         ? num(input.fx_rate_snapshot)
         : NaN
   const settlementUsd = resolveFundingSettlementUsd(input)
+  const hasLocal = Number.isFinite(local) && local > 0 && ccy.length >= 3
+
+  if (perspective === "approval" && hasLocal) {
+    const localFmt = formatLocalFundingAmount(local, ccy)
+    const usdPrimary =
+      settlementUsd != null && Number.isFinite(settlementUsd)
+        ? formatUsdSettlementPrimary(settlementUsd)
+        : null
+    return {
+      primary: usdPrimary ?? "—",
+      secondary: `${intentLabel}: ${localFmt}`,
+      settlementUsd,
+      localAmount: local,
+      localCurrency: ccy,
+      localPerUsd: Number.isFinite(lp) ? lp : null,
+    }
+  }
 
   if (Number.isFinite(local) && local > 0 && ccy.length >= 3) {
-    const localFmt = `${ccy} ${local.toLocaleString(undefined, {
-      maximumFractionDigits: ccy === "UGX" || ccy === "TZS" || ccy === "RWF" || ccy === "MWK" ? 0 : 2,
-    })}`
+    const localFmt = formatLocalFundingAmount(local, ccy)
     const usd =
       settlementUsd != null && Number.isFinite(settlementUsd)
         ? `≈ USD ${settlementUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -100,7 +136,10 @@ export function formatFundingAmountDisplay(input: FundingAmountDisplayInput): Fu
 
   if (settlementUsd != null && Number.isFinite(settlementUsd)) {
     return {
-      primary: `USD ${settlementUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      primary:
+        perspective === "approval"
+          ? formatUsdSettlementPrimary(settlementUsd)
+          : `USD ${settlementUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       secondary: null,
       settlementUsd,
       localAmount: null,

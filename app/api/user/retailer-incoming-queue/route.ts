@@ -35,14 +35,47 @@ export async function GET(request: Request) {
     const { data, error } = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,user_id,amount,tx_reference,status,note,mobile_network,fund_channel,created_at,appeal_note,escalated_to_admin,payer_display_name,payer_phone,updated_at,retailer_response_deadline_at"
+        "id,user_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,tx_reference,status,note,mobile_network,fund_channel,created_at,appeal_note,escalated_to_admin,payer_display_name,payer_phone,updated_at,retailer_response_deadline_at"
       )
       .eq("retailer_id", desk.id)
       .in("status", ["pending", "under_review", "appealed", "escalated"])
       .order("created_at", { ascending: false })
       .limit(100)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ requests: data ?? [], desk })
+
+    const rows = data ?? []
+    const fundIds = rows.map((r) => String((r as { id?: string }).id ?? "")).filter(Boolean)
+    const fxByFundRequestId = new Map<string, Record<string, unknown>>()
+    if (fundIds.length) {
+      const { data: fxNorm, error: fxNormErr } = await admin
+        .from("funding_fx_normalization")
+        .select(
+          "fund_request_id,routing_lane,amount_input_local,input_currency,local_per_usd,rate_date,rate_source,rate_captured_at,middleware_version,amount_usd_normalized,settled_amount_usd,settled_local_equivalent",
+        )
+        .in("fund_request_id", fundIds)
+      if (!fxNormErr) {
+        for (const fxRow of fxNorm ?? []) {
+          const rid = String((fxRow as { fund_request_id?: string }).fund_request_id ?? "")
+          if (rid) fxByFundRequestId.set(rid, fxRow as Record<string, unknown>)
+        }
+      }
+    }
+
+    const requests = rows.map((raw) => {
+      const id = String((raw as { id?: string }).id ?? "")
+      const fxRow = fxByFundRequestId.get(id) ?? null
+      const l5_settlement_usd = settlementUsdFromFundRequestRow(
+        raw as { amount_usd_locked?: unknown; amount?: unknown; amount_input_local?: unknown },
+        fxRow,
+      )
+      return {
+        ...raw,
+        l5_settlement_usd,
+        fx_middleware: fxRow,
+      }
+    })
+
+    return NextResponse.json({ requests, desk })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
   }
