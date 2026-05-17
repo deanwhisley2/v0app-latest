@@ -14,6 +14,16 @@ import {
   getPlatformLaunchStatus,
   launchPromotionsActive,
 } from "@/lib/server/platform-launch"
+import { adminRetailPoolUserId } from "@/lib/server/admin-retail-pool"
+
+/** Treasury RPC requires a UUID actor — use dedicated pool user or configured system id. */
+function launchTreasuryActorId(): string {
+  const pool = adminRetailPoolUserId()
+  if (pool) return pool
+  const env = process.env.NEXUS_TREASURY_SYSTEM_ACTOR_ID?.trim()
+  if (env && env.length >= 30) return env
+  return "00000000-0000-4000-8000-000000000001"
+}
 
 async function treasuryDebitReferenceExists(admin: SupabaseClient, referenceId: string): Promise<boolean> {
   const { data, error } = await admin
@@ -53,7 +63,7 @@ async function creditUserFromLaunchTreasury(
     amt,
     params.referenceId,
     params.reason,
-    "system",
+    launchTreasuryActorId(),
     "MAIN_TREASURY",
   )
   if (!tr.success) {
