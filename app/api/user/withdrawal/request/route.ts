@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       amount?: number
       currencyContext?: string
+      /** Exact local units the user typed (approval intent; ledger uses `amount` USD). */
+      amountInputLocal?: number
+      inputCurrency?: string
       /** Shown on L5 withdrawal desk (payout rail / destination hint — no PII required). */
       payoutRail?: string
       destinationHint?: string
@@ -141,6 +144,13 @@ export async function POST(request: Request) {
     const destHint =
       typeof body.destinationHint === "string" ? body.destinationHint.trim().slice(0, 200) || null : null
 
+    const rawLocal = body.amountInputLocal != null ? Number(body.amountInputLocal) : NaN
+    const inputCurRaw =
+      typeof body.inputCurrency === "string" ? body.inputCurrency.trim().toUpperCase().slice(0, 12) : ""
+    const amountInputLocal =
+      Number.isFinite(rawLocal) && rawLocal > 0 && isSupportedFiat(inputCurRaw) ? rawLocal : null
+    const inputCurrency = amountInputLocal != null ? inputCurRaw : null
+
     const { data: ins, error: wrErr } = await admin
       .from("withdrawal_requests")
       .insert({
@@ -150,6 +160,8 @@ export async function POST(request: Request) {
         payout_amount: settlement.payoutAmount,
         processing_fee_rate: settlement.processingFeeRate,
         currency_context: (body.currencyContext ?? "USD").slice(0, 12),
+        amount_input_local: amountInputLocal,
+        input_currency: inputCurrency,
         status: "pending",
         transaction_ref: txRef,
         metadata: {
@@ -160,6 +172,14 @@ export async function POST(request: Request) {
             payout_usd: settlement.payoutAmount,
             fee_rate: settlement.processingFeeRate,
           },
+          ...(amountInputLocal != null && inputCurrency
+            ? {
+                request_intent: {
+                  amount_input_local: amountInputLocal,
+                  input_currency: inputCurrency,
+                },
+              }
+            : {}),
           ...(rail ? { payout_rail: rail } : {}),
           ...(destHint ? { destination_hint: destHint } : {}),
         },

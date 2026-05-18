@@ -63,7 +63,7 @@ export type FundingAmountDisplayOptions = {
   intentLabel?: string
 }
 
-function formatLocalFundingAmount(local: number, ccy: string): string {
+export function formatLocalFundingAmount(local: number, ccy: string): string {
   const digits = ccy === "UGX" || ccy === "TZS" || ccy === "RWF" || ccy === "MWK" ? 0 : 2
   return `${local.toLocaleString(undefined, { maximumFractionDigits: digits })} ${ccy}`
 }
@@ -168,4 +168,18 @@ export function formatFundingAmountDisplay(
     localCurrency: null,
     localPerUsd: null,
   }
+}
+
+/** Compact one-line label for customer / retailer request lists. */
+export function formatFundingReceiptCompact(input: FundingAmountDisplayInput): string {
+  const lines = formatFundingAmountDisplay(input, { perspective: "customer" })
+  if (lines.localAmount != null && lines.localCurrency) {
+    const local = formatLocalFundingAmount(lines.localAmount, lines.localCurrency)
+    const usd =
+      lines.settlementUsd != null && Number.isFinite(lines.settlementUsd)
+        ? `≈ $${lines.settlementUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`
+        : null
+    return usd ? `${local} · ${usd}` : local
+  }
+  return lines.primary
 }

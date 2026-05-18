@@ -56,6 +56,7 @@ import {
 import { TreasuryPoolsPanel } from "@/components/dashboard/treasury-pools-panel"
 import { getOperationalRoleHint } from "@/lib/operational-role-hint"
 import { parseUgAirtelMerchantDesk, parseUgMtnMobileDesk } from "@/lib/retailer-payment-templates"
+import { formatFundingReceiptCompact } from "@/lib/formatting/funding-amount-display"
 
 interface CurrentUser {
   email: string
@@ -112,6 +113,10 @@ type RetailerFundingRequest = {
   retailer_id?: string | null
   official_corridor_route_id?: string | null
   amount: number
+  amount_usd_locked?: number | null
+  amount_input_local?: number | null
+  input_currency?: string | null
+  fx_rate_snapshot?: number | null
   tx_reference: string
   status: string
   note?: string | null
@@ -126,10 +131,34 @@ type IncomingFundReq = {
   id: string
   user_id: string
   amount: number
+  amount_usd_locked?: number | null
+  amount_input_local?: number | null
+  input_currency?: string | null
+  fx_rate_snapshot?: number | null
+  l5_settlement_usd?: number | null
+  fx_middleware?: Record<string, unknown> | null
   tx_reference: string
   status: string
   mobile_network?: string | null
   created_at: string
+}
+
+function fundRequestReceiptLabel(r: {
+  amount: number
+  amount_usd_locked?: number | null
+  amount_input_local?: number | null
+  input_currency?: string | null
+  fx_rate_snapshot?: number | null
+  fx_middleware?: Record<string, unknown> | null
+}): string {
+  return formatFundingReceiptCompact({
+    amount: r.amount,
+    amount_usd_locked: r.amount_usd_locked ?? null,
+    amount_input_local: r.amount_input_local ?? null,
+    input_currency: r.input_currency ?? null,
+    fx_rate_snapshot: r.fx_rate_snapshot ?? null,
+    fx_middleware: r.fx_middleware ?? null,
+  })
 }
 
 const initialMarketFeed: MarketFeedState = {
@@ -1849,6 +1878,8 @@ export default function DashboardPage() {
             body: JSON.stringify({
               amount,
               currencyContext: currency,
+              amountInputLocal: amountRaw,
+              inputCurrency: currency,
             }),
           })
           const out = (await res.json().catch(() => ({}))) as {
@@ -2736,7 +2767,7 @@ export default function DashboardPage() {
                     <div className="max-h-32 space-y-1 overflow-y-auto border-t border-border/50 px-2 pb-2 pt-1 sm:max-h-36">
                       {fundRequests.slice(0, 6).map((r) => (
                         <div key={r.id} className="text-[11px]">
-                          {r.tx_reference.slice(0, 18)} • {Number(r.amount).toFixed(2)} •{" "}
+                          {r.tx_reference.slice(0, 18)} • {fundRequestReceiptLabel(r)} •{" "}
                           {r.status === "appealed" || r.status === "escalated"
                             ? t("funding.status.appealed")
                             : r.status}
@@ -2950,7 +2981,8 @@ export default function DashboardPage() {
                     retailerIncoming.map((r) => (
                       <div key={r.id} className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
                         <span>
-                          {Number(r.amount).toFixed(2)} · {r.tx_reference.slice(0, 16)} · {r.mobile_network ?? "MM"}
+                          {fundRequestReceiptLabel(r)} · {r.tx_reference.slice(0, 16)} ·{" "}
+                          {r.mobile_network ?? "MM"}
                         </span>
                         <span className="flex gap-1">
                           <button

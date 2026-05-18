@@ -64,6 +64,14 @@ export type OperationsDeskRow = {
   /** Net amount for payout handlers after 3% processing fee. */
   withdrawal_payout_usd?: number | null
   withdrawal_fee_rate?: number | null
+  /** User-typed local funding intent (retailer_fund_requests). */
+  amount_input_local?: number | null
+  input_currency?: string | null
+  amount_usd_locked?: number | null
+  fx_rate_snapshot?: number | null
+  /** User-typed local withdrawal intent (withdrawal_requests). */
+  withdrawal_amount_input_local?: number | null
+  withdrawal_input_currency?: string | null
 }
 
 function msSince(iso: string): number | null {
@@ -97,7 +105,7 @@ export async function GET(request: Request) {
       admin
         .from("withdrawal_requests")
         .select(
-          "id,user_id,amount,processing_fee_amount,payout_amount,processing_fee_rate,currency_context,status,transaction_ref,created_at,reviewed_at,resolution_note,payout_status,held_at,metadata"
+          "id,user_id,amount,processing_fee_amount,payout_amount,processing_fee_rate,currency_context,amount_input_local,input_currency,status,transaction_ref,created_at,reviewed_at,resolution_note,payout_status,held_at,metadata"
         )
         .order("created_at", { ascending: false })
         .limit(200),
@@ -353,6 +361,13 @@ export async function GET(request: Request) {
         resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,
         l5_settlement_usd: amount,
         fx_middleware: fxRow,
+        amount_input_local:
+          raw.amount_input_local != null ? Number(raw.amount_input_local) : null,
+        input_currency: raw.input_currency ? String(raw.input_currency) : null,
+        amount_usd_locked:
+          raw.amount_usd_locked != null ? Number(raw.amount_usd_locked) : null,
+        fx_rate_snapshot:
+          raw.fx_rate_snapshot != null ? Number(raw.fx_rate_snapshot) : null,
       }
     }
 
@@ -374,6 +389,14 @@ export async function GET(request: Request) {
       )
       const amount = wdSettlement.grossAmount
       const meta = (raw.metadata as Record<string, unknown>) ?? {}
+      let wdInputLocal =
+        raw.amount_input_local != null ? Number(raw.amount_input_local) : NaN
+      let wdInputCur = String(raw.input_currency ?? "").trim()
+      if (!(wdInputLocal > 0) && meta.request_intent && typeof meta.request_intent === "object") {
+        const intent = meta.request_intent as Record<string, unknown>
+        wdInputLocal = Number(intent.amount_input_local ?? NaN)
+        wdInputCur = String(intent.input_currency ?? wdInputCur).trim()
+      }
       const rail = meta.payout_rail != null ? String(meta.payout_rail).trim() : ""
       const dest =
         meta.destination_hint != null
@@ -423,6 +446,9 @@ export async function GET(request: Request) {
         withdrawal_processing_fee_usd: wdSettlement.processingFeeAmount,
         withdrawal_payout_usd: wdSettlement.payoutAmount,
         withdrawal_fee_rate: wdSettlement.processingFeeRate,
+        withdrawal_amount_input_local:
+          Number.isFinite(wdInputLocal) && wdInputLocal > 0 ? wdInputLocal : null,
+        withdrawal_input_currency: wdInputCur.length >= 3 ? wdInputCur : null,
       }
     }
 

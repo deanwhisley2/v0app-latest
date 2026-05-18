@@ -33,6 +33,10 @@ import {
   formatFundingAmountDisplay,
   type FundingAmountDisplayInput,
 } from "@/lib/formatting/funding-amount-display"
+import {
+  formatWithdrawalAmountDisplay,
+  type WithdrawalAmountDisplayInput,
+} from "@/lib/formatting/withdrawal-amount-display"
 
 function fundingApprovalAmountInput(row: {
   amount?: string | number | null
@@ -70,6 +74,29 @@ function FundingApprovalAmountBlock({
     <div className="space-y-0.5">
       <p className={primaryClass}>{lines.primary}</p>
       {lines.secondary ? <p className={secondaryClass}>{lines.secondary}</p> : null}
+    </div>
+  )
+}
+
+function WithdrawalApprovalAmountBlock({
+  input,
+  size = "sm",
+}: {
+  input: WithdrawalAmountDisplayInput
+  size?: "sm" | "md"
+}) {
+  const lines = formatWithdrawalAmountDisplay(input)
+  const subClass = size === "md" ? "text-[11px]" : "text-[10px]"
+  return (
+    <div className={`space-y-0.5 font-mono ${subClass}`}>
+      <p className="font-semibold text-foreground">Gross {lines.grossPrimary}</p>
+      {lines.intentLine ? <p className="text-muted-foreground">{lines.intentLine}</p> : null}
+      {lines.feeLine ? <p className="text-amber-800 dark:text-amber-200">{lines.feeLine}</p> : null}
+      {lines.payoutLine ? (
+        <p className={`font-bold text-emerald-800 dark:text-emerald-200 ${size === "md" ? "text-base" : ""}`}>
+          {lines.payoutLine}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -671,6 +698,23 @@ type OperationsDeskApiRow = {
   withdrawal_processing_fee_usd?: number | null
   withdrawal_payout_usd?: number | null
   withdrawal_fee_rate?: number | null
+  amount_input_local?: number | null
+  input_currency?: string | null
+  amount_usd_locked?: number | null
+  fx_rate_snapshot?: number | null
+  withdrawal_amount_input_local?: number | null
+  withdrawal_input_currency?: string | null
+}
+
+function withdrawalApprovalAmountInput(row: OperationsDeskApiRow): WithdrawalAmountDisplayInput {
+  return {
+    grossUsd: Number(row.withdrawal_gross_usd ?? row.amount ?? 0),
+    processingFeeUsd: row.withdrawal_processing_fee_usd ?? null,
+    payoutUsd: row.withdrawal_payout_usd ?? null,
+    feeRate: row.withdrawal_fee_rate ?? null,
+    amountInputLocal: row.withdrawal_amount_input_local ?? null,
+    inputCurrency: row.withdrawal_input_currency ?? null,
+  }
 }
 
 function formatPendingAge(ms: number | null): string {
@@ -683,17 +727,7 @@ function formatPendingAge(ms: number | null): string {
 
 function FundingDeskAmountCell({ row }: { row: OperationsDeskApiRow }) {
   if (row.kind === "user_withdrawal") {
-    const gross = row.withdrawal_gross_usd ?? row.amount
-    const fee = row.withdrawal_processing_fee_usd ?? 0
-    const payout = row.withdrawal_payout_usd ?? gross
-    const fmt = (n: number) => (Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—")
-    return (
-      <div className="space-y-0.5 font-mono text-[10px]">
-        <div className="font-semibold text-foreground">Gross ${fmt(Number(gross))}</div>
-        <div className="text-amber-800 dark:text-amber-200">Fee ${fmt(Number(fee))}</div>
-        <div className="font-bold text-emerald-800 dark:text-emerald-200">Payout ${fmt(Number(payout))}</div>
-      </div>
-    )
+    return <WithdrawalApprovalAmountBlock input={withdrawalApprovalAmountInput(row)} />
   }
   if (row.kind !== "user_add_funds") {
     const usd = Number(row.amount)
@@ -1993,22 +2027,11 @@ export function AdminOperationalAssets({
                     <p className="mt-2 text-muted-foreground">{reviewRow.request_type_label}</p>
                     <p className="mt-2 font-mono break-all">Ref · {reviewRow.tx_reference}</p>
                     {reviewRow.kind === "user_withdrawal" ? (
-                      <div className="mt-2 space-y-1 rounded border border-amber-500/30 bg-amber-500/5 p-2 font-mono text-[11px]">
-                        <p className="font-semibold text-foreground">
-                          Gross (frozen) · $
-                          {Number(reviewRow.withdrawal_gross_usd ?? reviewRow.amount).toFixed(2)}
-                        </p>
-                        <p className="text-amber-900 dark:text-amber-100">
-                          Processing fee · $
-                          {Number(reviewRow.withdrawal_processing_fee_usd ?? 0).toFixed(2)}
-                          {reviewRow.withdrawal_fee_rate != null && reviewRow.withdrawal_fee_rate > 0
-                            ? ` (${(Number(reviewRow.withdrawal_fee_rate) * 100).toFixed(1)}%)`
-                            : " (legacy — no fee)"}
-                        </p>
-                        <p className="text-base font-bold text-emerald-800 dark:text-emerald-200">
-                          Forward to payout handler · $
-                          {Number(reviewRow.withdrawal_payout_usd ?? reviewRow.amount).toFixed(2)}
-                        </p>
+                      <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                        <WithdrawalApprovalAmountBlock
+                          input={withdrawalApprovalAmountInput(reviewRow)}
+                          size="md"
+                        />
                       </div>
                     ) : reviewRow.kind === "user_add_funds" ? (
                       <div className="mt-1">
