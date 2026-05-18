@@ -10,7 +10,6 @@ export async function notifyLaunchWelcome(
 ): Promise<void> {
   const launch = await getPlatformLaunchStatus()
   if (!launch.active || !launch.programs.onboarding?.welcome_notification) return
-  if (regionCode !== "UG" && launch.regionCode === "UG") return
 
   await appendUserAccountNotification(admin, {
     userId,
@@ -18,7 +17,7 @@ export async function notifyLaunchWelcome(
     sourceId: `${launch.slug ?? "launch"}:${userId}`,
     notificationType: "launch",
     title: "Welcome to Nexus Pro",
-    body: "Your account is live. Fund your wallet to start trading. Refer friends during the launch window to unlock rewards.",
+    body: "Your account is live. Fund your wallet to start trading. Referral rewards are active during the current promotional cycle.",
     nav: { tab: "wallet" },
     metadata: { launchSlug: launch.slug, regionCode },
   })

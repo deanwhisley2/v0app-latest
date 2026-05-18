@@ -38,6 +38,9 @@ export type LaunchProgramsConfig = {
 
 export const UGANDA_LAUNCH_SLUG = "uganda-launch-2026"
 
+/** Active promotional cycle — all countries, 14 days. */
+export const GLOBAL_LAUNCH_SLUG = "global-referral-2026"
+
 export type PlatformLaunchPublicStatus = {
   active: boolean
   slug: string | null
@@ -55,7 +58,7 @@ export const LAUNCH_REFERRER_FLAT_USD = 0.53
 export const LAUNCH_REFEREE_FIRST_DEPOSIT_RATE = 0.2
 export const LAUNCH_STARTER_FIX_PERSONA_ID = "fix_l1_t1"
 
-export const DEFAULT_UGANDA_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
+export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
   referrals: {
     enabled: true,
     referrer_flat_usd: LAUNCH_REFERRER_FLAT_USD,
@@ -66,12 +69,20 @@ export const DEFAULT_UGANDA_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
     enabled: true,
     welcome_notification: true,
     launch_banner: true,
-    default_country: "UG",
     starter_fix_unlock: true,
     starter_fix_persona_id: LAUNCH_STARTER_FIX_PERSONA_ID,
     valid_referee_min_funded_usd: 3,
   },
   monitoring: {
     elevated_ops: true,
+  },
+}
+
+/** @deprecated Prefer DEFAULT_GLOBAL_LAUNCH_PROGRAMS — Uganda-only window retained for legacy rows. */
+export const DEFAULT_UGANDA_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
+  ...DEFAULT_GLOBAL_LAUNCH_PROGRAMS,
+  onboarding: {
+    ...DEFAULT_GLOBAL_LAUNCH_PROGRAMS.onboarding,
+    default_country: "UG",
   },
 }

@@ -7,7 +7,7 @@ import {
   invalidatePlatformLaunchCache,
   loadLaunchWindow,
 } from "@/lib/server/platform-launch"
-import { UGANDA_LAUNCH_SLUG } from "@/lib/platform-launch-config"
+import { GLOBAL_LAUNCH_SLUG } from "@/lib/platform-launch-config"
 
 /** Level 5: read/update Uganda launch window configuration. */
 export async function GET(request: Request) {
@@ -47,7 +47,7 @@ export async function PATCH(request: Request) {
       extendDays?: number
     }
 
-    const slug = body.slug?.trim() || UGANDA_LAUNCH_SLUG
+    const slug = body.slug?.trim() || GLOBAL_LAUNCH_SLUG
     const admin = createAdminClient()
     const row = await loadLaunchWindow(admin, slug)
     if (!row) {

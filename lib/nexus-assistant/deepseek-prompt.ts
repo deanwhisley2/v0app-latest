@@ -64,7 +64,7 @@ export function buildJoelinDeepseekSystemPrompt(
     "How to explain Nexus Pro (always):",
     NEXUS_ASSISTANT_EXPLANATION_RULES,
     "",
-    "Container & earnings (customer-facing doctrine — follow this):",
+    "Container & bullish trades (customer-facing doctrine — follow this):",
     `- ${containerCustomerEarningsStory()}`,
     `- ${CONTAINER_WITHDRAWAL_SUMMARY}`,
     `- ${LEVEL_HINT}`,

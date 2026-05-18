@@ -22,6 +22,7 @@ import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter
 import { RegisterStepIndicator } from "@/components/auth/register-step-indicator"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
+import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -255,6 +256,7 @@ export default function RegisterPage() {
 
   return (
     <>
+      <WelcomePlatformModal />
       <AuthLayoutShell language={language}>
         <header className="mb-2 text-center">
           <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{authT.register.title}</h2>

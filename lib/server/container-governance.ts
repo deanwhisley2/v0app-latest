@@ -352,7 +352,7 @@ export function personaUnlocked(persona: ContainerPersonaRow, ctx: UnlockCtx): {
       ? { ok: true }
       : {
           ok: false,
-          reason: "Fund Nexus Main during the launch window to unlock your starter fixed-trade desk.",
+          reason: "Fund Nexus Main during the current promotional cycle to unlock your starter fixed-trade desk.",
         }
   }
 

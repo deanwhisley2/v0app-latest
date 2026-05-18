@@ -151,7 +151,7 @@ async function tryCreditRefereeLaunchDepositBonus(
     summary: `Launch promotion: ${(rate * 100).toFixed(0)}% first-deposit bonus credited to Nexus Main.`,
     metadata: { refereeUserId, depositUsd, rate, sourceRef, launchSlug: launch.slug },
     notificationTitle: "First deposit bonus credited",
-    notificationBody: `Your launch promotion bonus of $${bonus.toFixed(2)} USD has been added to Nexus Main.`,
+    notificationBody: `Your promotional-cycle bonus of $${bonus.toFixed(2)} USD has been added to Nexus Main.`,
   })
   if (!ok) return
 
@@ -194,7 +194,7 @@ async function tryCreditReferrerLaunchFlatBonus(
     summary: `Launch promotion: $${flatUsd.toFixed(2)} referral reward for a qualifying first deposit.`,
     metadata: { refereeUserId, referrerId, depositUsd, flatUsd, sourceRef, launchSlug: launch.slug },
     notificationTitle: "Referral reward credited",
-    notificationBody: `You earned $${flatUsd.toFixed(2)} USD from a referral's first deposit during the launch window.`,
+    notificationBody: `You earned $${flatUsd.toFixed(2)} USD from a referral's first deposit during the current promotional cycle.`,
   })
   if (!ok) return
 

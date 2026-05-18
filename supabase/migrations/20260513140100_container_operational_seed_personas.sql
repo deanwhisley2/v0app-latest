@@ -22,7 +22,7 @@ VALUES
     ARRAY['tr_002']::text[]
   ),
   (
-    'fix_l1_t1', 'fix', 'Desk Tau — Income', 'DT', 85.0, 'Low', 23.0,
+    'fix_l1_t1', 'fix', 'Desk Tau — Session', 'DT', 85.0, 'Low', 23.0,
     'Baseline institutional desk',
     'Level 1 structured allocation — unlocked once Nexus Main is funded.',
     '["Baseline corridor","Stable yield stack"]'::jsonb,

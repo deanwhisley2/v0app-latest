@@ -13,6 +13,7 @@ import {
   totalScheduleTargetUsd,
   type FixPeriodMonths,
 } from "@/lib/container-earnings-schedule"
+import { applyPlatformTerminology } from "@/lib/platform-terminology"
 import {
   COPY_TRADE_CYCLE_MS,
   COPY_TRADE_FORCE_CANCEL_FEE_RATE,
@@ -113,7 +114,7 @@ type ApiContainerDesk = {
 function mapApiDesk(row: ApiContainerDesk): MasterTrader {
   return {
     id: row.id,
-    name: row.name,
+    name: applyPlatformTerminology(row.name),
     avatar: row.avatar,
     winRate: row.winRate,
     totalProfit: 0,
@@ -1192,7 +1193,7 @@ export function ContainerMode({
 
       const grossDisplayed = fixPolicyDisplayedGrossUsd(trade)
       if (!(grossDisplayed > 0)) {
-        toast.error("No accrued earnings are available to release yet. Earnings build on the desk schedule.", {
+        toast.error("No accrued bullish trades are available to release yet. Bullish trades build on the desk schedule.", {
           duration: 6500,
         })
         return
@@ -1201,7 +1202,7 @@ export function ContainerMode({
       const headroom = Math.max(0, Math.round((grossDisplayed - trade.totalWithdrawn) * 100) / 100)
       if (headroom <= 0) {
         toast.error(
-          "Nothing left to release for this allocation — earnings may already be in your pocket or still accruing.",
+          "Nothing left to release for this allocation — bullish trades may already be in your pocket or still accruing.",
           { duration: 7500 },
         )
         return
@@ -1212,7 +1213,7 @@ export function ContainerMode({
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
-        if (!token) throw new Error("Sign in to release earnings.")
+        if (!token) throw new Error("Sign in to release bullish trades.")
 
         const res = await fetch("/api/user/fixed-trade/release-earnings", {
           method: "POST",
@@ -1244,7 +1245,7 @@ export function ContainerMode({
             )
             return
           }
-          toastMutationError(raw, "Could not release earnings — try again or contact support.")
+          toastMutationError(raw, "Could not release bullish trades — try again or contact support.")
           return
         }
 
@@ -1532,7 +1533,7 @@ export function ContainerMode({
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Container desk</p>
               <h3 className="mt-1 text-lg font-semibold tracking-tight">Balance overview</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Allocation, earnings, and open sessions in one overview.
+                Allocation, bullish trades, and open sessions in one overview.
               </p>
             </div>
             <div className="grid gap-px bg-border/50 sm:grid-cols-3">
@@ -1542,7 +1543,7 @@ export function ContainerMode({
                 <p className="mt-1 text-[11px] text-muted-foreground">Crypto committed to strategies</p>
               </div>
               <div className="bg-card p-4 sm:p-5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Earnings (display)</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Bullish Trades (display)</p>
                 <p className="mt-2 font-mono text-2xl font-bold tabular-nums text-success">
                   +{formatUserMoney(totalEarnedDisplayUsd)}
                 </p>
@@ -1868,7 +1869,7 @@ export function ContainerMode({
                             ) : (
                               <ArrowUpRight className="h-4 w-4 shrink-0" />
                             )}
-                            <span className="whitespace-nowrap">Release earnings</span>
+                            <span className="whitespace-nowrap">Release bullish trades</span>
                           </Button>
                         ) : (
                           <p className="order-1 w-full rounded-md border border-dashed border-border/80 bg-background/40 px-3 py-2.5 text-center text-xs leading-snug text-muted-foreground md:order-1 md:flex-1 md:text-left">
@@ -2140,7 +2141,7 @@ export function ContainerMode({
                       <p className="font-mono text-sm font-bold text-success">
                         ~{trader.monthlyReturn}% / mo curve
                       </p>
-                      <p className="text-xs text-muted-foreground">Scheduled earnings on allocation (policy)</p>
+                      <p className="text-xs text-muted-foreground">Scheduled bullish trades on allocation (policy)</p>
                     </div>
                   </div>
                   
@@ -2380,7 +2381,7 @@ export function ContainerMode({
                     {fixProjectionPreview ? (
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Total targeted earnings (model)</span>
+                          <span className="text-muted-foreground">Total targeted bullish trades (model)</span>
                           <span className="font-mono font-semibold text-success">
                             {formatUserMoney(fixProjectionPreview.totalTargetUsd)}
                           </span>
@@ -2404,14 +2405,14 @@ export function ContainerMode({
                   </div>
 
                   <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm text-muted-foreground space-y-2">
-                    <p className="font-semibold text-foreground">How earnings show up</p>
+                    <p className="font-semibold text-foreground">How bullish trades show up</p>
                     <p>
-                      After you lock, the trader you picked trades on your behalf. Earnings appear as natural,
+                      After you lock, the trader you picked trades on your behalf. Bullish trades appear as natural,
                       day‑by‑day progress — some sessions quieter, some stronger — so you can feel momentum while the
                       coin stays supported during slower periods.
                     </p>
                     <p className="text-xs">
-                      Release accrued earnings to your pocket anytime; Nexus Main withdrawals follow the 50% liquid-total cap on your dashboard.
+                      Release accrued bullish trades to your pocket anytime; Nexus Main withdrawals follow the 50% liquid-total cap on your dashboard.
                     </p>
                   </div>
 
@@ -2421,7 +2422,7 @@ export function ContainerMode({
                       <li>
                         - <strong>Locked crypto allocation</strong> for {fixPeriod} month{fixPeriod > 1 ? "s" : ""}. Early exit (funded
                         sessions): 10% agreement default + insurance from protected allocation only;{" "}
-                        <strong>full session earnings</strong> credited to Nexus Main with net principal.
+                        <strong>full session bullish trades</strong> credited to Nexus Main with net principal.
                       </li>
                       <li>- {t("container.fix.releaseRulesBody")}</li>
                       <li>- {t("container.fix.pocketWithdrawCap")}</li>

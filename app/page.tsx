@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { Button } from "@/components/ui/button"
+import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 
 export default function HomePage() {
   const router = useRouter()
@@ -64,7 +65,9 @@ export default function HomePage() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background">
+    <>
+      <WelcomePlatformModal />
+      <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background">
       {isGuestSession ? (
         <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm">
           <div className="mx-auto flex h-14 max-w-5xl items-center justify-end px-4">
@@ -107,6 +110,7 @@ export default function HomePage() {
           </Button>
         </div>
       </main>
-    </div>
+      </div>
+    </>
   )
 }

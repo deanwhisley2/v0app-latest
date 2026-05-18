@@ -96,7 +96,7 @@ const en: Record<string, string> = {
   "notifications.center.depositFailed": "Failed.",
   "notifications.center.detailBalancePlain": "Transfer completed.",
   "notifications.trade.fixedFinishedTitle": "Completed",
-  "notifications.trade.fixedFinishedMessage": "Principal {{principal}} · Earnings {{pocket}}",
+  "notifications.trade.fixedFinishedMessage": "Principal {{principal}} · Bullish Trades {{pocket}}",
   "notifications.trade.fixedFinishedDetail": "Fixed trade closed.",
   "notifications.trade.scheduleActiveTitle": "Active",
   "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}} mo",
@@ -106,7 +106,7 @@ const en: Record<string, string> = {
   "notifications.trade.copySettlementFailMessage": "Close incomplete. Refresh or force pull-out.",
 
   "notifications.container.dayProgressShort": "Day {{current}}/{{total}}",
-  "notifications.container.earningsLabel": "Earnings",
+  "notifications.container.earningsLabel": "Bullish Trades",
   "notifications.container.leaseSettling": "Processing.",
   "notifications.container.maturingIn": "{{n}}d remaining",
   "notifications.container.maturesToday": "Matures today",

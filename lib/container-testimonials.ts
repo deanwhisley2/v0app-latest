@@ -239,7 +239,7 @@ function templateLine(
     case 1:
       return `${displayName} from ${country} hit ${formatted} in ${p} trading Container Mode!`
     case 2:
-      return `${displayName} from ${country} started small and is now earning daily passive income with Container Mode${emoji}`
+      return `${displayName} from ${country} started small and is now building daily bullish trades with Container Mode${emoji}`
     case 3:
       return `${displayName} from ${country} made ${formatted} in ${p} — Container Mode changed everything!`
     case 4:

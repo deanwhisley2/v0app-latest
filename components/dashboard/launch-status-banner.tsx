@@ -2,19 +2,21 @@
 
 import { usePlatformLaunch } from "@/hooks/use-platform-launch"
 
-/** Compact institutional launch strip — one line, no marketing blocks. */
+/** Compact institutional referral strip — no “newly launched” marketing. */
 export function LaunchStatusBanner() {
   const { launch, active, loading } = usePlatformLaunch()
 
   if (loading || !active || !launch?.programs.onboarding?.launch_banner) return null
 
   const days = launch.daysRemaining
-  const label =
+  const timing =
     days > 1
-      ? `Launch · ${days}d left · 20% 1st deposit + $0.53 referral`
+      ? `${days} days left in this cycle`
       : days === 1
-        ? "Launch · final day · 20% 1st deposit + $0.53 referral"
-        : "Launch active · 20% 1st deposit + $0.53 referral"
+        ? "Final day of this cycle"
+        : "Current promotional cycle"
+
+  const label = `Global referral rewards event · ${timing} · 20% first deposit + $0.53 referral`
 
   return (
     <div
@@ -22,7 +24,7 @@ export function LaunchStatusBanner() {
       role="status"
     >
       <span className="font-medium">{label}</span>
-      <span className="text-muted-foreground"> · Referrals and onboarding rewards are live.</span>
+      <span className="text-muted-foreground"> · Referral rewards currently active.</span>
     </div>
   )
 }

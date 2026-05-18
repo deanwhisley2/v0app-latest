@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import {
-  DEFAULT_UGANDA_LAUNCH_PROGRAMS,
+  DEFAULT_GLOBAL_LAUNCH_PROGRAMS,
   type LaunchProgramsConfig,
   type PlatformLaunchPublicStatus,
+  GLOBAL_LAUNCH_SLUG,
   UGANDA_LAUNCH_SLUG,
 } from "@/lib/platform-launch-config"
 
@@ -26,8 +27,8 @@ let cacheAt = 0
 let cacheStatus: PlatformLaunchPublicStatus | null = null
 
 function parsePrograms(raw: unknown): LaunchProgramsConfig {
-  if (!raw || typeof raw !== "object") return DEFAULT_UGANDA_LAUNCH_PROGRAMS
-  return { ...DEFAULT_UGANDA_LAUNCH_PROGRAMS, ...(raw as LaunchProgramsConfig) }
+  if (!raw || typeof raw !== "object") return DEFAULT_GLOBAL_LAUNCH_PROGRAMS
+  return { ...DEFAULT_GLOBAL_LAUNCH_PROGRAMS, ...(raw as LaunchProgramsConfig) }
 }
 
 function computePublicStatus(row: PlatformLaunchWindowRow | null): PlatformLaunchPublicStatus {
@@ -105,7 +106,7 @@ async function activateIfScheduled(admin: SupabaseClient, row: PlatformLaunchWin
 
 export async function loadLaunchWindow(
   admin: SupabaseClient,
-  slug: string = UGANDA_LAUNCH_SLUG,
+  slug: string = GLOBAL_LAUNCH_SLUG,
 ): Promise<PlatformLaunchWindowRow | null> {
   const { data, error } = await admin.from("platform_launch_windows").select("*").eq("slug", slug).maybeSingle()
   if (error) throw new Error(error.message)

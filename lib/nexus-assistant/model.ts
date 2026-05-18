@@ -13,6 +13,10 @@ import {
   NEXUS_UI_WHERE_TO_GO,
   nexusPlatformOverviewForAssistant,
   NEXUS_ASSISTANT_EXPLANATION_RULES,
+  NEXUS_BULLISH_TRADES_EXPLAINER,
+  NEXUS_SESSIONS_EXPLAINER,
+  NEXUS_FEES_EXPLAINER,
+  NEXUS_EARN_PATH_EXPLAINER,
 } from "./knowledge"
 
 function norm(s: string) {
@@ -279,6 +283,73 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
         ? "Register to explore Wallet, Container, and Referrals. Settings → About for institutional contact."
         : "Settings → About for company channels. Say wallet, container, or referral for how-to.",
     ].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "how does nexus work",
+      "how does nexus pro work",
+      "how it works",
+      "how do you work",
+      "how does this work",
+    ])
+  ) {
+    return [
+      nexusPlatformOverviewForAssistant(),
+      "",
+      NEXUS_SESSIONS_EXPLAINER,
+      "",
+      NEXUS_BULLISH_TRADES_EXPLAINER,
+    ].join("\n")
+  }
+
+  if (hasAny(q, ["bullish trade", "bullish trades", "what are bullish"])) {
+    return [NEXUS_BULLISH_TRADES_EXPLAINER, "", CONTAINER_WITHDRAWAL_SUMMARY].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "what are sessions",
+      "trading session",
+      "trading sessions",
+      "monitored session",
+      "container session",
+      "fixed session",
+    ])
+  ) {
+    return [NEXUS_SESSIONS_EXPLAINER, "", containerCustomerEarningsStory()].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "how do users earn",
+      "how do i earn",
+      "how can i earn",
+      "how to earn",
+      "how users earn",
+      "make money on nexus",
+    ])
+  ) {
+    return [
+      NEXUS_EARN_PATH_EXPLAINER,
+      "",
+      containerCustomerEarningsStory(),
+      "",
+      NEXUS_REFERRAL_PROGRAM_GUIDE,
+    ].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "why fee",
+      "why fees",
+      "why are there fees",
+      "what are the fees",
+      "platform fee",
+      "insurance fee",
+    ])
+  ) {
+    return [NEXUS_FEES_EXPLAINER, "", NEXUS_WALLET_AND_WITHDRAWAL_RULES].join("\n")
   }
 
   if (
