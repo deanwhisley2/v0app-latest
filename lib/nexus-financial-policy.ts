@@ -60,13 +60,28 @@ export function roundUsd2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-/** Total debited from Nexus Main when opening a fix: principal + insurance (immediate). */
-export function computeFixedTradeMainDebitUsd(principalUsd: number, insuranceFeeUsd: number): number {
-  return roundUsd2(principalUsd + insuranceFeeUsd)
-}
-
+/** Insurance on gross commit (for display / legacy callers). */
 export function computeInsuranceFeeUsd(principalUsd: number, insuranceFeeRate: number): number {
   return roundUsd2(principalUsd * insuranceFeeRate)
+}
+
+/**
+ * Fixed-trade open: user commits `grossCommitUsd` from Nexus Main in one debit.
+ * Insurance is carved from that gross (not an extra Main charge); net principal is locked in the session.
+ */
+export function splitFixedTradeOpenCommitUsd(
+  grossCommitUsd: number,
+  insuranceFeeRate: number,
+): { grossCommitUsd: number; insuranceFeeUsd: number; principalUsd: number } {
+  const gross = roundUsd2(grossCommitUsd)
+  const insuranceFeeUsd = roundUsd2(gross * insuranceFeeRate)
+  const principalUsd = roundUsd2(gross - insuranceFeeUsd)
+  return { grossCommitUsd: gross, insuranceFeeUsd, principalUsd }
+}
+
+/** Total debited from Nexus Main when opening a fix (equals gross commit). */
+export function computeFixedTradeMainDebitUsd(grossCommitUsd: number, _insuranceFeeUsd?: number): number {
+  return roundUsd2(grossCommitUsd)
 }
 
 /** Early pullout before official lease end: agreement default (fraction of principal). */

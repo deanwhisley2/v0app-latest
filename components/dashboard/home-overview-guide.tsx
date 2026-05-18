@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { Layers, Plus, Wallet } from "lucide-react"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { cn } from "@/lib/utils"
 
 const GUIDE_DISMISS_KEY = "nexus_home_guide_collapsed_v1"
@@ -19,7 +20,9 @@ const steps = [
 
 /** Workspace guide — native details/summary (no transform animations). */
 export function HomeOverviewGuide({ t, className }: Props) {
+  const { currency } = useUserPreferences()
   const detailsRef = useRef<HTMLDetailsElement>(null)
+  const trustLine = t("home.overview.trustLine").replace("{{currency}}", currency)
 
   useEffect(() => {
     try {
@@ -77,7 +80,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
             )
           })}
         </ol>
-        <p className="mt-3 text-[11px] text-muted-foreground">{t("home.overview.trustLine")}</p>
+        <p className="mt-3 text-[11px] text-muted-foreground">{trustLine}</p>
       </div>
     </details>
   )

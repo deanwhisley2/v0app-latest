@@ -6,8 +6,8 @@
 import {
   computeEarlyExitSettlementUsd,
   computeFixedTradeMainDebitUsd,
-  computeInsuranceFeeUsd,
   fixInsuranceAndWithdrawFees,
+  splitFixedTradeOpenCommitUsd,
   NEXUS_EMERGENCY_PULLOUT_THRESHOLD,
   NEXUS_FIXED_EARLY_EXIT_AGREEMENT_RATE,
   NEXUS_HARD_PROTECTION_THRESHOLD,
@@ -39,10 +39,11 @@ function main() {
   const l2Med = fixInsuranceAndWithdrawFees(2, "Medium")
   assert(l2Med.insuranceFeeRate === 0.035 && l2Med.withdrawalFeeRate === 0.015, "L2 medium fees")
 
-  const ins = computeInsuranceFeeUsd(1000, l2Med.insuranceFeeRate)
-  assert(ins === 35, `insurance fee ${ins}`)
-  const debit = computeFixedTradeMainDebitUsd(1000, ins)
-  assert(debit === 1035, `main debit ${debit}`)
+  const split = splitFixedTradeOpenCommitUsd(1000, l2Med.insuranceFeeRate)
+  assert(split.insuranceFeeUsd === 35, `insurance carved ${split.insuranceFeeUsd}`)
+  assert(split.principalUsd === 965, `net principal ${split.principalUsd}`)
+  const debit = computeFixedTradeMainDebitUsd(1000)
+  assert(debit === 1000, `main debit equals gross commit ${debit}`)
 
   assert(NEXUS_FIXED_EARLY_EXIT_AGREEMENT_RATE === 0.1, "early exit 10%")
   const early = computeEarlyExitSettlementUsd(1000, 20, 150)

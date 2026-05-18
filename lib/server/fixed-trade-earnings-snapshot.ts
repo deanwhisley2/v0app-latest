@@ -27,7 +27,11 @@ export function computeFixedSessionPolicyGrossUsd(row: FixedSessionEarnedRow, no
     (row.seed_key && String(row.seed_key).trim()) ||
     `${row.id}-${principalUsd}-${months}-${row.created_at}`
   const insuranceFee = roundUsd2(Number(row.insurance_fee_amount ?? 0))
-  const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, insuranceFee)
+  const mdV = md?.v
+  const legacyGrossPrincipal =
+    !(typeof mdV === "number" && mdV >= 2) && md?.gross_commit_usd == null
+  const insuranceForSchedule = legacyGrossPrincipal ? insuranceFee : 0
+  const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, insuranceForSchedule)
   const startAt = new Date(row.created_at)
   const smoothGross = scheduledEarnedUsdSmooth(schedule, startAt, now)
   const cap = totalScheduleTargetUsd(schedule)

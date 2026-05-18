@@ -204,7 +204,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "home.overview.stepWithdrawHint": "When eligible",
   "home.overview.availableLabel": "Available balance",
   "home.overview.earningsBadge": "Lifetime bullish trades",
-  "home.overview.trustLine": "USD balances · institutional controls",
+  "home.overview.trustLine": "{{currency}} balances · institutional controls",
   "home.walletInfra.eyebrow": "Execution infrastructure",
   "home.walletInfra.title": "Link exchange infrastructure",
   "home.walletInfra.titleLinked": "Exchange infrastructure linked",

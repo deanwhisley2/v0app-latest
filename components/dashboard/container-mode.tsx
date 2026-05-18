@@ -21,7 +21,10 @@ import {
   estimateCopyForcePulloutUsd,
 } from "@/lib/copy-trade-policy"
 import { fixedTradeScheduleProjection } from "@/lib/fixed-trade-projection"
-import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees } from "@/lib/nexus-financial-policy"
+import {
+  fixInsuranceAndWithdrawFees,
+  splitFixedTradeOpenCommitUsd,
+} from "@/lib/nexus-financial-policy"
 import { localFiatUnitsToUsd } from "@/lib/currency-display"
 import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
@@ -420,12 +423,19 @@ export function ContainerMode({
 
   const fixProjectionPreview = useMemo(() => {
     if (activeTab !== "fix" || !selectedTrader) return null
-    const principalUsd = localFiatUnitsToUsd(parseFloat(fixAmount) || 0, currency)
-    if (principalUsd <= 0) return null
-    const seed = `${selectedTrader.id}-${fixPeriod}-${principalUsd}`
+    const grossUsd = localFiatUnitsToUsd(parseFloat(fixAmount) || 0, currency)
+    if (grossUsd <= 0) return null
     const fees = fixInsuranceAndWithdrawFees(userLevel, selectedTrader.riskLevel)
-    const insuranceUsd = computeInsuranceFeeUsd(principalUsd, fees.insuranceFeeRate)
-    return fixedTradeScheduleProjection(principalUsd, fixPeriod as FixPeriodMonths, seed, insuranceUsd)
+    const { principalUsd, insuranceFeeUsd } = splitFixedTradeOpenCommitUsd(grossUsd, fees.insuranceFeeRate)
+    if (!(principalUsd > 0)) return null
+    const seed = `${selectedTrader.id}-${fixPeriod}-${grossUsd}`
+    return {
+      ...fixedTradeScheduleProjection(principalUsd, fixPeriod as FixPeriodMonths, seed, 0),
+      grossCommitUsd: grossUsd,
+      principalUsd,
+      insuranceFeeUsd,
+      insuranceFeeRate: fees.insuranceFeeRate,
+    }
   }, [activeTab, selectedTrader, fixAmount, fixPeriod, currency, userLevel])
 
   // Server-authoritative recovery: active copy/fixed sessions after login, refresh, device change, or runtime restart.
@@ -852,7 +862,7 @@ export function ContainerMode({
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
       if (amount < copyMinUsdPolicy) {
-        toast.error(`Minimum copy allocation is $${copyMinUsdPolicy} USD equivalent in your currency.`, { duration: 6000 })
+        toast.error(`Minimum copy allocation is ${formatUserMoney(copyMinUsdPolicy)}.`, { duration: 6000 })
         return
       }
       if (!copyRiskAcknowledged) return
@@ -1025,10 +1035,19 @@ export function ContainerMode({
   const handleActivateFix = (trader: MasterTrader) => {
     void (async () => {
       const raw = parseFloat(fixAmount)
-      const amount = localFiatUnitsToUsd(raw, currency)
-      if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
-      if (amount < fixMinUsdPolicy) {
-        toast.error(`Minimum fixed allocation is $${fixMinUsdPolicy} USD equivalent in your currency.`, { duration: 6000 })
+      const grossCommitUsd = localFiatUnitsToUsd(raw, currency)
+      if (isNaN(raw) || raw <= 0 || !(grossCommitUsd > 0)) return
+      const openFees = fixInsuranceAndWithdrawFees(userLevel, trader.riskLevel)
+      const { principalUsd: netPrincipalUsd, insuranceFeeUsd: openInsuranceUsd } =
+        splitFixedTradeOpenCommitUsd(grossCommitUsd, openFees.insuranceFeeRate)
+      if (!(netPrincipalUsd > 0)) {
+        toast.error("Allocation is too small after insurance is reserved from your commitment.", { duration: 6000 })
+        return
+      }
+      if (netPrincipalUsd < fixMinUsdPolicy) {
+        toast.error(`Minimum fixed allocation is ${formatUserMoney(fixMinUsdPolicy)} (net after insurance).`, {
+          duration: 6000,
+        })
         return
       }
       if (trader.locked || fixLiquidityGate) return
@@ -1047,7 +1066,8 @@ export function ContainerMode({
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
-            principalUsd: amount,
+            commitUsd: grossCommitUsd,
+            principalUsd: grossCommitUsd,
             riskClass: trader.riskLevel,
             fixPeriodMonths: fixPeriod,
             traderPersonaId: trader.id,
@@ -1062,6 +1082,8 @@ export function ContainerMode({
           leaseEndAt?: string
           coinSymbol?: string
           fixedPriceUsd?: number
+          grossCommitUsd?: number
+          principalUsd?: number
           fees?: { insuranceFeeUsd?: number }
         }
         if (!res.ok || out?.success === false) {
@@ -1077,9 +1099,12 @@ export function ContainerMode({
               return e
             })()
 
-        const seed = out.seedKey ?? `${trader.id}-${amount}-${fixPeriod}-${startTime.getTime()}`
-        const insuranceOpen = typeof out.fees?.insuranceFeeUsd === "number" ? out.fees.insuranceFeeUsd : 0
-        const dailySchedule = buildContainerDailySchedule(amount, fixPeriod, seed, insuranceOpen)
+        const lockedPrincipalUsd =
+          typeof out.principalUsd === "number" && Number.isFinite(out.principalUsd)
+            ? out.principalUsd
+            : netPrincipalUsd
+        const seed = out.seedKey ?? `${trader.id}-${grossCommitUsd}-${fixPeriod}-${startTime.getTime()}`
+        const dailySchedule = buildContainerDailySchedule(lockedPrincipalUsd, fixPeriod, seed, 0)
 
         const coinSymbol = out.coinSymbol ?? "BTC"
         let fixedPrice: number
@@ -1103,7 +1128,7 @@ export function ContainerMode({
 
         const newTrade: ActiveFixTrade = {
           traderId: trader.id,
-          amount,
+          amount: lockedPrincipalUsd,
           period: fixPeriod,
           startTime,
           endTime,
@@ -1124,7 +1149,7 @@ export function ContainerMode({
           type: "system",
           title: t("notifications.trade.scheduleActiveTitle"),
           message: t("notifications.trade.scheduleActiveMessage")
-            .replace("{{amount}}", formatUserMoney(amount))
+            .replace("{{amount}}", formatUserMoney(lockedPrincipalUsd))
             .replace("{{months}}", String(fixPeriod)),
           nav: { kind: "notifications" },
         })
@@ -2338,7 +2363,9 @@ export function ContainerMode({
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Lock amount (managed allocation)</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      Lock amount ({currency}) — managed allocation
+                    </label>
                     <input
                       type="number"
                       value={fixAmount}
@@ -2396,7 +2423,7 @@ export function ContainerMode({
                         </div>
                         <p className="text-[11px] text-muted-foreground pt-1">
                           Uses the same daily bucket schedule as your live fixed lock — not live coin leverage.
-                          Insurance &amp; withdrawal fees apply at lock per Nexus financial policy.
+                          Insurance is taken from your commitment (not an extra Main charge) and credited to treasury at open.
                         </p>
                       </div>
                     ) : (

@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const { data: session, error: sErr } = await admin
       .from("fixed_trade_sessions")
       .select(
-        "id,user_id,principal_amount,insurance_fee_amount,risk_class,fix_period_months,status,seed_key,created_at"
+        "id,user_id,principal_amount,insurance_fee_amount,risk_class,fix_period_months,status,seed_key,created_at,metadata"
       )
       .eq("id", sessionId)
       .maybeSingle()
@@ -96,7 +96,11 @@ export async function POST(request: Request) {
       (session.seed_key as string | null)?.trim() ||
       `${session.id}-${principalUsd}-${months}-${createdAt}`
 
-    const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, openingInsuranceUsd)
+    const sessionMd = (session.metadata ?? {}) as Record<string, unknown>
+    const legacyGrossPrincipal =
+      !(typeof sessionMd.v === "number" && sessionMd.v >= 2) && sessionMd.gross_commit_usd == null
+    const insuranceForSchedule = legacyGrossPrincipal ? openingInsuranceUsd : 0
+    const schedule = buildContainerDailySchedule(principalUsd, months, seedKey, insuranceForSchedule)
     const cap = totalScheduleTargetUsd(schedule)
     const sessionEarnedUsd = round2(
       Math.min(cap, scheduledEarnedUsdSmooth(schedule, new Date(createdAt), now))

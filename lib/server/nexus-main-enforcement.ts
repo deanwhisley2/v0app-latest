@@ -49,32 +49,34 @@ async function casUpdateBalances(
 }
 
 /**
- * Fixed-trade open: debit principal + insurance from Nexus Main; lock principal into current_stake.
+ * Fixed-trade open: debit gross commit from Nexus Main once; lock net principal into current_stake.
+ * Insurance portion is routed to treasury separately (not a second Main debit).
  */
 export async function casOpenFixedTradeDebit(
   sb: SupabaseClient,
   userId: string,
-  principalUsd: number,
-  insuranceFeeUsd: number,
+  grossCommitUsd: number,
+  principalToStakeUsd: number,
 ): Promise<
   | { ok: true; available_balance: number; current_stake: number }
   | { ok: false; reason: "insufficient"; available_balance: number; required: number }
 > {
-  const totalDebit = round2(principalUsd + insuranceFeeUsd)
-  if (!(totalDebit > 0)) throw new Error("Invalid debit.")
+  const gross = round2(grossCommitUsd)
+  const principal = round2(principalToStakeUsd)
+  if (!(gross > 0) || !(principal > 0) || principal > gross) throw new Error("Invalid fixed-trade debit.")
 
   for (let attempt = 0; attempt < CAS_MAX_ATTEMPTS; attempt++) {
     const b = await selectBalances(sb, userId)
-    if (b.available_balance < totalDebit) {
+    if (b.available_balance < gross) {
       return {
         ok: false,
         reason: "insufficient",
         available_balance: b.available_balance,
-        required: totalDebit,
+        required: gross,
       }
     }
-    const nextAvail = round2(b.available_balance - totalDebit)
-    const nextStake = round2(b.current_stake + principalUsd)
+    const nextAvail = round2(b.available_balance - gross)
+    const nextStake = round2(b.current_stake + principal)
     const applied = await casUpdateBalances(sb, userId, b.available_balance, nextAvail, nextStake)
     if (applied) {
       return { ok: true, available_balance: nextAvail, current_stake: nextStake }

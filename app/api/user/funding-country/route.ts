@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { isSupportedOperatingCountry } from "@/lib/operating-countries"
+import { corridorCurrencyForCountry, isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { enforceCountryCorridor } from "@/lib/server/country-corridor-guard"
 
 /** Level 1: persist preferred country for local retailer matching (ISO 3166-1 alpha-2). */
@@ -22,7 +22,15 @@ export async function POST(request: Request) {
     const admin = createAdminClient()
     const { error } = await admin.from("profiles").update({ funding_country_code: code }).eq("id", user.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-    return NextResponse.json({ ok: true, fundingCountryCode: code })
+
+    const displayCurrency = corridorCurrencyForCountry(code)
+    if (displayCurrency) {
+      await admin.auth.admin.updateUserById(user.id, {
+        user_metadata: { preferred_currency: displayCurrency },
+      })
+    }
+
+    return NextResponse.json({ ok: true, fundingCountryCode: code, displayCurrency: displayCurrency ?? null })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
   }

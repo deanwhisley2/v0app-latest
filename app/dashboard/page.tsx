@@ -708,7 +708,7 @@ export default function DashboardPage() {
     return false
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
 
-  /** Local MM: amount input is in corridor fiat (UG→UGX), not necessarily wallet display currency (often USD). */
+  /** Local MM: amount input is in corridor fiat (UG→UGX), aligned with wallet display currency. */
   const localMmCorridorFiat = useMemo(() => {
     const cc = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
     return cc.length === 2 ? corridorFiatForCountryIso2(cc) : null

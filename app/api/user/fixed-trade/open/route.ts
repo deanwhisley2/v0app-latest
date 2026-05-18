@@ -4,7 +4,12 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { traderEligibleForFixedTrade } from "@/lib/fix-trade-access"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
-import { computeInsuranceFeeUsd, fixInsuranceAndWithdrawFees, roundUsd2 } from "@/lib/nexus-financial-policy"
+import {
+  fixInsuranceAndWithdrawFees,
+  roundUsd2,
+  splitFixedTradeOpenCommitUsd,
+} from "@/lib/nexus-financial-policy"
+import { treasury } from "@/lib/financial/treasury-authority"
 import { casOpenFixedTradeDebit } from "@/lib/server/nexus-main-enforcement"
 import { resolveFixedTradeMarketLock } from "@/lib/server/fixed-trade-market-lock"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
@@ -35,33 +40,26 @@ export async function POST(request: Request) {
     const { user } = auth
 
     const body = (await request.json().catch(() => ({}))) as {
+      /** Total commitment from Nexus Main (insurance carved inside this amount). */
       principalUsd?: number
+      commitUsd?: number
       riskClass?: FixTradeRiskLevel
       fixPeriodMonths?: 1 | 3 | 6
       traderPersonaId?: string
       seedKey?: string
     }
 
-    const principalUsd = Number(body.principalUsd ?? 0)
+    const grossCommitUsd = Number(body.commitUsd ?? body.principalUsd ?? 0)
     const riskClass = body.riskClass
     const fixPeriodMonths = body.fixPeriodMonths
     const traderPersonaIdRaw = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
 
-    if (!Number.isFinite(principalUsd) || principalUsd <= 0) {
+    if (!Number.isFinite(grossCommitUsd) || grossCommitUsd <= 0) {
       return jsonMutationError(
         400,
         "INVALID_PRINCIPAL",
-        "Enter a valid principal amount greater than zero.",
-        "fixed-trade/open: principalUsd invalid.",
-      )
-    }
-    const minP = assertFixPrincipalUsd(principalUsd)
-    if (!minP.ok) {
-      return jsonMutationError(
-        400,
-        "PRINCIPAL_POLICY",
-        minP.message,
-        "fixed-trade/open: assertFixPrincipalUsd failed.",
+        "Enter a valid allocation amount greater than zero.",
+        "fixed-trade/open: gross commit invalid.",
       )
     }
     if (riskClass !== "Low" && riskClass !== "Medium" && riskClass !== "High") {
@@ -157,14 +155,34 @@ export async function POST(request: Request) {
     }
 
     const fees = fixInsuranceAndWithdrawFees(userLevel, riskClass)
-    const insuranceFeeUsd = computeInsuranceFeeUsd(principalUsd, fees.insuranceFeeRate)
+    const { grossCommitUsd: grossUsd, insuranceFeeUsd, principalUsd } = splitFixedTradeOpenCommitUsd(
+      grossCommitUsd,
+      fees.insuranceFeeRate,
+    )
+    if (!(principalUsd > 0)) {
+      return jsonMutationError(
+        400,
+        "INVALID_PRINCIPAL",
+        "Allocation is too small after insurance is reserved from your commitment.",
+        "fixed-trade/open: net principal non-positive.",
+      )
+    }
+    const minP = assertFixPrincipalUsd(principalUsd)
+    if (!minP.ok) {
+      return jsonMutationError(
+        400,
+        "PRINCIPAL_POLICY",
+        minP.message,
+        "fixed-trade/open: assertFixPrincipalUsd failed.",
+      )
+    }
 
-    const debited = await casOpenFixedTradeDebit(admin, user.id, principalUsd, insuranceFeeUsd)
+    const debited = await casOpenFixedTradeDebit(admin, user.id, grossUsd, principalUsd)
     if (!debited.ok) {
       return jsonMutationError(
         400,
         "INSUFFICIENT_NEXUS_MAIN",
-        "Nexus Main does not have enough available balance to fund principal plus insurance. Retail and other buckets cannot be used here.",
+        "Nexus Main does not have enough available balance for this allocation. Retail and other buckets cannot be used here.",
         "fixed-trade/open: casOpenFixedTradeDebit failed.",
         {
           suggested_action: "Add funds to Nexus Main or reduce the allocation size.",
@@ -178,7 +196,7 @@ export async function POST(request: Request) {
 
     const seedKey =
       body.seedKey?.trim() ||
-      `${user.id}-${persona.id}-${principalUsd}-${fixPeriodMonths}-${Date.now()}`
+      `${user.id}-${persona.id}-${grossUsd}-${fixPeriodMonths}-${Date.now()}`
 
     const display = await resolveFixedTradeMarketLock(seedKey)
 
@@ -194,7 +212,8 @@ export async function POST(request: Request) {
         trader_persona_id: persona.id,
         seed_key: seedKey,
         metadata: {
-          v: 1,
+          v: 2,
+          gross_commit_usd: grossUsd,
           coin_symbol: display.coinSymbol,
           fixed_price_usd: display.fixedPriceUsd,
           price_provider: display.provider,
@@ -207,6 +226,20 @@ export async function POST(request: Request) {
     if (sErr) throw new Error(sErr.message)
 
     const sessionId = sessionRow?.id as string
+
+    if (insuranceFeeUsd > 0) {
+      const tr = await treasury.mutateTreasury(
+        "CREDIT",
+        insuranceFeeUsd,
+        `fixed_trade_insurance:${sessionId}`,
+        `Fixed-trade insurance ${(fees.insuranceFeeRate * 100).toFixed(2)}% carved from open commit`,
+        user.id,
+        "MAIN_TREASURY",
+      )
+      if (!tr.success) {
+        console.error("[fixed-trade/open] treasury insurance credit failed:", tr.error, sessionId)
+      }
+    }
     const createdAtIso = sessionRow?.created_at as string
     const resolvedSeed = (sessionRow?.seed_key as string | null)?.trim() || seedKey
     const leaseEnd = officialLeaseEndDate(createdAtIso, fixPeriodMonths)
@@ -221,7 +254,8 @@ export async function POST(request: Request) {
       .from("fixed_trade_sessions")
       .update({
         metadata: {
-          v: 1,
+          v: 2,
+          gross_commit_usd: grossUsd,
           coin_symbol: display.coinSymbol,
           fixed_price_usd: display.fixedPriceUsd,
           price_provider: display.provider,
@@ -240,14 +274,16 @@ export async function POST(request: Request) {
       category: "trade",
       amount: insuranceFeeUsd,
       feeAmount: 0,
-      balanceSource: "available_balance",
-      balanceDestination: "platform_insurance",
+      balanceSource: "fixed_trade_gross_commit",
+      balanceDestination: "MAIN_TREASURY",
       status: "completed",
       relatedTradeId: sessionId,
       actorType: "user",
       actorId: user.id,
-      summary: `Insurance fee (${(fees.insuranceFeeRate * 100).toFixed(2)}%) deducted at fixed-trade open.`,
+      summary: `Insurance (${(fees.insuranceFeeRate * 100).toFixed(2)}%) carved from allocation and credited to treasury.`,
       metadata: {
+        grossCommitUsd: grossUsd,
+        principalUsd,
         withdrawalFeeRateDeclared: fees.withdrawalFeeRate,
         fixPeriodMonths,
         riskClass,
@@ -260,14 +296,14 @@ export async function POST(request: Request) {
       category: "trade",
       amount: principalUsd,
       feeAmount: 0,
-      balanceSource: "available_balance",
+      balanceSource: "fixed_trade_gross_commit",
       balanceDestination: "current_stake",
       status: "completed",
       relatedTradeId: sessionId,
       actorType: "user",
       actorId: user.id,
-      summary: "Principal locked into active fixed session from Nexus Main.",
-      metadata: { fixPeriodMonths, riskClass },
+      summary: "Net principal locked into active fixed session (insurance carved from gross commit).",
+      metadata: { grossCommitUsd: grossUsd, insuranceFeeUsd, fixPeriodMonths, riskClass },
     })
 
     return NextResponse.json({
@@ -279,8 +315,11 @@ export async function POST(request: Request) {
       leaseEndAt: leaseEnd.toISOString(),
       coinSymbol: display.coinSymbol,
       fixedPriceUsd: display.fixedPriceUsd,
+      grossCommitUsd: grossUsd,
+      principalUsd: roundUsd2(principalUsd),
       fees: {
         insuranceFeeUsd: roundUsd2(insuranceFeeUsd),
+        insuranceFeeRate: fees.insuranceFeeRate,
         declaredWithdrawalFeeRate: fees.withdrawalFeeRate,
       },
       balances: {

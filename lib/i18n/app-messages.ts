@@ -118,6 +118,8 @@ const en: Record<string, string> = {
   "settings.languageHint": "Applies after reload on some screens.",
 
   "settings.currencyTitle": "Display currency",
+  "settings.currencyCorridorLocked":
+    "Your operating country uses {{currency}} for all balances and trades. Amounts are shown in your local money only.",
   "settings.item.language": "Language",
   "settings.item.currency": "Display currency",
   "settings.item.region": "Operating country",
@@ -154,8 +156,7 @@ const fr: Partial<Record<string, string>> = {
   "settings.item.currency": "Devise d’affichage",
   "settings.item.region": "Pays d’opération",
   "settings.regionTitle": "Pays d’opération",
-  "settings.regionHint":
-    "Utilisé pour les corridors de financement et les valeurs par défaut régionales. La comptabilité interne reste en USD.",
+  "settings.regionHint": "Utilisé pour les corridors de financement et les valeurs par défaut régionales.",
   "settings.regionApplySuggestion": "Appliquer la langue et la devise suggérées",
   "settings.regionSaved": "Pays enregistré pour la correspondance de financement.",
   ...(fundingWithdrawalOverlays.fr ?? {}),
@@ -184,8 +185,7 @@ const sw: Partial<Record<string, string>> = {
   "settings.item.currency": "Sarafu ya kuonyesha",
   "settings.item.region": "Nchi ya uendeshaji",
   "settings.regionTitle": "Nchi ya uendeshaji",
-  "settings.regionHint":
-    "Inatumika kwa njia za fedha za ndani na mapendekezo ya kikanda. Hesabu ya ndani bado iko kwa USD.",
+  "settings.regionHint": "Inatumika kwa njia za fedha za ndani na mapendekezo ya kikanda.",
   "settings.regionApplySuggestion": "Tumia lugha na sarafu zilizopendekezwa",
   "settings.regionSaved": "Nchi imehifadhiwa kwa ulinganifu wa fedha.",
   ...(fundingWithdrawalOverlays.sw ?? {}),
@@ -213,8 +213,7 @@ const ar: Partial<Record<string, string>> = {
   "settings.item.currency": "عملة العرض",
   "settings.item.region": "دولة التشغيل",
   "settings.regionTitle": "دولة التشغيل",
-  "settings.regionHint":
-    "تُستخدم لممرات التمويل المحلية والإعدادات الإقليمية. المحاسبة الداخلية تبقى بالدولار الأمريكي.",
+  "settings.regionHint": "تُستخدم لممرات التمويل المحلية والإعدادات الإقليمية.",
   "settings.regionApplySuggestion": "تطبيق اللغة وعملة العرض المقترحة",
   "settings.regionSaved": "تم حفظ البلد لمطابقة التمويل.",
   ...(fundingWithdrawalOverlays.ar ?? {}),
@@ -247,7 +246,7 @@ const ha: Partial<Record<string, string>> = {
   "settings.languageTitle": "Harshe",
   "settings.item.region": "Ƙasar aiki",
   "settings.regionTitle": "Ƙasar aiki",
-  "settings.regionHint": "Don hanyoyin biyan kuɗi na gida da saitunan yanki. Lissafi na ciki har yanzu USD ne.",
+  "settings.regionHint": "Don hanyoyin biyan kuɗi na gida da saitunan yanki.",
   "settings.regionApplySuggestion": "Yi amfani da harshe da kuɗin da aka ba da shawara",
   "settings.regionSaved": "An adana ƙasar don dacewa da biyan kuɗi.",
   ...(fundingWithdrawalOverlays.ha ?? {}),

@@ -40,6 +40,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import { OPERATING_COUNTRY_OPTIONS, suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
+import { customerCurrencyOptionsForCountry } from "@/lib/customer-display-currency"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
@@ -923,13 +924,23 @@ export function SettingsScreen({
 
   // Currency Selection
   if (currentView === "currency") {
+    const corridorLocked = customerCurrencyOptionsForCountry(appCountry ?? null)
+    const currencyChoices =
+      corridorLocked != null
+        ? CURRENCY_OPTIONS.filter((opt) => corridorLocked.includes(opt.code as FiatCurrencyCode))
+        : CURRENCY_OPTIONS
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
           <h3 className="mb-6 text-lg font-semibold">{t("settings.currencyTitle")}</h3>
+          {corridorLocked != null ? (
+            <p className="mb-4 text-sm text-muted-foreground">
+              {t("settings.currencyCorridorLocked").replace("{{currency}}", corridorLocked[0] ?? appCurrency)}
+            </p>
+          ) : null}
           <div className="grid gap-2 sm:grid-cols-2">
-            {CURRENCY_OPTIONS.map((opt) => (
+            {currencyChoices.map((opt) => (
               <button
                 key={opt.code}
                 type="button"

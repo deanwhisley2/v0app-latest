@@ -15,6 +15,7 @@ import {
   launchPromotionsActive,
 } from "@/lib/server/platform-launch"
 import { adminRetailPoolUserId } from "@/lib/server/admin-retail-pool"
+import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 
 /** Treasury RPC requires a UUID actor — use dedicated pool user or configured system id. */
 function launchTreasuryActorId(): string {
@@ -142,6 +143,7 @@ async function tryCreditRefereeLaunchDepositBonus(
   if (referee.referee_launch_deposit_bonus_at) return
 
   const refId = `launch_referee_deposit_bonus:${refereeUserId}`
+  const bonusFmt = await formatCustomerMoneyForUser(sb, refereeUserId, bonus)
   const ok = await creditUserFromLaunchTreasury(sb, {
     userId: refereeUserId,
     amountUsd: bonus,
@@ -151,7 +153,7 @@ async function tryCreditRefereeLaunchDepositBonus(
     summary: `Launch promotion: ${(rate * 100).toFixed(0)}% first-deposit bonus credited to Nexus Main.`,
     metadata: { refereeUserId, depositUsd, rate, sourceRef, launchSlug: launch.slug },
     notificationTitle: "First deposit bonus credited",
-    notificationBody: `Your promotional-cycle bonus of $${bonus.toFixed(2)} USD has been added to Nexus Main.`,
+    notificationBody: `Your promotional-cycle bonus of ${bonusFmt} has been credited to your main balance.`,
   })
   if (!ok) return
 
@@ -185,6 +187,7 @@ async function tryCreditReferrerLaunchFlatBonus(
   if (referee.referrer_first_deposit_bonus_at) return
 
   const refId = `launch_referrer_flat:${refereeUserId}`
+  const rewardFmt = await formatCustomerMoneyForUser(sb, referrerId, flatUsd)
   const ok = await creditUserFromLaunchTreasury(sb, {
     userId: referrerId,
     amountUsd: flatUsd,
@@ -194,7 +197,7 @@ async function tryCreditReferrerLaunchFlatBonus(
     summary: `Launch promotion: $${flatUsd.toFixed(2)} referral reward for a qualifying first deposit.`,
     metadata: { refereeUserId, referrerId, depositUsd, flatUsd, sourceRef, launchSlug: launch.slug },
     notificationTitle: "Referral reward credited",
-    notificationBody: `You earned $${flatUsd.toFixed(2)} USD from a referral's first deposit during the current promotional cycle.`,
+    notificationBody: `You earned ${rewardFmt} from a referral's first deposit during the current promotional cycle.`,
   })
   if (!ok) return
 

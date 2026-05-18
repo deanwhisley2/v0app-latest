@@ -14,6 +14,7 @@ import {
   notifyReferrerNewReferee,
 } from "@/lib/server/launch-notifications"
 import { isSupportedOperatingCountry } from "@/lib/operating-countries"
+import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import {
   COUNTRY_CORRIDOR_REQUIRED_MESSAGE,
   enforceCountryCorridor,
@@ -67,11 +68,15 @@ export async function POST(request: Request) {
   const phone = typeof body.phone === "string" ? body.phone.trim() : ""
   const preferred_language =
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
-  const preferred_currency =
+  const preferred_currency_raw =
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
   const funding_country_raw =
     typeof body.funding_country_code === "string" ? body.funding_country_code.trim().toUpperCase().slice(0, 2) : ""
   const funding_country_code = /^[A-Z]{2}$/.test(funding_country_raw) ? funding_country_raw : ""
+  const preferred_currency = displayCurrencyForCustomer(
+    funding_country_code,
+    preferred_currency_raw || null,
+  )
   const referralInvite = normalizeReferralCodeInput(
     typeof body.referral_code === "string" ? body.referral_code : ""
   )

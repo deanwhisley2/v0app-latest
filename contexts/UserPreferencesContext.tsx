@@ -21,6 +21,7 @@ import {
   localeForLanguage,
 } from "@/lib/user-preferences"
 import { formatMoneyAmount } from "@/lib/currency-display"
+import { mergeCustomerPreferencesWithCorridor } from "@/lib/customer-display-currency"
 import { translateApp } from "@/lib/i18n/app-messages"
 import { supabase } from "@/lib/supabaseClient"
 
@@ -51,12 +52,14 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     const fromMeta = user?.user_metadata
       ? preferencesFromUserMetadata(user.user_metadata as Record<string, unknown>)
       : {}
-    const merged = parsePreferences({
+    const base = parsePreferences({
       ...DEFAULT_PREFERENCES,
       ...stored,
       ...fromMeta,
     })
+    const merged = mergeCustomerPreferencesWithCorridor(base, base.country ?? null)
     setPrefs(merged)
+    writePreferencesToStorage(merged)
   }, [user?.id, user?.user_metadata])
 
   /** When the user has not set a country in local preferences, mirror `profiles.funding_country_code` for regional UX. */
@@ -79,9 +82,14 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
       if (!raw || raw.length !== 2) return
 
       setPrefs((prev) => {
-        if (prev.country === raw) return prev
-        const next = parsePreferences({ ...prev, country: raw })
+        const next = mergeCustomerPreferencesWithCorridor(parsePreferences({ ...prev, country: raw }), raw)
+        if (next.country === prev.country && next.currency === prev.currency) return prev
         writePreferencesToStorage(next)
+        const meta = user?.user_metadata as Record<string, unknown> | undefined
+        const metaCur = meta?.preferred_currency ?? meta?.preferredCurrency
+        if (next.currency !== metaCur) {
+          void supabase.auth.updateUser({ data: { preferred_currency: next.currency } })
+        }
         return next
       })
     })()
