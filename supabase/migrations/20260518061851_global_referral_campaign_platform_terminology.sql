@@ -17,14 +17,14 @@ INSERT INTO public.platform_launch_windows (
   status,
   programs
 )
-VALUES (
+SELECT
   'global-referral-2026',
   'Global referral rewards event',
   'GLOBAL',
   14,
   true,
-  now(),
-  now() + interval '14 days',
+  coalesce(u.activated_at, now()),
+  coalesce(u.ends_at, now() + interval '14 days'),
   'active',
   jsonb_build_object(
     'referrals', jsonb_build_object(
@@ -45,7 +45,8 @@ VALUES (
       'elevated_ops', true
     )
   )
-)
+FROM (SELECT 1) _one
+LEFT JOIN public.platform_launch_windows u ON u.slug = 'uganda-launch-2026'
 ON CONFLICT (slug) DO UPDATE SET
   title = excluded.title,
   region_code = excluded.region_code,
@@ -53,11 +54,7 @@ ON CONFLICT (slug) DO UPDATE SET
   programs = excluded.programs,
   updated_at = now(),
   activated_at = coalesce(public.platform_launch_windows.activated_at, excluded.activated_at),
-  ends_at = coalesce(
-    public.platform_launch_windows.ends_at,
-    coalesce(public.platform_launch_windows.activated_at, excluded.activated_at)
-      + (excluded.duration_days || ' days')::interval
-  ),
+  ends_at = coalesce(public.platform_launch_windows.ends_at, excluded.ends_at),
   status = case
     when public.platform_launch_windows.status = 'expired' then 'expired'
     when coalesce(public.platform_launch_windows.ends_at, excluded.ends_at) <= now() then 'expired'
@@ -66,7 +63,6 @@ ON CONFLICT (slug) DO UPDATE SET
 
 UPDATE public.platform_launch_windows
 SET status = 'expired', updated_at = now()
-WHERE slug = 'uganda-launch-2026'
-  AND slug <> 'global-referral-2026';
+WHERE slug = 'uganda-launch-2026';
 
 COMMIT;

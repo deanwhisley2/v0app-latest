@@ -211,6 +211,8 @@ async function tryCreditReferrerLaunchFlatBonus(
 
 /**
  * Apply launch-window promotions on a qualifying Nexus Main funding credit.
+ * Referee % and referrer flat rewards debit MAIN_TREASURY only — never retailer float.
+ * Retailer approvals transfer the locked request USD; bonuses run here afterward.
  * No-op when the 14-day launch window is not active.
  */
 export async function applyLaunchFundingPromotions(

@@ -124,13 +124,40 @@ export async function loadLaunchWindow(
   return out
 }
 
+/**
+ * Canonical promotional cycle for all countries: prefer global-referral-2026.
+ * Falls back to any other active launch row with referrals enabled (legacy prod gap).
+ */
+export async function loadActiveLaunchWindow(admin: SupabaseClient): Promise<PlatformLaunchWindowRow | null> {
+  const slugs: string[] = [GLOBAL_LAUNCH_SLUG]
+
+  const { data: activeRows, error } = await admin
+    .from("platform_launch_windows")
+    .select("slug")
+    .eq("status", "active")
+    .neq("slug", GLOBAL_LAUNCH_SLUG)
+  if (error) throw new Error(error.message)
+  for (const r of activeRows ?? []) {
+    const slug = String((r as { slug?: string }).slug ?? "").trim()
+    if (slug && !slugs.includes(slug)) slugs.push(slug)
+  }
+  if (!slugs.includes(UGANDA_LAUNCH_SLUG)) slugs.push(UGANDA_LAUNCH_SLUG)
+
+  for (const slug of slugs) {
+    const row = await loadLaunchWindow(admin, slug)
+    if (!row) continue
+    if (launchPromotionsActive(computePublicStatus(row))) return row
+  }
+  return null
+}
+
 export async function getPlatformLaunchStatus(force = false): Promise<PlatformLaunchPublicStatus> {
   const now = Date.now()
   if (!force && cacheStatus && now - cacheAt < CACHE_MS) return cacheStatus
 
   try {
     const admin = createAdminClient()
-    const row = await loadLaunchWindow(admin)
+    const row = await loadActiveLaunchWindow(admin)
     const status = computePublicStatus(row)
     cacheAt = now
     cacheStatus = status

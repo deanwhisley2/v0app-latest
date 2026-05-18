@@ -41,6 +41,14 @@ export async function creditCustomerMainFromTreasuryUsd(
   if (!(amt > 0) || Number.isNaN(amt)) throw new Error("Invalid settlement amount.")
 
   if (await treasuryDebitReferenceExists(admin, params.referenceId)) {
+    if (!/\:comp:/i.test(params.referenceId)) {
+      await applyLaunchFundingPromotions(
+        admin,
+        params.customerUserId,
+        amt,
+        params.referenceId,
+      )
+    }
     return { treasuryTransactionId: params.referenceId, idempotent: true }
   }
 
