@@ -77,6 +77,8 @@ const getTypeColor = (type: NexusNotificationType) => {
 
 const INBOX_ROW_EST = 80
 const INBOX_WINDOW_OVERSCAN = 8
+/** Below this count, render the full list (avoids pad/spacer flicker on small inboxes). */
+const INBOX_VIRTUAL_MIN = 100
 
 type InboxRowProps = {
   notification: NexusNotificationItem
@@ -147,6 +149,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const { t } = useUserPreferences()
   const {
     inbox,
+    accountInboxReady,
     unreadCount,
     markRead,
     markAllRead,
@@ -227,7 +230,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const recomputeWindow = useCallback(() => {
     const el = listRef.current
     const n = inbox.length
-    if (!el || n <= 48) {
+    if (!el || n < INBOX_VIRTUAL_MIN) {
       setVWindow((w) => (w.start !== 0 || w.end !== n ? { start: 0, end: n } : w))
       return
     }
@@ -260,13 +263,15 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     }
   }, [isOpen, showSettings, recomputeWindow])
 
+  const useVirtualInbox = inbox.length >= INBOX_VIRTUAL_MIN
+
   const visibleInbox = useMemo(
-    () => (inbox.length <= 48 ? inbox : inbox.slice(vWindow.start, vWindow.end)),
-    [inbox, vWindow.end, vWindow.start]
+    () => (useVirtualInbox ? inbox.slice(vWindow.start, vWindow.end) : inbox),
+    [inbox, useVirtualInbox, vWindow.end, vWindow.start]
   )
 
-  const topPad = inbox.length <= 48 ? 0 : vWindow.start * INBOX_ROW_EST
-  const bottomPad = inbox.length <= 48 ? 0 : Math.max(0, inbox.length - vWindow.end) * INBOX_ROW_EST
+  const topPad = useVirtualInbox ? vWindow.start * INBOX_ROW_EST : 0
+  const bottomPad = useVirtualInbox ? Math.max(0, inbox.length - vWindow.end) * INBOX_ROW_EST : 0
 
   if (!isOpen || !mounted) return null
 
@@ -454,7 +459,13 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
             className="nexus-scroll-isolated min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-0.5 [scrollbar-gutter:stable]"
           >
             <div className="p-2 pb-1">
-              {inbox.length === 0 ? (
+              {!accountInboxReady ? (
+                <div className="space-y-2 px-2 py-4" aria-busy="true">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-[72px] animate-pulse rounded-xl bg-muted/30" />
+                  ))}
+                </div>
+              ) : inbox.length === 0 ? (
                 <NotificationInboxEmpty
                   message={t("notifications.inbox.panelEmpty")}
                   hint={t("notifications.inbox.panelEmptyHint")}

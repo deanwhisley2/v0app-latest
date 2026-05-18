@@ -52,7 +52,7 @@ function isActiveDepositStatus(status: string): boolean {
 
 export function NotificationCenterScreen() {
   const { t } = useUserPreferences()
-  const { inbox, markRead, markAllRead, deleteFromInbox, archiveFromInbox, runAppNavigation } =
+  const { inbox, accountInboxReady, markRead, markAllRead, deleteFromInbox, archiveFromInbox, runAppNavigation } =
     useNexusNotifications()
   const [selected, setSelected] = useState<NexusNotificationItem | null>(null)
   const [filter, setFilter] = useState<InboxFilter>("all")
@@ -88,14 +88,18 @@ export function NotificationCenterScreen() {
 
   useEffect(() => {
     void loadDeposits(true)
-    const id = window.setInterval(() => void loadDeposits(true), 25_000)
-    return () => window.clearInterval(id)
   }, [loadDeposits])
 
   const activeDeposits = useMemo(
     () => cryptoDeposits.filter((d) => isActiveDepositStatus(String(d.status ?? ""))),
     [cryptoDeposits]
   )
+
+  useEffect(() => {
+    if (depositsLoading || activeDeposits.length === 0) return
+    const id = window.setInterval(() => void loadDeposits(false), 60_000)
+    return () => window.clearInterval(id)
+  }, [loadDeposits, depositsLoading, activeDeposits.length])
 
   const sorted = useMemo(
     () => [...inbox].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
@@ -203,7 +207,20 @@ export function NotificationCenterScreen() {
       ) : null}
 
       <section className={`${INBOX_CARD} overflow-hidden`}>
-        {filtered.length === 0 ? (
+        {!accountInboxReady ? (
+          <div className="divide-y divide-border/40" aria-busy="true" aria-label={t("notifications.center.subtitle")}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex gap-2.5 px-3 py-3 animate-pulse">
+                <div className="h-9 w-9 shrink-0 rounded-lg bg-muted/40" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-2.5 w-1/3 rounded bg-muted/40" />
+                  <div className="h-3 w-4/5 rounded bg-muted/50" />
+                  <div className="h-2.5 w-full rounded bg-muted/30" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <NotificationInboxEmpty
             message={
               activeDeposits.length > 0

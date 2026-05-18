@@ -182,6 +182,8 @@ type NavigatorFn = (nav: NexusNotificationNav) => void
 type NexusNotificationsContextValue = {
   inbox: NexusNotificationItem[]
   history: NexusNotificationItem[]
+  /** False until the first account-notifications pull finishes (avoids empty→local→server flicker). */
+  accountInboxReady: boolean
   unreadCount: number
   registerAppNavigator: (fn: NavigatorFn | null) => void
   runAppNavigation: (nav: NexusNotificationNav) => void
@@ -211,9 +213,12 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
   const lastPostedJsonRef = useRef("")
   const persistPrefsTimerRef = useRef<number | null>(null)
   const persistLocalTimerRef = useRef<number | null>(null)
-  /** When true, account rows load from `/api/user/account-notifications` and skip operational-preferences inbox mirror. */
+  /** When true, inbox is server-backed; skip operational-preferences mirror and stale local inbox hydrate. */
   const [accountNotifFeedOn, setAccountNotifFeedOn] = useState(false)
+  const [accountInboxReady, setAccountInboxReady] = useState(false)
   const notificationsUserKeyRef = useRef<string | null>(null)
+  const realtimeBatchRef = useRef<NexusNotificationItem[]>([])
+  const realtimeFlushTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     clearLegacyGlobalNotificationStorage()
@@ -228,12 +233,19 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
 
     clearLegacyGlobalNotificationStorage()
     setAccountNotifFeedOn(false)
+    setAccountInboxReady(false)
     serverNotifSerializedRef.current = ""
     lastPostedJsonRef.current = ""
     seedCapturedRef.current = false
     hadLocalPersistedRef.current = false
+    realtimeBatchRef.current = []
+    if (realtimeFlushTimerRef.current) {
+      window.clearTimeout(realtimeFlushTimerRef.current)
+      realtimeFlushTimerRef.current = null
+    }
 
     if (isGuestSession) {
+      setAccountInboxReady(true)
       setInbox(seedInbox())
       setHistory(seedHistory())
       return
@@ -241,12 +253,11 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
 
     const persisted = loadPersistedNotifications(user?.id ?? null, false)
     hadLocalPersistedRef.current = !!persisted
-    if (persisted) {
-      setInbox(withoutDemoNotifications(persisted.inbox))
-      setHistory(withoutDemoNotifications(persisted.history))
-    } else {
-      setInbox([])
-      setHistory([])
+    // Authenticated inbox: server SSOT — do not flash stale localStorage rows before pull.
+    setInbox([])
+    setHistory(withoutDemoNotifications(persisted?.history ?? []))
+    if (user?.id && !isDevLocalOnly()) {
+      setAccountNotifFeedOn(true)
     }
   }, [hydrated, user?.id, isGuestSession])
 
@@ -355,6 +366,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         })
       } catch {
         /* ignore */
+      } finally {
+        if (!cancelled) setAccountInboxReady(true)
       }
     }
 
@@ -396,6 +409,26 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       })
     }
 
+    const flushRealtimeBatch = () => {
+      realtimeFlushTimerRef.current = null
+      const batch = realtimeBatchRef.current
+      if (!batch.length) return
+      realtimeBatchRef.current = []
+      setInbox((prev) => {
+        let merged = prev
+        for (const item of batch) {
+          merged = upsertServerNotificationRows(merged, [item])
+        }
+        if (sameInboxSignature(prev, merged)) return prev
+        return merged
+      })
+    }
+
+    const scheduleRealtimeFlush = () => {
+      if (realtimeFlushTimerRef.current != null) return
+      realtimeFlushTimerRef.current = window.setTimeout(flushRealtimeBatch, 80)
+    }
+
     const channel = supabase
       .channel(`acct-notif:${uid}`)
       .on(
@@ -425,16 +458,21 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
             setInbox((prev) => prev.filter((n) => n.id !== item.id))
             return
           }
-          setInbox((prev) => {
-            const merged = upsertServerNotificationRows(prev, [item])
-            if (sameInboxSignature(prev, merged)) return prev
-            return merged
-          })
+          const batch = realtimeBatchRef.current
+          const idx = batch.findIndex((b) => b.id === item.id)
+          if (idx >= 0) batch[idx] = item
+          else batch.push(item)
+          scheduleRealtimeFlush()
         },
       )
       .subscribe()
 
     return () => {
+      if (realtimeFlushTimerRef.current) {
+        window.clearTimeout(realtimeFlushTimerRef.current)
+        realtimeFlushTimerRef.current = null
+      }
+      realtimeBatchRef.current = []
       void supabase.removeChannel(channel)
     }
   }, [hydrated, user?.id, isGuestSession])
@@ -568,6 +606,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     () => ({
       inbox,
       history,
+      accountInboxReady,
       unreadCount,
       registerAppNavigator,
       runAppNavigation,
@@ -584,6 +623,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     [
       inbox,
       history,
+      accountInboxReady,
       unreadCount,
       registerAppNavigator,
       runAppNavigation,

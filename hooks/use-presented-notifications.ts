@@ -2,6 +2,7 @@
 
 import { useMemo } from "react"
 import type { NexusNotificationItem } from "@/lib/nexus-notification-models"
+import { inboxSignature } from "@/lib/nexus-notifications-merge"
 import {
   presentNotification,
   type PresentedNotification,
@@ -12,11 +13,13 @@ export function usePresentedNotifications(
   items: NexusNotificationItem[],
   t: (key: string) => string
 ): Map<string, PresentedNotification> {
+  const sig = inboxSignature(items)
   return useMemo(() => {
     const map = new Map<string, PresentedNotification>()
     for (const n of items) map.set(n.id, presentNotification(n, t))
     return map
-  }, [items, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable when inbox content unchanged
+  }, [sig, t])
 }
 
 export function filterInboxNotifications(

@@ -18,7 +18,11 @@ export function mergeServerAccountWithLocals(
       map.set(p.id, p)
     }
   }
-  return [...map.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return [...map.values()].sort((a, b) => {
+    const dt = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    if (dt !== 0) return dt
+    return a.id.localeCompare(b.id)
+  })
 }
 
 /** Order-independent fingerprint to skip redundant `setInbox` after pull/realtime. */
@@ -46,5 +50,9 @@ export function upsertServerNotificationRows(
     if (isServerNotificationId(row.id)) smap.set(row.id, row)
   }
   const locals = prev.filter((p) => !isServerNotificationId(p.id) && !p.id.startsWith("fin-"))
-  return [...smap.values(), ...locals].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return [...smap.values(), ...locals].sort((a, b) => {
+    const dt = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    if (dt !== 0) return dt
+    return a.id.localeCompare(b.id)
+  })
 }
