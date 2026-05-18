@@ -28,7 +28,10 @@ import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
-import { OPERATING_COUNTRY_OPTIONS } from "@/lib/i18n/region-defaults"
+import {
+  isSupportedOperatingCountry,
+  operatingCountriesByRegion,
+} from "@/lib/operating-countries"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
 import { cn } from "@/lib/utils"
 import {
@@ -113,7 +116,12 @@ export default function RegisterPage() {
       if (!email.trim() || !email.includes("@")) return "Enter a valid email."
       return null
     }
-    if (s === 2) return null
+    if (s === 2) {
+      if (!operatingCountry || !isSupportedOperatingCountry(operatingCountry)) {
+        return authT.register.countryRequired ?? "Select your operating country."
+      }
+      return null
+    }
     if (s === 3) {
       if (password.length < 6) return reg.passwordHint
       if (password !== confirmPassword) return "Passwords do not match."
@@ -122,11 +130,27 @@ export default function RegisterPage() {
     return null
   }
 
-  function goNext() {
+  async function goNext() {
     const err = validateStep(step)
     if (err) {
       setError(err)
       return
+    }
+    if (step === 2 && operatingCountry) {
+      try {
+        const res = await fetch(
+          `/api/auth/corridor-check?country=${encodeURIComponent(operatingCountry)}`,
+          { credentials: "same-origin" },
+        )
+        const json = (await res.json().catch(() => ({}))) as { allowed?: boolean; error?: string }
+        if (!res.ok || json.allowed === false) {
+          setError(json.error || authT.register.countryMismatch)
+          return
+        }
+      } catch {
+        setError("Could not verify your region. Try again.")
+        return
+      }
     }
     setError(null)
     setStep((s) => Math.min(3, s + 1))
@@ -213,6 +237,9 @@ export default function RegisterPage() {
 
       try {
         sessionStorage.setItem("nexus_pending_verify_email", trimmedEmail)
+        if (operatingCountry) {
+          sessionStorage.setItem("nexus_pending_verify_country", operatingCountry)
+        }
       } catch {
         /* ignore */
       }
@@ -377,9 +404,9 @@ export default function RegisterPage() {
               <div className="space-y-2">
                 <Label>{reg.operatingCountry ?? "Operating country"}</Label>
                 <Select
-                  value={operatingCountry || "none"}
+                  value={operatingCountry}
                   onValueChange={(v) => {
-                    const code = v === "none" ? "" : v
+                    const code = v
                     setOperatingCountry(code)
                     if (code) {
                       const hint = suggestPreferencesForCountry(code)
@@ -392,12 +419,18 @@ export default function RegisterPage() {
                   <SelectTrigger className={cn("w-full", inputClass)}>
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {OPERATING_COUNTRY_OPTIONS.map((o) => (
-                      <SelectItem key={o.code} value={o.code}>
-                        {o.label}
-                      </SelectItem>
+                  <SelectContent className="max-h-[min(70vh,320px)]">
+                    {operatingCountriesByRegion().map((group) => (
+                      <div key={group.region}>
+                        <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {group.region}
+                        </p>
+                        {group.countries.map((o) => (
+                          <SelectItem key={o.code} value={o.code}>
+                            {o.label} · {o.currency}
+                          </SelectItem>
+                        ))}
+                      </div>
                     ))}
                   </SelectContent>
                 </Select>

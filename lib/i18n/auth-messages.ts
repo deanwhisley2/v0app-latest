@@ -38,6 +38,8 @@ export type AuthMessages = {
     selfieAdded: string
     referralHint: string
     countryHint: string
+    countryRequired: string
+    countryMismatch: string
     passwordStrength: string
     passwordWeak: string
     passwordFair: string
@@ -94,7 +96,11 @@ const en: AuthMessages = {
     selfieHint: "Recommended for account recovery. Add now or later in Settings.",
     selfieAdded: "Face profile saved for secure recovery.",
     referralHint: "Paste a referral ID if someone invited you.",
-    countryHint: "Helps match local funding routes. You can change this later.",
+    countryHint:
+      "Must match where you are signing up from. VPN or foreign IPs are blocked at verification.",
+    countryRequired: "Select your operating country to continue.",
+    countryMismatch:
+      "Your connection does not match the selected country. Choose your actual country or sign in from that region.",
     passwordStrength: "Password strength",
     passwordWeak: "Add more characters",
     passwordFair: "Fair — consider numbers & symbols",

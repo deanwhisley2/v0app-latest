@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { corridorCurrencyForCountry } from "@/lib/operating-countries"
 
 export interface ConversionRequest {
   amount: number
@@ -158,9 +159,7 @@ class CurrencyEngine {
     if (error) throw new Error(error.message)
     const row = data as { funding_country_code?: string | null } | null
     const country = row?.funding_country_code?.trim().toUpperCase()
-    if (country === "KE") return "KES"
-    if (country === "UG") return "UGX"
-    return "UGX"
+    return corridorCurrencyForCountry(country) ?? "UGX"
   }
 }
 

@@ -48,6 +48,9 @@ export const CURRENCY_OPTIONS: { code: FiatCurrencyCode; label: string }[] = [
   { code: "ETB", label: "ETB — Ethiopian Birr" },
   { code: "ZMW", label: "ZMW — Zambian Kwacha" },
   { code: "MWK", label: "MWK — Malawian Kwacha" },
+  { code: "MZN", label: "MZN — Mozambican Metical" },
+  { code: "BWP", label: "BWP — Botswana Pula" },
+  { code: "CDF", label: "CDF — Congolese Franc" },
 ]
 
 export const DEFAULT_PREFERENCES: UserPreferences = {

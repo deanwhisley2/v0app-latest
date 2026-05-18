@@ -92,10 +92,19 @@ function VerifyContent() {
     setInfoMsg("")
 
     try {
+      let fundingCountry = ""
+      try {
+        fundingCountry = sessionStorage.getItem("nexus_pending_verify_country")?.trim() ?? ""
+      } catch {
+        /* ignore */
+      }
       const res = await fetch("/api/auth/send-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          ...(fundingCountry ? { funding_country_code: fundingCountry } : {}),
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         error?: string

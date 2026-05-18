@@ -13,7 +13,13 @@ import {
   notifyLaunchWelcome,
   notifyReferrerNewReferee,
 } from "@/lib/server/launch-notifications"
-import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
+import { isSupportedOperatingCountry } from "@/lib/operating-countries"
+import {
+  COUNTRY_CORRIDOR_REQUIRED_MESSAGE,
+  enforceCountryCorridor,
+  recordSignupCorridorEvent,
+} from "@/lib/server/country-corridor-guard"
+import { getRequestIpAddress } from "@/lib/server/request-geo"
 
 /** Supabase rejects a second signUp for the same email even if the first account never completed in-app verification. */
 function isAuthDuplicateSignupError(err: { message?: string | null; code?: string | null }): boolean {
@@ -78,6 +84,34 @@ export async function POST(request: Request) {
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
+  }
+
+  if (!funding_country_code || !isSupportedOperatingCountry(funding_country_code)) {
+    return NextResponse.json({ error: COUNTRY_CORRIDOR_REQUIRED_MESSAGE }, { status: 400 })
+  }
+
+  const corridor = await enforceCountryCorridor(request, funding_country_code)
+  const ip = getRequestIpAddress(request)
+  const userAgent = request.headers.get("user-agent")
+
+  try {
+    const adminAudit = createAdminClient()
+    await recordSignupCorridorEvent(adminAudit, {
+      action: "register",
+      selectedCountry: funding_country_code,
+      detectedCountry: corridor.ok ? corridor.detectedCountry : corridor.detectedCountry,
+      ipAddress: ip,
+      blocked: !corridor.ok,
+      email,
+      userAgent,
+      detail: corridor.ok ? null : corridor.message,
+    })
+  } catch {
+    /* audit best-effort */
+  }
+
+  if (!corridor.ok) {
+    return NextResponse.json({ error: corridor.message }, { status: 403 })
   }
   const hasSelfiePayload = Boolean(selfie_image || selfie_template || selfie_hash)
   const hasCompleteSelfiePayload = Boolean(selfie_image && selfie_template && selfie_hash)
@@ -185,10 +219,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const launch = await getPlatformLaunchStatus()
-      const countryForProfile =
-        funding_country_code ||
-        (launch.active && launch.programs.onboarding?.default_country === "UG" ? "UG" : "")
+      const countryForProfile = funding_country_code
 
       for (let attempt = 0; attempt < 8; attempt++) {
         const seed = attempt === 0 ? newUserId : `${newUserId}:${attempt}`
@@ -221,7 +252,7 @@ export async function POST(request: Request) {
       if (referredByUserId) {
         void notifyReferrerNewReferee(admin, referredByUserId, newUserId)
       }
-      void notifyLaunchWelcome(admin, newUserId, countryForProfile || funding_country_code || "UG")
+      void notifyLaunchWelcome(admin, newUserId, countryForProfile)
 
       if (hasCompleteSelfiePayload) {
         const { error: profileAvatarErr } = await admin

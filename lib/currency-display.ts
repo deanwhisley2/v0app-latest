@@ -23,6 +23,9 @@ export const USD_TO_FX: Record<string, number> = {
   ETB: 57,
   ZMW: 27,
   MWK: 1730,
+  MZN: 64,
+  BWP: 13.6,
+  CDF: 2850,
 }
 
 export type FiatCurrencyCode = keyof typeof USD_TO_FX
@@ -39,6 +42,10 @@ const ISO2_TO_CORRIDOR_FIAT: Partial<Record<string, FiatCurrencyCode>> = {
   MW: "MWK",
   ET: "ETB",
   ZM: "ZMW",
+  MZ: "MZN",
+  BW: "BWP",
+  ZW: "USD",
+  CD: "CDF",
   MA: "MAD",
   EG: "EGP",
   US: "USD",

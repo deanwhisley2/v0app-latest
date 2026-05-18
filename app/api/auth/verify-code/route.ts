@@ -2,6 +2,12 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
+import {
+  COUNTRY_CORRIDOR_REQUIRED_MESSAGE,
+  enforceCountryCorridor,
+  recordSignupCorridorEvent,
+} from "@/lib/server/country-corridor-guard"
+import { getRequestIpAddress } from "@/lib/server/request-geo"
 
 /** Validates code from public.email_verifications (issued via Brevo). */
 
@@ -33,6 +39,33 @@ export async function POST(request: Request) {
     const userId = await findAuthUserIdByEmail(admin, email)
     if (!userId) {
       return NextResponse.json({ error: "Invalid code or email" }, { status: 400 })
+    }
+
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("funding_country_code")
+      .eq("id", userId)
+      .maybeSingle()
+    const selectedCountry = String(prof?.funding_country_code ?? "").trim().toUpperCase().slice(0, 2)
+    if (!selectedCountry) {
+      return NextResponse.json({ error: COUNTRY_CORRIDOR_REQUIRED_MESSAGE }, { status: 403 })
+    }
+
+    const corridor = await enforceCountryCorridor(request, selectedCountry)
+    const ip = getRequestIpAddress(request)
+    await recordSignupCorridorEvent(admin, {
+      action: "verify_code",
+      selectedCountry,
+      detectedCountry: corridor.ok ? corridor.detectedCountry : corridor.detectedCountry,
+      ipAddress: ip,
+      blocked: !corridor.ok,
+      userId,
+      email: emailNormalized,
+      userAgent: request.headers.get("user-agent"),
+      detail: corridor.ok ? null : corridor.message,
+    })
+    if (!corridor.ok) {
+      return NextResponse.json({ error: corridor.message }, { status: 403 })
     }
 
     const nowIso = new Date().toISOString()

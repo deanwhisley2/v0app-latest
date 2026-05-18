@@ -47,8 +47,4 @@ export async function trackLoginSession(params: {
   return gate
 }
 
-export function getRequestIpAddress(request: Request): string | null {
-  const xff = request.headers.get("x-forwarded-for")
-  if (xff) return xff.split(",")[0]?.trim() ?? null
-  return request.headers.get("x-real-ip")
-}
+export { getRequestIpAddress } from "@/lib/server/request-geo"
