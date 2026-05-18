@@ -82,7 +82,12 @@ export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
 export const DEFAULT_UGANDA_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
   ...DEFAULT_GLOBAL_LAUNCH_PROGRAMS,
   onboarding: {
-    ...DEFAULT_GLOBAL_LAUNCH_PROGRAMS.onboarding,
+    enabled: true,
+    welcome_notification: true,
+    launch_banner: true,
+    starter_fix_unlock: true,
+    starter_fix_persona_id: LAUNCH_STARTER_FIX_PERSONA_ID,
+    valid_referee_min_funded_usd: 3,
     default_country: "UG",
   },
 }
