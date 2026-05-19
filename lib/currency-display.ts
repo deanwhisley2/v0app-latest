@@ -4,6 +4,7 @@
  * Server-side accounting uses USD-equivalent units; customer screens should show
  * local fiat amounts only — never conversion mechanics or treasury wording.
  */
+import { localUnitsToUsd } from "@/lib/nexus-fx"
 import { NEXUS_MIN_DEPOSIT_USD } from "@/lib/nexus-financial-policy"
 
 /** Approximate USD → local rates for display (container / wallet copy). Not FX trading quotes. */
@@ -66,13 +67,31 @@ export function convertFromUsd(amountUsd: number, currency: string): number {
   return amountUsd * rate
 }
 
-/** User-typed amount in their fiat → USD accounting unit (inverse of convertFromUsd). */
+/**
+ * Parse customer-typed fiat in the amount field.
+ * Strips grouping commas/spaces so `1,519,990` (CDF/UGX/KES) is not read as `1.519`.
+ */
+export function parseCustomerLocalAmountInput(raw: string): number {
+  const normalized = raw.trim().replace(/\s+/g, "").replace(/,/g, "")
+  if (!normalized) return NaN
+  const n = Number.parseFloat(normalized)
+  return Number.isFinite(n) ? n : NaN
+}
+
+/** User-typed amount in their fiat → USD accounting unit (env FX map, then static corridor table). */
 export function localFiatUnitsToUsd(amountLocal: number, currency: string): number {
-  if (!Number.isFinite(amountLocal)) return 0
+  if (!Number.isFinite(amountLocal) || amountLocal <= 0) return 0
   const c = isSupportedFiat(currency) ? currency : "USD"
-  const rate = USD_TO_FX[c as FiatCurrencyCode] ?? 1
   if (c === "USD") return Math.round(amountLocal * 100) / 100
+  const fromEnv = localUnitsToUsd(amountLocal, c)
+  if (fromEnv != null && fromEnv > 0) return fromEnv
+  const rate = USD_TO_FX[c as FiatCurrencyCode] ?? 1
   return Math.round((amountLocal / rate) * 1e6) / 1e6
+}
+
+/** Parse local input string and convert to ledger USD for mutations. */
+export function usdFromCustomerLocalInput(raw: string, currency: string): number {
+  return localFiatUnitsToUsd(parseCustomerLocalAmountInput(raw), currency)
 }
 
 /** Format a number already in local fiat (e.g. echoing raw input). Does NOT treat value as USD. */

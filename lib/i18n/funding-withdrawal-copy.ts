@@ -228,6 +228,12 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.balance.exchangeTitle": "Exchange balances",
   "funding.balance.exchangeHint": "Linked exchanges. Container fees paid: {{fees}}",
   "funding.balance.activityFallback": "Activity",
+  "container.error.invalidLocalAmount":
+    "Enter a valid amount in your local currency (use digits; commas between thousands are OK).",
+  "container.error.fixOpenFailed": "Fixed trade open failed.",
+  "container.error.belowFixMinimum":
+    "Minimum fixed allocation is {{min}} (net after insurance).",
+  "container.error.belowCopyMinimum": "Minimum copy allocation is {{min}}.",
   "funding.container.extractToast": "{{amount}} moved to pocket (fee deducted).",
   "funding.container.transferToast": "{{amount}} transferred to main balance.",
   "funding.container.sessionToPocketToast":

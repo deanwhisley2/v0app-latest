@@ -46,6 +46,8 @@ import {
   formatMinDepositForCustomer,
   localFiatUnitsToUsd,
   minDepositLocalAmount,
+  parseCustomerLocalAmountInput,
+  usdFromCustomerLocalInput,
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
@@ -1566,7 +1568,7 @@ export default function DashboardPage() {
   ])
 
   const handleRetailerCryptoTopupSubmit = useCallback(async () => {
-    const amt = parseFloat(fundAmount)
+    const amt = parseCustomerLocalAmountInput(fundAmount)
     if (!(amt > 0) || Number.isNaN(amt)) {
       showToast("Enter requested top-up amount.", "error")
       return
@@ -1633,7 +1635,7 @@ export default function DashboardPage() {
   )
 
   const handleLoadQualifiedRetailers = useCallback(async () => {
-    const amt = parseFloat(fundAmount)
+    const amt = parseCustomerLocalAmountInput(fundAmount)
     if (!(amt > 0) || Number.isNaN(amt)) {
       showToast("Enter the amount you will send.", "error")
       return
@@ -1826,22 +1828,22 @@ export default function DashboardPage() {
   }, [isGuestSession, user, operationalWorkspace])
 
   const handleFundSubmit = useCallback(() => {
-    const amountRaw = parseFloat(fundAmount)
+    const amountRaw = parseCustomerLocalAmountInput(fundAmount)
     /** Withdraw & local mobile-money funding: user types preferred fiat → ledger uses USD-normalized units. */
     const ccFund = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
     const localFundingFiat = corridorFiatForCountryIso2(ccFund) ?? currency
     let ledgerUsd = amountRaw
     if (showFundModal === "withdraw") {
-      ledgerUsd = localFiatUnitsToUsd(amountRaw, currency)
+      ledgerUsd = usdFromCustomerLocalInput(fundAmount, currency)
     } else if (showFundModal === "add" && l1FundSource === "local") {
-      ledgerUsd = localFiatUnitsToUsd(amountRaw, localFundingFiat)
+      ledgerUsd = usdFromCustomerLocalInput(fundAmount, localFundingFiat)
     } else if (showFundModal === "add" && l1FundSource === "airtel") {
       const ccAirtel = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
       const airtelFiat =
         (ccAirtel.length === 2 ? corridorFiatForCountryIso2(ccAirtel) : null) ??
         corridorFiatForCountryIso2("UG") ??
         "UGX"
-      ledgerUsd = localFiatUnitsToUsd(amountRaw, airtelFiat)
+      ledgerUsd = usdFromCustomerLocalInput(fundAmount, airtelFiat)
     }
     const amount = ledgerUsd
     const level = currentUser?.level ?? 1
@@ -2504,7 +2506,7 @@ export default function DashboardPage() {
                       </span>
                       <span className="rounded-md bg-background px-2 py-1">{fundMobileNetwork || "—"}</span>
                       <span className="rounded-md bg-background px-2 py-1 font-mono">
-                        {formatLocalFiatAmount(parseFloat(fundAmount) || 0, fundingAmountLabelCurrency, locale)}
+                        {formatLocalFiatAmount(parseCustomerLocalAmountInput(fundAmount) || 0, fundingAmountLabelCurrency, locale)}
                       </span>
                     </div>
 
@@ -3140,7 +3142,7 @@ export default function DashboardPage() {
                         ? t("withdrawal.status.senderRequired")
                         : !fundMobileNetwork.trim() || fundingCountryCodeInput.trim().length !== 2
                           ? t("withdrawal.status.countryNetwork")
-                          : !(parseFloat(fundAmount) > 0)
+                          : !(parseCustomerLocalAmountInput(fundAmount) > 0)
                             ? t("withdrawal.status.amountMissing")
                             : t("withdrawal.status.readyConfirm")}
                 </p>
@@ -3150,20 +3152,20 @@ export default function DashboardPage() {
                 onClick={handleFundSubmit}
                 disabled={
                   isFundProcessing ||
-                  (showFundModal === "withdraw" && (!fundAmount || parseFloat(fundAmount) <= 0)) ||
+                  (showFundModal === "withdraw" && (!fundAmount || parseCustomerLocalAmountInput(fundAmount) <= 0)) ||
                   (showFundModal === "add" &&
                     customerRetailFunding &&
                     (l1FundSource === "pick" ||
                       (l1FundSource === "crypto" &&
                         (!fundTxReference.trim() ||
                           Boolean(fundTxRefError) ||
-                          !(parseFloat(fundAmount) > 0))) ||
+                          !(parseCustomerLocalAmountInput(fundAmount) > 0))) ||
                       (l1FundSource === "airtel" &&
                         (!fundTxReference.trim() ||
                           Boolean(fundTxRefError) ||
                           !fundPayerName.trim() ||
                           !fundPayerPhone.trim() ||
-                          !(parseFloat(fundAmount) > 0))))) ||
+                          !(parseCustomerLocalAmountInput(fundAmount) > 0))))) ||
                   (showFundModal === "add" && retailerCreditDesk) ||
                   (showFundModal === "add" && (currentUser?.level ?? 1) === 5) ||
                   (showFundModal === "add" &&
@@ -3177,7 +3179,7 @@ export default function DashboardPage() {
                       !fundPayerPhone.trim() ||
                       !fundMobileNetwork.trim() ||
                       fundingCountryCodeInput.trim().length !== 2 ||
-                      !(parseFloat(fundAmount) > 0)))
+                      !(parseCustomerLocalAmountInput(fundAmount) > 0)))
                 }
                 className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold text-white transition-colors disabled:opacity-50 ${
                   showFundModal === "add" ? "bg-success hover:bg-success/90" : "bg-primary hover:bg-primary/90"
@@ -3195,7 +3197,7 @@ export default function DashboardPage() {
                   fundAmount.trim()
                     ? t("withdrawal.cta.withdrawWithAmount").replace(
                         "{{amount}}",
-                        formatLocalFiatAmount(parseFloat(fundAmount) || 0, currency, locale),
+                        formatLocalFiatAmount(parseCustomerLocalAmountInput(fundAmount) || 0, currency, locale),
                       )
                     : t("withdrawal.cta.withdraw")
                 ) : customerRetailFunding && l1FundSource === "local" ? (

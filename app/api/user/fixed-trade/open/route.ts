@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { traderEligibleForFixedTrade } from "@/lib/fix-trade-access"
+import { mapTradingProfileToDeskTier, traderEligibleForFixedTrade } from "@/lib/fix-trade-access"
 import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
 import {
   fixInsuranceAndWithdrawFees,
@@ -25,12 +25,6 @@ import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
-}
-
-function mapProfileToFixUserLevel(tradingUserLevel: number): number {
-  if (tradingUserLevel === 5) return 5
-  if (tradingUserLevel === 2) return 2
-  return 1
 }
 
 export async function POST(request: Request) {
@@ -105,7 +99,7 @@ export async function POST(request: Request) {
         "fixed-trade/open: level 5 or retailer desk.",
       )
     }
-    const userLevel = mapProfileToFixUserLevel(tradingLv)
+    const userLevel = mapTradingProfileToDeskTier(tradingLv)
 
     const persona = await resolvePersonaId(admin, traderPersonaIdRaw, "fix")
     if (!persona || !persona.risk_class) {

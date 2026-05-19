@@ -35,6 +35,15 @@ export function traderFixedDeskEligible(
 }
 
 /** Fixed-trade desk: L1 → Low only; L2 → Low + Medium; L3+ → all tiers. */
+/** Map profiles.trading_user_level to fixed/copy desk tier (L3+ keeps full desk access). */
+export function mapTradingProfileToDeskTier(tradingUserLevel: number): number {
+  const lv = Math.floor(Number(tradingUserLevel) || 1)
+  if (lv >= 5) return 5
+  if (lv >= 3) return lv
+  if (lv === 2) return 2
+  return 1
+}
+
 export function traderEligibleForFixedTrade(
   userLevel: UserLevelNum | number,
   riskLevel: FixTradeRiskLevel,

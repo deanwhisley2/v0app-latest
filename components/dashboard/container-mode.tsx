@@ -25,7 +25,11 @@ import {
   fixInsuranceAndWithdrawFees,
   splitFixedTradeOpenCommitUsd,
 } from "@/lib/nexus-financial-policy"
-import { localFiatUnitsToUsd } from "@/lib/currency-display"
+import {
+  localFiatUnitsToUsd,
+  parseCustomerLocalAmountInput,
+  usdFromCustomerLocalInput,
+} from "@/lib/currency-display"
 import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { computePlatformLiveStats } from "@/lib/platform-live-stats"
@@ -423,7 +427,7 @@ export function ContainerMode({
 
   const fixProjectionPreview = useMemo(() => {
     if (activeTab !== "fix" || !selectedTrader) return null
-    const grossUsd = localFiatUnitsToUsd(parseFloat(fixAmount) || 0, currency)
+    const grossUsd = usdFromCustomerLocalInput(fixAmount, currency)
     if (grossUsd <= 0) return null
     const fees = fixInsuranceAndWithdrawFees(userLevel, selectedTrader.riskLevel)
     const { principalUsd, insuranceFeeUsd } = splitFixedTradeOpenCommitUsd(grossUsd, fees.insuranceFeeRate)
@@ -858,11 +862,14 @@ export function ContainerMode({
 
   const handleActivateCopy = (trader: MasterTrader) => {
     void (async () => {
-      const raw = parseFloat(copyAmount)
+      const raw = parseCustomerLocalAmountInput(copyAmount)
       const amount = localFiatUnitsToUsd(raw, currency)
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
       if (amount < copyMinUsdPolicy) {
-        toast.error(`Minimum copy allocation is ${formatUserMoney(copyMinUsdPolicy)}.`, { duration: 6000 })
+        toast.error(
+          t("container.error.belowCopyMinimum").replace("{{min}}", formatUserMoney(copyMinUsdPolicy)),
+          { duration: 6000 },
+        )
         return
       }
       if (!copyRiskAcknowledged) return
@@ -1034,9 +1041,12 @@ export function ContainerMode({
 
   const handleActivateFix = (trader: MasterTrader) => {
     void (async () => {
-      const raw = parseFloat(fixAmount)
+      const raw = parseCustomerLocalAmountInput(fixAmount)
       const grossCommitUsd = localFiatUnitsToUsd(raw, currency)
-      if (isNaN(raw) || raw <= 0 || !(grossCommitUsd > 0)) return
+      if (isNaN(raw) || raw <= 0 || !(grossCommitUsd > 0)) {
+        toast.error(t("container.error.invalidLocalAmount"), { duration: 6500 })
+        return
+      }
       const openFees = fixInsuranceAndWithdrawFees(userLevel, trader.riskLevel)
       const { principalUsd: netPrincipalUsd, insuranceFeeUsd: openInsuranceUsd } =
         splitFixedTradeOpenCommitUsd(grossCommitUsd, openFees.insuranceFeeRate)
@@ -1045,9 +1055,10 @@ export function ContainerMode({
         return
       }
       if (netPrincipalUsd < fixMinUsdPolicy) {
-        toast.error(`Minimum fixed allocation is ${formatUserMoney(fixMinUsdPolicy)} (net after insurance).`, {
-          duration: 6000,
-        })
+        toast.error(
+          t("container.error.belowFixMinimum").replace("{{min}}", formatUserMoney(fixMinUsdPolicy)),
+          { duration: 6000 },
+        )
         return
       }
       if (trader.locked || fixLiquidityGate) return
@@ -1087,7 +1098,7 @@ export function ContainerMode({
           fees?: { insuranceFeeUsd?: number }
         }
         if (!res.ok || out?.success === false) {
-          toastMutationError(out, "Fixed trade open failed.")
+          toastMutationError(out, t("container.error.fixOpenFailed"))
           return
         }
         const startTime = out.createdAt ? new Date(out.createdAt) : new Date()
@@ -1114,11 +1125,12 @@ export function ContainerMode({
         } else {
           const livePx = getSymbolPrice(coinSymbol)
           if (livePx == null) {
-            toast.error("Market reference loading. Wait and retry.", { duration: 7500 })
-            return
+            fixedPrice = 0
+            fixedPriceFromLiveFeed = false
+          } else {
+            fixedPrice = Math.round(livePx)
+            fixedPriceFromLiveFeed = true
           }
-          fixedPrice = Math.round(livePx)
-          fixedPriceFromLiveFeed = true
         }
 
         const nowOpen = new Date()
@@ -2332,10 +2344,10 @@ export function ContainerMode({
                       <li>
                         Force pull-out: {(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}% cancel +{" "}
                         {(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal + market impact
-                        {localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency) >= copyMinUsdPolicy
+                        {usdFromCustomerLocalInput(copyAmount, currency) >= copyMinUsdPolicy
                           ? ` (illustrative net ≈ ${formatUserMoney(
                               estimateCopyForcePulloutUsd({
-                                stakeUsd: localFiatUnitsToUsd(Number.parseFloat(copyAmount) || 0, currency),
+                                stakeUsd: usdFromCustomerLocalInput(copyAmount, currency),
                                 floatingPnLUsd: 0,
                                 coinImpactFraction: 0.08,
                               }).netToMainUsd

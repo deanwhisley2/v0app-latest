@@ -143,6 +143,12 @@ export const frNotificationsOverlay: Record<string, string> = {
     "Le retrait depuis la poche est plafonné selon les règles du conteneur actif.",
   "container.fix.unreleasedLabel": "Non libéré",
   "container.fix.availableToRelease": "Disponible à libérer",
+  "container.error.invalidLocalAmount":
+    "Saisissez un montant valide dans votre devise (chiffres uniquement ; les virgules de milliers sont acceptées).",
+  "container.error.fixOpenFailed": "Échec d’ouverture du trade fixe.",
+  "container.error.belowFixMinimum":
+    "Allocation fixe minimum : {{min}} (net après assurance).",
+  "container.error.belowCopyMinimum": "Allocation copie minimum : {{min}}.",
 
   "notifications.customer.fundingApprovedTitle": "Financement approuvé",
   "notifications.customer.fundingApprovedBody": "Approuvé. Crédité.",
