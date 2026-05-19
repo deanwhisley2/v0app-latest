@@ -44,13 +44,12 @@ function buildCookieRecoveryResponse(request: NextRequest) {
  *
  * When `NEXT_PUBLIC_DEV_LOCAL_ONLY=1`, `/auth/*` still redirects to `/dashboard` (no login UI).
  */
-/** GA4 stream and canonical public site use www — redirect apex host. */
+/** GA4 stream and canonical public site use www — redirect apex host (never leak :3000). */
 function wwwCanonicalRedirect(request: NextRequest): NextResponse | null {
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? ""
   if (host !== "nexuspro.it.com") return null
-  const url = request.nextUrl.clone()
-  url.hostname = "www.nexuspro.it.com"
-  return NextResponse.redirect(url, 308)
+  const path = `${request.nextUrl.pathname}${request.nextUrl.search}`
+  return NextResponse.redirect(new URL(path, "https://www.nexuspro.it.com"), 308)
 }
 
 export async function middleware(request: NextRequest) {
