@@ -1,5 +1,9 @@
 import type { NexusNotificationItem } from "@/lib/nexus-notification-models"
 import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
+import {
+  localizeStoredNotificationBody,
+  localizeStoredNotificationTitle,
+} from "@/lib/notifications/localize-stored-notification"
 
 export type NotificationInboxCategory =
   | "security"
@@ -63,10 +67,10 @@ function categoryLabelKey(cat: NotificationInboxCategory): string {
   return `notifications.inbox.category.${cat}`
 }
 
-export function formatNotificationTimeAgo(iso: string): string {
+export function formatNotificationTimeAgo(iso: string, t?: (key: string) => string): string {
   const date = new Date(iso)
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (seconds < 60) return "Now"
+  if (seconds < 60) return t?.("notifications.time.now") ?? "Now"
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
@@ -101,12 +105,21 @@ export function presentNotification(
     }
   }
 
-  const title = sanitizeCustomerNotificationText(n.title, fallbackMsg)
-  let summary = sanitizeCustomerNotificationText(n.message, fallbackMsg)
+  const title = localizeStoredNotificationTitle(
+    sanitizeCustomerNotificationText(n.title, fallbackMsg),
+    t,
+  )
+  let summary = localizeStoredNotificationBody(
+    sanitizeCustomerNotificationText(n.message, fallbackMsg),
+    t,
+  )
   summary = summary.replace(UA_NOISE, "").replace(/\s{2,}/g, " ").trim()
   if (summary.length > 96) summary = `${summary.slice(0, 93)}…`
 
-  const detail = sanitizeCustomerNotificationText(n.detailText ?? n.message, fallbackDetail)
+  const detail = localizeStoredNotificationBody(
+    sanitizeCustomerNotificationText(n.detailText ?? n.message, fallbackDetail),
+    t,
+  )
   const metaLine = IP_PATTERN.test(n.message) ? extractLoginMeta(n.message) : undefined
 
   return {

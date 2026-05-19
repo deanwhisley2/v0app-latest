@@ -6,8 +6,12 @@ import {
 } from "@/lib/notifications/customer-notification-language"
 import { getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
 import { emitTreasuryStreamEvent, fundRequestReferenceId } from "@/lib/server/treasury-operation-stream"
+import { customerNotifyT, resolveCustomerAppLanguage } from "@/lib/server/customer-ui-language"
 
-function buildFundingApprovedFromFx(fx: Record<string, unknown> | null) {
+function buildFundingApprovedFromFx(
+  fx: Record<string, unknown> | null,
+  t: ReturnType<typeof customerNotifyT>,
+) {
   const inputLocal = fx?.amount_input_local != null ? Number(fx.amount_input_local) : NaN
   const ccy = String(fx?.input_currency ?? "").trim()
   const normUsd = Number(fx?.amount_usd_normalized ?? 0)
@@ -19,11 +23,14 @@ function buildFundingApprovedFromFx(fx: Record<string, unknown> | null) {
         ? normUsd
         : null
 
-  return buildFundingApprovedCustomerCopy({
-    amountInputLocal: Number.isFinite(inputLocal) && inputLocal > 0 ? inputLocal : null,
-    inputCurrency: ccy || null,
-    amountUsd: settledUsd,
-  })
+  return buildFundingApprovedCustomerCopy(
+    {
+      amountInputLocal: Number.isFinite(inputLocal) && inputLocal > 0 ? inputLocal : null,
+      inputCurrency: ccy || null,
+      amountUsd: settledUsd,
+    },
+    t,
+  )
 }
 
 function opsAuditMetadata(params: {
@@ -66,7 +73,9 @@ export async function notifyCustomerFundingOperational(
     console.warn("[l5-funding-notify] FX snapshot lookup failed:", e)
   }
 
-  const { title, body, customerHint } = buildFundingApprovedFromFx(fx)
+  const lang = await resolveCustomerAppLanguage(admin, params.userId)
+  const t = customerNotifyT(lang)
+  const { title, body, customerHint } = buildFundingApprovedFromFx(fx, t)
 
   const nav: NexusNotificationNav = { kind: "notifications" }
   const { error } = await admin.from("user_account_notifications").upsert(
@@ -107,7 +116,9 @@ export async function notifyCustomerFundingDeclined(
   admin: SupabaseClient,
   params: { userId: string; requestId: string; resolutionNote?: string | null },
 ): Promise<void> {
-  const { title, body } = buildFundingRejectedCustomerCopy(params.resolutionNote)
+  const lang = await resolveCustomerAppLanguage(admin, params.userId)
+  const t = customerNotifyT(lang)
+  const { title, body } = buildFundingRejectedCustomerCopy(params.resolutionNote, t)
   const nav: NexusNotificationNav = { kind: "notifications" }
   const { error } = await admin.from("user_account_notifications").upsert(
     {

@@ -11,6 +11,7 @@ import { financialStatusEn } from "@/lib/i18n/financial-status"
 import { fundingWithdrawalEn, fundingWithdrawalOverlays } from "@/lib/i18n/funding-withdrawal-copy"
 import { companyMessagesEn } from "@/lib/i18n/company-messages"
 import { frNotificationsOverlay } from "@/lib/i18n/fr-notifications-overlay"
+import { customerNotificationMessageEn } from "@/lib/i18n/customer-notification-messages"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -129,6 +130,7 @@ const en: Record<string, string> = {
   "settings.regionApplySuggestion": "Apply suggested language & display currency",
   "settings.regionSaved": "Country saved for funding match.",
   "common.missingTranslation": "Translation unavailable.",
+  ...customerNotificationMessageEn,
   ...financialStatusEn,
   ...fundingWithdrawalEn,
   ...companyMessagesEn,

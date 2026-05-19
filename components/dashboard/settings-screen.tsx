@@ -478,11 +478,11 @@ export function SettingsScreen({
   }
 
   const settingsItems: SettingItem[] = [
-    { key: "exchanges", icon: <Link2 className="h-5 w-5" />, label: "Connected Exchanges", description: "Binance, Bybit, Bitget, etc.", badge: "New" },
-    { key: "security", icon: <Shield className="h-5 w-5" />, label: "Security Center", description: `Level ${securityLevel} of 3`, badge: securityLevel < 3 ? "Setup" : undefined },
-    { key: "deposit-withdraw", icon: <ArrowDownUp className="h-5 w-5" />, label: "Deposit & Withdraw", description: "Add or withdraw funds" },
-    { key: "notifications", icon: <Bell className="h-5 w-5" />, label: "Notifications", description: "Alerts and push settings" },
-    { key: "nexus-learner", icon: <MessageCircle className="h-5 w-5" />, label: "Joelin", description: "Nexus PRO product & trust guide" },
+    { key: "exchanges", icon: <Link2 className="h-5 w-5" />, label: t("settings.menu.exchanges"), description: t("settings.menu.exchangesDesc"), badge: "New" },
+    { key: "security", icon: <Shield className="h-5 w-5" />, label: t("settings.menu.security"), description: t("settings.menu.securityDesc").replace("{{level}}", String(securityLevel)), badge: securityLevel < 3 ? "Setup" : undefined },
+    { key: "deposit-withdraw", icon: <ArrowDownUp className="h-5 w-5" />, label: t("settings.menu.depositWithdraw"), description: t("settings.menu.depositWithdrawDesc") },
+    { key: "notifications", icon: <Bell className="h-5 w-5" />, label: t("settings.menu.notifications"), description: t("settings.menu.notificationsDesc") },
+    { key: "nexus-learner", icon: <MessageCircle className="h-5 w-5" />, label: t("settings.menu.learner"), description: t("settings.menu.learnerDesc") },
     {
       key: "currency",
       icon: <Wallet className="h-5 w-5" />,
@@ -501,11 +501,11 @@ export function SettingsScreen({
       label: t("settings.item.region"),
       description: countryLabel,
     },
-    { key: "theme", icon: <Palette className="h-5 w-5" />, label: "Theme", description: theme.charAt(0).toUpperCase() + theme.slice(1) },
-    { key: "wire-currency", icon: <Banknote className="h-5 w-5" />, label: "Direct Wire Currency", description: wireCurrency },
-    { key: "payment-methods", icon: <CreditCard className="h-5 w-5" />, label: "Payment Methods", description: "Cards and bank accounts" },
-    { key: "privacy", icon: <Lock className="h-5 w-5" />, label: "Privacy Center", description: "Data and privacy settings" },
-    { key: "about", icon: <Info className="h-5 w-5" />, label: "About Us", description: "Company identity and institutional contact" },
+    { key: "theme", icon: <Palette className="h-5 w-5" />, label: t("settings.menu.theme"), description: theme.charAt(0).toUpperCase() + theme.slice(1) },
+    { key: "wire-currency", icon: <Banknote className="h-5 w-5" />, label: t("settings.menu.wireCurrency"), description: wireCurrency },
+    { key: "payment-methods", icon: <CreditCard className="h-5 w-5" />, label: t("settings.menu.paymentMethods"), description: t("settings.menu.paymentMethodsDesc") },
+    { key: "privacy", icon: <Lock className="h-5 w-5" />, label: t("settings.menu.privacy"), description: t("settings.menu.privacyDesc") },
+    { key: "about", icon: <Info className="h-5 w-5" />, label: t("settings.menu.about"), description: t("settings.menu.aboutDesc") },
   ]
 
   const renderBackButton = () => (
@@ -1043,9 +1043,9 @@ export function SettingsScreen({
   // Theme Selection
   if (currentView === "theme") {
     const themes = [
-      { key: "dark", label: "Dark", description: "Dark background with light text" },
-      { key: "light", label: "Light", description: "Light background with dark text" },
-      { key: "system", label: "System", description: "Follow system preference" },
+      { key: "dark", label: t("settings.theme.dark"), description: t("settings.theme.darkDesc") },
+      { key: "light", label: t("settings.theme.light"), description: t("settings.theme.lightDesc") },
+      { key: "system", label: t("settings.theme.system"), description: t("settings.theme.systemDesc") },
     ]
 
     return (
