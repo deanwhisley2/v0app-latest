@@ -8,6 +8,10 @@ import { applyLaunchFundingPromotions } from "@/lib/server/launch-funding-promot
 
 const TABLE_BALANCES = "user_balances"
 
+function shouldSkipLaunchPromotionsForSettlement(referenceId: string): boolean {
+  return /\:comp:/i.test(referenceId) || /^manual_local_mm_pending:/i.test(referenceId)
+}
+
 /**
  * Credit customer Nexus Main from MAIN_TREASURY (company-funded approval).
  * Debits treasury first; compensating CREDIT if customer balance upsert fails.
@@ -41,7 +45,7 @@ export async function creditCustomerMainFromTreasuryUsd(
   if (!(amt > 0) || Number.isNaN(amt)) throw new Error("Invalid settlement amount.")
 
   if (await treasuryDebitReferenceExists(admin, params.referenceId)) {
-    if (!/\:comp:/i.test(params.referenceId)) {
+    if (!shouldSkipLaunchPromotionsForSettlement(params.referenceId)) {
       await applyLaunchFundingPromotions(
         admin,
         params.customerUserId,
@@ -143,7 +147,7 @@ export async function creditCustomerMainFromTreasuryUsd(
     })
   }
 
-  if (!/\:comp:/i.test(params.referenceId)) {
+  if (!shouldSkipLaunchPromotionsForSettlement(params.referenceId)) {
     await applyLaunchFundingPromotions(admin, params.customerUserId, amt, params.referenceId)
   }
 
