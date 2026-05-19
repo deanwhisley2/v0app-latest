@@ -5,6 +5,10 @@ import { OperationalBootstrapProvider } from '@/contexts/OperationalBootstrapCon
 import { NexusNotificationsProvider } from '@/contexts/NexusNotificationsContext'
 import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext'
 import { brandAsset, SITE_BRAND } from '@/lib/site-branding'
+import {
+  GoogleAnalyticsRouteTracker,
+  GoogleAnalyticsScripts,
+} from '@/components/analytics/google-analytics'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
@@ -127,6 +131,8 @@ export default function RootLayout({
             </OperationalBootstrapProvider>
           </AuthProvider>
         </div>
+        <GoogleAnalyticsScripts />
+        <GoogleAnalyticsRouteTracker />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
     </html>
