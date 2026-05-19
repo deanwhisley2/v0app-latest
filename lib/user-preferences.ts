@@ -1,6 +1,8 @@
 import type { FiatCurrencyCode } from "@/lib/currency-display"
 
 export const PREFERENCE_STORAGE_KEY = "nexus_user_preferences"
+/** Set when the user explicitly picks a language in Settings (do not auto-overwrite). */
+export const LANGUAGE_USER_SET_KEY = "nexus_language_user_set"
 
 export type AppLanguage =
   | "en"
@@ -90,6 +92,24 @@ export function writePreferencesToStorage(p: UserPreferences) {
   if (typeof window === "undefined") return
   try {
     window.localStorage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(p))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readLanguageUserSet(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return window.localStorage.getItem(LANGUAGE_USER_SET_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+export function markLanguageUserSet(): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(LANGUAGE_USER_SET_KEY, "1")
   } catch {
     /* ignore */
   }

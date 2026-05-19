@@ -1,6 +1,6 @@
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 
-/** Canonical GA4 property for https://nexuspro.it.com (global site traffic). */
+/** Canonical GA4 property for https://www.nexuspro.it.com (global site traffic). */
 export const NEXUS_GA4_MEASUREMENT_ID = "G-H3GZ631CQ9"
 
 const GA4_ID_PATTERN = /^G-[A-Z0-9]+$/i
@@ -32,7 +32,16 @@ declare global {
 
 export function gaPageview(path: string, measurementId: string): void {
   if (typeof window === "undefined" || typeof window.gtag !== "function") return
-  window.gtag("config", measurementId, { page_path: path })
+  const pageLocation = typeof window.location?.href === "string" ? window.location.href : path
+  window.gtag("config", measurementId, {
+    page_path: path,
+    page_location: pageLocation,
+  })
+  window.gtag("event", "page_view", {
+    page_path: path,
+    page_location: pageLocation,
+    send_to: measurementId,
+  })
 }
 
 export function gaEvent(

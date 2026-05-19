@@ -47,7 +47,10 @@ export function GoogleAnalyticsScripts() {
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
           gtag('config', '${measurementId}', {
-            send_page_view: true
+            send_page_view: true,
+            page_location: window.location.href,
+            cookie_domain: 'nexuspro.it.com',
+            cookie_flags: 'SameSite=None;Secure'
           });
         `}
       </Script>

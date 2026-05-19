@@ -1,6 +1,7 @@
 import { corridorCurrencyForCountry, operatingCountryByCode } from "@/lib/operating-countries"
 import { isSupportedFiat, type FiatCurrencyCode } from "@/lib/currency-display"
 import type { UserPreferences } from "@/lib/user-preferences"
+import { readLanguageUserSet } from "@/lib/user-preferences"
 
 /**
  * Customer-visible wallet/trade amounts use the operating-country fiat when set.
@@ -38,10 +39,16 @@ export function mergeCustomerPreferencesWithCorridor(
     undefined
   const countryOk = country && operatingCountryByCode(country) ? country : prefs.country
   const currency = displayCurrencyForCustomer(countryOk ?? null, prefs.currency)
+  const row = operatingCountryByCode(countryOk ?? null)
+  let language = prefs.language
+  if (row && row.language !== language && !readLanguageUserSet()) {
+    language = row.language
+  }
   return {
     ...prefs,
     ...(countryOk ? { country: countryOk } : {}),
     currency,
+    language,
   }
 }
 

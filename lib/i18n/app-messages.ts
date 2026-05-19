@@ -10,6 +10,7 @@ import { resolveUiString } from "@/lib/i18n/resolver"
 import { financialStatusEn } from "@/lib/i18n/financial-status"
 import { fundingWithdrawalEn, fundingWithdrawalOverlays } from "@/lib/i18n/funding-withdrawal-copy"
 import { companyMessagesEn } from "@/lib/i18n/company-messages"
+import { frNotificationsOverlay } from "@/lib/i18n/fr-notifications-overlay"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -160,6 +161,7 @@ const fr: Partial<Record<string, string>> = {
   "settings.regionApplySuggestion": "Appliquer la langue et la devise suggérées",
   "settings.regionSaved": "Pays enregistré pour la correspondance de financement.",
   ...(fundingWithdrawalOverlays.fr ?? {}),
+  ...frNotificationsOverlay,
 }
 
 const sw: Partial<Record<string, string>> = {

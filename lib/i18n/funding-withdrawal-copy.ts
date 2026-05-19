@@ -1,4 +1,5 @@
 import type { AppLanguage } from "@/lib/user-preferences"
+import { frFundingOverlay } from "@/lib/i18n/fr-funding-overlay"
 
 /** Phase 2.1 — funding & withdrawal UI + known API error strings (English canonical). */
 export const fundingWithdrawalEn: Record<string, string> = {
@@ -271,67 +272,15 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.apiErr.maxHalfBalance": "Maximum withdrawal: 50% of liquid total (~{{max}}).",
 }
 
+/** French funding copy — generated base + curated overrides for sensitive lines. */
 const frFw: Partial<Record<string, string>> = {
-  "funding.button.addFunds": "Ajouter des fonds",
-  "funding.button.withdraw": "Retirer",
-  "funding.modal.titleAdd": "Ajouter des fonds",
-  "funding.modal.titleWithdraw": "Retrait de fonds",
+  ...frFundingOverlay,
   "funding.retailerOpsBlockedWithdraw":
     "Vous avez des demandes de financement local en attente. Les retraits du solde principal Nexus sont bloqués jusqu’à leur traitement. Vous pouvez toujours mettre à jour votre guichet ou approuver la file.",
-  "funding.optionCrypto": "A — Crypto",
-  "funding.optionLocal": "B — Mobile local",
   "funding.pickHint":
     "Choisissez l’option A (crypto vers le portefeuille société) ou B (mobile money via un guichet vérifié).",
-  "funding.crypto.companyWallet": "Portefeuille de réception société",
-  "funding.crypto.networkHint": "Envoyez uniquement sur le réseau indiqué ({{network}}).",
-  "funding.crypto.askSupport": "Contactez le support pour l’adresse du jour.",
-  "funding.local.step1Title": "Mobile local · Étape 1 sur 2",
-  "funding.local.badgeQualify": "Qualifier",
-  "funding.local.step1Body": "Indiquez pays, réseau, montant et expéditeur. Les guichets s’affichent à l’étape 2.",
-  "funding.field.country": "Pays",
-  "funding.field.network": "Réseau",
-  "funding.field.fundingAmount": "Montant ({{currency}})",
-  "funding.field.senderPhone": "Téléphone expéditeur",
-  "funding.field.senderName": "Nom expéditeur (comme sur MoMo)",
-  "funding.network.select": "Choisir le réseau…",
-  "funding.continueFindRetailers": "Continuer · trouver des guichets",
-  "funding.findingRetailers": "Recherche de guichets…",
-  "funding.local.step2Back": "← Modifier",
-  "funding.local.step2Title": "Étape 2 sur 2 · Choisir le guichet",
-  "funding.noDeskCorridorTitle": "Aucun guichet ni ligne officielle pour ce corridor.",
-  "funding.qualifiedDesksTitle": "Guichets qualifiés",
-  "funding.deskPrefix": "Guichet ·",
-  "funding.badge.verified": "Vérifié",
-  "funding.officialLineTitle": "Ligne officielle de réception",
-  "funding.payDeskOnlyTitle": "Payez uniquement ce guichet",
   "funding.wrongDestinationWarning":
     "Vérifiez noms et numéros avant d’envoyer. Une erreur annule la demande.",
-  "funding.txRefLabel": "ID / référence de transaction (obligatoire)",
-  "funding.txRefPlaceholder": "Collez l’ID du reçu ou du SMS",
-  "funding.optionalMemo": "Mémo facultatif",
-  "funding.recentRequestsExpand": "Demandes récentes — toucher pour développer",
-  "funding.appeal": "Contester",
-  "funding.incomingLocalTitle": "Fonds entrants",
-  "funding.noPendingApprovals": "Aucune approbation en attente.",
-  "funding.approve": "Approuver",
-  "funding.reject": "Refuser",
-  "withdrawal.amountLabel": "Montant du retrait ({{currency}})",
-  "withdrawal.availableLabel": "Disponible :",
-  "withdrawal.card.frozenTitle": "Retrait en attente",
-  "withdrawal.card.frozenBody": "Fonds réservés pour traitement du retrait.",
-  "withdrawal.cta.withdraw": "Retirer",
-  "funding.cta.confirmPayment": "Confirmer le paiement",
-  "funding.cta.chooseLocalPath": "Choisissez l’option locale pour confirmer",
-  "funding.cta.processing": "Traitement…",
-  "funding.button.close": "Fermer",
-  "withdrawal.error.enterAmount": "Saisissez un montant.",
-  "withdrawal.error.insufficientBalance": "Solde insuffisant",
-  "withdrawal.toast.success": "Retrait soumis.",
-  "funding.toast.officialQueued": "Demande en file — paiement ligne officielle en revue.",
-  "funding.toast.retailerPending": "Demande envoyée au guichet — confirmation en attente.",
-  "withdrawal.apiErr.minimumUsd": "Retrait minimum : {{min}}.",
-  "withdrawal.apiErr.insufficientMain": "Solde principal insuffisant pour ce retrait.",
-  "withdrawal.apiErr.genericFailed": "Le retrait n’a pas pu aboutir.",
   "funding.apiErr.gateNotAllowed":
     "Le financement guichet est réservé aux comptes niveau 1 ou 2 non guichets crédit.",
 }

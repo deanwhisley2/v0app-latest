@@ -19,6 +19,7 @@ import {
   writePreferencesToStorage,
   preferencesFromUserMetadata,
   localeForLanguage,
+  markLanguageUserSet,
 } from "@/lib/user-preferences"
 import { formatMoneyAmount } from "@/lib/currency-display"
 import { mergeCustomerPreferencesWithCorridor } from "@/lib/customer-display-currency"
@@ -83,12 +84,22 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
 
       setPrefs((prev) => {
         const next = mergeCustomerPreferencesWithCorridor(parsePreferences({ ...prev, country: raw }), raw)
-        if (next.country === prev.country && next.currency === prev.currency) return prev
+        if (
+          next.country === prev.country &&
+          next.currency === prev.currency &&
+          next.language === prev.language
+        ) {
+          return prev
+        }
         writePreferencesToStorage(next)
         const meta = user?.user_metadata as Record<string, unknown> | undefined
         const metaCur = meta?.preferred_currency ?? meta?.preferredCurrency
-        if (next.currency !== metaCur) {
-          void supabase.auth.updateUser({ data: { preferred_currency: next.currency } })
+        const metaLang = meta?.preferred_language ?? meta?.preferredLanguage
+        const metaPatch: Record<string, string> = {}
+        if (next.currency !== metaCur) metaPatch.preferred_currency = String(next.currency)
+        if (next.language !== metaLang) metaPatch.preferred_language = String(next.language)
+        if (Object.keys(metaPatch).length > 0) {
+          void supabase.auth.updateUser({ data: metaPatch })
         }
         return next
       })
@@ -99,12 +110,19 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   }, [user?.id])
 
   const setPreferences = useCallback((partial: Partial<UserPreferences>) => {
+    if (partial.language) markLanguageUserSet()
     setPrefs((prev) => {
       const next = parsePreferences({ ...prev, ...partial })
       writePreferencesToStorage(next)
+      if (partial.language && user?.id) {
+        void supabase.auth.updateUser({ data: { preferred_language: next.language } })
+      }
+      if (partial.currency && user?.id) {
+        void supabase.auth.updateUser({ data: { preferred_currency: next.currency } })
+      }
       return next
     })
-  }, [])
+  }, [user?.id])
 
   const locale = useMemo(() => localeForLanguage(prefs.language), [prefs.language])
 
