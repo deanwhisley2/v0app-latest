@@ -62,6 +62,7 @@ export function buildJoelinDeepseekSystemPrompt(
   const corridorDirective = row
     ? corridorAssistantLanguageDirective({
         isCongo: country === "CD",
+        isCongoBrazzaville: country === "CG",
         language: langCode,
         currency: row.currency,
         fundingCountryCode: country,

@@ -1,25 +1,41 @@
 /**
- * Congo (DRC) customer experience — language, locale, currency, assistant doctrine.
- * Ledger stays USD-normalized; customers see CDF and corridor-appropriate copy.
+ * Customer corridor experience — language, locale, currency, assistant doctrine.
+ * DRC (CD/CDF) and Congo Brazzaville (CG/XAF) share French formatting; ledger stays USD-normalized.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import {
+  CONGO_BRAZZAVILLE_COUNTRY_ISO2,
   CONGO_COUNTRY_ISO2,
+  CONGO_DRC_COUNTRY_ISO2,
+  isCentralAfricaLocalizedCorridor,
+  isCongoBrazzavilleOperatingCountry,
   isCongoOperatingCountry,
+  isDrcOperatingCountry,
   localeForCustomerCorridor,
 } from "@/lib/customer-corridor-money"
 import { resolveCustomerAppLanguage } from "@/lib/server/customer-ui-language"
 import type { AppLanguage } from "@/lib/user-preferences"
 
-export { CONGO_COUNTRY_ISO2, isCongoOperatingCountry }
+export {
+  CONGO_BRAZZAVILLE_COUNTRY_ISO2,
+  CONGO_COUNTRY_ISO2,
+  CONGO_DRC_COUNTRY_ISO2,
+  isCentralAfricaLocalizedCorridor,
+  isCongoBrazzavilleOperatingCountry,
+  isCongoOperatingCountry,
+  isDrcOperatingCountry,
+}
 
 export type CustomerExperienceProfile = {
   language: AppLanguage
   fundingCountryCode: string | null
   currency: string
   locale: string
+  /** DRC (CD) — CDF corridor. */
   isCongo: boolean
+  /** Republic of the Congo / Brazzaville (CG) — XAF corridor. */
+  isCongoBrazzaville: boolean
 }
 
 export function localeForCustomerExperience(
@@ -33,7 +49,10 @@ import { operatingCountryByCode } from "@/lib/operating-countries"
 
 /** Regional assistant rules: corridor currency + language; never expose other corridors. */
 export function corridorAssistantLanguageDirective(
-  profile: Pick<CustomerExperienceProfile, "isCongo" | "language" | "currency" | "fundingCountryCode">,
+  profile: Pick<
+    CustomerExperienceProfile,
+    "isCongo" | "isCongoBrazzaville" | "language" | "currency" | "fundingCountryCode"
+  >,
 ): string {
   const country = profile.fundingCountryCode?.trim().toUpperCase().slice(0, 2) ?? ""
   const row = operatingCountryByCode(country)
@@ -52,15 +71,23 @@ export function corridorAssistantLanguageDirective(
 
   if (profile.isCongo && profile.language === "fr") {
     lines.push("Example amount style: 1 519 199,50 CDF.")
+  } else if (profile.isCongoBrazzaville && profile.language === "fr") {
+    lines.push("Example amount style: 150 000 CFA (XAF) or 1 500 000,00 XAF.")
+  } else if (profile.currency === "XAF" && profile.language === "fr") {
+    lines.push("Example amount style: 150 000 XAF (CFA).")
   }
   return lines.join(" ")
 }
 
 /** @deprecated Use corridorAssistantLanguageDirective */
 export function congoAssistantLanguageDirective(
-  profile: Pick<CustomerExperienceProfile, "isCongo" | "language" | "currency">,
+  profile: Pick<
+    CustomerExperienceProfile,
+    "isCongo" | "isCongoBrazzaville" | "language" | "currency" | "fundingCountryCode"
+  >,
 ): string {
-  return corridorAssistantLanguageDirective({ ...profile, fundingCountryCode: profile.isCongo ? "CD" : null })
+  const cc = profile.fundingCountryCode ?? (profile.isCongo ? "CD" : profile.isCongoBrazzaville ? "CG" : null)
+  return corridorAssistantLanguageDirective({ ...profile, fundingCountryCode: cc })
 }
 
 export async function resolveCustomerExperience(
@@ -84,6 +111,7 @@ export async function resolveCustomerExperience(
     fundingCountryCode,
     currency,
     locale,
-    isCongo: isCongoOperatingCountry(fundingCountryCode),
+    isCongo: isDrcOperatingCountry(fundingCountryCode),
+    isCongoBrazzaville: isCongoBrazzavilleOperatingCountry(fundingCountryCode),
   }
 }

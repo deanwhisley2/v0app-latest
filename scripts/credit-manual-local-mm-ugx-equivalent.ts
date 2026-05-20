@@ -17,7 +17,7 @@ import { adminRetailPoolUserId } from "../lib/server/admin-retail-pool"
 import { formatCustomerMoneyForUser } from "../lib/server/customer-money-copy"
 import { appendUserAccountNotification } from "../lib/server/user-account-notifications"
 import { recordFinancialEvent } from "../lib/server/financial-events"
-import { isCongoOperatingCountry } from "../lib/customer-corridor-money"
+import { isCentralAfricaLocalizedCorridor } from "../lib/customer-corridor-money"
 
 config({ path: resolve(process.cwd(), ".env.local") })
 
@@ -50,9 +50,9 @@ async function creditUgxEquivalent(email: string, ugxAmount: number): Promise<vo
     .eq("id", userId)
     .maybeSingle()
   const country = (prof as { funding_country_code?: string | null } | null)?.funding_country_code
-  if (isCongoOperatingCountry(country)) {
+  if (isCentralAfricaLocalizedCorridor(country)) {
     throw new Error(
-      `User ${email} is Congo (CD). Use: npx tsx scripts/congo-reconcile-customer-account.ts --email ${email} --credit-usd <usd>`,
+      `User ${email} is Congo corridor (${country}). Use: npx tsx scripts/congo-reconcile-customer-account.ts --email ${email} --ensure-country ${country} --credit-usd <usd>`,
     )
   }
 

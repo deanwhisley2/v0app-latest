@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Congo corridor ops: clean legacy UGX-style notifications/credits, re-credit in CDF display.
+ * Central Africa corridor ops (CD/CDF, CG/XAF): clean legacy notifications/credits, localized display.
  *
  * Usage:
  *   npx tsx scripts/congo-reconcile-customer-account.ts --email <email> --ensure-country CD
@@ -47,7 +47,7 @@ async function main() {
   const email = argValue("--email")
   if (!email) {
     console.error(
-      "Usage: npx tsx scripts/congo-reconcile-customer-account.ts --email <email> [--ensure-country CD] [--clean-notifications] [--reverse-manual-credits] [--credit-usd N] [--apply-launch-bonus]",
+      "Usage: npx tsx scripts/congo-reconcile-customer-account.ts --email <email> [--ensure-country CD|CG] [--clean-notifications] [--reverse-manual-credits] [--credit-usd N] [--apply-launch-bonus]",
     )
     process.exit(1)
   }
@@ -151,7 +151,11 @@ async function main() {
         title,
         body,
         nav: { kind: "wallet" },
-        metadata: { amount_usd: creditUsd, corridor: "CD", friendly_detail: body },
+        metadata: {
+          amount_usd: creditUsd,
+          corridor: exp.fundingCountryCode ?? "CD",
+          friendly_detail: body,
+        },
       })
       await recordFinancialEvent({
         userId,

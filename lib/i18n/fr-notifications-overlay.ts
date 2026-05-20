@@ -144,7 +144,7 @@ export const frNotificationsOverlay: Record<string, string> = {
   "container.fix.unreleasedLabel": "Non libéré",
   "container.fix.availableToRelease": "Disponible à libérer",
   "container.error.invalidLocalAmount":
-    "Saisissez un montant valide (ex. 1 519 199,50 ou 1519199,50 en CDF ; format US 1,519,990 aussi accepté).",
+    "Saisissez un montant valide (ex. 1 519 199,50 ou 1519199,50 en CDF ; 150 000 ou 1 500 000,00 en CFA/XAF ; format US 1,519,990 aussi accepté).",
   "container.error.fixOpenFailed": "Échec d’ouverture du trade fixe.",
   "container.error.belowFixMinimum":
     "Allocation fixe minimum : {{min}} (net après assurance).",

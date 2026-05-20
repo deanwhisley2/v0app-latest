@@ -8,7 +8,7 @@ export const GROUPING_SPACE_RE = /[\s\u00a0\u202f\u2009]/g
 
 /** Known fiat tickers and symbols (longest first). */
 const CURRENCY_PREFIX_RE =
-  /\b(?:CDF|UGX|USD|USDT|KES|TZS|RWF|NGN|GHS|ZAR|XOF|XAF|MAD|EGP|ETB|ZMW|MWK|MZN|BWP|SDG|KSH|FC)\b/gi
+  /\b(?:CDF|UGX|USD|USDT|KES|TZS|RWF|NGN|GHS|ZAR|XOF|XAF|CFA|MAD|EGP|ETB|ZMW|MWK|MZN|BWP|SDG|KSH|FC)\b/gi
 
 const SYMBOL_CHARS_RE = /[$€£₦₹¥]/g
 

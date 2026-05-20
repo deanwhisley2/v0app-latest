@@ -18,6 +18,8 @@ const PARSE_CASES: Array<{ input: string; expected: number }> = [
   { input: "150 000,50", expected: 150_000.5 },
   { input: "150,000.00", expected: 150_000 },
   { input: "CDF 1 420 000", expected: 1_420_000 },
+  { input: "CFA 250 000", expected: 250_000 },
+  { input: "XAF 1 500 000,00", expected: 1_500_000 },
   { input: "UGX 250,000", expected: 250_000 },
   { input: "$66.50", expected: 66.5 },
   { input: "KSh 8,600.00", expected: 8_600 },
@@ -53,7 +55,25 @@ function main() {
   const roundTrip = parseCustomerLocalAmountInput(formatAmountInputLive("150000", "fr-CD", "CDF"))
   assert(roundTrip === 150_000, `format round-trip fr-CD CDF: ${roundTrip}`)
 
-  console.log("audit-customer-money-localization: PASS", { parseCases: PARSE_CASES.length, cdFr: fmt })
+  const cgFr = buildCustomerMoneyContext({ fundingCountryCode: "CG", language: "fr" })
+  const cgFmt = formatUsdForCustomerDisplay(100, cgFr)
+  assert(!/UGX|CDF/i.test(cgFmt), `CG display must not contain UGX/CDF: ${cgFmt}`)
+  assert(/XAF|FCFA|CFA|F\s*CFA/i.test(cgFmt) || /\d/.test(cgFmt), `CG fr format: ${cgFmt}`)
+
+  const cgEn = buildCustomerMoneyContext({ fundingCountryCode: "CG", language: "en" })
+  const cgEnFmt = formatUsdForCustomerDisplay(50, cgEn)
+  assert(!/UGX|CDF/i.test(cgEnFmt), `CG en display: ${cgEnFmt}`)
+
+  const xafFr = formatAmountInputLive("1500000", "fr-CG", "XAF")
+  assert(xafFr.replace(/\D/g, "").includes("1500000"), `XAF fr-CG live format: ${xafFr}`)
+  const cfaParse = parseCustomerLocalAmountInput("CFA 200 000")
+  assert(cfaParse === 200_000, `CFA prefix parse: ${cfaParse}`)
+
+  console.log("audit-customer-money-localization: PASS", {
+    parseCases: PARSE_CASES.length,
+    cdFr: fmt,
+    cgFr: cgFmt,
+  })
 }
 
 main()

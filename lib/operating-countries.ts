@@ -19,6 +19,13 @@ export const OPERATING_COUNTRIES: readonly OperatingCountryDef[] = [
   { code: "MW", label: "Malawi", region: "East/Southern Africa", currency: "MWK", language: "en" },
   { code: "KE", label: "Kenya", region: "East Africa", currency: "KES", language: "sw" },
   { code: "CD", label: "Congo (DRC)", region: "Central Africa", currency: "CDF", language: "fr" },
+  {
+    code: "CG",
+    label: "Congo (Brazzaville)",
+    region: "Central Africa",
+    currency: "XAF",
+    language: "fr",
+  },
   { code: "UG", label: "Uganda", region: "East Africa", currency: "UGX", language: "en" },
   { code: "TZ", label: "Tanzania", region: "East Africa", currency: "TZS", language: "sw" },
   { code: "RW", label: "Rwanda", region: "East Africa", currency: "RWF", language: "en" },
