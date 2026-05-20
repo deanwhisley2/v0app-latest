@@ -26,6 +26,8 @@ import {
   splitFixedTradeOpenCommitUsd,
 } from "@/lib/nexus-financial-policy"
 import {
+  convertFromUsd,
+  formatLocalFiatAmount,
   localFiatUnitsToUsd,
   parseCustomerLocalAmountInput,
   usdFromCustomerLocalInput,
@@ -292,7 +294,7 @@ export function ContainerMode({
   containerLiquidEarningsUsd = 0,
   withdrawalPolicyHint = null,
 }: ContainerModeProps) {
-  const { formatUserMoney, currency, t } = useUserPreferences()
+  const { formatUserMoney, currency, locale, t } = useUserPreferences()
   const { addNotification } = useNexusNotifications()
   const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
@@ -2326,11 +2328,17 @@ export function ContainerMode({
                   <div>
                     <label className="text-sm font-medium mb-2 block">Allocation amount</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
                       value={copyAmount}
                       onChange={(e) => setCopyAmount(e.target.value)}
+                      placeholder={formatLocalFiatAmount(
+                        convertFromUsd(copyMinUsdPolicy, currency),
+                        currency,
+                        locale,
+                      )}
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
-                      min={copyMinUsdPolicy}
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
                       Minimum: {formatUserMoney(copyMinUsdPolicy)}
@@ -2379,11 +2387,17 @@ export function ContainerMode({
                       Lock amount ({currency}) — managed allocation
                     </label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
                       value={fixAmount}
                       onChange={(e) => setFixAmount(e.target.value)}
+                      placeholder={formatLocalFiatAmount(
+                        convertFromUsd(fixMinUsdPolicy, currency),
+                        currency,
+                        locale,
+                      )}
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
-                      min={fixMinUsdPolicy}
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
                       Minimum: {formatUserMoney(fixMinUsdPolicy)}

@@ -16,6 +16,7 @@ import {
   NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT,
 } from "../lib/nexus-financial-policy"
 import { minDepositUsdOk, minWithdrawUsdOk, readFxLocalPerUsdMap, usdToLocalUnits } from "../lib/nexus-fx"
+import { parseCustomerLocalAmountInput } from "../lib/currency-display"
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)
@@ -56,6 +57,12 @@ function main() {
   if (process.env.NEXUS_FX_LOCAL_PER_USD_JSON?.includes("UGX")) {
     assert(ugx !== null && ugx > 0, "fx conversion when UGX configured")
   }
+
+  assert(parseCustomerLocalAmountInput("1 519 199,50") === 1_519_199.5, "fr-CD decimal comma + spaces")
+  assert(parseCustomerLocalAmountInput("1\u202f519\u202f199,50") === 1_519_199.5, "narrow no-break spaces")
+  assert(parseCustomerLocalAmountInput("1,519,990") === 1_519_990, "US thousand commas")
+  assert(parseCustomerLocalAmountInput("1519199.50") === 1_519_199.5, "plain dot decimal")
+  assert(parseCustomerLocalAmountInput("1.519.199,50") === 1_519_199.5, "EU dot thousands + comma decimal")
 
   console.log("nexus-financial-batch1-check: OK")
 }

@@ -2431,12 +2431,16 @@ export default function DashboardPage() {
                           {t("funding.field.fundingAmount").replace("{{currency}}", fundingAmountLabelCurrency)}
                         </label>
                         <input
-                          type="number"
-                          min={0}
-                          step="any"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
                           value={fundAmount}
                           onChange={(e) => setFundAmount(e.target.value)}
-                          placeholder="0"
+                          placeholder={formatLocalFiatAmount(
+                            minDepositLocalAmount(fundingAmountLabelCurrency),
+                            fundingAmountLabelCurrency,
+                            locale || "en-US",
+                          )}
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 font-mono text-sm"
                         />
                         <p className="mt-1 text-[10px] text-muted-foreground">
@@ -3074,10 +3078,16 @@ export default function DashboardPage() {
                         )}
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={fundAmount}
                   onChange={(e) => setFundAmount(e.target.value)}
-                  placeholder={`0 (${currency})`}
+                  placeholder={formatLocalFiatAmount(
+                    minDepositLocalAmount(currency),
+                    currency,
+                    locale || "en-US",
+                  )}
                   className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"
                 />
                 {showFundModal !== "withdraw" && (

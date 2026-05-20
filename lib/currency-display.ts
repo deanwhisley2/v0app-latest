@@ -67,14 +67,48 @@ export function convertFromUsd(amountUsd: number, currency: string): number {
   return amountUsd * rate
 }
 
+/** Spaces used as thousand separators (incl. narrow no-break space from Intl fr-CD). */
+const GROUPING_SPACE_RE = /[\s\u00a0\u202f]/g
+
 /**
  * Parse customer-typed fiat in the amount field.
- * Strips grouping commas/spaces so `1,519,990` (CDF/UGX/KES) is not read as `1.519`.
+ * Supports US/UK (`1,519,990.50`), French/Congo (`1 519 199,50`), and plain digits.
  */
 export function parseCustomerLocalAmountInput(raw: string): number {
-  const normalized = raw.trim().replace(/\s+/g, "").replace(/,/g, "")
-  if (!normalized) return NaN
-  const n = Number.parseFloat(normalized)
+  let s = raw.trim()
+  if (!s) return NaN
+
+  s = s.replace(/[a-zA-Z]{2,6}/g, "").trim()
+  if (!s) return NaN
+
+  const commaCount = (s.match(/,/g) ?? []).length
+  const dotCount = (s.match(/\./g) ?? []).length
+
+  if (commaCount > 0 && dotCount > 0) {
+    const lastComma = s.lastIndexOf(",")
+    const lastDot = s.lastIndexOf(".")
+    if (lastComma > lastDot) {
+      s = s.replace(GROUPING_SPACE_RE, "").replace(/\./g, "").replace(",", ".")
+    } else {
+      s = s.replace(GROUPING_SPACE_RE, "").replace(/,/g, "")
+    }
+  } else if (commaCount === 1) {
+    const compact = s.replace(GROUPING_SPACE_RE, "")
+    const idx = compact.indexOf(",")
+    const intPart = compact.slice(0, idx)
+    const fracPart = compact.slice(idx + 1)
+    if (/^\d{1,2}$/.test(fracPart)) {
+      s = `${intPart}.${fracPart}`
+    } else {
+      s = compact.replace(/,/g, "")
+    }
+  } else if (commaCount > 1) {
+    s = s.replace(GROUPING_SPACE_RE, "").replace(/,/g, "")
+  } else {
+    s = s.replace(GROUPING_SPACE_RE, "")
+  }
+
+  const n = Number.parseFloat(s)
   return Number.isFinite(n) ? n : NaN
 }
 

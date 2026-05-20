@@ -229,7 +229,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.balance.exchangeHint": "Linked exchanges. Container fees paid: {{fees}}",
   "funding.balance.activityFallback": "Activity",
   "container.error.invalidLocalAmount":
-    "Enter a valid amount in your local currency (use digits; commas between thousands are OK).",
+    "Enter a valid amount in your local currency (e.g. 1 519 199,50 or 1519199.50 for CDF; US-style 1,519,990 is also OK).",
   "container.error.fixOpenFailed": "Fixed trade open failed.",
   "container.error.belowFixMinimum":
     "Minimum fixed allocation is {{min}} (net after insurance).",
