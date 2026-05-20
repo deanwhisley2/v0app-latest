@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const available = liquid.availableUsd
     const total = liquid.totalLiquidUsd
     const minUsd = roundUsd2(minWithdrawUsdFloor())
-    const withdrawableMainUsd = round2(
+    const withdrawableMainUsd = roundUsd2(
       Math.max(0, available - nexusMainMinimumRetainUsd(fundingCountryCode)),
     )
     const maxUsd = roundUsd2(Math.min(withdrawableMainUsd, Math.max(0, total * 0.5)))
