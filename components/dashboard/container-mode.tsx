@@ -38,6 +38,9 @@ import { computePlatformLiveStats } from "@/lib/platform-live-stats"
 import { Checkbox } from "@/components/ui/checkbox"
 import { fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
+import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balance"
+import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
+import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
 import { cn } from "@/lib/utils"
 import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
@@ -301,6 +304,11 @@ export function ContainerMode({
   const [showInstructions, setShowInstructions] = useState(true)
   const [copyAmount, setCopyAmount] = useState("500")
   const [fixAmount, setFixAmount] = useState("1000")
+
+  useEffect(() => {
+    setCopyAmount((v) => formatAmountInputLive(v, locale, currency))
+    setFixAmount((v) => formatAmountInputLive(v, locale, currency))
+  }, [locale, currency])
   const [fixPeriod, setFixPeriod] = useState<FixPeriod>(1)
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -878,14 +886,17 @@ export function ContainerMode({
 
       setIsProcessing(true)
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) {
-          toast.error("Sign in to start a copy-trade allocation.", { duration: 5000 })
+        const refreshed = await refreshLiveBalanceBeforeAction()
+        if (!refreshed.ok) {
+          toast.error(refreshed.error, { duration: 5000 })
           return
         }
+        const mainUsd = refreshed.balance.available_balance
+        if (amount > mainUsd) {
+          toast.error(t("withdrawal.error.insufficientBalance"), { duration: 6000 })
+          return
+        }
+        const token = refreshed.token
         const res = await fetch("/api/user/copy-trade/open", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -1067,14 +1078,17 @@ export function ContainerMode({
 
       setIsProcessing(true)
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) {
-          toast.error("Sign in to open a fixed trade.", { duration: 5000 })
+        const refreshed = await refreshLiveBalanceBeforeAction()
+        if (!refreshed.ok) {
+          toast.error(refreshed.error, { duration: 5000 })
           return
         }
+        const mainUsd = refreshed.balance.available_balance
+        if (grossCommitUsd > mainUsd) {
+          toast.error(t("withdrawal.error.insufficientBalance"), { duration: 6000 })
+          return
+        }
+        const token = refreshed.token
         const res = await fetch("/api/user/fixed-trade/open", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2327,12 +2341,11 @@ export function ContainerMode({
                 <>
                   <div>
                     <label className="text-sm font-medium mb-2 block">Allocation amount</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
+                    <SmartAmountInput
                       value={copyAmount}
-                      onChange={(e) => setCopyAmount(e.target.value)}
+                      onValueChange={setCopyAmount}
+                      locale={locale}
+                      currency={currency}
                       placeholder={formatLocalFiatAmount(
                         convertFromUsd(copyMinUsdPolicy, currency),
                         currency,
@@ -2386,12 +2399,11 @@ export function ContainerMode({
                     <label className="text-sm font-medium mb-2 block">
                       Lock amount ({currency}) — managed allocation
                     </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
+                    <SmartAmountInput
                       value={fixAmount}
-                      onChange={(e) => setFixAmount(e.target.value)}
+                      onValueChange={setFixAmount}
+                      locale={locale}
+                      currency={currency}
                       placeholder={formatLocalFiatAmount(
                         convertFromUsd(fixMinUsdPolicy, currency),
                         currency,

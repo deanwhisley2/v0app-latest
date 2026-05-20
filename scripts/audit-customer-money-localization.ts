@@ -5,6 +5,7 @@
  */
 import { parseCustomerLocalAmountInput } from "../lib/customer-amount-parse"
 import { formatUsdForCustomerDisplay, buildCustomerMoneyContext } from "../lib/customer-facing-money"
+import { formatAmountInputLive } from "../lib/customer-amount-input-format"
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)
@@ -42,6 +43,15 @@ function main() {
   const ug = buildCustomerMoneyContext({ fundingCountryCode: "UG", language: "en" })
   const ugFmt = formatUsdForCustomerDisplay(5, ug)
   assert(/UGX/i.test(ugFmt) || /\d/.test(ugFmt), `UG display: ${ugFmt}`)
+
+  const cdfFr = formatAmountInputLive("150000", "fr-CD", "CDF")
+  assert(/\d/.test(cdfFr) && cdfFr.replace(/\D/g, "").includes("150000"), `CDF fr live format: ${cdfFr}`)
+  const ugEn = formatAmountInputLive("1500000", "en-US", "UGX")
+  assert(ugEn.includes("1") && ugEn.includes("500"), `UGX en live format: ${ugEn}`)
+  const usdEn = formatAmountInputLive("150000", "en-US", "USD")
+  assert(usdEn.includes("150"), `USD en live format: ${usdEn}`)
+  const roundTrip = parseCustomerLocalAmountInput(formatAmountInputLive("150000", "fr-CD", "CDF"))
+  assert(roundTrip === 150_000, `format round-trip fr-CD CDF: ${roundTrip}`)
 
   console.log("audit-customer-money-localization: PASS", { parseCases: PARSE_CASES.length, cdFr: fmt })
 }

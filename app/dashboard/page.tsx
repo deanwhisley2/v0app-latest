@@ -50,6 +50,9 @@ import {
   usdFromCustomerLocalInput,
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
+import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balance"
+import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
+import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
 import {
   PaymentReferenceFields,
@@ -751,6 +754,29 @@ export default function DashboardPage() {
       : l1FundSource === "airtel"
         ? localMmCorridorFiat ?? corridorFiatForCountryIso2("UG") ?? "UGX"
         : currency
+
+  const smartAmountLocale = locale || "en-US"
+
+  const smartAmountCurrencyForFund = useMemo(() => {
+    if (showFundModal === "withdraw") return currency
+    if (showFundModal === "add" && l1FundSource === "crypto") return "USD"
+    if (showFundModal === "add" && (l1FundSource === "local" || l1FundSource === "airtel")) {
+      return fundingAmountLabelCurrency
+    }
+    return currency
+  }, [showFundModal, l1FundSource, currency, fundingAmountLabelCurrency])
+
+  const handleFundAmountChange = useCallback(
+    (raw: string) => {
+      setFundAmount(formatAmountInputLive(raw, smartAmountLocale, smartAmountCurrencyForFund))
+    },
+    [smartAmountLocale, smartAmountCurrencyForFund],
+  )
+
+  useEffect(() => {
+    if (!fundAmount.trim()) return
+    setFundAmount((v) => formatAmountInputLive(v, smartAmountLocale, smartAmountCurrencyForFund))
+  }, [smartAmountLocale, smartAmountCurrencyForFund])
 
   const customerMinDepositDisplay = useMemo(() => {
     const cur =
@@ -1862,15 +1888,20 @@ export default function DashboardPage() {
     setIsFundProcessing(true)
     ;(async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) throw new Error(t("withdrawal.error.sessionExpired"))
+        const refreshed = await refreshLiveBalanceBeforeAction()
+        if (!refreshed.ok) throw new Error(refreshed.error)
+        const token = refreshed.token
+        const liveMain = refreshed.balance.available_balance
+        const liveRetail = refreshed.balance.retail_balance ?? retailBalance
+        const liveWithdrawPending =
+          refreshed.balance.withdrawal_pending_balance ?? withdrawalPendingBalance
+        setMainBalance(liveMain)
+        setRetailBalance(liveRetail)
+        setWithdrawalPendingBalance(liveWithdrawPending)
 
         if (showFundModal === "withdraw") {
           if (!(amount > 0)) throw new Error(t("withdrawal.error.enterAmount"))
-          if (amount > mainBalance) throw new Error(t("withdrawal.error.insufficientBalance"))
+          if (amount > liveMain) throw new Error(t("withdrawal.error.insufficientBalance"))
           if (retailerCreditDesk && retailerOpsBlocked) {
             throw new Error(t("withdrawal.error.retailerPendingBlocksWithdraw"))
           }
@@ -2366,7 +2397,9 @@ export default function DashboardPage() {
                   }}
                   userEmail={user?.email ?? currentUser?.email ?? ""}
                   fundAmount={fundAmount}
-                  onFundAmountChange={setFundAmount}
+                  onFundAmountChange={handleFundAmountChange}
+                  fundAmountLocale={smartAmountLocale}
+                  fundAmountCurrency={smartAmountCurrencyForFund}
                   fundTxReference={fundTxReference}
                   onTxReferenceChange={(v) => {
                     setFundTxReference(v)
@@ -2430,12 +2463,11 @@ export default function DashboardPage() {
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
                           {t("funding.field.fundingAmount").replace("{{currency}}", fundingAmountLabelCurrency)}
                         </label>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          autoComplete="off"
+                        <SmartAmountInput
                           value={fundAmount}
-                          onChange={(e) => setFundAmount(e.target.value)}
+                          onValueChange={handleFundAmountChange}
+                          locale={smartAmountLocale}
+                          currency={smartAmountCurrencyForFund}
                           placeholder={formatLocalFiatAmount(
                             minDepositLocalAmount(fundingAmountLabelCurrency),
                             fundingAmountLabelCurrency,
@@ -3077,15 +3109,14 @@ export default function DashboardPage() {
                           l1FundSource === "airtel" ? fundingAmountLabelCurrency : currency,
                         )}
                 </label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
+                <SmartAmountInput
                   value={fundAmount}
-                  onChange={(e) => setFundAmount(e.target.value)}
+                  onValueChange={handleFundAmountChange}
+                  locale={smartAmountLocale}
+                  currency={smartAmountCurrencyForFund}
                   placeholder={formatLocalFiatAmount(
-                    minDepositLocalAmount(currency),
-                    currency,
+                    minDepositLocalAmount(smartAmountCurrencyForFund),
+                    smartAmountCurrencyForFund,
                     locale || "en-US",
                   )}
                   className="w-full rounded-lg border border-border bg-background py-2 px-3 font-mono text-base outline-none transition-colors focus:border-primary sm:py-2.5 sm:text-lg"

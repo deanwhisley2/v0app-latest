@@ -5,6 +5,7 @@ import QRCode from "qrcode"
 import { Check, ChevronDown, Copy, Smartphone, Wallet } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { AirtelPaymentSteps, PaymentReferenceFields } from "@/components/dashboard/mobile-money-payment-instructions"
+import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
@@ -42,6 +43,8 @@ type Props = {
   /** When set with onFundAmountChange, amount field is rendered in crypto flow (compact mobile layout). */
   fundAmount?: string
   onFundAmountChange?: (v: string) => void
+  fundAmountLocale?: string
+  fundAmountCurrency?: string
   /** e.g. "Minimum: UGX 20,000" — customer-safe, no FX samples */
   minDepositLabel?: string
   /** Pre-submit server check message (customer-safe). */
@@ -68,6 +71,8 @@ export function FundingPaymentPanel({
   onPayerPhoneChange,
   fundAmount = "",
   onFundAmountChange,
+  fundAmountLocale = "en-US",
+  fundAmountCurrency = "USD",
   minDepositLabel,
   txReferenceError,
   onTxReferenceBlur,
@@ -310,15 +315,13 @@ export function FundingPaymentPanel({
           <label className="block text-[10px] font-medium text-foreground" htmlFor="fund-crypto-amount-inline">
             {t("funding.amount.matchSend").replace("{{currency}}", "USD")}
           </label>
-          <input
+          <SmartAmountInput
             id="fund-crypto-amount-inline"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="any"
             value={fundAmount}
-            onChange={(e) => onFundAmountChange(e.target.value)}
-            placeholder="0 (USD)"
+            onValueChange={onFundAmountChange}
+            locale={fundAmountLocale}
+            currency={fundAmountCurrency}
+            placeholder="0"
             className="w-full min-h-[44px] rounded-lg border border-border bg-background px-3 py-2 font-mono text-base outline-none focus:border-primary"
           />
           <p className="text-[10px] leading-snug text-muted-foreground">{t("funding.payment.cryptoAmountUsdHint")}</p>
