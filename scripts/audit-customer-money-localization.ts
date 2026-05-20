@@ -69,6 +69,13 @@ function main() {
   const cfaParse = parseCustomerLocalAmountInput("CFA 200 000")
   assert(cfaParse === 200_000, `CFA prefix parse: ${cfaParse}`)
 
+  const bfFr = buildCustomerMoneyContext({ fundingCountryCode: "BF", language: "fr" })
+  const bfFmt = formatUsdForCustomerDisplay(6, bfFr)
+  assert(!/UGX|CDF|XAF/i.test(bfFmt), `BF display must not leak other corridors: ${bfFmt}`)
+  assert(/XOF|CFA|FCFA/i.test(bfFmt) || /\d/.test(bfFmt), `BF fr format: ${bfFmt}`)
+  const xofFr = formatAmountInputLive("1500000", "fr-BF", "XOF")
+  assert(xofFr.replace(/\D/g, "").includes("1500000"), `XOF fr-BF live format: ${xofFr}`)
+
   console.log("audit-customer-money-localization: PASS", {
     parseCases: PARSE_CASES.length,
     cdFr: fmt,

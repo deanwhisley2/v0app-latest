@@ -54,6 +54,7 @@ const ISO2_TO_CORRIDOR_FIAT: Partial<Record<string, FiatCurrencyCode>> = {
   CM: "XAF",
   SN: "XOF",
   CI: "XOF",
+  BF: "XOF",
   MA: "MAD",
   EG: "EGP",
   US: "USD",

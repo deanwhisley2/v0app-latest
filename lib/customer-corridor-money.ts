@@ -24,6 +24,7 @@ const FRENCH_AMOUNT_LOCALE_BY_COUNTRY: Partial<Record<string, string>> = {
   CM: "fr-CM",
   SN: "fr-SN",
   CI: "fr-CI",
+  BF: "fr-BF",
   MA: "fr-MA",
 }
 

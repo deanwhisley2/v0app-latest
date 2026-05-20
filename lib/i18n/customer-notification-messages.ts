@@ -29,6 +29,8 @@ export const customerNotificationMessageEn: Record<string, string> = {
   "notifications.launch.newReferralTitle": "New referral",
   "notifications.launch.newReferralBody":
     "Someone registered with your referral link. Rewards apply after they fund and trade.",
+  "notifications.startupCapital.grantedTitle": "Startup capital credited",
+  "notifications.startupCapital.grantedBody": "{{amount}} startup capital credited to Nexus Main.",
   "notifications.withdrawal.submittedTitle": "Withdrawal received",
   "notifications.withdrawal.submittedBody": "{{amount}} pending.",
   "notifications.crypto.depositReceivedTitle": "Deposit received",

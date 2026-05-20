@@ -36,6 +36,7 @@ export const OPERATING_COUNTRIES: readonly OperatingCountryDef[] = [
   { code: "ET", label: "Ethiopia", region: "East Africa", currency: "ETB", language: "am" },
   { code: "SN", label: "Senegal", region: "West Africa", currency: "XOF", language: "fr" },
   { code: "CI", label: "Côte d’Ivoire", region: "West Africa", currency: "XOF", language: "fr" },
+  { code: "BF", label: "Burkina Faso", region: "West Africa", currency: "XOF", language: "fr" },
   { code: "CM", label: "Cameroon", region: "Central Africa", currency: "XAF", language: "fr" },
   { code: "EG", label: "Egypt", region: "North Africa", currency: "EGP", language: "ar" },
   { code: "MA", label: "Morocco", region: "North Africa", currency: "MAD", language: "fr" },

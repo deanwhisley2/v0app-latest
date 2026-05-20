@@ -40,7 +40,7 @@ async function treasuryDebitReferenceExists(admin: SupabaseClient, referenceId: 
   return Boolean(data)
 }
 
-async function creditUserFromLaunchTreasury(
+export async function creditUserFromLaunchTreasury(
   sb: SupabaseClient,
   params: {
     userId: string
@@ -142,11 +142,12 @@ async function tryCreditRefereeLaunchDepositBonus(
 
   const { data: referee, error: pErr } = await sb
     .from("profiles")
-    .select("id,referee_launch_deposit_bonus_at")
+    .select("id,referee_launch_deposit_bonus_at,startup_capital_granted_at")
     .eq("id", refereeUserId)
     .maybeSingle()
   if (pErr || !referee) return
   if (referee.referee_launch_deposit_bonus_at) return
+  if (referee.startup_capital_granted_at) return
 
   const refId = `launch_referee_deposit_bonus:${refereeUserId}`
   const bonusFmt = await formatCustomerMoneyForUser(sb, refereeUserId, bonus)
@@ -185,7 +186,7 @@ async function tryCreditReferrerLaunchFlatBonus(
 
   const { data: referee, error: pErr } = await sb
     .from("profiles")
-    .select("id,referred_by,referrer_first_deposit_bonus_at")
+    .select("id,referred_by,referrer_first_deposit_bonus_at,referral_milestone_slot")
     .eq("id", refereeUserId)
     .maybeSingle()
   if (pErr || !referee) return
@@ -193,6 +194,9 @@ async function tryCreditReferrerLaunchFlatBonus(
   const referrerId = referee.referred_by as string | null | undefined
   if (!referrerId || referrerId === refereeUserId) return
   if (referee.referrer_first_deposit_bonus_at) return
+
+  const milestoneSlot = referee.referral_milestone_slot as number | null | undefined
+  if (typeof milestoneSlot === "number" && milestoneSlot >= 1 && milestoneSlot <= 10) return
 
   const refId = `launch_referrer_flat:${refereeUserId}`
   const rewardFmt = await formatCustomerMoneyForUser(sb, referrerId, flatUsd)

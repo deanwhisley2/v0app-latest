@@ -4,7 +4,13 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { buildRegisterReferralLink, referralCodeForUserId } from "@/lib/referral-code"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
 import { loadReferralSnapshot } from "@/lib/server/container-governance"
-import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
+import {
+  getPlatformLaunchStatus,
+  getStartupCapitalRegistrationsRequired,
+  getStartupCapitalUsdReward,
+  startupCapitalActive,
+} from "@/lib/server/platform-launch"
+import { loadStartupCapitalProgress } from "@/lib/server/startup-capital-session"
 
 /**
  * Returns stable referral code + share link + referee counts.
@@ -59,6 +65,7 @@ export async function GET(request: Request) {
 
     const launch = await getPlatformLaunchStatus()
     const snapshot = await loadReferralSnapshot(admin, user.id)
+    const startup = await loadStartupCapitalProgress(admin, user.id)
 
     return NextResponse.json({
       referralCode: code,
@@ -68,6 +75,17 @@ export async function GET(request: Request) {
       referredByUserId: row?.referred_by ?? null,
       launchActive: launch.active,
       launchEndsAt: launch.endsAt,
+      startupCapital: {
+        active: startup.active,
+        requiredRegistrations: startup.required,
+        registrationCount: startup.registrationCount,
+        granted: startup.granted,
+        usdReward: startup.usdReward,
+        remainingRegistrations: Math.max(0, startup.required - startup.registrationCount),
+        launchProgramsEnabled: startupCapitalActive(launch),
+        configuredUsdReward: getStartupCapitalUsdReward(launch.programs),
+        configuredRequired: getStartupCapitalRegistrationsRequired(launch.programs),
+      },
     })
   } catch (e) {
     return NextResponse.json(

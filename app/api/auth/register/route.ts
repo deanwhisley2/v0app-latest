@@ -13,6 +13,7 @@ import {
   notifyLaunchWelcome,
   notifyReferrerNewReferee,
 } from "@/lib/server/launch-notifications"
+import { processReferralStartupMilestone } from "@/lib/server/startup-capital-session"
 import { isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import {
@@ -255,6 +256,7 @@ export async function POST(request: Request) {
       }
 
       if (referredByUserId) {
+        void processReferralStartupMilestone(admin, referredByUserId, newUserId)
         void notifyReferrerNewReferee(admin, referredByUserId, newUserId)
       }
       void notifyLaunchWelcome(admin, newUserId, countryForProfile)

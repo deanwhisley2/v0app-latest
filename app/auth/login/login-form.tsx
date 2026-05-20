@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
+import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 const REMEMBER_KEY = "nexus_auth_remember_id"
 
@@ -183,6 +184,7 @@ export default function LoginPage() {
   return (
     <>
       <WelcomePlatformModal />
+      <StartupCapitalPromoModal />
       <AuthLayoutShell language={language} showBrand={false} showTrustStrip={false}>
         <header className="mb-6 text-center">
           <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{t.login.welcomeBack}</h1>

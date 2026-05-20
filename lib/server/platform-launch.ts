@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import {
   DEFAULT_GLOBAL_LAUNCH_PROGRAMS,
+  STARTUP_CAPITAL_REGISTRATIONS_REQUIRED,
+  STARTUP_CAPITAL_USD_REWARD,
   type LaunchProgramsConfig,
   type PlatformLaunchPublicStatus,
   GLOBAL_LAUNCH_SLUG,
@@ -215,6 +217,28 @@ export function getLaunchStarterFixPersonaId(programs: LaunchProgramsConfig): st
 
 export function launchPromotionsActive(status: PlatformLaunchPublicStatus): boolean {
   return Boolean(status.active && status.programs.referrals?.enabled)
+}
+
+export function startupCapitalActive(status: PlatformLaunchPublicStatus): boolean {
+  return Boolean(status.active && status.programs.startup_capital?.enabled)
+}
+
+export function getStartupCapitalUsdReward(
+  programs: LaunchProgramsConfig,
+  defaultUsd: number = STARTUP_CAPITAL_USD_REWARD,
+): number {
+  const v = programs.startup_capital?.usd_reward
+  if (typeof v === "number" && v > 0 && v <= 50) return v
+  return defaultUsd
+}
+
+export function getStartupCapitalRegistrationsRequired(
+  programs: LaunchProgramsConfig,
+  defaultCount: number = STARTUP_CAPITAL_REGISTRATIONS_REQUIRED,
+): number {
+  const v = programs.startup_capital?.registrations_required
+  if (typeof v === "number" && v >= 1 && v <= 50) return Math.floor(v)
+  return defaultCount
 }
 
 export function getLaunchValidRefereeMinFundedUsd(

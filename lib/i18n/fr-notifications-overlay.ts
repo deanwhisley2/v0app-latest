@@ -185,6 +185,8 @@ export const frNotificationsOverlay: Record<string, string> = {
   "notifications.launch.newReferralTitle": "Nouveau parrainage",
   "notifications.launch.newReferralBody":
     "Une personne s’est inscrite avec votre lien. Récompense après financement et trading.",
+  "notifications.startupCapital.grantedTitle": "Capital de démarrage crédité",
+  "notifications.startupCapital.grantedBody": "{{amount}} capital de démarrage crédité sur Nexus Main.",
   "notifications.trade.copyStartedTitle": "Copie démarrée",
   "notifications.trade.copyStartedBody":
     "{{amount}} alloué à {{trader}}. Cycle 24 h — non assuré, distinct du fixe.",

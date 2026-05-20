@@ -8,6 +8,7 @@ import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { Button } from "@/components/ui/button"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
+import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 
 export default function HomePage() {
   const router = useRouter()
@@ -67,6 +68,7 @@ export default function HomePage() {
   return (
     <>
       <WelcomePlatformModal />
+      <StartupCapitalPromoModal />
       <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background">
       {isGuestSession ? (
         <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm">

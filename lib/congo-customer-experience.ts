@@ -75,6 +75,8 @@ export function corridorAssistantLanguageDirective(
     lines.push("Example amount style: 150 000 CFA (XAF) or 1 500 000,00 XAF.")
   } else if (profile.currency === "XAF" && profile.language === "fr") {
     lines.push("Example amount style: 150 000 XAF (CFA).")
+  } else if (profile.currency === "XOF" && profile.language === "fr") {
+    lines.push("Example amount style: CFA 150 000 or XOF 1 500 000,00.")
   }
   return lines.join(" ")
 }
