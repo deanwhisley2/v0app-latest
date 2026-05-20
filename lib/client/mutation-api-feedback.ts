@@ -9,8 +9,8 @@ export type MutationApiErrorJson = {
 }
 
 export function toastMutationError(json: unknown, fallbackUserMessage: string, duration = 7000) {
-  const j = json as MutationApiErrorJson & { error?: string }
-  if (j && j.success === false) {
+  const j = json as MutationApiErrorJson & { error?: string; message?: string }
+  if (j && typeof j === "object") {
     const um = typeof j.user_message === "string" ? j.user_message.trim() : ""
     if (um) {
       toast.error(um, { duration })
@@ -19,6 +19,11 @@ export function toastMutationError(json: unknown, fallbackUserMessage: string, d
     const legacy = typeof j.error === "string" ? j.error.trim() : ""
     if (legacy) {
       toast.error(legacy, { duration })
+      return
+    }
+    const msg = typeof j.message === "string" ? j.message.trim() : ""
+    if (msg) {
+      toast.error(msg, { duration })
       return
     }
   }

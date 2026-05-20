@@ -32,6 +32,7 @@ import {
   parseCustomerLocalAmountInput,
   usdFromCustomerLocalInput,
 } from "@/lib/currency-display"
+import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { computePlatformLiveStats } from "@/lib/platform-live-stats"
@@ -873,8 +874,11 @@ export function ContainerMode({
   const handleActivateCopy = (trader: MasterTrader) => {
     void (async () => {
       const raw = parseCustomerLocalAmountInput(copyAmount)
-      const amount = localFiatUnitsToUsd(raw, currency)
-      if (isNaN(raw) || raw <= 0 || !(amount > 0)) return
+      const amount = roundUsd2(localFiatUnitsToUsd(raw, currency))
+      if (isNaN(raw) || raw <= 0 || !(amount > 0)) {
+        toast.error(t("container.error.invalidLocalAmount"), { duration: 6000 })
+        return
+      }
       if (amount < copyMinUsdPolicy) {
         toast.error(
           t("container.error.belowCopyMinimum").replace("{{min}}", formatUserMoney(copyMinUsdPolicy)),
@@ -900,7 +904,13 @@ export function ContainerMode({
         const res = await fetch("/api/user/copy-trade/open", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ stakeUsd: amount, traderPersonaId: trader.id }),
+          body: JSON.stringify({
+            stakeUsd: amount,
+            amountInputLocal: raw,
+            amountInputRaw: copyAmount,
+            inputCurrency: currency,
+            traderPersonaId: trader.id,
+          }),
         })
         const out = (await readJsonSafe(res)) as {
           success?: boolean
@@ -1055,7 +1065,7 @@ export function ContainerMode({
   const handleActivateFix = (trader: MasterTrader) => {
     void (async () => {
       const raw = parseCustomerLocalAmountInput(fixAmount)
-      const grossCommitUsd = localFiatUnitsToUsd(raw, currency)
+      const grossCommitUsd = roundUsd2(localFiatUnitsToUsd(raw, currency))
       if (isNaN(raw) || raw <= 0 || !(grossCommitUsd > 0)) {
         toast.error(t("container.error.invalidLocalAmount"), { duration: 6500 })
         return

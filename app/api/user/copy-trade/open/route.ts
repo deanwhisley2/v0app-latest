@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { casCreditNexusMainOnly, casReserveCopyTradeStake } from "@/lib/server/nexus-main-enforcement"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
+import { localUnitsToUsd } from "@/lib/nexus-fx"
+import { parseCustomerLocalAmountInput } from "@/lib/customer-amount-parse"
 import {
   assertCopyStakeUsd,
   resolvePersonaId,
@@ -38,10 +40,28 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as {
       stakeUsd?: number
+      amountInputLocal?: number
+      amountInputRaw?: string
+      inputCurrency?: string
       traderPersonaId?: string
     }
-    const stakeUsd = Number(body.stakeUsd ?? 0)
     const traderPersonaIdRaw = typeof body.traderPersonaId === "string" ? body.traderPersonaId.trim() : ""
+    const inputCurrency =
+      typeof body.inputCurrency === "string" ? body.inputCurrency.trim().toUpperCase() : ""
+
+    let stakeUsd = Number(body.stakeUsd ?? 0)
+    const rawLocal =
+      typeof body.amountInputRaw === "string" && body.amountInputRaw.trim()
+        ? parseCustomerLocalAmountInput(body.amountInputRaw)
+        : Number(body.amountInputLocal ?? NaN)
+    if (Number.isFinite(rawLocal) && rawLocal > 0 && inputCurrency) {
+      const fromLocal = localUnitsToUsd(rawLocal, inputCurrency)
+      if (fromLocal != null && fromLocal > 0) {
+        stakeUsd = fromLocal
+      }
+    }
+    stakeUsd = roundUsd2(stakeUsd)
+
     if (!Number.isFinite(stakeUsd) || !(stakeUsd > 0)) {
       return jsonMutationError(
         400,
