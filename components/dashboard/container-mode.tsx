@@ -40,6 +40,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
 import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balance"
+import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
@@ -938,13 +939,12 @@ export function ContainerMode({
         }
         setActiveCopyTrades((prev) => [...prev, newTrade])
         notifyCopy(
-          "Copy trade started",
-          `${formatUserMoney(amount)} allocated from Nexus Main to ${trader.name}. 24h aggressive cycle — uninsured, separate from fixed insurance.`
+          t("notifications.trade.copyStartedTitle"),
+          t("notifications.trade.copyStartedBody")
+            .replace("{{amount}}", formatUserMoney(amount))
+            .replace("{{trader}}", trader.name),
         )
-        notifyCopy(
-          "Recovery-hold possible",
-          "If the desk is underwater, capital may stay in play briefly to avoid unnecessary damage; force pull-out remains available."
-        )
+        notifyCopy(t("notifications.trade.recoveryHoldTitle"), t("notifications.trade.recoveryHoldBody"))
         setSelectedTrader(null)
         setCopyRiskAcknowledged(false)
       } finally {
@@ -966,7 +966,10 @@ export function ContainerMode({
           } = await supabase.auth.getSession()
           const token = session?.access_token
           if (!token) {
-            notifyCopy("Sign in required", "Sign in to sync copy-trade preferences to your account.")
+            notifyCopy(
+              t("notifications.trade.signInRequiredTitle"),
+              t("notifications.trade.signInRequiredBody"),
+            )
             return
           }
           const res = await fetch("/api/user/copy-trade/session-metadata", {
@@ -976,25 +979,34 @@ export function ContainerMode({
           })
           if (!res.ok) {
             const j = (await res.json().catch(() => ({}))) as { error?: string }
-            notifyCopy("Could not sync", j.error || "Server rejected metadata update.")
+            notifyCopy(
+              t("notifications.trade.syncFailedTitle"),
+              sanitizeCustomerNotificationText(
+                j.error || t("notifications.trade.syncFailedBody"),
+                t("notifications.trade.syncFailedBody"),
+              ),
+            )
             return
           }
         } catch (e) {
-          notifyCopy("Could not sync", e instanceof Error ? e.message : "Network error.")
+          notifyCopy(
+            t("notifications.trade.syncFailedTitle"),
+            e instanceof Error
+              ? sanitizeCustomerNotificationText(e.message, t("notifications.trade.networkErrorBody"))
+              : t("notifications.trade.networkErrorBody"),
+          )
           return
         }
       }
 
       setActiveCopyTrades((prev) =>
-        prev.map((t) => {
-          if (t.traderId !== traderId) return t
+        prev.map((trade) => {
+          if (trade.traderId !== traderId) return trade
           notifyCopy(
-            next ? "Auto-adjust enabled" : "Auto-adjust disabled",
-            next
-              ? "Desk may hold through drawdowns toward a modeled +5% exit (then withdrawal fee). Not insured."
-              : "You disabled recovery continuation toward the auto target."
+            next ? t("notifications.trade.autoAdjustOnTitle") : t("notifications.trade.autoAdjustOffTitle"),
+            next ? t("notifications.trade.autoAdjustOnBody") : t("notifications.trade.autoAdjustOffBody"),
           )
-          return { ...t, autoAdjust: next }
+          return { ...trade, autoAdjust: next }
         })
       )
     })()
@@ -1047,12 +1059,16 @@ export function ContainerMode({
         setActiveCopyTrades((prev) => prev.filter((t) => t.traderId !== traderId))
         setShowCancelConfirm(null)
         notifyCopy(
-          "Force pull-out completed",
-          `Nexus Main +${formatUserMoney(mainCred)}; container liquid +${formatUserMoney(liqCred)} (modeled cancel ${(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}%, withdrawal ${(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}%).`,
+          t("notifications.trade.forcePulloutTitle"),
+          t("notifications.trade.forcePulloutBody")
+            .replace("{{main}}", formatUserMoney(mainCred))
+            .replace("{{pocket}}", formatUserMoney(liqCred)),
         )
         notifyCopy(
-          "Fees trace (copy)",
-          `Cancel ≈ ${formatUserMoney(out.settlement?.cancelFeeUsd ?? 0)}, withdrawal ≈ ${formatUserMoney(out.settlement?.withdrawFeeUsd ?? 0)}.`,
+          t("notifications.trade.forcePulloutFeesTitle"),
+          t("notifications.trade.forcePulloutFeesBody")
+            .replace("{{cancel}}", formatUserMoney(out.settlement?.cancelFeeUsd ?? 0))
+            .replace("{{withdraw}}", formatUserMoney(out.settlement?.withdrawFeeUsd ?? 0)),
         )
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Settlement failed.", { duration: 6500 })
@@ -2471,7 +2487,7 @@ export function ContainerMode({
                         </div>
                         <p className="text-[11px] text-muted-foreground pt-1">
                           Uses the same daily bucket schedule as your live fixed lock — not live coin leverage.
-                          Insurance is taken from your commitment (not an extra Main charge) and credited to treasury at open.
+                          {t("container.fix.insuranceReservedHint")}
                         </p>
                       </div>
                     ) : (

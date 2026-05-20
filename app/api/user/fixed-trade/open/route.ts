@@ -273,7 +273,7 @@ export async function POST(request: Request) {
       relatedTradeId: sessionId,
       actorType: "user",
       actorId: user.id,
-      summary: `Insurance (${(fees.insuranceFeeRate * 100).toFixed(2)}%) carved from allocation and credited to treasury.`,
+      summary: `Insurance (${(fees.insuranceFeeRate * 100).toFixed(2)}%) reserved from allocation at open.`,
       metadata: {
         grossCommitUsd: grossUsd,
         principalUsd,

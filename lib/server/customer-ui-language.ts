@@ -30,3 +30,12 @@ export async function resolveCustomerAppLanguage(
 export function customerNotifyT(lang: AppLanguage): (key: string) => string {
   return (key: string) => translateApp(lang, key)
 }
+
+/** Resolve language + translator for server-written inbox rows (funding, trade, security). */
+export async function customerNotifyForUser(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ language: AppLanguage; t: ReturnType<typeof customerNotifyT> }> {
+  const language = await resolveCustomerAppLanguage(admin, userId)
+  return { language, t: customerNotifyT(language) }
+}

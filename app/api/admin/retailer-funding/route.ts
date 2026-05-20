@@ -26,6 +26,7 @@ import {
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
+import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
 import { finalizeFundingFxOnApproval, getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
 import { isAdminDirectFundChannel } from "@/lib/server/admin-payment-config"
@@ -798,7 +799,8 @@ async function notifyFundingStatus(
   if (nextStatus === "rejected") {
     await notifyCustomerFundingDeclined(admin, { userId: customerId, requestId, resolutionNote: note })
   } else if (nextStatus === "under_review") {
-    const held = buildFundingHeldCustomerCopy(note)
+    const { t } = await customerNotifyForUser(admin, customerId)
+    const held = buildFundingHeldCustomerCopy(note, t)
     await appendUserAccountNotification(admin, {
       userId: customerId,
       sourceKind: "funding_status",
@@ -810,7 +812,8 @@ async function notifyFundingStatus(
       metadata: { requestId, ops_audit: { status: "under_review", fund_request_id: requestId } },
     })
   } else if (nextStatus === "resolved") {
-    const resolved = buildFundingResolvedCustomerCopy()
+    const { t } = await customerNotifyForUser(admin, customerId)
+    const resolved = buildFundingResolvedCustomerCopy(t)
     await appendUserAccountNotification(admin, {
       userId: customerId,
       sourceKind: "funding_status",
@@ -825,6 +828,7 @@ async function notifyFundingStatus(
     return
   }
 
-  const headline = buildFundingStatusHeadline(nextStatus, note)
+  const { t } = await customerNotifyForUser(admin, customerId)
+  const headline = buildFundingStatusHeadline(nextStatus, note, t)
   await notifyUserFundingDecision(admin, { userId: customerId, headline, relatedId: requestId })
 }

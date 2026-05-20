@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
+import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
 
 /** Institutional welcome — short, non-marketing. */
 export async function notifyLaunchWelcome(
@@ -11,13 +12,15 @@ export async function notifyLaunchWelcome(
   const launch = await getPlatformLaunchStatus()
   if (!launch.active || !launch.programs.onboarding?.welcome_notification) return
 
+  const { t } = await customerNotifyForUser(admin, userId)
+
   await appendUserAccountNotification(admin, {
     userId,
     sourceKind: "launch_welcome",
     sourceId: `${launch.slug ?? "launch"}:${userId}`,
     notificationType: "launch",
-    title: "Welcome to Nexus Pro",
-    body: "Your account is live. Fund your wallet to start trading. Referral rewards are active during the current promotional cycle.",
+    title: t("notifications.launch.welcomeTitle"),
+    body: t("notifications.launch.welcomeBody"),
     nav: { tab: "wallet" },
     metadata: { launchSlug: launch.slug, regionCode },
   })
@@ -31,13 +34,15 @@ export async function notifyReferrerNewReferee(
   const launch = await getPlatformLaunchStatus()
   if (!launch.active || !launch.programs.referrals?.notify_on_registration) return
 
+  const { t } = await customerNotifyForUser(admin, referrerId)
+
   await appendUserAccountNotification(admin, {
     userId: referrerId,
     sourceKind: "referral_registration",
     sourceId: refereeId,
     notificationType: "referral",
-    title: "New referral joined",
-    body: "Someone registered with your referral ID. Rewards apply after they fund and trade.",
+    title: t("notifications.launch.newReferralTitle"),
+    body: t("notifications.launch.newReferralBody"),
     nav: { tab: "referrals" },
     metadata: { refereeUserId: refereeId, launchSlug: launch.slug },
   })

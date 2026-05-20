@@ -6,7 +6,7 @@ import {
 } from "@/lib/notifications/customer-notification-language"
 import { getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
 import { emitTreasuryStreamEvent, fundRequestReferenceId } from "@/lib/server/treasury-operation-stream"
-import { customerNotifyT, resolveCustomerAppLanguage } from "@/lib/server/customer-ui-language"
+import { customerNotifyForUser, customerNotifyT, resolveCustomerAppLanguage } from "@/lib/server/customer-ui-language"
 import { resolveCustomerExperience } from "@/lib/congo-customer-experience"
 
 async function buildFundingApprovedFromFx(
@@ -156,20 +156,19 @@ export async function notifyRetailerOverrideDebit(
   params: { retailerUserId: string; requestId: string; amountUsd: number },
 ): Promise<void> {
   const nav: NexusNotificationNav = { kind: "notifications" }
-  const friendly =
-    "A customer top-up you approved has been settled. Your desk balance was adjusted to match that approval."
+  const { t } = await customerNotifyForUser(admin, params.retailerUserId)
   const { error } = await admin.from("user_account_notifications").upsert(
     {
       user_id: params.retailerUserId,
       source_kind: "l5_retailer_override_debit",
       source_id: params.requestId,
       notification_type: "system",
-      title: "Desk payment settled",
-      body: "Your desk balance was updated after a customer funding approval.",
+      title: t("notifications.retailer.deskSettledTitle"),
+      body: t("notifications.retailer.deskSettledBody"),
       nav,
       metadata: {
         requestId: params.requestId,
-        friendly_detail: friendly,
+        friendly_detail: t("notifications.retailer.deskSettledBody"),
         ops_audit: { retailerDebitedUsdEquivalent: params.amountUsd },
       },
     },

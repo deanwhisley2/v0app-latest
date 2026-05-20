@@ -24,6 +24,7 @@ import {
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 import { buildFundingSubmittedCustomerCopy } from "@/lib/notifications/customer-notification-language"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
+import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
 import { corridorFiatForCountryIso2, isSupportedFiat } from "@/lib/currency-display"
 import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } from "@/lib/server/daily-fx-rate"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
@@ -710,7 +711,8 @@ export async function POST(request: Request) {
         inputCurrency: inputCurrencyStr,
       },
     })
-    const submitted = buildFundingSubmittedCustomerCopy()
+    const { t: notifyT } = await customerNotifyForUser(admin, user.id)
+    const submitted = buildFundingSubmittedCustomerCopy(notifyT)
     await appendUserAccountNotification(admin, {
       userId: user.id,
       sourceKind: "funding_status",
@@ -723,7 +725,7 @@ export async function POST(request: Request) {
     })
     await notifyUserFundingDecision(admin, {
       userId: user.id,
-      headline: "Funding submitted",
+      headline: notifyT("notifications.customer.fundingSubmittedTitle"),
       relatedId: data.id as string,
     })
     return NextResponse.json({ ok: true, request: data })

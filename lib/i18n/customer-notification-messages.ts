@@ -23,12 +23,40 @@ export const customerNotificationMessageEn: Record<string, string> = {
   "notifications.launch.refereeBonusBody": "{{amount}} bonus credited.",
   "notifications.launch.referrerBonusTitle": "Referral reward",
   "notifications.launch.referrerBonusBody": "{{amount}} referral reward.",
+  "notifications.launch.welcomeTitle": "Welcome",
+  "notifications.launch.welcomeBody":
+    "Your account is active. Add funds to start trading. Referral rewards apply while promotions run.",
+  "notifications.launch.newReferralTitle": "New referral",
+  "notifications.launch.newReferralBody":
+    "Someone registered with your referral link. Rewards apply after they fund and trade.",
   "notifications.withdrawal.submittedTitle": "Withdrawal received",
   "notifications.withdrawal.submittedBody": "{{amount}} pending.",
   "notifications.crypto.depositReceivedTitle": "Deposit received",
-  "notifications.crypto.depositVerifyingBody": "{{amount}} verifying.",
+  "notifications.crypto.depositVerifyingBody": "{{amount}} processing.",
   "notifications.crypto.depositCreditedTitle": "Deposit credited",
   "notifications.crypto.depositCreditedBody": "{{amount}} credited.",
+  "notifications.trade.copyStartedTitle": "Copy trade started",
+  "notifications.trade.copyStartedBody":
+    "{{amount}} allocated to {{trader}}. 24-hour cycle — uninsured, separate from fixed insurance.",
+  "notifications.trade.recoveryHoldTitle": "Recovery hold",
+  "notifications.trade.recoveryHoldBody":
+    "If the desk is underwater, capital may stay in play briefly; force pull-out remains available.",
+  "notifications.trade.autoAdjustOnTitle": "Auto-adjust on",
+  "notifications.trade.autoAdjustOnBody":
+    "Desk may hold through drawdowns toward a modeled exit target. Not insured.",
+  "notifications.trade.autoAdjustOffTitle": "Auto-adjust off",
+  "notifications.trade.autoAdjustOffBody": "Recovery continuation toward the auto target is disabled.",
+  "notifications.trade.forcePulloutTitle": "Pull-out completed",
+  "notifications.trade.forcePulloutBody":
+    "Main +{{main}} · Container earnings +{{pocket}} (fees applied per policy).",
+  "notifications.trade.forcePulloutFeesTitle": "Fees summary",
+  "notifications.trade.forcePulloutFeesBody": "Cancel {{cancel}} · Withdrawal {{withdraw}}.",
+  "notifications.trade.signInRequiredTitle": "Sign in required",
+  "notifications.trade.signInRequiredBody": "Sign in to sync copy-trade preferences.",
+  "notifications.trade.syncFailedTitle": "Could not sync",
+  "notifications.trade.syncFailedBody": "Preferences were not saved. Try again.",
+  "notifications.trade.networkErrorBody": "Network error. Try again.",
+  "notifications.inbox.accountUpdateTitle": "Account update",
 
   "settings.menu.exchanges": "Connected Exchanges",
   "settings.menu.exchangesDesc": "Binance, Bybit, Bitget, etc.",
@@ -54,4 +82,8 @@ export const customerNotificationMessageEn: Record<string, string> = {
   "settings.theme.lightDesc": "Light background with dark text",
   "settings.theme.system": "System",
   "settings.theme.systemDesc": "Follow system preference",
+  "container.fix.insuranceReservedHint":
+    "Insurance is reserved from your commitment at open (not an extra balance charge).",
+  "notifications.retailer.deskSettledTitle": "Desk payment settled",
+  "notifications.retailer.deskSettledBody": "Your desk balance was updated after a customer funding approval.",
 }

@@ -179,6 +179,39 @@ export const frNotificationsOverlay: Record<string, string> = {
   "notifications.crypto.depositVerifyingBody": "{{amount}} en vérification.",
   "notifications.crypto.depositCreditedTitle": "Dépôt crédité",
   "notifications.crypto.depositCreditedBody": "{{amount}} crédité.",
+  "notifications.launch.welcomeTitle": "Bienvenue",
+  "notifications.launch.welcomeBody":
+    "Votre compte est actif. Ajoutez des fonds pour trader. Les récompenses de parrainage s’appliquent pendant les promotions.",
+  "notifications.launch.newReferralTitle": "Nouveau parrainage",
+  "notifications.launch.newReferralBody":
+    "Une personne s’est inscrite avec votre lien. Récompense après financement et trading.",
+  "notifications.trade.copyStartedTitle": "Copie démarrée",
+  "notifications.trade.copyStartedBody":
+    "{{amount}} alloué à {{trader}}. Cycle 24 h — non assuré, distinct du fixe.",
+  "notifications.trade.recoveryHoldTitle": "Maintien de récupération",
+  "notifications.trade.recoveryHoldBody":
+    "Si le desk est en perte, le capital peut rester en jeu brièvement ; retrait forcé disponible.",
+  "notifications.trade.autoAdjustOnTitle": "Ajustement auto activé",
+  "notifications.trade.autoAdjustOnBody":
+    "Le desk peut tenir en drawdown vers une cible de sortie modélisée. Non assuré.",
+  "notifications.trade.autoAdjustOffTitle": "Ajustement auto désactivé",
+  "notifications.trade.autoAdjustOffBody": "La poursuite automatique vers la cible est désactivée.",
+  "notifications.trade.forcePulloutTitle": "Retrait forcé terminé",
+  "notifications.trade.forcePulloutBody":
+    "Principal +{{main}} · Gains conteneur +{{pocket}} (frais selon politique).",
+  "notifications.trade.forcePulloutFeesTitle": "Résumé des frais",
+  "notifications.trade.forcePulloutFeesBody": "Annulation {{cancel}} · Retrait {{withdraw}}.",
+  "notifications.trade.signInRequiredTitle": "Connexion requise",
+  "notifications.trade.signInRequiredBody": "Connectez-vous pour synchroniser les préférences de copie.",
+  "notifications.trade.syncFailedTitle": "Synchronisation impossible",
+  "notifications.trade.syncFailedBody": "Préférences non enregistrées. Réessayez.",
+  "notifications.trade.networkErrorBody": "Erreur réseau. Réessayez.",
+  "notifications.inbox.accountUpdateTitle": "Mise à jour du compte",
+  "container.fix.insuranceReservedHint":
+    "L’assurance est prélevée sur votre engagement à l’ouverture (pas de charge supplémentaire sur le solde).",
+  "notifications.retailer.deskSettledTitle": "Paiement desk réglé",
+  "notifications.retailer.deskSettledBody":
+    "Le solde de votre desk a été mis à jour après approbation d’un dépôt client.",
 
   "home.profile.greeting.morning": "Bonjour, {{name}}",
   "home.profile.greeting.afternoon": "Bon après-midi, {{name}}",
