@@ -4,8 +4,11 @@
  * Server-side accounting uses USD-equivalent units; customer screens should show
  * local fiat amounts only — never conversion mechanics or treasury wording.
  */
+import { parseCustomerLocalAmountInput } from "@/lib/customer-amount-parse"
 import { localUnitsToUsd } from "@/lib/nexus-fx"
 import { NEXUS_MIN_DEPOSIT_USD } from "@/lib/nexus-financial-policy"
+
+export { parseCustomerLocalAmountInput } from "@/lib/customer-amount-parse"
 
 /** Approximate USD → local rates for display (container / wallet copy). Not FX trading quotes. */
 export const USD_TO_FX: Record<string, number> = {
@@ -67,51 +70,6 @@ export function convertFromUsd(amountUsd: number, currency: string): number {
   return amountUsd * rate
 }
 
-/** Spaces used as thousand separators (incl. narrow no-break space from Intl fr-CD). */
-const GROUPING_SPACE_RE = /[\s\u00a0\u202f]/g
-
-/**
- * Parse customer-typed fiat in the amount field.
- * Supports US/UK (`1,519,990.50`), French/Congo (`1 519 199,50`), and plain digits.
- */
-export function parseCustomerLocalAmountInput(raw: string): number {
-  let s = raw.trim()
-  if (!s) return NaN
-
-  s = s.replace(/[a-zA-Z]{2,6}/g, "").trim()
-  if (!s) return NaN
-
-  const commaCount = (s.match(/,/g) ?? []).length
-  const dotCount = (s.match(/\./g) ?? []).length
-
-  if (commaCount > 0 && dotCount > 0) {
-    const lastComma = s.lastIndexOf(",")
-    const lastDot = s.lastIndexOf(".")
-    if (lastComma > lastDot) {
-      s = s.replace(GROUPING_SPACE_RE, "").replace(/\./g, "").replace(",", ".")
-    } else {
-      s = s.replace(GROUPING_SPACE_RE, "").replace(/,/g, "")
-    }
-  } else if (commaCount === 1) {
-    const compact = s.replace(GROUPING_SPACE_RE, "")
-    const idx = compact.indexOf(",")
-    const intPart = compact.slice(0, idx)
-    const fracPart = compact.slice(idx + 1)
-    if (/^\d{1,2}$/.test(fracPart)) {
-      s = `${intPart}.${fracPart}`
-    } else {
-      s = compact.replace(/,/g, "")
-    }
-  } else if (commaCount > 1) {
-    s = s.replace(GROUPING_SPACE_RE, "").replace(/,/g, "")
-  } else {
-    s = s.replace(GROUPING_SPACE_RE, "")
-  }
-
-  const n = Number.parseFloat(s)
-  return Number.isFinite(n) ? n : NaN
-}
-
 /** User-typed amount in their fiat → USD accounting unit (env FX map, then static corridor table). */
 export function localFiatUnitsToUsd(amountLocal: number, currency: string): number {
   if (!Number.isFinite(amountLocal) || amountLocal <= 0) return 0
@@ -135,7 +93,8 @@ export function formatLocalFiatAmount(amountLocal: number, currency: string, loc
     return new Intl.NumberFormat(locale || "en", {
       style: "currency",
       currency: c,
-      maximumFractionDigits: c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK" ? 0 : 2,
+      maximumFractionDigits:
+        c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK" || c === "CDF" ? 0 : 2,
     }).format(amountLocal)
   } catch {
     return `${c} ${amountLocal.toFixed(0)}`
@@ -151,7 +110,7 @@ export function formatAccountingUsdForDisplay(amountUsd: number, currency: strin
 export function minDepositLocalAmount(currency: string): number {
   const c = isSupportedFiat(currency) ? currency : "USD"
   const local = convertFromUsd(NEXUS_MIN_DEPOSIT_USD, c)
-  if (c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK") return Math.ceil(local)
+  if (c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK" || c === "CDF") return Math.ceil(local)
   return Math.round(local * 100) / 100
 }
 
@@ -167,7 +126,8 @@ export function formatMoneyAmount(amountUsd: number, currency: string, locale: s
     return new Intl.NumberFormat(locale || "en", {
       style: "currency",
       currency: c,
-      maximumFractionDigits: c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK" ? 0 : 2,
+      maximumFractionDigits:
+        c === "UGX" || c === "TZS" || c === "RWF" || c === "MWK" || c === "CDF" ? 0 : 2,
     }).format(local)
   } catch {
     return `${c} ${local.toFixed(0)}`

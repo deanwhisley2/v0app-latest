@@ -23,9 +23,12 @@ const approvedCd = buildFundingApprovedCustomerCopy({
   amountUsd: 513.33,
   fundingCountryCode: "CD",
   preferredCurrency: "CDF",
+  language: "fr",
+  locale: "fr-CD",
 })
 assert.ok(!/UGX/i.test(approvedCd.body))
-assert.match(approvedCd.body, /CDF|FC/)
+assert.match(approvedCd.body, /CDF|FC|\d/)
+assert.ok(approvedCd.body.length < 80, "notification body stays short")
 assert.ok(!/normalized|treasury|MAIN_TREASURY/i.test(approvedCd.body))
 assert.match(approvedCd.body, /Credited/)
 

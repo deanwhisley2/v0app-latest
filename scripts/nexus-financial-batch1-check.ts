@@ -16,7 +16,7 @@ import {
   NEXUS_REFERRAL_RATE_ON_FIRST_DEPOSIT,
 } from "../lib/nexus-financial-policy"
 import { minDepositUsdOk, minWithdrawUsdOk, readFxLocalPerUsdMap, usdToLocalUnits } from "../lib/nexus-fx"
-import { parseCustomerLocalAmountInput } from "../lib/currency-display"
+import { parseCustomerLocalAmountInput } from "../lib/customer-amount-parse"
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)
@@ -63,6 +63,10 @@ function main() {
   assert(parseCustomerLocalAmountInput("1,519,990") === 1_519_990, "US thousand commas")
   assert(parseCustomerLocalAmountInput("1519199.50") === 1_519_199.5, "plain dot decimal")
   assert(parseCustomerLocalAmountInput("1.519.199,50") === 1_519_199.5, "EU dot thousands + comma decimal")
+  assert(parseCustomerLocalAmountInput("CDF 1 420 000") === 1_420_000, "CDF prefix + spaces")
+  assert(parseCustomerLocalAmountInput("150,000.00") === 150_000, "US comma thousands + dot decimal")
+  assert(parseCustomerLocalAmountInput("KSh 8,600.00") === 8_600, "KSh prefix")
+  assert(parseCustomerLocalAmountInput("$66.50") === 66.5, "USD symbol")
 
   console.log("nexus-financial-batch1-check: OK")
 }

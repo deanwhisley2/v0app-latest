@@ -17,6 +17,9 @@ import { creditCustomerMainFromTreasuryUsd } from "@/lib/server/l5-funding-settl
 import { ensureMainTreasuryCanCoverDebit } from "@/lib/server/main-treasury-float"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
+import { resolveCustomerExperience } from "@/lib/congo-customer-experience"
+import { customerNotifyT } from "@/lib/server/customer-ui-language"
+import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import {
   cryptoCronPausedGlobally,
@@ -195,14 +198,17 @@ export async function createCryptoDepositRequest(
     payload: { amountUsd, txHash },
   })
 
+  const expPending = await resolveCustomerExperience(admin, params.userId)
+  const tPending = customerNotifyT(expPending.language)
+  const amtPending = await formatCustomerMoneyForUser(admin, params.userId, amountUsd)
   await appendUserAccountNotification(admin, {
     userId: params.userId,
     sourceKind: "crypto_deposit",
     sourceId: data.id as string,
     notificationType: "crypto_deposit_pending",
-    title: "Crypto deposit received",
-    body: `USDT deposit verifying (declared ${amountUsd.toFixed(2)} USD). Credit pending confirmation.`,
-    metadata: { txHash, amountUsd, status: "verifying" },
+    title: tPending("notifications.crypto.depositReceivedTitle"),
+    body: tPending("notifications.crypto.depositVerifyingBody").replace("{{amount}}", amtPending),
+    metadata: { txHash, amountUsd, status: "verifying", amount_usd: amountUsd },
   })
 
   return data as CryptoDepositRow
@@ -394,17 +400,18 @@ async function creditDepositIfReady(
     },
   })
 
+  const expCred = await resolveCustomerExperience(admin, working.user_id)
+  const tCred = customerNotifyT(expCred.language)
+  const amtCred = await formatCustomerMoneyForUser(admin, working.user_id, totalUsd)
+  const bodyCred = tCred("notifications.crypto.depositCreditedBody").replace("{{amount}}", amtCred)
   await appendUserAccountNotification(admin, {
     userId: working.user_id,
     sourceKind: "crypto_deposit",
     sourceId: working.id,
     notificationType: "crypto_deposit_credited",
-    title: "Crypto deposit credited",
-    body:
-      compensationUsd > 0
-        ? CRYPTO_COMPENSATION_USER_MESSAGE
-        : `Your USDT deposit of ${principalUsd.toFixed(2)} USD has been credited to Nexus Main.`,
-    metadata: { principalUsd, compensationUsd, totalUsd, txHash: working.tx_hash },
+    title: tCred("notifications.crypto.depositCreditedTitle"),
+    body: bodyCred,
+    metadata: { principalUsd, compensationUsd, totalUsd, amount_usd: totalUsd, txHash: working.tx_hash },
   })
 
   await appendLog(admin, working.id, {

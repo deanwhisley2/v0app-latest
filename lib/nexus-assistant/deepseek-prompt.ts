@@ -1,5 +1,5 @@
-import { congoAssistantLanguageDirective } from "@/lib/congo-customer-experience"
-import { isCongoOperatingCountry } from "@/lib/customer-corridor-money"
+import { corridorAssistantLanguageDirective } from "@/lib/congo-customer-experience"
+import { operatingCountryByCode } from "@/lib/operating-countries"
 import type { AppLanguage } from "@/lib/user-preferences"
 import {
   NEXUS_PRODUCT_NAME,
@@ -58,15 +58,17 @@ export function buildJoelinDeepseekSystemPrompt(
   const sym = meta.focusSymbol ? `Desk symbol: ${meta.focusSymbol}\n` : ""
   const langCode = (meta.appLanguage ?? "en").trim().toLowerCase() as AppLanguage
   const country = meta.fundingCountryCode?.trim().toUpperCase().slice(0, 2) ?? ""
-  const congoDirective = isCongoOperatingCountry(country)
-    ? congoAssistantLanguageDirective({
-        isCongo: true,
-        language: langCode === "fr" ? "fr" : "en",
-        currency: "CDF",
+  const row = operatingCountryByCode(country)
+  const corridorDirective = row
+    ? corridorAssistantLanguageDirective({
+        isCongo: country === "CD",
+        language: langCode,
+        currency: row.currency,
+        fundingCountryCode: country,
       })
     : ""
-  const languageLine = isCongoOperatingCountry(country)
-    ? congoDirective
+  const languageLine = corridorDirective
+    ? corridorDirective
     : langCode !== "en"
       ? `Reply in the user's language (${langCode}) when possible; otherwise English.`
       : "Reply in English unless the user wrote in another language."

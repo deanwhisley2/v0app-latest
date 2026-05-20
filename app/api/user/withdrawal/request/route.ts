@@ -3,12 +3,12 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid-withdraw-base"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { formatLocalFiatAmount, isSupportedFiat } from "@/lib/currency-display"
+import { isSupportedFiat } from "@/lib/currency-display"
 import { resolveCustomerExperience } from "@/lib/congo-customer-experience"
 import { customerNotifyT } from "@/lib/server/customer-ui-language"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
-import { minWithdrawUsdOk, minWithdrawUsdFloor, usdToLocalUnits } from "@/lib/nexus-fx"
+import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
 import { nexusMainMinimumRetainUsd } from "@/lib/customer-corridor-money"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import {
@@ -53,24 +53,18 @@ export async function POST(request: Request) {
     }
     const grossAmount = settlement.grossAmount
 
+    const admin = createAdminClient()
+
     const minFloor = roundUsd2(minWithdrawUsdFloor())
     if (!minWithdrawUsdOk(grossAmount)) {
-      const ccyRaw = String(body.currencyContext ?? "").trim().toUpperCase()
-      const ccy = isSupportedFiat(ccyRaw) ? ccyRaw : "USD"
-      const local = usdToLocalUnits(minFloor, ccy)
-      const minLabel =
-        local != null && Number.isFinite(local)
-          ? formatLocalFiatAmount(local, ccy, "en-US")
-          : `$${minFloor.toFixed(2)}`
+      const minLabel = await formatCustomerMoneyForUser(admin, user.id, minFloor)
       return NextResponse.json(
         {
           error: `Minimum withdrawal is ${minLabel}.`,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
-
-    const admin = createAdminClient()
     const since = new Date(Date.now() - 86_400_000).toISOString()
     const { data: recentW, error: wqErr } = await admin
       .from("withdrawal_requests")
@@ -119,13 +113,14 @@ export async function POST(request: Request) {
     const pendingWas = round2(Number((row as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
 
     if (grossAmount > maxAllowed + 1e-6) {
+      const maxFmt = await formatCustomerMoneyForUser(admin, user.id, maxAllowed)
       return NextResponse.json(
         {
-          error: `For security, each withdrawal is capped at 50% of your total balance (about ${roundUsd2(maxAllowed)} USD right now).`,
+          error: `For security, each withdrawal is capped at 50% of your total balance (about ${maxFmt}).`,
           maxUsd: maxAllowed,
           totalBalanceUsd: totalBalance,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
