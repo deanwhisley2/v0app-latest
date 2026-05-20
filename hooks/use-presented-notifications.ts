@@ -14,15 +14,16 @@ export function usePresentedNotifications(
   items: NexusNotificationItem[],
   t: (key: string) => string,
 ): Map<string, PresentedNotification> {
-  const { currency, country, locale } = useUserPreferences()
+  const { currency, country, locale, language } = useUserPreferences()
   const sig = inboxSignature(items)
   const viewer = useMemo(
     () => ({
       fundingCountryCode: country ?? null,
       displayCurrency: currency,
       locale,
+      language,
     }),
-    [country, currency, locale],
+    [country, currency, locale, language],
   )
   return useMemo(() => {
     const map = new Map<string, PresentedNotification>()

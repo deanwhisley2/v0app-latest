@@ -1,6 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
- * Credit Nexus Main with USD equivalent of a UGX nominal (ops: local MM rails not ready).
+ * Credit Nexus Main with USD equivalent of a UGX nominal (ops: Uganda corridor only).
+ * Do NOT use for Congo (CD) — use scripts/congo-reconcile-customer-account.ts instead.
  *
  * Usage:
  *   npx tsx scripts/credit-manual-local-mm-ugx-equivalent.ts <email> <ugx_amount>
@@ -16,6 +17,7 @@ import { adminRetailPoolUserId } from "../lib/server/admin-retail-pool"
 import { formatCustomerMoneyForUser } from "../lib/server/customer-money-copy"
 import { appendUserAccountNotification } from "../lib/server/user-account-notifications"
 import { recordFinancialEvent } from "../lib/server/financial-events"
+import { isCongoOperatingCountry } from "../lib/customer-corridor-money"
 
 config({ path: resolve(process.cwd(), ".env.local") })
 
@@ -41,6 +43,18 @@ async function creditUgxEquivalent(email: string, ugxAmount: number): Promise<vo
   const admin = createAdminClient()
   const userId = await findAuthUserIdByEmail(admin, email)
   if (!userId) throw new Error(`User not found: ${email}`)
+
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("funding_country_code")
+    .eq("id", userId)
+    .maybeSingle()
+  const country = (prof as { funding_country_code?: string | null } | null)?.funding_country_code
+  if (isCongoOperatingCountry(country)) {
+    throw new Error(
+      `User ${email} is Congo (CD). Use: npx tsx scripts/congo-reconcile-customer-account.ts --email ${email} --credit-usd <usd>`,
+    )
+  }
 
   const referenceId = `manual_local_mm_pending:${userId}:ugx${ugxAmount}`
   const reason = `Manual local MM credit (UGX ${ugxAmount.toLocaleString("en-US")} equivalent, pending corridor payment details)`

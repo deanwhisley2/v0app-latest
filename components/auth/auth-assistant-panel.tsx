@@ -19,6 +19,8 @@ type Props = {
   defaultOpen?: boolean
   /** When true, FAB pulses briefly once per browser session (dashboard-style nudge). Off on auth by default. */
   fabHintPulse?: boolean
+  appLanguage?: string
+  fundingCountryCode?: string
 }
 
 export function AuthAssistantPanel({
@@ -28,6 +30,8 @@ export function AuthAssistantPanel({
   chips,
   defaultOpen = false,
   fabHintPulse = false,
+  appLanguage,
+  fundingCountryCode,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen)
   const [input, setInput] = useState("")
@@ -74,6 +78,8 @@ export function AuthAssistantPanel({
           authStep,
           isGuest: false,
           tradingUserLevel: 1,
+          appLanguage,
+          fundingCountryCode,
         })
         setMessages((prev) => [...prev, { role: "assistant", text: reply }])
       } finally {

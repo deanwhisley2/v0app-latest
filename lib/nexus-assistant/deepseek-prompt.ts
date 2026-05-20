@@ -1,3 +1,6 @@
+import { congoAssistantLanguageDirective } from "@/lib/congo-customer-experience"
+import { isCongoOperatingCountry } from "@/lib/customer-corridor-money"
+import type { AppLanguage } from "@/lib/user-preferences"
 import {
   NEXUS_PRODUCT_NAME,
   CONTAINER_WITHDRAWAL_SUMMARY,
@@ -21,6 +24,8 @@ export type JoelinSessionMeta = {
   isGuest: boolean
   authStep?: string
   focusSymbol?: string
+  appLanguage?: string
+  fundingCountryCode?: string
 }
 
 /**
@@ -51,6 +56,20 @@ export function buildJoelinDeepseekSystemPrompt(
 
   const auth = meta.authStep ? `Auth step: ${meta.authStep}\n` : ""
   const sym = meta.focusSymbol ? `Desk symbol: ${meta.focusSymbol}\n` : ""
+  const langCode = (meta.appLanguage ?? "en").trim().toLowerCase() as AppLanguage
+  const country = meta.fundingCountryCode?.trim().toUpperCase().slice(0, 2) ?? ""
+  const congoDirective = isCongoOperatingCountry(country)
+    ? congoAssistantLanguageDirective({
+        isCongo: true,
+        language: langCode === "fr" ? "fr" : "en",
+        currency: "CDF",
+      })
+    : ""
+  const languageLine = isCongoOperatingCountry(country)
+    ? congoDirective
+    : langCode !== "en"
+      ? `Reply in the user's language (${langCode}) when possible; otherwise English.`
+      : "Reply in English unless the user wrote in another language."
   return [
     `You are Joelin, the in-app guide for ${NEXUS_PRODUCT_NAME}. Tone: institutional financial system — short, neutral, action-focused. No tutorials, no "we/our team", no storytelling.`,
     "",
@@ -107,6 +126,8 @@ export function buildJoelinDeepseekSystemPrompt(
     "--- Factual anchor (binding facts and refusals; align tone with doctrine) ---",
     factualAnchorDraft.trim(),
     "",
-    "Reply as Joelin only. Max ~4 short lines unless user asks for detail. Plain text — no markdown. No 'we/our/I’m here'. Match user language if non-English; else English. No emoji unless user used one.",
+    "Reply as Joelin only. Max ~4 short lines unless user asks for detail. Plain text — no markdown. No 'we/our/I’m here'.",
+    languageLine,
+    "No emoji unless user used one.",
   ].join("\n")
 }

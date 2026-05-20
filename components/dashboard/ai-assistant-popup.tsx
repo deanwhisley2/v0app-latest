@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 
 interface Message {
   role: "user" | "assistant"
@@ -54,6 +55,7 @@ export function AIAssistantPopup({
   context = "dashboard",
   isGuestSession = false,
 }: AIAssistantPopupProps) {
+  const { language, country } = useUserPreferences()
   const surface = context === "login" ? "floating_login" : "floating_dashboard"
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -107,6 +109,8 @@ export function AIAssistantPopup({
       surface,
       isGuest: isGuestSession,
       tradingUserLevel: TRADING_USER_LEVEL,
+      appLanguage: language,
+      fundingCountryCode: country ?? undefined,
     })
     setMessages((prev) => [
       ...prev,

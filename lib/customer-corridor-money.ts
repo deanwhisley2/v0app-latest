@@ -6,8 +6,20 @@ import {
   operatingCountryByCode,
 } from "@/lib/operating-countries"
 import { NEXUS_CD_MIN_MAIN_RETAIN_USD } from "@/lib/nexus-financial-policy"
+import { localeForLanguage, type AppLanguage } from "@/lib/user-preferences"
 
 export const CONGO_COUNTRY_ISO2 = "CD"
+
+/** Intl locale for amount formatting (fr-CD for Congo French, en-US for Congo English). */
+export function localeForCustomerCorridor(
+  fundingCountryCode: string | null | undefined,
+  language: AppLanguage,
+): string {
+  if (isCongoOperatingCountry(fundingCountryCode)) {
+    return language === "fr" ? "fr-CD" : "en-US"
+  }
+  return localeForLanguage(language)
+}
 
 /** Foreign tickers that must not appear on Congo customer notifications when corridor is CDF. */
 const FOREIGN_FIAT_TICKER_RE = /\b(UGX|KES|TZS|RWF|NGN|GHS|MZN|ZMW|MWK|BWP|ETB|XOF|XAF|MAD|EGP)\b/gi
@@ -41,8 +53,11 @@ export function formatFundingApprovedAmountForCustomer(params: {
   fundingCountryCode?: string | null
   preferredCurrency?: string | null
   locale?: string
+  language?: AppLanguage
 }): string | null {
-  const locale = params.locale ?? "en-US"
+  const locale =
+    params.locale ??
+    localeForCustomerCorridor(params.fundingCountryCode ?? null, params.language ?? "en")
   const displayCcy = displayCurrencyForCustomer(
     params.fundingCountryCode ?? null,
     params.preferredCurrency ?? null,
@@ -69,6 +84,7 @@ export type NotificationViewerCorridor = {
   fundingCountryCode?: string | null
   displayCurrency?: string
   locale?: string
+  language?: AppLanguage
 }
 
 /** Replace wrong-corridor fiat tickers in stored notification copy (e.g. UGX on a Congo account). */
@@ -86,7 +102,8 @@ export function rewriteNotificationAmountsForCorridor(
     viewer.displayCurrency && isSupportedFiat(viewer.displayCurrency)
       ? viewer.displayCurrency
       : corridor
-  const locale = viewer.locale ?? "en-US"
+  const locale =
+    viewer.locale ?? localeForCustomerCorridor(country, viewer.language ?? "en")
   const usd = Number(amountUsd ?? NaN)
 
   if (!Number.isFinite(usd) || !(usd > 0)) {

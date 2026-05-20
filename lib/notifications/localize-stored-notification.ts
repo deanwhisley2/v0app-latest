@@ -25,6 +25,11 @@ const EXACT_BODY_KEY: Record<string, string> = {
   "Transfer completed.": "notifications.center.detailBalancePlain",
 }
 
+const BODY_REFEREE_BONUS_RE =
+  /^Your promotional-cycle bonus of (.+) has been credited to your main balance\.$/
+const BODY_REFERRER_BONUS_RE =
+  /^You earned (.+) from a referral's first deposit during the current promotional cycle\.$/
+const BODY_FUNDS_CREDITED_RE = /^(.+) has been added to your Nexus Main(?: balance)?\./
 const BODY_LOCAL_APPROVED_RE = /^Approved · (.+)\. Credited\.$/
 const BODY_DECLINED_NOTE_RE = /^Funding declined\. (.+)$/
 const BODY_HELD_NOTE_RE = /^Request under review\. (.+)$/
@@ -43,6 +48,18 @@ export function localizeStoredNotificationBody(body: string, t: (key: string) =>
   const approvedLocal = trimmed.match(BODY_LOCAL_APPROVED_RE)
   if (approvedLocal) {
     return t("notifications.customer.fundingApprovedBodyLocal").replace("{{amount}}", approvedLocal[1])
+  }
+  const refereeBonus = trimmed.match(BODY_REFEREE_BONUS_RE)
+  if (refereeBonus) {
+    return t("notifications.launch.refereeBonusBody").replace("{{amount}}", refereeBonus[1])
+  }
+  const referrerBonus = trimmed.match(BODY_REFERRER_BONUS_RE)
+  if (referrerBonus) {
+    return t("notifications.launch.referrerBonusBody").replace("{{amount}}", referrerBonus[1])
+  }
+  const fundsCredited = trimmed.match(BODY_FUNDS_CREDITED_RE)
+  if (fundsCredited) {
+    return t("notifications.customer.fundsCreditedBody").replace("{{amount}}", fundsCredited[1])
   }
   const declined = trimmed.match(BODY_DECLINED_NOTE_RE)
   if (declined) {

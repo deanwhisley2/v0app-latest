@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { formatMoneyAmount } from "@/lib/currency-display"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
+import { resolveCustomerExperience } from "@/lib/congo-customer-experience"
 
 export async function resolveCustomerDisplayCurrency(
   sb: SupabaseClient,
@@ -30,6 +31,10 @@ export async function formatCustomerMoneyForUser(
   amountUsd: number,
   preferredCurrencyFromMeta?: string | null,
 ): Promise<string> {
-  const currency = await resolveCustomerDisplayCurrency(sb, userId, preferredCurrencyFromMeta)
-  return formatCustomerMoneyCopy(amountUsd, currency)
+  const exp = await resolveCustomerExperience(sb, userId)
+  const currency =
+    preferredCurrencyFromMeta && displayCurrencyForCustomer(exp.fundingCountryCode, preferredCurrencyFromMeta)
+      ? displayCurrencyForCustomer(exp.fundingCountryCode, preferredCurrencyFromMeta)
+      : exp.currency
+  return formatCustomerMoneyCopy(amountUsd, currency, exp.locale)
 }

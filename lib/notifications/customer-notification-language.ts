@@ -36,6 +36,25 @@ export type FundingApprovedCustomerCopy = {
   customerHint: string
 }
 
+export function buildFundsCreditedCustomerCopy(
+  amountFormatted: string,
+  t?: NotifyCopyFn,
+): { title: string; body: string } {
+  const tr =
+    t ??
+    ((key: string) => {
+      const en: Record<string, string> = {
+        "notifications.customer.fundsCreditedTitle": "Funds credited to your balance",
+        "notifications.customer.fundsCreditedBody": "{{amount}} has been added to your Nexus Main balance.",
+      }
+      return en[key] ?? key
+    })
+  return {
+    title: tr("notifications.customer.fundsCreditedTitle"),
+    body: tr("notifications.customer.fundsCreditedBody").replace("{{amount}}", amountFormatted),
+  }
+}
+
 export function buildFundingApprovedCustomerCopy(
   params: {
     amountInputLocal?: number | null
@@ -44,6 +63,7 @@ export function buildFundingApprovedCustomerCopy(
     fundingCountryCode?: string | null
     preferredCurrency?: string | null
     locale?: string
+    language?: import("@/lib/user-preferences").AppLanguage
   },
   t?: NotifyCopyFn,
 ): FundingApprovedCustomerCopy {
@@ -66,6 +86,7 @@ export function buildFundingApprovedCustomerCopy(
     fundingCountryCode: params.fundingCountryCode,
     preferredCurrency: params.preferredCurrency,
     locale: params.locale,
+    language: params.language,
   })
   if (localFmt) {
     return {

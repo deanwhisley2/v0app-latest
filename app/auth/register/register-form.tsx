@@ -27,7 +27,7 @@ import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
-import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/user-preferences"
+import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
 import {
   isSupportedOperatingCountry,
   operatingCountriesByRegion,
@@ -190,6 +190,7 @@ export default function RegisterPage() {
     }
     setError(null)
     setIsSubmitting(true)
+    markLanguageUserSet()
     setPreferences({
       language,
       currency,
@@ -561,6 +562,8 @@ export default function RegisterPage() {
       <AuthAssistantPanel
         scope="register"
         authStep="signup"
+        appLanguage={language}
+        fundingCountryCode={operatingCountry}
         initialMessages={[
           {
             role: "assistant",

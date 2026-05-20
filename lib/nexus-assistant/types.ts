@@ -30,4 +30,8 @@ export type NexusAssistantInput = {
   authStep?: NexusAssistantAuthStep | string
   /** Desk symbol when user is on Wallstreet / trade context. */
   focusSymbol?: string
+  /** Viewer UI language (e.g. fr for Congo French). */
+  appLanguage?: string
+  /** ISO2 funding country — Congo (CD) triggers CDF + corridor assistant rules. */
+  fundingCountryCode?: string
 }

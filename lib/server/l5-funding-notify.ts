@@ -7,7 +7,7 @@ import {
 import { getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
 import { emitTreasuryStreamEvent, fundRequestReferenceId } from "@/lib/server/treasury-operation-stream"
 import { customerNotifyT, resolveCustomerAppLanguage } from "@/lib/server/customer-ui-language"
-import { resolveCustomerDisplayCurrency } from "@/lib/server/customer-money-copy"
+import { resolveCustomerExperience } from "@/lib/congo-customer-experience"
 
 async function buildFundingApprovedFromFx(
   admin: SupabaseClient,
@@ -26,22 +26,17 @@ async function buildFundingApprovedFromFx(
         ? normUsd
         : null
 
-  const displayCurrency = await resolveCustomerDisplayCurrency(admin, userId)
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("funding_country_code")
-    .eq("id", userId)
-    .maybeSingle()
-  const fundingCountryCode = (profile as { funding_country_code?: string | null } | null)
-    ?.funding_country_code
+  const exp = await resolveCustomerExperience(admin, userId)
 
   return buildFundingApprovedCustomerCopy(
     {
       amountInputLocal: Number.isFinite(inputLocal) && inputLocal > 0 ? inputLocal : null,
       inputCurrency: ccy || null,
       amountUsd: settledUsd,
-      fundingCountryCode: fundingCountryCode ?? null,
-      preferredCurrency: displayCurrency,
+      fundingCountryCode: exp.fundingCountryCode,
+      preferredCurrency: exp.currency,
+      locale: exp.locale,
+      language: exp.language,
     },
     t,
   )
@@ -104,6 +99,7 @@ export async function notifyCustomerFundingOperational(
       metadata: {
         requestId: params.requestId,
         friendly_detail: customerHint,
+        amount_usd: fx?.settled_amount_usd ?? fx?.amount_usd_normalized ?? null,
         ...opsAuditMetadata({ requestId: params.requestId, viaTreasury: params.viaTreasury, fx }),
       },
     },

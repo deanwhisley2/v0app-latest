@@ -17,11 +17,16 @@ export const customerNotificationMessageEn: Record<string, string> = {
   "notifications.customer.fundingSubmittedBody": "Submitted.",
   "notifications.customer.fundingUpdateTitle": "Funding update",
   "notifications.customer.fundsCreditedTitle": "Funds credited to your balance",
-  "notifications.customer.fundsCreditedBody":
-    "{{amount}} has been added to your Nexus Main while we finalize local payment options for your country.",
+  "notifications.customer.fundsCreditedBody": "{{amount}} has been added to your Nexus Main balance.",
   "notifications.time.now": "Now",
   "notifications.launch.refereeBonusTitle": "First deposit bonus credited",
+  "notifications.launch.refereeBonusBody":
+    "Your promotional-cycle bonus of {{amount}} has been credited to your main balance.",
   "notifications.launch.referrerBonusTitle": "Referral reward credited",
+  "notifications.launch.referrerBonusBody":
+    "You earned {{amount}} from a referral's first deposit during the current promotional cycle.",
+  "notifications.withdrawal.submittedTitle": "Withdrawal submitted",
+  "notifications.withdrawal.submittedBody": "{{amount}} withdrawal is pending review.",
 
   "settings.menu.exchanges": "Connected Exchanges",
   "settings.menu.exchangesDesc": "Binance, Bybit, Bitget, etc.",

@@ -22,6 +22,8 @@ const bodySchema = z.object({
   authStep: z.string().max(64).optional(),
   focusSymbol: z.string().max(32).optional(),
   precomputedDraft: z.string().max(12000).optional(),
+  appLanguage: z.string().max(8).optional(),
+  fundingCountryCode: z.string().max(2).optional(),
 })
 
 async function generateWithDeepSeek(systemPrompt: string, userMessage: string): Promise<string | null> {
@@ -89,6 +91,8 @@ export async function POST(req: Request) {
         isGuest: input.isGuest,
         authStep: input.authStep,
         focusSymbol: input.focusSymbol,
+        appLanguage: input.appLanguage,
+        fundingCountryCode: input.fundingCountryCode,
       },
       draft
     )

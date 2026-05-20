@@ -4,6 +4,10 @@ import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { formatLocalFiatAmount, isSupportedFiat } from "@/lib/currency-display"
+import { resolveCustomerExperience } from "@/lib/congo-customer-experience"
+import { customerNotifyT } from "@/lib/server/customer-ui-language"
+import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
+import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 import { minWithdrawUsdOk, minWithdrawUsdFloor, usdToLocalUnits } from "@/lib/nexus-fx"
 import { nexusMainMinimumRetainUsd } from "@/lib/customer-corridor-money"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
@@ -199,6 +203,20 @@ export async function POST(request: Request) {
       .single()
 
     if (wrErr) throw new Error(wrErr.message)
+
+    const exp = await resolveCustomerExperience(admin, user.id)
+    const t = customerNotifyT(exp.language)
+    const amountFmt = await formatCustomerMoneyForUser(admin, user.id, grossAmount)
+    await appendUserAccountNotification(admin, {
+      userId: user.id,
+      sourceKind: "withdrawal_request",
+      sourceId: String(ins?.id ?? txRef),
+      notificationType: "withdrawal",
+      title: t("notifications.withdrawal.submittedTitle"),
+      body: t("notifications.withdrawal.submittedBody").replace("{{amount}}", amountFmt),
+      nav: { kind: "wallet" },
+      metadata: { amount_usd: grossAmount, requestId: ins?.id, transactionRef: txRef },
+    })
 
     await recordFinancialEvent({
       userId: user.id,

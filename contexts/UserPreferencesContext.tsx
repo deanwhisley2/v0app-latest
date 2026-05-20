@@ -23,6 +23,7 @@ import {
 } from "@/lib/user-preferences"
 import { formatMoneyAmount } from "@/lib/currency-display"
 import { mergeCustomerPreferencesWithCorridor } from "@/lib/customer-display-currency"
+import { localeForCustomerCorridor } from "@/lib/customer-corridor-money"
 import { translateApp } from "@/lib/i18n/app-messages"
 import { supabase } from "@/lib/supabaseClient"
 
@@ -124,7 +125,10 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     })
   }, [user?.id])
 
-  const locale = useMemo(() => localeForLanguage(prefs.language), [prefs.language])
+  const locale = useMemo(
+    () => localeForCustomerCorridor(prefs.country ?? null, prefs.language),
+    [prefs.country, prefs.language],
+  )
 
   useEffect(() => {
     if (typeof document === "undefined") return

@@ -168,10 +168,16 @@ export const frNotificationsOverlay: Record<string, string> = {
   "notifications.customer.fundingUpdateTitle": "Mise à jour du financement",
   "notifications.customer.fundsCreditedTitle": "Fonds crédités sur votre solde",
   "notifications.customer.fundsCreditedBody":
-    "{{amount}} a été ajouté à votre Nexus Main pendant que nous finalisons les options de paiement local pour votre pays.",
+    "{{amount}} a été ajouté à votre solde principal Nexus.",
   "notifications.time.now": "Maintenant",
   "notifications.launch.refereeBonusTitle": "Bonus premier dépôt crédité",
+  "notifications.launch.refereeBonusBody":
+    "Votre bonus promotionnel de {{amount}} a été crédité sur votre solde principal.",
   "notifications.launch.referrerBonusTitle": "Récompense de parrainage créditée",
+  "notifications.launch.referrerBonusBody":
+    "Vous avez reçu {{amount}} grâce au premier dépôt d’un filleul pendant le cycle promotionnel en cours.",
+  "notifications.withdrawal.submittedTitle": "Retrait soumis",
+  "notifications.withdrawal.submittedBody": "Retrait de {{amount}} en attente d’examen.",
 
   "home.profile.greeting.morning": "Bonjour, {{name}}",
   "home.profile.greeting.afternoon": "Bon après-midi, {{name}}",
