@@ -92,15 +92,15 @@ async function main() {
 
   if (argFlag("--reverse-manual-credits")) {
     const { data: events, error: evErr } = await admin
-      .from("financial_events")
-      .select("amount,metadata")
+      .from("container_balance_events")
+      .select("gross_amount,metadata")
       .eq("user_id", userId)
       .eq("event_type", "manual_local_mm_credit")
     if (evErr) throw new Error(evErr.message)
 
     let reverseUsd = 0
     for (const e of events ?? []) {
-      const amt = Number(e.amount ?? 0)
+      const amt = Number((e as { gross_amount?: number }).gross_amount ?? 0)
       if (amt > 0) reverseUsd += amt
     }
     reverseUsd = roundUsd2(reverseUsd)
