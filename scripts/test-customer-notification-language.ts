@@ -9,13 +9,24 @@ const bad =
 const clean = sanitizeCustomerNotificationText(bad, "Your funding has been approved.")
 assert.ok(!/MAIN_TREASURY|normalized settlement|admin_airtel/i.test(clean))
 
-const approved = buildFundingApprovedCustomerCopy({
+const approvedUg = buildFundingApprovedCustomerCopy({
   amountInputLocal: 50_000,
   inputCurrency: "UGX",
   amountUsd: 13.33,
+  fundingCountryCode: "UG",
 })
-assert.match(approved.body, /UGX/)
-assert.ok(!/normalized|treasury|MAIN_TREASURY/i.test(approved.body))
-assert.match(approved.body, /Credited/)
+assert.match(approvedUg.body, /UGX/)
+
+const approvedCd = buildFundingApprovedCustomerCopy({
+  amountInputLocal: 2_000_000,
+  inputCurrency: "UGX",
+  amountUsd: 513.33,
+  fundingCountryCode: "CD",
+  preferredCurrency: "CDF",
+})
+assert.ok(!/UGX/i.test(approvedCd.body))
+assert.match(approvedCd.body, /CDF|FC/)
+assert.ok(!/normalized|treasury|MAIN_TREASURY/i.test(approvedCd.body))
+assert.match(approvedCd.body, /Credited/)
 
 console.log("customer-notification-language: PASS")

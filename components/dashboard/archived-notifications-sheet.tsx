@@ -65,7 +65,7 @@ interface ArchivedNotificationsSheetProps {
 }
 
 export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotificationsSheetProps) {
-  const { t } = useUserPreferences()
+  const { t, currency, country, locale } = useUserPreferences()
   const { history, deleteFromHistory, unarchiveFromHistory } = useNexusNotifications()
   const [serverArchived, setServerArchived] = useState<NexusNotificationItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -154,7 +154,13 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
     deleteFromHistory(n.id)
   }
 
-  const selectedPresented = selected ? presentNotification(selected, t) : null
+  const selectedPresented = selected
+    ? presentNotification(selected, t, {
+        fundingCountryCode: country ?? null,
+        displayCurrency: currency,
+        locale,
+      })
+    : null
 
   if (!isOpen || typeof document === "undefined") return null
 

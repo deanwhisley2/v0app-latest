@@ -51,7 +51,7 @@ function isActiveDepositStatus(status: string): boolean {
 }
 
 export function NotificationCenterScreen() {
-  const { t } = useUserPreferences()
+  const { t, currency, country, locale } = useUserPreferences()
   const { inbox, accountInboxReady, markRead, markAllRead, deleteFromInbox, archiveFromInbox, runAppNavigation } =
     useNexusNotifications()
   const [selected, setSelected] = useState<NexusNotificationItem | null>(null)
@@ -122,7 +122,13 @@ export function NotificationCenterScreen() {
   )
 
   const closeDetail = useCallback(() => setSelected(null), [])
-  const selectedPresented = selected ? presentNotification(selected, t) : null
+  const selectedPresented = selected
+    ? presentNotification(selected, t, {
+        fundingCountryCode: country ?? null,
+        displayCurrency: currency,
+        locale,
+      })
+    : null
 
   return (
     <div className="mx-auto w-full max-w-lg pb-24 pt-4 md:max-w-2xl md:pb-8">

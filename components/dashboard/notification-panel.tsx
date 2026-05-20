@@ -88,8 +88,12 @@ type InboxRowProps = {
 }
 
 function PanelDetailOverlay({ detail, onClose }: { detail: NexusNotificationItem; onClose: () => void }) {
-  const { t } = useUserPreferences()
-  const p = presentNotification(detail, t)
+  const { t, currency, country, locale } = useUserPreferences()
+  const p = presentNotification(detail, t, {
+    fundingCountryCode: country ?? null,
+    displayCurrency: currency,
+    locale,
+  })
   return (
     <div className="absolute inset-0 z-[110] flex flex-col bg-card">
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2.5">
@@ -125,8 +129,12 @@ function PanelDetailOverlay({ detail, onClose }: { detail: NexusNotificationItem
 }
 
 const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight, onSwipeLeft }: InboxRowProps) {
-  const { t } = useUserPreferences()
-  const p = presentNotification(notification, t)
+  const { t, currency, country, locale } = useUserPreferences()
+  const p = presentNotification(notification, t, {
+    fundingCountryCode: country ?? null,
+    displayCurrency: currency,
+    locale,
+  })
   return (
     <NotificationSwipeRow
       className="mb-1.5"

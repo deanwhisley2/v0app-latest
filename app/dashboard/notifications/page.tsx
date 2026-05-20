@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button"
 
 export default function NotificationsHistoryPage() {
   const router = useRouter()
-  const { t } = useUserPreferences()
+  const { t, currency, country, locale } = useUserPreferences()
   const { user, isLoading: authLoading, isGuestSession } = useAuth()
   const { inbox, history, markRead, deleteFromHistory, clearHistory } = useNexusNotifications()
 
@@ -73,7 +73,13 @@ export default function NotificationsHistoryPage() {
   )
 
   const closeDetail = useCallback(() => setSelected(null), [])
-  const selectedPresented = selected ? presentNotification(selected, t) : null
+  const selectedPresented = selected
+    ? presentNotification(selected, t, {
+        fundingCountryCode: country ?? null,
+        displayCurrency: currency,
+        locale,
+      })
+    : null
 
   if (authLoading || !user) {
     return (

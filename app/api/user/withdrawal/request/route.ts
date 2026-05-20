@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { formatLocalFiatAmount, isSupportedFiat } from "@/lib/currency-display"
 import { minWithdrawUsdOk, minWithdrawUsdFloor, usdToLocalUnits } from "@/lib/nexus-fx"
+import { nexusMainMinimumRetainUsd } from "@/lib/customer-corridor-money"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import {
   assertWithdrawalSettlementConserved,
@@ -88,10 +89,20 @@ export async function POST(request: Request) {
       )
     }
 
+    const { data: profileRow } = await admin
+      .from("profiles")
+      .select("funding_country_code")
+      .eq("id", user.id)
+      .maybeSingle()
+    const fundingCountryCode = (profileRow as { funding_country_code?: string | null } | null)
+      ?.funding_country_code
+
     const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
     const available = liquid.availableUsd
     const totalBalance = liquid.totalLiquidUsd
-    const maxAllowed = round2(Math.min(available, totalBalance * 0.5))
+    const mainRetainUsd = nexusMainMinimumRetainUsd(fundingCountryCode)
+    const withdrawableMainUsd = round2(Math.max(0, available - mainRetainUsd))
+    const maxAllowed = round2(Math.min(withdrawableMainUsd, totalBalance * 0.5))
 
     const { data: row, error: selErr } = await admin
       .from("user_balances")
@@ -114,7 +125,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (grossAmount > available) {
+    if (grossAmount > withdrawableMainUsd + 1e-6 || grossAmount > available + 1e-6) {
       return NextResponse.json(
         { error: "Insufficient Nexus Main balance for this withdrawal." },
         { status: 400 }

@@ -1,4 +1,8 @@
 import type { NexusNotificationItem } from "@/lib/nexus-notification-models"
+import {
+  rewriteNotificationAmountsForCorridor,
+  type NotificationViewerCorridor,
+} from "@/lib/customer-corridor-money"
 import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 import {
   localizeStoredNotificationBody,
@@ -80,9 +84,19 @@ export function formatNotificationTimeAgo(iso: string, t?: (key: string) => stri
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
+function applyCorridorAmountRewrite(
+  text: string,
+  n: NexusNotificationItem,
+  viewer?: NotificationViewerCorridor,
+): string {
+  if (!viewer?.fundingCountryCode) return text
+  return rewriteNotificationAmountsForCorridor(text, viewer, n.customerAmountUsd ?? null)
+}
+
 export function presentNotification(
   n: NexusNotificationItem,
-  t: (key: string) => string
+  t: (key: string) => string,
+  viewer?: NotificationViewerCorridor,
 ): PresentedNotification {
   const category = inferNotificationCategory(n)
   const categoryLabel = t(categoryLabelKey(category))
@@ -105,20 +119,26 @@ export function presentNotification(
     }
   }
 
-  const title = localizeStoredNotificationTitle(
-    sanitizeCustomerNotificationText(n.title, fallbackMsg),
-    t,
+  const title = applyCorridorAmountRewrite(
+    localizeStoredNotificationTitle(sanitizeCustomerNotificationText(n.title, fallbackMsg), t),
+    n,
+    viewer,
   )
-  let summary = localizeStoredNotificationBody(
-    sanitizeCustomerNotificationText(n.message, fallbackMsg),
-    t,
+  let summary = applyCorridorAmountRewrite(
+    localizeStoredNotificationBody(sanitizeCustomerNotificationText(n.message, fallbackMsg), t),
+    n,
+    viewer,
   )
   summary = summary.replace(UA_NOISE, "").replace(/\s{2,}/g, " ").trim()
   if (summary.length > 96) summary = `${summary.slice(0, 93)}…`
 
-  const detail = localizeStoredNotificationBody(
-    sanitizeCustomerNotificationText(n.detailText ?? n.message, fallbackDetail),
-    t,
+  const detail = applyCorridorAmountRewrite(
+    localizeStoredNotificationBody(
+      sanitizeCustomerNotificationText(n.detailText ?? n.message, fallbackDetail),
+      t,
+    ),
+    n,
+    viewer,
   )
   const metaLine = IP_PATTERN.test(n.message) ? extractLoginMeta(n.message) : undefined
 

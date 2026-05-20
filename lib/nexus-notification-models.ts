@@ -30,4 +30,6 @@ export type NexusNotificationItem = {
   archived?: boolean
   nav?: NexusNotificationNav
   analysis?: AnalysisNotificationPayload
+  /** USD ledger hint for corridor-safe amount rewrite in the inbox (never show foreign corridor tickers). */
+  customerAmountUsd?: number
 }

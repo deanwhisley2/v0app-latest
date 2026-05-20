@@ -91,6 +91,19 @@ function mapServerAccountRow(r: {
     r.metadata && typeof r.metadata === "object" && r.metadata !== null
       ? (r.metadata as Record<string, unknown>)
       : null
+  const amountUsdRaw = meta?.amount_usd ?? meta?.settled_amount_usd
+  const opsAudit =
+    meta?.ops_audit && typeof meta.ops_audit === "object" && meta.ops_audit !== null
+      ? (meta.ops_audit as Record<string, unknown>)
+      : null
+  const amountUsdNorm = opsAudit?.amount_usd_normalized
+  const customerAmountUsd = (() => {
+    for (const v of [amountUsdRaw, amountUsdNorm]) {
+      const n = Number(v ?? NaN)
+      if (Number.isFinite(n) && n > 0) return n
+    }
+    return undefined
+  })()
   const fallbackDetail = "See your account balance for the latest status."
   const rawDetail = typeof meta?.friendly_detail === "string" ? meta.friendly_detail : undefined
   const detailText = rawDetail
@@ -107,6 +120,7 @@ function mapServerAccountRow(r: {
     archived: !!r.user_archived_at,
     detailText,
     nav,
+    customerAmountUsd,
   }
 }
 

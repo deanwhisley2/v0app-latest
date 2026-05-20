@@ -3,6 +3,8 @@
  * Operational / treasury / accounting detail belongs in admin logs and metadata.ops_audit — never in title/body.
  */
 
+import { formatFundingApprovedAmountForCustomer } from "@/lib/customer-corridor-money"
+
 const INTERNAL_PHRASE =
   /normalized settlement|MAIN_TREASURY|OPERATIONAL(?:\s+pool)?|admin_airtel(?:_ug)?|admin[\s_-]*direct|admin_crypto|L5\s+approved|treasury[\s_-]*pool|retailer_retail_balance|fx[\s_-]*(snapshot|normalization|middleware)|funding_request_admin|legacy_admin|official[\s_-]*corridor|book entry|nexus_main_pending|→|debited|credited account|liquidity reservation|settlement trace|middleware_version|usd_native_v1|internal_daily_fx|internal unit|standard dollar|we convert|at today.?s rate|≈\s*USD|USD equivalent|settlement|normalization|ledger|middleware|lifecycle|processor|routing|rpc\b/i
 
@@ -17,12 +19,6 @@ const IP_UA_BLOB =
   /\b\d{1,3}(?:\.\d{1,3}){3}\b.*(?:webkit|chrome|safari|firefox|edge)/i
 
 export type NotifyCopyFn = (key: string) => string
-
-function formatLocalAmount(amount: number, currency: string, locale?: string): string {
-  const ccy = currency.trim().toUpperCase()
-  const frac = ccy === "UGX" || ccy === "TZS" || ccy === "RWF" || ccy === "MWK" ? 0 : 2
-  return `${ccy} ${amount.toLocaleString(locale ?? undefined, { maximumFractionDigits: frac, minimumFractionDigits: frac === 0 ? 0 : 2 })}`
-}
 
 export function sanitizeCustomerNotificationText(text: string, fallback: string): string {
   const t = text.trim()
@@ -45,6 +41,9 @@ export function buildFundingApprovedCustomerCopy(
     amountInputLocal?: number | null
     inputCurrency?: string | null
     amountUsd?: number | null
+    fundingCountryCode?: string | null
+    preferredCurrency?: string | null
+    locale?: string
   },
   t?: NotifyCopyFn,
 ): FundingApprovedCustomerCopy {
@@ -60,12 +59,15 @@ export function buildFundingApprovedCustomerCopy(
       return en[key] ?? key
     })
 
-  const ccy = String(params.inputCurrency ?? "")
-    .trim()
-    .toUpperCase()
-  const local = Number(params.amountInputLocal ?? NaN)
-  if (ccy.length >= 3 && Number.isFinite(local) && local > 0) {
-    const localFmt = formatLocalAmount(local, ccy)
+  const localFmt = formatFundingApprovedAmountForCustomer({
+    amountUsd: params.amountUsd,
+    amountInputLocal: params.amountInputLocal,
+    inputCurrency: params.inputCurrency,
+    fundingCountryCode: params.fundingCountryCode,
+    preferredCurrency: params.preferredCurrency,
+    locale: params.locale,
+  })
+  if (localFmt) {
     return {
       title: tr("notifications.customer.fundingApprovedTitle"),
       body: tr("notifications.customer.fundingApprovedBodyLocal").replace("{{amount}}", localFmt),

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import type { NexusNotificationItem } from "@/lib/nexus-notification-models"
 import { inboxSignature } from "@/lib/nexus-notifications-merge"
 import {
@@ -11,22 +12,31 @@ import type { InboxFilter } from "@/components/dashboard/notification-inbox-ui"
 
 export function usePresentedNotifications(
   items: NexusNotificationItem[],
-  t: (key: string) => string
+  t: (key: string) => string,
 ): Map<string, PresentedNotification> {
+  const { currency, country, locale } = useUserPreferences()
   const sig = inboxSignature(items)
+  const viewer = useMemo(
+    () => ({
+      fundingCountryCode: country ?? null,
+      displayCurrency: currency,
+      locale,
+    }),
+    [country, currency, locale],
+  )
   return useMemo(() => {
     const map = new Map<string, PresentedNotification>()
-    for (const n of items) map.set(n.id, presentNotification(n, t))
+    for (const n of items) map.set(n.id, presentNotification(n, t, viewer))
     return map
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable when inbox content unchanged
-  }, [sig, t])
+  }, [sig, t, viewer])
 }
 
 export function filterInboxNotifications(
   items: NexusNotificationItem[],
   filter: InboxFilter,
   search: string,
-  presented: Map<string, PresentedNotification>
+  presented: Map<string, PresentedNotification>,
 ): NexusNotificationItem[] {
   const q = search.trim().toLowerCase()
   return items.filter((n) => {

@@ -7,8 +7,11 @@ import {
 import { getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
 import { emitTreasuryStreamEvent, fundRequestReferenceId } from "@/lib/server/treasury-operation-stream"
 import { customerNotifyT, resolveCustomerAppLanguage } from "@/lib/server/customer-ui-language"
+import { resolveCustomerDisplayCurrency } from "@/lib/server/customer-money-copy"
 
-function buildFundingApprovedFromFx(
+async function buildFundingApprovedFromFx(
+  admin: SupabaseClient,
+  userId: string,
   fx: Record<string, unknown> | null,
   t: ReturnType<typeof customerNotifyT>,
 ) {
@@ -23,11 +26,22 @@ function buildFundingApprovedFromFx(
         ? normUsd
         : null
 
+  const displayCurrency = await resolveCustomerDisplayCurrency(admin, userId)
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("funding_country_code")
+    .eq("id", userId)
+    .maybeSingle()
+  const fundingCountryCode = (profile as { funding_country_code?: string | null } | null)
+    ?.funding_country_code
+
   return buildFundingApprovedCustomerCopy(
     {
       amountInputLocal: Number.isFinite(inputLocal) && inputLocal > 0 ? inputLocal : null,
       inputCurrency: ccy || null,
       amountUsd: settledUsd,
+      fundingCountryCode: fundingCountryCode ?? null,
+      preferredCurrency: displayCurrency,
     },
     t,
   )
@@ -75,7 +89,7 @@ export async function notifyCustomerFundingOperational(
 
   const lang = await resolveCustomerAppLanguage(admin, params.userId)
   const t = customerNotifyT(lang)
-  const { title, body, customerHint } = buildFundingApprovedFromFx(fx, t)
+  const { title, body, customerHint } = await buildFundingApprovedFromFx(admin, params.userId, fx, t)
 
   const nav: NexusNotificationNav = { kind: "notifications" }
   const { error } = await admin.from("user_account_notifications").upsert(

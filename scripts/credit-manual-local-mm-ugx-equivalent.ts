@@ -76,9 +76,13 @@ async function creditUgxEquivalent(email: string, ugxAmount: number): Promise<vo
       sourceId: referenceId,
       notificationType: "financial",
       title: "Funds credited to your balance",
-      body: `${displayFmt} has been added to your Nexus Main while we finalize local payment options for your country.`,
+      body: `${displayFmt} has been added to your Nexus Main balance.`,
       nav: { kind: "wallet" },
-      metadata: { ugx_nominal: ugxAmount, amount_usd: amountUsd, reference_id: referenceId },
+      metadata: {
+        amount_usd: amountUsd,
+        reference_id: referenceId,
+        ops_audit: { ugx_nominal_internal: ugxAmount },
+      },
     })
   }
 

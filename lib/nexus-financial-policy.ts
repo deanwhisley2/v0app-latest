@@ -11,6 +11,12 @@ export const NEXUS_MIN_DEPOSIT_USD = 5
 /** Legacy floor in USD; product minimum is driven by {@link NEXUS_MIN_WITHDRAW_UGX} equivalent via FX. */
 export const NEXUS_MIN_WITHDRAW_USD = 3
 
+/**
+ * Congo (DRC) Nexus Main minimum retain — not disclosed in UI until a full-balance withdraw is attempted.
+ * Ledger remains USD-normalized; enforcement is on withdraw only.
+ */
+export const NEXUS_CD_MIN_MAIN_RETAIN_USD = 3
+
 /** Minimum cashout in Ugandan shilling (or FX-equivalent in other currencies). */
 export const NEXUS_MIN_WITHDRAW_UGX = 20_000
 

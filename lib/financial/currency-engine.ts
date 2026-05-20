@@ -159,7 +159,7 @@ class CurrencyEngine {
     if (error) throw new Error(error.message)
     const row = data as { funding_country_code?: string | null } | null
     const country = row?.funding_country_code?.trim().toUpperCase()
-    return corridorCurrencyForCountry(country) ?? "UGX"
+    return corridorCurrencyForCountry(country) ?? "USD"
   }
 }
 
