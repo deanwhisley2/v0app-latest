@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { COPY_TRADE_CYCLE_MS } from "@/lib/copy-trade-policy"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 import { settleCopyTradeSessionForUser } from "@/lib/server/copy-trade-settle"
 import { envelopeFromCopyCloseMessage, jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
@@ -11,15 +11,12 @@ export async function POST(request: Request) {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const level = await getTradingUserLevel(user.id)
-    if (level === 2 || level === 5) {
-      return jsonMutationError(
-        403,
-        "ACCOUNT_TYPE_BLOCKED",
-        "This account type cannot manage copy-trade sessions from the desk.",
-        "copy-trade/close: level 2 or 5.",
-      )
-    }
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "copy-trade/close",
+    )
+    if (tradingBlock) return tradingBlock
 
     const body = (await request.json().catch(() => ({}))) as {
       sessionId?: string

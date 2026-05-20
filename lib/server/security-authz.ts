@@ -1,5 +1,23 @@
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import type { User } from "@supabase/supabase-js"
+import {
+  blocksCustomerTradingApis,
+  computeRetailerCreditSeller,
+  isRetailerCreditSellerFromEnv,
+  normalizeTradingUserLevel,
+  type TradingUserLevel,
+} from "@/lib/platform-roles"
+
+export {
+  blocksCustomerTradingApis,
+  computeRetailerCreditSeller,
+  isRetailerCreditDesk,
+  isLiquidityAdminDesk,
+  isRetailerCreditSellerFromEnv,
+  normalizeTradingUserLevel,
+  resolvePlatformRouteRole,
+  type TradingUserLevel,
+} from "@/lib/platform-roles"
 
 function readAdminIdentitySet(): Set<string> {
   const ids = (process.env.NEXUS_ADMIN_USER_IDS ?? "")
@@ -54,38 +72,6 @@ export async function requireLiquidityAdminLevel5(user: User): Promise<void> {
   throw new Error("Level 5 liquidity admin required")
 }
 
-function readCsvSet(raw: string): Set<string> {
-  return new Set(
-    raw
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean)
-  )
-}
-
-/** Env-based allowlist for the five designated Level-2 retailer credit accounts (IDs or emails). */
-export function isRetailerCreditSellerFromEnv(userId: string, email: string | null | undefined): boolean {
-  const ids = readCsvSet(process.env.NEXUS_RETAILER_CREDIT_SELLER_IDS ?? "")
-  const emails = new Set(
-    (process.env.NEXUS_RETAILER_CREDIT_SELLER_EMAILS ?? "")
-      .split(",")
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean)
-  )
-  if (ids.has(userId)) return true
-  const em = (email ?? "").toLowerCase()
-  return em ? emails.has(em) : false
-}
-
-/** DB flag (profiles.retailer_credit_seller) OR env allowlist. */
-export function computeRetailerCreditSeller(
-  userId: string,
-  email: string | null | undefined,
-  profileFlag: boolean | null | undefined
-): boolean {
-  return Boolean(profileFlag) || isRetailerCreditSellerFromEnv(userId, email)
-}
-
 /** Level 1, or Level 2 without designated retailer-credit-desk flag (same mobile-money → retailer flow as L1). */
 export function canUseRetailFundingCustomerFlow(level: 1 | 2 | 5, retailerCreditSeller: boolean): boolean {
   if (level === 5) return false
@@ -109,12 +95,28 @@ export async function getRetailFundingCustomerGate(
     .select("trading_user_level, retailer_credit_seller")
     .eq("id", userId)
     .maybeSingle()
-  const raw = Number(data?.trading_user_level ?? 1)
-  const level: 1 | 2 | 5 = raw === 2 || raw === 5 ? raw : 1
+  const level = normalizeTradingUserLevel(Number(data?.trading_user_level ?? 1))
   const retailerCreditSeller = computeRetailerCreditSeller(userId, email, data?.retailer_credit_seller ?? null)
   return {
     level,
     retailerCreditSeller,
     canUseRetailFundingCustomerFlow: canUseRetailFundingCustomerFlow(level, retailerCreditSeller),
+  }
+}
+
+/** Gate for copy/fix container APIs — level 2 traders without retailer flag are allowed. */
+export async function getCustomerTradingAccessGate(
+  userId: string,
+  email: string | null | undefined,
+): Promise<{
+  level: TradingUserLevel
+  retailerCreditSeller: boolean
+  blocksCustomerTrading: boolean
+}> {
+  const gate = await getRetailFundingCustomerGate(userId, email)
+  return {
+    level: gate.level,
+    retailerCreditSeller: gate.retailerCreditSeller,
+    blocksCustomerTrading: blocksCustomerTradingApis(gate.level, gate.retailerCreditSeller),
   }
 }

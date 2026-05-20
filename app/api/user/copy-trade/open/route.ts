@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/container-governance"
 import { buildCopyTradeLifecycle } from "@/lib/server/copy-trade-lifecycle"
 import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 
 export async function POST(request: Request) {
   try {
@@ -19,24 +20,14 @@ export async function POST(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
 
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "copy-trade/open",
+    )
+    if (tradingBlock) return tradingBlock
+
     const admin = createAdminClient()
-    const { data: profile, error: profErr } = await admin
-      .from("profiles")
-      .select("trading_user_level, retailer_credit_seller")
-      .eq("id", user.id)
-      .maybeSingle()
-    if (profErr) throw new Error(profErr.message)
-    const tradingLv = Number(profile?.trading_user_level ?? 1)
-    const retailerDesk = tradingLv === 2 && Boolean(profile?.retailer_credit_seller)
-    if (tradingLv === 5 || retailerDesk) {
-      return jsonMutationError(
-        403,
-        "ACCOUNT_TYPE_BLOCKED",
-        "Designated retailer desks and Level-5 accounts cannot open copy-trade sessions from this flow.",
-        "copy-trade/open: trading_user_level 5 or retailer desk.",
-        { suggested_action: "Use a standard trading account for copy allocations." },
-      )
-    }
 
     const body = (await request.json().catch(() => ({}))) as {
       stakeUsd?: number

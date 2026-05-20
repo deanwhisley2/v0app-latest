@@ -3,7 +3,7 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 import { settleFixedTradeMaturityForUser } from "@/lib/server/fixed-trade-maturity-settle"
 import { envelopeFromMaturityExceptionMessage, jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
@@ -16,15 +16,12 @@ export async function POST(request: Request) {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const level = await getTradingUserLevel(user.id)
-    if (level === 2 || level === 5) {
-      return jsonMutationError(
-        403,
-        "ACCOUNT_TYPE_BLOCKED",
-        "This account type cannot run fixed-trade maturity from the desk.",
-        "maturity-check: level 2 or 5.",
-      )
-    }
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "maturity-check",
+    )
+    if (tradingBlock) return tradingBlock
 
     const admin = createAdminClient()
     const now = new Date()

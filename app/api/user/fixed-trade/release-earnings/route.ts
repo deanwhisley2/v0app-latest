@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 import {
   envelopeFromFixedTradeReleaseRpc,
   jsonMutationError,
@@ -13,16 +13,12 @@ export async function POST(request: Request) {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const level = await getTradingUserLevel(user.id)
-    if (level === 2 || level === 5) {
-      return jsonMutationError(
-        403,
-        "ACCOUNT_TYPE_BLOCKED",
-        "This account type cannot release fixed-trade earnings.",
-        "release-earnings: trading_user_level 2 or 5 blocked.",
-        { suggested_action: "Use a standard trading account for container releases." },
-      )
-    }
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "release-earnings",
+    )
+    if (tradingBlock) return tradingBlock
 
     const body = (await request.json().catch(() => ({}))) as { sessionId?: string }
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : ""

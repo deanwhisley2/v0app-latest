@@ -22,6 +22,7 @@ import {
 import { getLaunchStarterFixPersonaId, getPlatformLaunchStatus, launchPromotionsActive } from "@/lib/server/platform-launch"
 import { buildFixedTradeLifecycleV2 } from "@/lib/server/fixed-trade-lifecycle-v2"
 import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -89,16 +90,14 @@ export async function POST(request: Request) {
       .maybeSingle()
     if (pErr) throw new Error(pErr.message)
 
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "fixed-trade/open",
+    )
+    if (tradingBlock) return tradingBlock
+
     const tradingLv = Number(profile?.trading_user_level ?? 1)
-    const retailerDesk = tradingLv === 2 && Boolean(profile?.retailer_credit_seller)
-    if (tradingLv === 5 || retailerDesk) {
-      return jsonMutationError(
-        403,
-        "ACCOUNT_TYPE_BLOCKED",
-        "Designated retailer desks and Level-5 accounts cannot open fixed trades from this flow.",
-        "fixed-trade/open: level 5 or retailer desk.",
-      )
-    }
     const userLevel = mapTradingProfileToDeskTier(tradingLv)
 
     const persona = await resolvePersonaId(admin, traderPersonaIdRaw, "fix")

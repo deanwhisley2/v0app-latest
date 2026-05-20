@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 import { envelopeFromFixedTradeReleaseRpc, jsonMutationError } from "@/lib/api/mutation-error-envelope"
 
 export async function GET(request: Request) {
@@ -9,15 +9,12 @@ export async function GET(request: Request) {
     const auth = await bearerUserWithGovernance(request, "read")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const level = await getTradingUserLevel(user.id)
-    if (level === 2 || level === 5) {
-      return jsonMutationError(
-        403,
-        "ACCOUNT_TYPE_BLOCKED",
-        "This account type cannot query fixed-trade withdrawable preview.",
-        "withdrawable-preview: level 2 or 5.",
-      )
-    }
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "withdrawable-preview",
+    )
+    if (tradingBlock) return tradingBlock
 
     const { searchParams } = new URL(request.url)
     const sessionId = (searchParams.get("sessionId") ?? "").trim()

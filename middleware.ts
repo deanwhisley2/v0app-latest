@@ -1,12 +1,13 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
+import { resolvePlatformRouteRole } from "@/lib/platform-roles"
 
 /** Total Cookie header above this triggers strip (keep above normal app cookie volume). */
 const COOKIE_HEADER_WARN_BYTES = 24 * 1024
 /** Supabase chunks JWT across cookies; any single sb-* chunk over this is suspiciously large. */
 const SINGLE_SB_COOKIE_MAX_CHARS = 8000
-/** Level-2 retailers must not use trading/exchange UIs; they are redirected to the main app (Assets/ops). */
+/** Designated retailer credit desks (L2 + retailer_credit_seller) must not use customer trading UIs. */
 const RETAILER_FORBIDDEN_TRADING_PATHS = ["/trading-workspace", "/war-room", "/analysis", "/race-conditions", "/api-settings"]
 const RETAILER_ONLY_PATHS = ["/retailer/dashboard", "/retailer/approvals", "/retailer/history"]
 const ADMIN_ONLY_PATHS = ["/admin/treasury", "/admin/users", "/admin/retailers"]
@@ -100,45 +101,64 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Role-based routing guard: USER vs RETAILER vs ADMIN.
+  // Role routing: USER (incl. L2 traders) vs RETAILER_DESK (explicit flag) vs ADMIN_DESK (L5).
   if (user) {
-    let userRole: "USER" | "RETAILER" | "ADMIN" = "USER"
-    const jwtLevel = Number(
-      (user.app_metadata as Record<string, unknown> | undefined)?.trading_user_level ?? 0
-    )
-    if (jwtLevel === 5) userRole = "ADMIN"
-    else if (jwtLevel === 2) userRole = "RETAILER"
+    let routeRole = resolvePlatformRouteRole({
+      tradingUserLevel: Number(
+        (user.app_metadata as Record<string, unknown> | undefined)?.trading_user_level ?? 1,
+      ),
+      retailerCreditSellerFlag: false,
+      userId: user.id,
+      email: user.email ?? null,
+    })
     try {
       const { data: prof } = await supabase
         .from("profiles")
-        .select("trading_user_level")
+        .select("trading_user_level, retailer_credit_seller")
         .eq("id", user.id)
         .maybeSingle()
-      const level = Number((prof as { trading_user_level?: number } | null)?.trading_user_level ?? 1)
-      if (level === 5) userRole = "ADMIN"
-      else if (level === 2) userRole = "RETAILER"
+      routeRole = resolvePlatformRouteRole({
+        tradingUserLevel: Number(
+          (prof as { trading_user_level?: number } | null)?.trading_user_level ?? 1,
+        ),
+        retailerCreditSellerFlag: (prof as { retailer_credit_seller?: boolean } | null)
+          ?.retailer_credit_seller,
+        userId: user.id,
+        email: user.email ?? null,
+      })
     } catch {
-      // Keep request flowing as USER on read failures.
+      // Keep JWT-derived role on read failures.
     }
 
-    if (userRole === "RETAILER" && matchesAnyPath(pathname, RETAILER_FORBIDDEN_TRADING_PATHS)) {
+    if (routeRole === "RETAILER_DESK" && matchesAnyPath(pathname, RETAILER_FORBIDDEN_TRADING_PATHS)) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }
-    if (userRole === "RETAILER" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
+    if (routeRole === "RETAILER_DESK" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
       return NextResponse.json(
-        { error: "Retailer accounts are operational liquidity desks and cannot access trading APIs." },
+        {
+          success: false,
+          error_code: "RETAILER_DESK_TRADING_BLOCKED",
+          user_message:
+            "This account is configured as a retailer liquidity desk and cannot use customer trading.",
+          error: "Retailer accounts are operational liquidity desks and cannot access trading APIs.",
+        },
         { status: 403, headers: { "Cache-Control": "no-store" } },
       )
     }
-    if (userRole === "ADMIN" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
+    if (routeRole === "ADMIN_DESK" && matchesAnyPath(pathname, TRADING_API_PATHS)) {
       return NextResponse.json(
-        { error: "Level-5 admin accounts are supervisory and cannot use trading APIs." },
+        {
+          success: false,
+          error_code: "ADMIN_DESK_TRADING_BLOCKED",
+          user_message: "Liquidity admin accounts cannot use customer trading APIs.",
+          error: "Level-5 admin accounts are supervisory and cannot use trading APIs.",
+        },
         { status: 403, headers: { "Cache-Control": "no-store" } },
       )
     }
     // Do not hard-block /admin/* by inferred role in middleware.
     // Page-level checks use service-role reads (authoritative) and avoid stale/missing middleware profile reads.
-    if (userRole === "USER" && matchesAnyPath(pathname, RETAILER_ONLY_PATHS)) {
+    if (routeRole === "USER" && matchesAnyPath(pathname, RETAILER_ONLY_PATHS)) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }
   }

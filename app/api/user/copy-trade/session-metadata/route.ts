@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getTradingUserLevel } from "@/lib/server/security-authz"
+import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
 
 type Metadata = Record<string, unknown>
 
@@ -45,10 +45,12 @@ export async function PATCH(request: Request) {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const level = await getTradingUserLevel(user.id)
-    if (level === 2 || level === 5) {
-      return NextResponse.json({ error: "Trading metadata not available for this account type." }, { status: 403 })
-    }
+    const tradingBlock = await customerTradingApiGuardResponse(
+      user.id,
+      user.email,
+      "copy-trade/session-metadata",
+    )
+    if (tradingBlock) return tradingBlock
 
     const body = (await request.json().catch(() => ({}))) as {
       sessionId?: string
