@@ -43,7 +43,6 @@ export const ESKNEXUSPRO_MTN_USSD_PREFIX = "*165*1#"
 /** Kenya M-Pesa receive lines (Safaricom) — shown only to KE corridor customers. */
 export const ESKNEXUSPRO_KE_MPESA_USSD_PREFIX = "*334#"
 export const ESKNEXUSPRO_KE_MPESA_LINES: ReadonlyArray<{ payeeName: string; msisdn: string }> = [
-  { payeeName: "Fanuel Juma Weta", msisdn: "0117071995" },
   { payeeName: "Oscar Maloba Odhiambo", msisdn: "0115831794" },
 ]
 

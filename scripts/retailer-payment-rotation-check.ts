@@ -22,7 +22,6 @@ function read(p: string): string {
 }
 
 const KE_MPESA_LINES = [
-  { label: "M-Pesa Kenya", value: "0117071995", payment_type: "mpesa_mobile_ke", payee_name: "Fanuel Juma Weta" },
   { label: "M-Pesa Kenya", value: "0115831794", payment_type: "mpesa_mobile_ke", payee_name: "Oscar Maloba Odhiambo" },
 ]
 
@@ -31,7 +30,7 @@ function main() {
   assert(PAYMENT_ROTATION_UNIQUE_CLIENT_THRESHOLD === 5, "unique client threshold is 5")
 
   const keLines = paymentLinesForNetwork(KE_MPESA_LINES, "MPesa", "KE")
-  assert(keLines.length === 2, "dual-number KE pool extracts 2 lines")
+  assert(keLines.length === 1, "single-number KE pool extracts 1 line")
   assert(keLines.length === 1 || keLines.length === 2, "multi-line pool")
 
   const singleUg = paymentLinesForNetwork(

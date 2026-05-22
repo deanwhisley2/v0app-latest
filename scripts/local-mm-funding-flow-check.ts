@@ -45,22 +45,19 @@ function main() {
   )
   assert(
     retailerDeskSupportsNetwork(
-      [
-        { label: "M-Pesa Kenya", value: "0117071995", payment_type: "mpesa_mobile_ke" },
-        { label: "M-Pesa Kenya", value: "0115831794", payment_type: "mpesa_mobile_ke" },
-      ],
+      [{ label: "M-Pesa Kenya", value: "0115831794", payment_type: "mpesa_mobile_ke" }],
       "MPesa",
       "KE",
     ),
-    "KE: ESK M-Pesa lines match MPesa selection",
+    "KE: ESK M-Pesa line matches MPesa selection",
   )
   assert(
     !retailerDeskSupportsNetwork(
-      [{ label: "M-Pesa Kenya", value: "0117071995", payment_type: "mpesa_mobile_ke" }],
+      [{ label: "M-Pesa Kenya", value: "0115831794", payment_type: "mpesa_mobile_ke" }],
       "MPesa",
       "UG",
     ),
-    "KE: M-Pesa lines must not match Uganda corridor",
+    "KE: M-Pesa line must not match Uganda corridor",
   )
 
   const api = read("app/api/user/qualified-retailers/route.ts")
