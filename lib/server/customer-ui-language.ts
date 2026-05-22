@@ -24,6 +24,8 @@ export async function resolveCustomerAppLanguage(
     .eq("id", userId)
     .maybeSingle()
   const country = (profile as { funding_country_code?: string | null } | null)?.funding_country_code
+  const cc = country?.trim().toUpperCase().slice(0, 2) ?? ""
+  if (cc === "KE") return "en"
   return operatingCountryByCode(country)?.language ?? "en"
 }
 

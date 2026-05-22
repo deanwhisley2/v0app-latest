@@ -119,9 +119,13 @@ export function preferencesFromUserMetadata(meta: Record<string, unknown> | unde
   if (!meta) return {}
   const language = meta.preferred_language ?? meta.preferredLanguage
   const currency = meta.preferred_currency ?? meta.preferredCurrency
+  const countryRaw = meta.funding_country_code ?? meta.fundingCountryCode
+  const country =
+    typeof countryRaw === "string" ? countryRaw.trim().toUpperCase().slice(0, 2) : ""
   return {
     ...(typeof language === "string" ? { language: language as AppLanguage } : {}),
     ...(typeof currency === "string" ? { currency } : {}),
+    ...(country.length === 2 && /^[A-Z]{2}$/.test(country) ? { country } : {}),
   }
 }
 

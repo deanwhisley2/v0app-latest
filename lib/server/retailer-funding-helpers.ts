@@ -174,28 +174,43 @@ export function retailerDeskSupportsNetwork(
   const needle = normMobileToken(raw)
   if (!needle) return true
 
+  const cc = String(customerCountryIso2 ?? "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 2)
+
   const rows = Array.isArray(paymentNumbers) ? paymentNumbers : []
   for (const p of rows) {
-    const row = p as { label?: string; value?: string }
+    const row = p as { label?: string; value?: string; payment_type?: string }
+    const pt = String(row.payment_type ?? "").toLowerCase()
+    if (pt === "mpesa_mobile_ke" && cc !== "KE") continue
     const lab = normMobileToken(String(row?.label ?? ""))
     const val = normMobileToken(String(row?.value ?? ""))
     if (!lab && !val) continue
+    if (pt === "mpesa_mobile_ke" && cc === "KE" && (needle === "mpesa" || needle.includes("mpesa"))) {
+      return true
+    }
     if (lab.includes(needle) || needle.includes(lab)) return true
     if (val.includes(needle) || needle.includes(val)) return true
     const bundle = lab + val
     if (bundle.includes(needle)) return true
   }
 
-  const cc = String(customerCountryIso2 ?? "")
-    .trim()
-    .toUpperCase()
-    .slice(0, 2)
   const want = selectedNetworkKindFromNeedle(needle)
   if (cc === "UG" && want) {
     for (const p of rows) {
       const row = p as { value?: string }
       const inf = ugandaPhoneInfersNetwork(String(row?.value ?? ""))
       if (inf === want) return true
+    }
+  }
+
+  if (cc === "KE" && (needle === "mpesa" || needle.includes("mpesa"))) {
+    for (const p of rows) {
+      const row = p as { label?: string; value?: string; payment_type?: string }
+      const pt = String(row.payment_type ?? "").toLowerCase()
+      const lab = normMobileToken(String(row.label ?? ""))
+      if (pt === "mpesa_mobile_ke" || lab.includes("mpesa")) return true
     }
   }
 

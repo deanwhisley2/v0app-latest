@@ -49,71 +49,83 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     return stored ?? { ...DEFAULT_PREFERENCES }
   })
 
+  /** Hydrate language/currency/country: profile funding_country_code is authoritative over stale localStorage. */
   useEffect(() => {
-    const stored = readPreferencesFromStorage()
-    const fromMeta = user?.user_metadata
-      ? preferencesFromUserMetadata(user.user_metadata as Record<string, unknown>)
-      : {}
-    const base = parsePreferences({
-      ...DEFAULT_PREFERENCES,
-      ...stored,
-      ...fromMeta,
-    })
-    const merged = mergeCustomerPreferencesWithCorridor(base, base.country ?? null)
-    setPrefs(merged)
-    writePreferencesToStorage(merged)
-  }, [user?.id, user?.user_metadata])
+    if (!user?.id) {
+      const stored = readPreferencesFromStorage()
+      const base = parsePreferences({ ...DEFAULT_PREFERENCES, ...stored })
+      setPrefs(mergeCustomerPreferencesWithCorridor(base, null))
+      return
+    }
 
-  /** When the user has not set a country in local preferences, mirror `profiles.funding_country_code` for regional UX. */
-  useEffect(() => {
-    if (!user?.id) return
     let cancelled = false
+    const fromMeta = preferencesFromUserMetadata(user.user_metadata as Record<string, unknown>)
+
     ;(async () => {
       const stored = readPreferencesFromStorage()
-      const storedCountry =
-        stored && typeof stored.country === "string" ? stored.country.trim().toUpperCase() : ""
-      if (storedCountry.length === 2) return
-
-      const { data, error } = await supabase
+      const { data: prof, error } = await supabase
         .from("profiles")
         .select("funding_country_code")
         .eq("id", user.id)
         .maybeSingle()
-      if (cancelled || error) return
-      const raw = (data as { funding_country_code?: string | null })?.funding_country_code?.trim().toUpperCase()
-      if (!raw || raw.length !== 2) return
 
-      setPrefs((prev) => {
-        const next = mergeCustomerPreferencesWithCorridor(parsePreferences({ ...prev, country: raw }), raw)
-        if (
-          next.country === prev.country &&
-          next.currency === prev.currency &&
-          next.language === prev.language
-        ) {
-          return prev
-        }
-        writePreferencesToStorage(next)
-        const meta = user?.user_metadata as Record<string, unknown> | undefined
-        const metaCur = meta?.preferred_currency ?? meta?.preferredCurrency
-        const metaLang = meta?.preferred_language ?? meta?.preferredLanguage
-        const metaPatch: Record<string, string> = {}
-        if (next.currency !== metaCur) metaPatch.preferred_currency = String(next.currency)
-        if (next.language !== metaLang) metaPatch.preferred_language = String(next.language)
-        if (Object.keys(metaPatch).length > 0) {
-          void supabase.auth.updateUser({ data: metaPatch })
-        }
-        return next
+      if (cancelled) return
+
+      const profileCountry = !error
+        ? (prof as { funding_country_code?: string | null } | null)?.funding_country_code
+            ?.trim()
+            .toUpperCase()
+            .slice(0, 2) ?? ""
+        : ""
+
+      const base = parsePreferences({
+        ...DEFAULT_PREFERENCES,
+        ...stored,
+        ...fromMeta,
       })
+
+      const authoritativeCountry =
+        profileCountry.length === 2 ? profileCountry : fromMeta.country ?? base.country ?? null
+
+      const next = mergeCustomerPreferencesWithCorridor(base, authoritativeCountry)
+
+      setPrefs(next)
+      writePreferencesToStorage(next)
+
+      const meta = user.user_metadata as Record<string, unknown> | undefined
+      const metaPatch: Record<string, string> = {}
+      if (authoritativeCountry && authoritativeCountry !== fromMeta.country) {
+        metaPatch.funding_country_code = authoritativeCountry
+      }
+      const metaCur = meta?.preferred_currency ?? meta?.preferredCurrency
+      const metaLang = meta?.preferred_language ?? meta?.preferredLanguage
+      if (next.currency !== metaCur) metaPatch.preferred_currency = String(next.currency)
+      if (next.language !== metaLang) metaPatch.preferred_language = String(next.language)
+      if (Object.keys(metaPatch).length > 0) {
+        void supabase.auth.updateUser({ data: metaPatch })
+      }
     })()
+
     return () => {
       cancelled = true
     }
-  }, [user?.id])
+  }, [user?.id, user?.user_metadata])
 
   const setPreferences = useCallback((partial: Partial<UserPreferences>) => {
     if (partial.language) markLanguageUserSet()
     setPrefs((prev) => {
-      const next = parsePreferences({ ...prev, ...partial })
+      const mergedPartial = { ...partial }
+      const corridorCountry = (partial.country ?? prev.country)?.trim().toUpperCase().slice(0, 2)
+      if (corridorCountry === "KE") {
+        mergedPartial.language = "en"
+        if (partial.currency) {
+          mergedPartial.currency = "KES"
+        }
+      }
+      const next = mergeCustomerPreferencesWithCorridor(
+        parsePreferences({ ...prev, ...mergedPartial }),
+        corridorCountry || prev.country || null,
+      )
       writePreferencesToStorage(next)
       if (partial.language && user?.id) {
         void supabase.auth.updateUser({ data: { preferred_language: next.language } })

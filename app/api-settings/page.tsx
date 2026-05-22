@@ -214,7 +214,7 @@ export default function ApiSettingsPage() {
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Globe className="h-3.5 w-3.5" />
-                <span>Data Source: <strong className="text-foreground">api.binance.com</strong></span>
+                <span>Market data: <strong className="text-foreground">Nexus market authority</strong></span>
               </div>
               {lastConnected && (
                 <div className="flex items-center gap-1.5">
@@ -230,7 +230,7 @@ export default function ApiSettingsPage() {
               )}
               <div className="flex items-center gap-1.5">
                 <Network className="h-3.5 w-3.5" />
-                <span>Live from <strong className="text-foreground">api.binance.com</strong></span>
+                <span>Spot quotes via <strong className="text-foreground">/api/market/authority</strong></span>
               </div>
             </div>
           </div>
@@ -510,7 +510,7 @@ export default function ApiSettingsPage() {
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Globe className="h-4 w-4 text-success" />
-                      <span>Data Source: <strong>Live from api.binance.com</strong></span>
+                      <span>Data Source: <strong>Nexus market authority</strong></span>
                     </div>
                   </div>
                 )}

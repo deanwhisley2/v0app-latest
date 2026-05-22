@@ -9,13 +9,13 @@ APP_DIR="${APP_DIR:-${_REPO_ROOT}}"
 APP_NAME="${APP_NAME:-nexus}"
 ECOSYSTEM="${ECOSYSTEM:-ecosystem.config.js}"
 
-# Canonical production VPS: ssh vpsuser@67.159.52.40 — app directory /opt/nexus-pro
+# Canonical production VPS: ssh root@173.214.164.179 — app directory /opt/nexus-pro
 # (Ignore stale IPs in old notes; deploy archive script defaults match this host.)
 #
 # ---------------------------------------------------------------------------
 # Run from your LAPTOP with DEPLOY_FROM_LOCAL=1 to copy .env.local and deploy.
 # Example:
-#   REMOTE_HOST=67.159.52.40 REMOTE_USER=vpsuser REMOTE_APP_DIR=/opt/nexus-pro DEPLOY_FROM_LOCAL=1 ./scripts/deploy.sh
+#   REMOTE_HOST=173.214.164.179 REMOTE_USER=root REMOTE_APP_DIR=/opt/nexus-pro DEPLOY_FROM_LOCAL=1 ./scripts/deploy.sh
 # Optional: LOCAL_ENV_FILE=.env.local
 # ---------------------------------------------------------------------------
 if [[ "${DEPLOY_FROM_LOCAL:-0}" == "1" ]]; then

@@ -22,6 +22,9 @@ node_modules
 # Local daemon logs
 logs/
 
+# VPS migration bundles (secrets — never commit)
+.vps-migration-backup/
+
 # Supabase CLI cache (do not commit)
 supabase/.temp/
 

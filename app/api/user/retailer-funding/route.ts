@@ -21,6 +21,10 @@ import {
   assertRetailDeskQualifiesForCorridor,
   normalizeCorridorNetworkToken,
 } from "@/lib/server/retailer-qualification"
+import {
+  bindFundRequestRotationLine,
+  resolveExposedPaymentLine,
+} from "@/lib/server/retailer-payment-rotation"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 import { buildFundingSubmittedCustomerCopy } from "@/lib/notifications/customer-notification-language"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
@@ -115,6 +119,8 @@ export async function POST(request: Request) {
       payerPhone?: string
       paymentProofPath?: string
       paymentProofDataUrl?: string
+      paymentRotationLineId?: string
+      paymentRotationPoolId?: string
     }
     const retailerId = typeof body.retailerId === "string" ? body.retailerId.trim() : ""
     const officialCorridorRouteId =
@@ -499,6 +505,47 @@ export async function POST(request: Request) {
         .single()
       if (fetchErr || !row) return NextResponse.json({ error: fetchErr?.message ?? "Fetch failed" }, { status: 500 })
       data = row as Record<string, unknown>
+
+      if (insertRetailerId && fundChannel === "local_mobile") {
+        const rotLineId =
+          typeof body.paymentRotationLineId === "string" ? body.paymentRotationLineId.trim() : ""
+        const rotPoolId =
+          typeof body.paymentRotationPoolId === "string" ? body.paymentRotationPoolId.trim() : ""
+        try {
+          if (rotLineId && rotPoolId) {
+            await bindFundRequestRotationLine(admin, newId, rotLineId, rotPoolId)
+          } else {
+            const { data: deskRow } = await admin
+              .from("retailer_profiles")
+              .select("id,payment_numbers,country_code")
+              .eq("id", insertRetailerId)
+              .maybeSingle()
+            if (deskRow) {
+              const resolved = await resolveExposedPaymentLine(admin, {
+                retailerProfileId: insertRetailerId,
+                countryCode: userCountry.slice(0, 2),
+                mobileNetwork: mobileNetwork ?? "",
+                paymentNumbers: deskRow.payment_numbers,
+                userId: user.id,
+              })
+              if (resolved) {
+                await bindFundRequestRotationLine(admin, newId, resolved.lineId, resolved.poolId)
+              }
+            }
+          }
+        } catch (rotErr) {
+          await finalizeRetailerLiquidityReservation(admin, newId, "released", "rotation_bind_failed")
+          return NextResponse.json(
+            {
+              error:
+                rotErr instanceof Error
+                  ? rotErr.message
+                  : "Could not assign payment line for this funding request.",
+            },
+            { status: 409 },
+          )
+        }
+      }
     } else {
       const { data: ins, error } = await admin
         .from("retailer_fund_requests")

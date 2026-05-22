@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Build a tarball from the current Git tree (tracked files only), upload to VPS, extract, run deploy.sh.
-# Canonical production target: vpsuser@67.159.52.40 → REMOTE_APP_DIR=/opt/nexus-pro (defaults below).
+# Canonical production target: root@173.214.164.179 → REMOTE_APP_DIR=/opt/nexus-pro (defaults below).
 # Must be run from a machine that has this repo as a git clone (with .git).
 #
 # Usage (from anywhere):
 #   bash scripts/deploy-vps-git-archive.sh
 #
 # Optional env:
-#   REMOTE_HOST=67.159.52.40 REMOTE_USER=vpsuser REMOTE_APP_DIR=/opt/nexus-pro
+#   REMOTE_HOST=173.214.164.179 REMOTE_USER=root REMOTE_APP_DIR=/opt/nexus-pro
 #   STRICT_BUILD=1 (default) runs npm run verify:ci on the server; STRICT_BUILD=0 legacy fallback only.
 set -euo pipefail
 
@@ -21,9 +21,16 @@ if [[ ! -d .git ]]; then
   exit 1
 fi
 
-REMOTE_HOST="${REMOTE_HOST:-67.159.52.40}"
-REMOTE_USER="${REMOTE_USER:-vpsuser}"
+REMOTE_HOST="${REMOTE_HOST:-173.214.164.179}"
+REMOTE_USER="${REMOTE_USER:-root}"
 REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/nexus-pro}"
+LEGACY_DECOMMISSIONED_HOST="${LEGACY_DECOMMISSIONED_HOST:-67.159.52.40}"
+
+if [[ "${REMOTE_HOST}" == "${LEGACY_DECOMMISSIONED_HOST}" ]]; then
+  echo "ERROR: REMOTE_HOST=${LEGACY_DECOMMISSIONED_HOST} is the decommissioned legacy VPS."
+  echo "Use production: REMOTE_HOST=173.214.164.179 REMOTE_USER=root"
+  exit 1
+fi
 
 REF="${DEPLOY_REF:-HEAD}"
 COMMIT="$(git rev-parse "${REF}^{commit}")"

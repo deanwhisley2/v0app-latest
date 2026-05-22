@@ -23,8 +23,12 @@ import {
 } from "@/lib/server/market-price-governance"
 import {
   getMarketPriceHealthSnapshot,
+  recordFailoverEvent,
   recordProviderFailure,
+  recordProviderLatency,
   recordProviderSuccess,
+  recordRefreshFail,
+  recordRefreshOk,
   updateMarketPriceHealth,
 } from "@/lib/server/market-price-health"
 import {
@@ -87,13 +91,15 @@ function symbolHue(symbol: string): number {
   return h % 360
 }
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit, latencyId?: string): Promise<T> {
+  const t0 = Date.now()
   const res = await fetch(url, {
     ...init,
     headers: { Accept: "application/json", ...(init?.headers ?? {}) },
     signal: init?.signal ?? AbortSignal.timeout(MARKET_PRICE_PROVIDER_TIMEOUT_MS),
     cache: "no-store",
   })
+  if (latencyId) recordProviderLatency(latencyId, Date.now() - t0)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return (await res.json()) as T
 }
@@ -452,6 +458,7 @@ async function refreshAuthorityCache(): Promise<AuthorityCache> {
     btc.provider === "cache-emergency" && btcAge >= MARKET_PRICE_ADMIN_ALERT_MS
 
   if (fallbackLevel > 0 && btc.provider !== "cache-emergency") {
+    recordFailoverEvent()
     updateMarketPriceHealth({
       event: `failover level=${fallbackLevel} active=${btc.provider}`,
     })
@@ -488,6 +495,7 @@ async function refreshAuthorityCache(): Promise<AuthorityCache> {
   }
 
   recordAuthorityRefreshSuccess()
+  recordRefreshOk()
 
   const next: AuthorityCache = {
     btc,
@@ -534,6 +542,7 @@ export async function getMarketPriceAuthority(opts?: {
     .then((c) => c)
     .catch((e) => {
       recordAuthorityRefreshFailure()
+      recordRefreshFail()
       throw e
     })
     .finally(() => {

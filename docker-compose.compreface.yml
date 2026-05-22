@@ -31,11 +31,15 @@ services:
       POSTGRES_PASSWORD: compreface
       POSTGRES_URL: jdbc:postgresql://compreface-postgres:5432/compreface
       SPRING_PROFILES_ACTIVE: dev
+      SAVE_IMAGES_TO_DB: "true"
+      MAX_FILE_SIZE: 5MB
+      MAX_REQUEST_SIZE: 10MB
+      CONNECTION_TIMEOUT: 10000
+      READ_TIMEOUT: 60000
     depends_on:
       - compreface-postgres
       - compreface-core
-    ports:
-      - "8000:8000"
+    # API is internal; use compreface-fe (nginx) as the host entry point — not :8000 on this container.
 
   compreface-admin:
     image: exadel/compreface-admin:1.2.0
@@ -63,7 +67,8 @@ services:
       - compreface-api
       - compreface-admin
     ports:
-      - "8002:80"
+      # Official layout: nginx proxies /api/v1/* to compreface-api (use this URL from the Next.js host).
+      - "8000:80"
 
 volumes:
   compreface-postgres-data:

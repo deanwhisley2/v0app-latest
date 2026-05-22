@@ -4,7 +4,7 @@ import {
   CUSTOMER_AIRTEL_MENU_DISPLAY_NAME,
   customerInstructionPayeeDisplay,
 } from "@/lib/customer-payment-instruction-display"
-import type { UgMtnMobileTemplate } from "@/lib/retailer-payment-templates"
+import type { KeMpesaMobileTemplate, UgMtnMobileTemplate } from "@/lib/retailer-payment-templates"
 
 const PANEL_CLASS =
   "max-w-full space-y-2 overflow-x-hidden rounded-lg border border-border/70 bg-background/80 p-2.5 sm:p-3"
@@ -39,6 +39,38 @@ export function AirtelPaymentSteps({ ussdPrefix, merchantId, payerEmail, t }: Ai
 type MtnStepsProps = {
   mtn: UgMtnMobileTemplate
   t: (key: string) => string
+}
+
+type MpesaStepsProps = {
+  mpesa: KeMpesaMobileTemplate
+  t: (key: string) => string
+}
+
+export function MpesaPaymentSteps({ mpesa, t }: MpesaStepsProps) {
+  return (
+    <details className="rounded-md border border-border/60 bg-muted/20" open>
+      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold text-foreground">
+        {t("funding.payment.mpesaStepsToggle")}
+      </summary>
+      <ol className="list-decimal space-y-1 border-t border-border/50 px-2.5 py-2 pl-5 text-[11px] leading-snug text-foreground break-words">
+        <li>{t("funding.payment.mpesaStep1").replace("{{ussd}}", mpesa.ussdPrefix)}</li>
+        <li>{t("funding.payment.mpesaStep2")}</li>
+        <li>{t("funding.payment.mpesaStep3")}</li>
+        <li>{t("funding.payment.mpesaStep4")}</li>
+        <li>{t("funding.payment.mpesaStep5")}</li>
+      </ol>
+      <div className="space-y-1 border-t border-border/50 px-2.5 py-2 text-[10px] leading-snug text-foreground">
+        <p className="font-semibold">{t("funding.payment.mpesaReceiveLinesTitle")}</p>
+        {mpesa.lines.map((line) => (
+          <p key={line.msisdn} className="break-words font-mono">
+            {t("funding.payment.mpesaReceiveLine")
+              .replace("{{payee}}", line.payeeName)
+              .replace("{{msisdn}}", line.msisdn)}
+          </p>
+        ))}
+      </div>
+    </details>
+  )
 }
 
 export function MtnPaymentSteps({ mtn, t }: MtnStepsProps) {
@@ -107,6 +139,7 @@ export function PaymentReferenceFields({
 type RetailerPaymentInstructionPanelProps = {
   airtel: { ussdPrefix: string; merchantId: string } | null
   mtn: UgMtnMobileTemplate | null
+  mpesa: KeMpesaMobileTemplate | null
   instructionPayeeRaw?: string | null
   payerEmail: string
   fundTxReference: string
@@ -122,6 +155,7 @@ type RetailerPaymentInstructionPanelProps = {
 export function RetailerPaymentInstructionPanel({
   airtel,
   mtn,
+  mpesa,
   instructionPayeeRaw,
   payerEmail,
   fundTxReference,
@@ -140,8 +174,9 @@ export function RetailerPaymentInstructionPanel({
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {t("funding.payment.instructionPanelTitle")}
       </p>
-      {mtn ? <MtnPaymentSteps mtn={mtn} t={t} /> : null}
-      {airtel && !mtn ? (
+      {mpesa ? <MpesaPaymentSteps mpesa={mpesa} t={t} /> : null}
+      {mtn && !mpesa ? <MtnPaymentSteps mtn={mtn} t={t} /> : null}
+      {airtel && !mtn && !mpesa ? (
         <>
           <AirtelPaymentSteps
             ussdPrefix={airtel.ussdPrefix}

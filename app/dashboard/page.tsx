@@ -61,7 +61,11 @@ import {
 } from "@/components/dashboard/mobile-money-payment-instructions"
 import { TreasuryPoolsPanel } from "@/components/dashboard/treasury-pools-panel"
 import { getOperationalRoleHint } from "@/lib/operational-role-hint"
-import { parseUgAirtelMerchantDesk, parseUgMtnMobileDesk } from "@/lib/retailer-payment-templates"
+import {
+  parseKeMpesaMobileDesk,
+  parseUgAirtelMerchantDesk,
+  parseUgMtnMobileDesk,
+} from "@/lib/retailer-payment-templates"
 import { formatFundingReceiptCompact } from "@/lib/formatting/funding-amount-display"
 
 interface CurrentUser {
@@ -100,6 +104,8 @@ type RetailerRow = {
 }
 
 type QualifiedRetailer = RetailerRow & {
+  payment_rotation_line_id?: string
+  payment_rotation_pool_id?: string
   spendable_liquidity?: number
   qualification_verified_desk?: boolean
 }
@@ -836,21 +842,30 @@ export default function DashboardPage() {
     return officialCorridorFallback.id === selectedOfficialRouteId ? officialCorridorFallback : null
   }, [officialCorridorFallback, selectedOfficialRouteId])
 
+  const localMmFundingCountry = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+
+  const localMmMpesaKenya = useMemo(() => {
+    if (!localMmSelectedDesk || localMmFundingCountry !== "KE") return null
+    if (!/mpesa/i.test(fundMobileNetwork)) return null
+    return parseKeMpesaMobileDesk(localMmSelectedDesk.payment_numbers)
+  }, [localMmSelectedDesk, fundMobileNetwork, localMmFundingCountry])
+
   const localMmMtnMobile = useMemo(() => {
-    if (!localMmSelectedDesk || fundMobileNetwork !== "MTN") return null
+    if (!localMmSelectedDesk || fundMobileNetwork !== "MTN" || localMmFundingCountry !== "UG") return null
     return parseUgMtnMobileDesk(
       localMmSelectedDesk.payment_numbers,
       localMmSelectedDesk.registered_payee_names,
     )
-  }, [localMmSelectedDesk, fundMobileNetwork])
+  }, [localMmSelectedDesk, fundMobileNetwork, localMmFundingCountry])
 
   const localMmAirtelMerchant = useMemo(() => {
-    if (!localMmSelectedDesk || fundMobileNetwork === "MTN") return null
+    if (!localMmSelectedDesk || fundMobileNetwork === "MTN" || localMmMpesaKenya) return null
+    if (localMmFundingCountry !== "UG") return null
     return parseUgAirtelMerchantDesk(
       localMmSelectedDesk.payment_numbers,
       localMmSelectedDesk.registered_payee_names,
     )
-  }, [localMmSelectedDesk, fundMobileNetwork])
+  }, [localMmSelectedDesk, fundMobileNetwork, localMmMpesaKenya, localMmFundingCountry])
 
   useEffect(() => {
     if (isGuestSession) return
@@ -2055,6 +2070,12 @@ export default function DashboardPage() {
               fundingCountryCode: ccSave.length === 2 ? ccSave : undefined,
               payerDisplayName: fundPayerName.trim(),
               payerPhone: fundPayerPhone.trim(),
+              ...(localMmSelectedDesk?.payment_rotation_line_id && localMmSelectedDesk?.payment_rotation_pool_id
+                ? {
+                    paymentRotationLineId: localMmSelectedDesk.payment_rotation_line_id,
+                    paymentRotationPoolId: localMmSelectedDesk.payment_rotation_pool_id,
+                  }
+                : {}),
             }),
           })
           const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
@@ -2662,7 +2683,17 @@ export default function DashboardPage() {
                           <>
                             <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] leading-snug sm:p-3 sm:text-xs">
                               <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
-                              {localMmMtnMobile ? (
+                              {localMmMpesaKenya ? (
+                                <>
+                                  {localMmMpesaKenya.lines.map((line) => (
+                                    <p key={line.msisdn} className="break-words font-mono text-[10px]">
+                                      {t("funding.retailer.mpesaDeskNumbersLine")
+                                        .replace("{{msisdn}}", line.msisdn)
+                                        .replace("{{payee}}", line.payeeName)}
+                                    </p>
+                                  ))}
+                                </>
+                              ) : localMmMtnMobile ? (
                                 <>
                                   <p className="break-words">
                                     {t("funding.numbersLabel")}{" "}
@@ -2715,6 +2746,7 @@ export default function DashboardPage() {
                               <p className="font-medium text-destructive break-words">{t("funding.wrongDestinationWarning")}</p>
                             </div>
                             <RetailerPaymentInstructionPanel
+                              mpesa={localMmMpesaKenya}
                               mtn={localMmMtnMobile}
                               airtel={
                                 localMmAirtelMerchant

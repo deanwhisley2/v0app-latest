@@ -25,6 +25,10 @@ import {
   settlementUsdFromFundRequestRow,
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
+import {
+  recordRotationApproval,
+  releaseRotationPending,
+} from "@/lib/server/retailer-payment-rotation"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
 import { finalizeFundingFxOnApproval, getFundingFxSnapshotByRequestId } from "@/lib/server/funding-fx-middleware"
@@ -534,6 +538,11 @@ export async function PATCH(request: Request) {
             { status: 500 },
           )
         }
+        try {
+          await releaseRotationPending(admin, body.requestId!)
+        } catch {
+          /* non-fatal */
+        }
       }
 
       const localPatch: Record<string, unknown> = {
@@ -626,6 +635,13 @@ export async function PATCH(request: Request) {
           requestId: body.requestId!,
           viaTreasury: isTreasury,
         })
+        if (!isTreasury) {
+          try {
+            await recordRotationApproval(admin, body.requestId!)
+          } catch {
+            /* non-fatal */
+          }
+        }
         if (!isTreasury && retailerDeskUserId) {
           await notifyRetailerOverrideDebit(admin, {
             retailerUserId: retailerDeskUserId,
@@ -722,6 +738,17 @@ export async function PATCH(request: Request) {
         settledAmountUsd: legacySettlementUsd,
         settledByUserId: user.id,
       })
+      try {
+        await recordRotationApproval(admin, body.requestId!)
+      } catch {
+        /* non-fatal */
+      }
+    } else if (body.action === "reject" || body.action === "resolve") {
+      try {
+        await releaseRotationPending(admin, body.requestId!)
+      } catch {
+        /* non-fatal */
+      }
     }
 
     const fxLedger =

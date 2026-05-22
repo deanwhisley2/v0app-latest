@@ -3,7 +3,7 @@
 /**
  * Real-time Price Streaming Hook
  * Simulates WebSocket-style price updates with configurable intervals
- * Falls back to simulated ticks when CoinGecko API is unavailable
+ * Live mode uses fetchMultiplePrices → /api/market/authority (canonical spot).
  */
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -94,7 +94,7 @@ export function useRealtimePrices(
     })
   }, [symbols, volatility])
 
-  // Fetch live prices from CoinGecko
+  // Fetch live prices from market authority API
   const fetchLivePrices = useCallback(async () => {
     try {
       const livePrices = await fetchMultiplePrices(symbols)

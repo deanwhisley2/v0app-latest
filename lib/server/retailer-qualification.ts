@@ -5,6 +5,12 @@ import {
   retailerDeskSupportsNetwork,
   retailerSpendableLiquidity,
 } from "@/lib/server/retailer-funding-helpers"
+import {
+  applyCorridorDeskToRetailerRow,
+  loadActiveCorridorDesksForProfiles,
+  pickCorridorForCountry,
+} from "@/lib/server/retailer-corridor-desks"
+import { applyPaymentRotationToDeskRow } from "@/lib/server/retailer-payment-rotation"
 
 export type CorridorQualificationParams = {
   /** ISO 3166-1 alpha-2 */
@@ -50,9 +56,14 @@ async function loadVerifiedRetailerUserIds(
  * Eligibility: same country (desk must declare ISO2), network match, verified desk owner,
  * active liquidity status, spendable retail >= amount, open-inbound cap.
  */
+export type CollectQualifiedRetailDesksOpts = CorridorQualificationParams & {
+  /** Sticky rotation line for open funding requests. */
+  customerUserId?: string | null
+}
+
 export async function collectQualifiedRetailDesks(
   admin: SupabaseClient,
-  params: CorridorQualificationParams,
+  params: CollectQualifiedRetailDesksOpts,
 ): Promise<Array<Record<string, unknown>>> {
   const customerCountry = params.customerCountry.trim().toUpperCase().slice(0, 2)
   const mobileNetwork = params.mobileNetwork.trim()
@@ -71,14 +82,26 @@ export async function collectQualifiedRetailDesks(
 
   if (error) throw new Error(error.message)
 
-  const candidates = (rows ?? []).filter((row) => {
+  const profileIds = (rows ?? []).map((r) => String((r as { id: string }).id))
+  const corridorByProfile = await loadActiveCorridorDesksForProfiles(admin, profileIds)
+
+  const candidates: Array<Record<string, unknown>> = []
+  for (const row of rows ?? []) {
+    const rid = String((row as { id: string }).id)
+    const corridors = corridorByProfile.get(rid)
+    const corridor = pickCorridorForCountry(corridors, customerCountry, mobileNetwork)
+    if (corridor) {
+      candidates.push(applyCorridorDeskToRetailerRow(row as Record<string, unknown>, corridor))
+      continue
+    }
     const deskCc = String(row.country_code ?? "")
       .trim()
       .toUpperCase()
       .slice(0, 2)
-    if (deskCc.length !== 2 || deskCc !== customerCountry) return false
-    return true
-  })
+    if (deskCc.length === 2 && deskCc === customerCountry) {
+      candidates.push(row as Record<string, unknown>)
+    }
+  }
 
   const uids = candidates.map((r) => String((r as { user_id: string }).user_id))
   const verifiedIds = await loadVerifiedRetailerUserIds(admin, uids)
@@ -115,8 +138,19 @@ export async function collectQualifiedRetailDesks(
     })
   }
 
+  const withRotation: Array<Record<string, unknown>> = []
+  for (const row of qualified) {
+    withRotation.push(
+      await applyPaymentRotationToDeskRow(admin, row, {
+        customerCountry,
+        mobileNetwork,
+        userId: params.customerUserId ?? null,
+      }),
+    )
+  }
+
   const statusOrder: Record<string, number> = { active: 0, busy: 1, low_liquidity: 2 }
-  qualified.sort((a, b) => {
+  withRotation.sort((a, b) => {
     const sa = statusOrder[String(a.liquidity_status ?? "")] ?? 9
     const sb = statusOrder[String(b.liquidity_status ?? "")] ?? 9
     if (sa !== sb) return sa - sb
@@ -125,7 +159,7 @@ export async function collectQualifiedRetailDesks(
     return pb - pa
   })
 
-  return qualified.slice(0, MAX_RETAILERS_ON_PAYMENT_PAGE)
+  return withRotation.slice(0, MAX_RETAILERS_ON_PAYMENT_PAGE)
 }
 
 export async function assertRetailDeskQualifiesForCorridor(

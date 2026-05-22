@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       health,
+      observability: health.observability,
       alerts: {
         level: health.alertLevel,
         codes: health.alertCodes,

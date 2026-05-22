@@ -7,6 +7,18 @@ export type ProviderHealthRow = {
   lastSuccessAt: number | null
   lastFailureAt: number | null
   lastError: string | null
+  lastLatencyMs: number | null
+  avgLatencyMs: number | null
+}
+
+export type MarketPriceObservability = {
+  cacheAgeMs: number
+  btcQuoteAgeMs: number
+  staleSinceMs: number | null
+  totalFailoverEvents: number
+  authorityUptimeMs: number
+  lastRefreshOkAt: number | null
+  consecutiveRefreshFailures: number
 }
 
 export type MarketPriceHealthSnapshot = {
@@ -20,6 +32,7 @@ export type MarketPriceHealthSnapshot = {
   adminAlert: boolean
   alertLevel: "ok" | "warn" | "critical"
   alertCodes: string[]
+  observability: MarketPriceObservability
   providers: ProviderHealthRow[]
   recentEvents: string[]
 }
@@ -37,9 +50,24 @@ let health: MarketPriceHealthSnapshot = {
   adminAlert: false,
   alertLevel: "ok",
   alertCodes: [],
+  observability: {
+    cacheAgeMs: 0,
+    btcQuoteAgeMs: 0,
+    staleSinceMs: null,
+    totalFailoverEvents: 0,
+    authorityUptimeMs: 0,
+    lastRefreshOkAt: null,
+    consecutiveRefreshFailures: 0,
+  },
   providers: [],
   recentEvents: [],
 }
+
+const AUTHORITY_STARTED_AT = Date.now()
+let totalFailoverEvents = 0
+let staleSince: number | null = null
+let lastRefreshOkAt: number | null = null
+let consecutiveRefreshFailures = 0
 
 const providerStats = new Map<string, ProviderHealthRow>()
 
@@ -53,10 +81,54 @@ function row(id: string): ProviderHealthRow {
       lastSuccessAt: null,
       lastFailureAt: null,
       lastError: null,
+      lastLatencyMs: null,
+      avgLatencyMs: null,
     }
     providerStats.set(id, r)
   }
   return r
+}
+
+export function recordProviderLatency(id: string, latencyMs: number) {
+  const r = row(id)
+  r.lastLatencyMs = latencyMs
+  if (r.avgLatencyMs == null) r.avgLatencyMs = latencyMs
+  else r.avgLatencyMs = Math.round(r.avgLatencyMs * 0.7 + latencyMs * 0.3)
+}
+
+export function recordFailoverEvent() {
+  totalFailoverEvents += 1
+}
+
+export function setStaleState(stale: boolean) {
+  if (stale && staleSince == null) staleSince = Date.now()
+  if (!stale) staleSince = null
+}
+
+export function recordRefreshOk() {
+  lastRefreshOkAt = Date.now()
+  consecutiveRefreshFailures = 0
+}
+
+export function recordRefreshFail() {
+  consecutiveRefreshFailures += 1
+}
+
+export function getConsecutiveRefreshFailures() {
+  return consecutiveRefreshFailures
+}
+
+function buildObservability(): MarketPriceObservability {
+  const now = Date.now()
+  return {
+    cacheAgeMs: health.lastRefreshAt ? now - health.lastRefreshAt : 0,
+    btcQuoteAgeMs: health.lastBtcUpdatedAt ? now - health.lastBtcUpdatedAt : 0,
+    staleSinceMs: staleSince ? now - staleSince : null,
+    totalFailoverEvents,
+    authorityUptimeMs: now - AUTHORITY_STARTED_AT,
+    lastRefreshOkAt,
+    consecutiveRefreshFailures,
+  }
 }
 
 function pushEvent(msg: string) {
@@ -84,9 +156,11 @@ export function recordProviderFailure(id: string, error: string) {
 }
 
 export function updateMarketPriceHealth(patch: Partial<MarketPriceHealthSnapshot> & { event?: string }) {
+  if (patch.stale !== undefined) setStaleState(patch.stale)
   health = {
     ...health,
     ...patch,
+    observability: buildObservability(),
     providers: Array.from(providerStats.values()),
   }
   if (patch.event) pushEvent(patch.event)
@@ -95,6 +169,7 @@ export function updateMarketPriceHealth(patch: Partial<MarketPriceHealthSnapshot
 export function getMarketPriceHealthSnapshot(): MarketPriceHealthSnapshot {
   return {
     ...health,
+    observability: buildObservability(),
     providers: Array.from(providerStats.values()),
     recentEvents: [...health.recentEvents],
   }

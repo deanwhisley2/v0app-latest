@@ -1,6 +1,7 @@
 "use client"
 
 import { MARKET_PRICE_CLIENT_POLL_MS } from "@/lib/market-price-constants"
+import { broadcastAuthorityRevision } from "@/lib/client/market-price-authority-revision"
 import type { Coin } from "@/lib/coins-data"
 
 export type MarketAuthorityBtc = {
@@ -40,6 +41,8 @@ let subscribers = 0
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let inFlight: Promise<void> | null = null
 let started = false
+let continuityTimer: ReturnType<typeof setInterval> | null = null
+let displayBtcNudge = 0
 
 const listeners = new Set<Listener>()
 
@@ -124,6 +127,8 @@ async function fetchAuthority(): Promise<void> {
         source: data.live?.source,
       }
       mergeCatalog(data.live ?? {})
+      displayBtcNudge = 0
+      if (state.authorityRevision) broadcastAuthorityRevision(state.authorityRevision)
       emit()
     } catch {
       state = { ...state, status: state.btc ? "degraded" : "loading" }
@@ -135,17 +140,31 @@ async function fetchAuthority(): Promise<void> {
   return inFlight
 }
 
+function applyContinuityNudge() {
+  if (!state.btc || state.btc.priceUsd <= 0) return
+  const cap = state.btc.priceUsd * 0.0004
+  displayBtcNudge += (Math.random() - 0.5) * state.btc.priceUsd * 0.00008
+  if (displayBtcNudge > cap) displayBtcNudge = cap
+  if (displayBtcNudge < -cap) displayBtcNudge = -cap
+  emit()
+}
+
 function startPolling() {
   if (started) return
   started = true
   void fetchAuthority()
   pollTimer = setInterval(() => void fetchAuthority(), MARKET_PRICE_CLIENT_POLL_MS)
+  continuityTimer = setInterval(applyContinuityNudge, 8_000)
 }
 
 function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (continuityTimer) {
+    clearInterval(continuityTimer)
+    continuityTimer = null
   }
   started = false
 }
@@ -170,7 +189,7 @@ export function getLiveSymbolPrice(symbol: string): number | null {
   const sym = symbol.toUpperCase()
   const row = state.pricesBySymbol[sym]
   if (row?.priceUsd > 0) return row.priceUsd
-  if (sym === "BTC" && state.btc) return state.btc.priceUsd
+  if (sym === "BTC" && state.btc) return state.btc.priceUsd + displayBtcNudge
   const coin = state.catalog.find((c) => c.symbol === sym)
   return coin?.price ?? null
 }

@@ -15,13 +15,12 @@ docker compose -f docker-compose.compreface.yml up -d
 
 Services:
 
-- `http://localhost:8002` - CompreFace UI
-- `http://localhost:8000` - CompreFace API
+- `http://localhost:8000` - CompreFace UI + REST API (nginx → api; use this in `COMPRE_FACE_API_URL`)
 - `http://localhost:8001` - Admin API
 
 ## 2) Create API key in CompreFace
 
-1. Open CompreFace UI (`http://localhost:8002`)
+1. Open CompreFace UI (`http://localhost:8000`)
 2. Create an application for recognition/verification
 3. Copy the **API key** for that app
 

@@ -11,6 +11,10 @@ import {
   settlementUsdFromFundRequestRow,
   transferRetailCreditToCustomer,
 } from "@/lib/server/retailer-funding-helpers"
+import {
+  recordRotationApproval,
+  releaseRotationPending,
+} from "@/lib/server/retailer-payment-rotation"
 
 export async function GET(request: Request) {
   try {
@@ -162,6 +166,11 @@ export async function PATCH(request: Request) {
         })
         .eq("id", requestId)
       if (up) return NextResponse.json({ error: up.message }, { status: 400 })
+      try {
+        await releaseRotationPending(admin, requestId)
+      } catch {
+        /* non-fatal */
+      }
       await recordFinancialEvent({
         userId: row.user_id,
         eventType: "funding_request_rejected_by_retailer",
@@ -220,6 +229,12 @@ export async function PATCH(request: Request) {
       })
       .eq("id", requestId)
     if (up) return NextResponse.json({ error: up.message }, { status: 400 })
+
+    try {
+      await recordRotationApproval(admin, requestId)
+    } catch {
+      /* non-fatal — approval already settled */
+    }
 
     await recordFinancialEvent({
       userId: row.user_id,

@@ -1,0 +1,39 @@
+---
+description: Canonical market pricing — customer-visible prices must use market-price-authority only.
+alwaysApply: true
+---
+
+# Market price authority (institutional)
+
+## Single source of truth
+
+All **customer-visible** spot USD references MUST resolve through:
+
+- Server: `getSymbolSpotUsd()` / `getMarketPriceAuthority()` / `getMarketPriceAuthorityPayload()`
+- Client: `useMarketPriceAuthority()` / `useMarketAuthoritySelector()` / `GET /api/market/authority`
+- Historical charts: `GET /api/market/ohlcv` (server `lib/server/market-ohlcv-authority.ts`)
+
+## Forbidden on customer surfaces
+
+- Direct `fetch` to `api.binance.com`, `api.coingecko.com`, or other exchange tickers for **display pricing**
+- `fetchMultiplePrices` / `fetchCoinPrice` from `lib/market-data.ts` calling CoinGecko directly (must use `/api/market/*` routes)
+- New hooks that poll exchange APIs for UI prices
+
+## Allowed exceptions (not customer spot display)
+
+- `/api/market/compare` Bitget/KuCoin legs (venue spread diagnostics)
+- User-authenticated `/api/binance`, `/api/binance-auth` (balances/orders)
+- Analysis/simulation modules (`trade-comparison-engine`, `fast-paths-core`) until migrated — must not feed dashboard ticker
+
+## New features
+
+1. Add symbol to `lib/coingecko-symbol-map.ts` + `lib/market-price-reference-assets.ts` if needed
+2. Extend `market-price-authority` provider chain — never add parallel client-side price fetch
+3. Record provider success/failure via `market-price-health.ts`
+4. Charts: only `/api/market/ohlcv` — no client CoinGecko OHLC
+
+## Cache governance
+
+- Server refresh: `MARKET_PRICE_CACHE_REFRESH_MS` (20s)
+- Client poll: `MARKET_PRICE_CLIENT_POLL_MS` (45s), single bus subscriber ref-count
+- Emergency last-good: max 15m, internal `stale` only (never expose provider errors in UI)

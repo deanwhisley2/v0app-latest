@@ -1,4 +1,6 @@
 import {
+  ESKNEXUSPRO_KE_MPESA_LINES,
+  ESKNEXUSPRO_KE_MPESA_USSD_PREFIX,
   ESKNEXUSPRO_MTN_MSISDN,
   ESKNEXUSPRO_MTN_USSD_PREFIX,
   ESKNEXUSPRO_PAYEE_BRAND,
@@ -28,6 +30,17 @@ export type UgMtnMobileTemplate = {
   payeeName: string
   payeeBrand: string
   ussdPrefix: string
+}
+
+export type KeMpesaReceiveLine = {
+  payeeName: string
+  msisdn: string
+}
+
+export type KeMpesaMobileTemplate = {
+  kind: "ke_mpesa_mobile"
+  ussdPrefix: string
+  lines: KeMpesaReceiveLine[]
 }
 
 const DEFAULT_AIRTEL_USSD = "*185*9#"
@@ -79,6 +92,35 @@ export function parseUgMtnMobileDesk(
     }
   }
   return null
+}
+
+export function parseKeMpesaMobileDesk(paymentNumbers: unknown): KeMpesaMobileTemplate | null {
+  const rows = Array.isArray(paymentNumbers) ? (paymentNumbers as RetailerPaymentLine[]) : []
+  const lines: KeMpesaReceiveLine[] = []
+  for (const row of rows) {
+    const pt = String(row.payment_type ?? "").toLowerCase()
+    const lab = String(row.label ?? "").toLowerCase()
+    if (pt !== "mpesa_mobile_ke" && !lab.includes("mpesa")) continue
+    const msisdn = String(row.value ?? "").trim()
+    if (!msisdn) continue
+    const payeeName = String((row as { payee_name?: string }).payee_name ?? "").trim() || "Registered payee"
+    lines.push({ payeeName, msisdn })
+  }
+  if (!lines.length) return null
+  return {
+    kind: "ke_mpesa_mobile",
+    ussdPrefix: ESKNEXUSPRO_KE_MPESA_USSD_PREFIX,
+    lines,
+  }
+}
+
+/** Canonical ESK Kenya M-Pesa lines when DB row is missing (should not happen after migration). */
+export function eskNexusProKeMpesaFallback(): KeMpesaMobileTemplate {
+  return {
+    kind: "ke_mpesa_mobile",
+    ussdPrefix: ESKNEXUSPRO_KE_MPESA_USSD_PREFIX,
+    lines: ESKNEXUSPRO_KE_MPESA_LINES.map((l) => ({ ...l })),
+  }
 }
 
 /** Canonical ESK desk MTN line when DB row is missing (should not happen after migration). */

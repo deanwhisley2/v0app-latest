@@ -40,7 +40,10 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import { OPERATING_COUNTRY_OPTIONS, suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
-import { customerCurrencyOptionsForCountry } from "@/lib/customer-display-currency"
+import {
+  customerCurrencyOptionsForCountry,
+  customerLanguageChoicesForCountry,
+} from "@/lib/customer-display-currency"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
@@ -964,14 +967,22 @@ export function SettingsScreen({
 
   // Language Selection
   if (currentView === "language") {
+    const languageChoices = customerLanguageChoicesForCountry(appCountry ?? null)
+    const languageCorridorLocked = languageChoices.length === 1
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
           <h3 className="mb-6 text-lg font-semibold">{t("settings.languageTitle")}</h3>
-          <p className="mb-4 text-sm text-muted-foreground">{t("settings.languageHint")}</p>
+          {languageCorridorLocked ? (
+            <p className="mb-4 text-sm text-muted-foreground">
+              Your operating country uses English only for account and funding screens.
+            </p>
+          ) : (
+            <p className="mb-4 text-sm text-muted-foreground">{t("settings.languageHint")}</p>
+          )}
           <div className="grid gap-2 sm:grid-cols-2">
-            {LANGUAGE_OPTIONS.map((opt) => (
+            {languageChoices.map((opt) => (
               <button
                 key={opt.code}
                 type="button"

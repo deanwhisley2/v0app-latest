@@ -64,6 +64,7 @@ export async function GET(request: Request) {
       customerCountry,
       mobileNetwork,
       amountUsd: amount,
+      customerUserId: user.id,
     })
 
     let official_fallback = null as null | Record<string, unknown>

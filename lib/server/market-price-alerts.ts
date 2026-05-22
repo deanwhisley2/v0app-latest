@@ -14,14 +14,14 @@ export type MarketPriceAlerts = {
   messages: string[]
 }
 
-let consecutiveRefreshFailures = 0
+import { getConsecutiveRefreshFailures } from "@/lib/server/market-price-health"
 
 export function recordAuthorityRefreshSuccess() {
-  consecutiveRefreshFailures = 0
+  /* refresh counters live in market-price-health */
 }
 
 export function recordAuthorityRefreshFailure() {
-  consecutiveRefreshFailures += 1
+  /* refresh counters live in market-price-health */
 }
 
 export function evaluateMarketPriceAlerts(input: {
@@ -59,9 +59,10 @@ export function evaluateMarketPriceAlerts(input: {
     messages.push("BTC quote beyond emergency max age")
   }
 
-  if (consecutiveRefreshFailures >= 3) {
+  const refreshFails = getConsecutiveRefreshFailures()
+  if (refreshFails >= 3) {
     codes.push("REFRESH_FAILURES")
-    messages.push(`Authority refresh failed ${consecutiveRefreshFailures} times in a row`)
+    messages.push(`Authority refresh failed ${refreshFails} times in a row`)
   }
 
   if (input.health.fallbackLevel >= 3) {

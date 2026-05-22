@@ -76,6 +76,8 @@ const EXACT_BODY_KEY: Record<string, string> = {
   "Desk may hold through drawdowns toward a modeled +5% exit (then withdrawal fee). Not insured.":
     "notifications.trade.autoAdjustOnBody",
   "Settlement incomplete. Refresh or force pull-out.": "notifications.trade.copySettlementFailMessage",
+  "Your desk balance was updated after a customer funding approval.":
+    "notifications.retailer.deskSettledBody",
 }
 
 const BODY_REFEREE_BONUS_LONG_RE =

@@ -6,10 +6,10 @@ set -euo pipefail
 #
 # Usage:
 #   bash scripts/ops-circle.sh
-#   VPS_HOST=67.159.52.40 VPS_USER=vpsuser bash scripts/ops-circle.sh
+#   VPS_HOST=173.214.164.179 VPS_USER=root bash scripts/ops-circle.sh
 
-VPS_HOST="${VPS_HOST:-67.159.52.40}"
-VPS_USER="${VPS_USER:-vpsuser}"
+VPS_HOST="${VPS_HOST:-173.214.164.179}"
+VPS_USER="${VPS_USER:-root}"
 # Public site (override for curls from the VPS): https://nexuspro.it.com — internal Node often listens on :3000 behind nginx.
 APP_URL="${APP_URL:-http://127.0.0.1:3000}"
 
