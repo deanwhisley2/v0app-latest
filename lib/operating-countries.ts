@@ -88,3 +88,16 @@ export function operatingCountriesByRegion(): { region: string; countries: Opera
   }
   return out
 }
+
+/** L5 Uganda Airtel admin direct — Uganda corridor only (USDT crypto is universal). */
+export function isUgandaAdminAirtelEligible(countryCode: string | null | undefined): boolean {
+  return (countryCode ?? "").trim().toUpperCase().slice(0, 2) === "UG"
+}
+
+/** Mobile-money network choices for Add Funds local step — corridor-scoped. */
+export function mobileNetworksForFundingCountry(code: string | null | undefined): readonly string[] {
+  const cc = (code ?? "").trim().toUpperCase().slice(0, 2)
+  if (cc === "KE") return ["MPesa", "Other"]
+  if (cc === "UG") return ["MTN", "Airtel", "Other"]
+  return ["MTN", "Airtel", "MPesa", "Orange", "Other"]
+}

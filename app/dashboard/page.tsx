@@ -55,6 +55,7 @@ import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balanc
 import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
+import { isUgandaAdminAirtelEligible, mobileNetworksForFundingCountry } from "@/lib/operating-countries"
 import {
   PaymentReferenceFields,
   RetailerPaymentInstructionPanel,
@@ -749,17 +750,36 @@ export default function DashboardPage() {
     return false
   }, [op.snapshot?.profile?.tradingUserLevel, op.snapshot?.profile?.retailerCreditSeller])
 
+  const profileFundingCountry = useMemo(() => {
+    const cc = op.snapshot?.profile?.fundingCountryCode
+    return typeof cc === "string" && cc.length >= 2 ? cc.toUpperCase().slice(0, 2) : ""
+  }, [op.snapshot?.profile?.fundingCountryCode])
+
+  /** Profile corridor wins — prevents picking another country’s desks/rails in Add Funds. */
+  const addFundsCorridorCountry = useMemo(() => {
+    if (profileFundingCountry.length === 2) return profileFundingCountry
+    return fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+  }, [profileFundingCountry, fundingCountryCodeInput])
+
+  const ugandaAdminAirtelEligible = isUgandaAdminAirtelEligible(addFundsCorridorCountry)
+  const fundingCountryLocked = profileFundingCountry.length === 2
+
+  const localMmNetworkOptions = useMemo(
+    () => mobileNetworksForFundingCountry(addFundsCorridorCountry),
+    [addFundsCorridorCountry],
+  )
+
   /** Local MM: amount input is in corridor fiat (UG→UGX), aligned with wallet display currency. */
   const localMmCorridorFiat = useMemo(() => {
-    const cc = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+    const cc = addFundsCorridorCountry
     return cc.length === 2 ? corridorFiatForCountryIso2(cc) : null
-  }, [fundingCountryCodeInput])
+  }, [addFundsCorridorCountry])
 
   const fundingAmountLabelCurrency =
     l1FundSource === "local" && localMmCorridorFiat
       ? localMmCorridorFiat
       : l1FundSource === "airtel"
-        ? localMmCorridorFiat ?? corridorFiatForCountryIso2("UG") ?? "UGX"
+        ? localMmCorridorFiat ?? currency
         : currency
 
   const smartAmountLocale = locale || "en-US"
@@ -842,7 +862,7 @@ export default function DashboardPage() {
     return officialCorridorFallback.id === selectedOfficialRouteId ? officialCorridorFallback : null
   }, [officialCorridorFallback, selectedOfficialRouteId])
 
-  const localMmFundingCountry = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+  const localMmFundingCountry = addFundsCorridorCountry
 
   const localMmMpesaKenya = useMemo(() => {
     if (!localMmSelectedDesk || localMmFundingCountry !== "KE") return null
@@ -1089,10 +1109,16 @@ export default function DashboardPage() {
   )
 
   useEffect(() => {
+    if (!ugandaAdminAirtelEligible && l1FundSource === "airtel") {
+      setL1FundSource("crypto")
+    }
+  }, [ugandaAdminAirtelEligible, l1FundSource])
+
+  useEffect(() => {
     if (authLoading || !user || isGuestSession) return
     const cc = op.snapshot?.profile?.fundingCountryCode
     if (typeof cc === "string" && cc.length >= 2) {
-      setFundingCountryCodeInput((prev) => prev || cc.toUpperCase().slice(0, 2))
+      setFundingCountryCodeInput(cc.toUpperCase().slice(0, 2))
     }
     ;(async () => {
       try {
@@ -1682,7 +1708,7 @@ export default function DashboardPage() {
       showToast("Enter the amount you will send.", "error")
       return
     }
-    const cc = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+    const cc = addFundsCorridorCountry
     if (cc.length !== 2) {
       showToast("Enter your 2-letter country code (e.g. UG, KE).", "error")
       return
@@ -1741,7 +1767,7 @@ export default function DashboardPage() {
     } finally {
       setLoadingQualifiedRetailers(false)
     }
-  }, [fundAmount, fundingCountryCodeInput, currency, fundMobileNetwork, fundPayerName, fundPayerPhone, showToast])
+  }, [fundAmount, addFundsCorridorCountry, currency, fundMobileNetwork, fundPayerName, fundPayerPhone, showToast])
 
   const handleBackLocalMmWizard = useCallback(() => {
     setLocalMmWizardStep(1)
@@ -1763,7 +1789,14 @@ export default function DashboardPage() {
     setSelectedRetailerId("")
     setLocalMmRetailersSearched(false)
     setLocalMmWizardStep(1)
-  }, [fundingCountryCodeInput, fundMobileNetwork, l1FundSource])
+  }, [addFundsCorridorCountry, fundMobileNetwork, l1FundSource])
+
+  useEffect(() => {
+    if (!fundMobileNetwork.trim()) return
+    if (!localMmNetworkOptions.includes(fundMobileNetwork)) {
+      setFundMobileNetwork("")
+    }
+  }, [addFundsCorridorCountry, fundMobileNetwork, localMmNetworkOptions])
 
   useEffect(() => {
     if (l1FundSource !== "local" || localMmWizardStep !== 2) return
@@ -1872,7 +1905,7 @@ export default function DashboardPage() {
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseCustomerLocalAmountInput(fundAmount)
     /** Withdraw & local mobile-money funding: user types preferred fiat → ledger uses USD-normalized units. */
-    const ccFund = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+    const ccFund = addFundsCorridorCountry
     const localFundingFiat = corridorFiatForCountryIso2(ccFund) ?? currency
     let ledgerUsd = amountRaw
     if (showFundModal === "withdraw") {
@@ -1880,11 +1913,11 @@ export default function DashboardPage() {
     } else if (showFundModal === "add" && l1FundSource === "local") {
       ledgerUsd = usdFromCustomerLocalInput(fundAmount, localFundingFiat)
     } else if (showFundModal === "add" && l1FundSource === "airtel") {
-      const ccAirtel = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
-      const airtelFiat =
-        (ccAirtel.length === 2 ? corridorFiatForCountryIso2(ccAirtel) : null) ??
-        corridorFiatForCountryIso2("UG") ??
-        "UGX"
+      if (!ugandaAdminAirtelEligible) {
+        showToast(t("funding.error.corridorRailMismatch"), "error")
+        return
+      }
+      const airtelFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "UGX"
       ledgerUsd = usdFromCustomerLocalInput(fundAmount, airtelFiat)
     }
     const amount = ledgerUsd
@@ -1991,16 +2024,15 @@ export default function DashboardPage() {
           }
 
           if (l1FundSource === "airtel") {
+            if (!ugandaAdminAirtelEligible) {
+              throw new Error(t("funding.error.corridorRailMismatch"))
+            }
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
             if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
               throw new Error(t("funding.error.senderIdentity"))
             }
-            const ccAirtel = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
-            const airtelFiat =
-              (ccAirtel.length === 2 ? corridorFiatForCountryIso2(ccAirtel) : null) ??
-              corridorFiatForCountryIso2("UG") ??
-              "UGX"
+            const airtelFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "UGX"
             const res = await fetch("/api/user/retailer-funding", {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2012,7 +2044,7 @@ export default function DashboardPage() {
                 fundChannel: "admin_airtel_ug",
                 payerDisplayName: fundPayerName.trim(),
                 payerPhone: fundPayerPhone.trim(),
-                fundingCountryCode: ccAirtel.length === 2 ? ccAirtel : "UG",
+                fundingCountryCode: addFundsCorridorCountry,
                 note: fundNote.trim() || null,
               }),
             })
@@ -2045,7 +2077,7 @@ export default function DashboardPage() {
           if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
             throw new Error(t("funding.error.senderIdentity"))
           }
-          const ccSave = fundingCountryCodeInput.trim().toUpperCase().slice(0, 2)
+          const ccSave = addFundsCorridorCountry
           if (ccSave.length === 2) {
             await fetch("/api/user/funding-country", {
               method: "POST",
@@ -2123,6 +2155,8 @@ export default function DashboardPage() {
     fundPayerName,
     fundPayerPhone,
     fundingCountryCodeInput,
+    addFundsCorridorCountry,
+    ugandaAdminAirtelEligible,
     retailerOpsBlocked,
     customerRetailFunding,
     retailerCreditDesk,
@@ -2406,6 +2440,7 @@ export default function DashboardPage() {
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
               <div className="mb-3 space-y-2">
                 <FundingPaymentPanel
+                  customerFundingCountry={addFundsCorridorCountry}
                   activeSource={l1FundSource}
                   onSourceChange={(s) => {
                     setL1FundSource(s)
@@ -2459,10 +2494,14 @@ export default function DashboardPage() {
                           type="text"
                           maxLength={2}
                           value={fundingCountryCodeInput}
-                          onChange={(e) => setFundingCountryCodeInput(e.target.value.toUpperCase())}
+                          onChange={(e) => {
+                            if (fundingCountryLocked) return
+                            setFundingCountryCodeInput(e.target.value.toUpperCase())
+                          }}
+                          readOnly={fundingCountryLocked}
                           placeholder="UG"
                           autoComplete="country"
-                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm uppercase"
+                          className={`w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm uppercase ${fundingCountryLocked ? "cursor-default opacity-80" : ""}`}
                         />
                       </div>
                       <div>
@@ -2475,11 +2514,11 @@ export default function DashboardPage() {
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         >
                           <option value="">{t("funding.network.select")}</option>
-                          <option value="MTN">MTN</option>
-                          <option value="Airtel">Airtel</option>
-                          <option value="MPesa">M-Pesa</option>
-                          <option value="Orange">Orange</option>
-                          <option value="Other">Other</option>
+                          {localMmNetworkOptions.map((net) => (
+                            <option key={net} value={net}>
+                              {net === "MPesa" ? "M-Pesa" : net}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -3215,7 +3254,7 @@ export default function DashboardPage() {
                       ? t("withdrawal.status.enterTxRef")
                       : !fundPayerName.trim() || !fundPayerPhone.trim()
                         ? t("withdrawal.status.senderRequired")
-                        : !fundMobileNetwork.trim() || fundingCountryCodeInput.trim().length !== 2
+                        : !fundMobileNetwork.trim() || addFundsCorridorCountry.length !== 2
                           ? t("withdrawal.status.countryNetwork")
                           : !(parseCustomerLocalAmountInput(fundAmount) > 0)
                             ? t("withdrawal.status.amountMissing")
@@ -3236,7 +3275,8 @@ export default function DashboardPage() {
                           Boolean(fundTxRefError) ||
                           !(parseCustomerLocalAmountInput(fundAmount) > 0))) ||
                       (l1FundSource === "airtel" &&
-                        (!fundTxReference.trim() ||
+                        (!ugandaAdminAirtelEligible ||
+                          !fundTxReference.trim() ||
                           Boolean(fundTxRefError) ||
                           !fundPayerName.trim() ||
                           !fundPayerPhone.trim() ||
@@ -3253,7 +3293,7 @@ export default function DashboardPage() {
                       !fundPayerName.trim() ||
                       !fundPayerPhone.trim() ||
                       !fundMobileNetwork.trim() ||
-                      fundingCountryCodeInput.trim().length !== 2 ||
+                      addFundsCorridorCountry.length !== 2 ||
                       !(parseCustomerLocalAmountInput(fundAmount) > 0)))
                 }
                 className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold text-white transition-colors disabled:opacity-50 ${

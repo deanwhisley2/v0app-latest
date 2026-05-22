@@ -32,7 +32,7 @@ import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
 import { corridorFiatForCountryIso2, isSupportedFiat } from "@/lib/currency-display"
 import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } from "@/lib/server/daily-fx-rate"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
-import { isAdminDirectFundChannel } from "@/lib/server/admin-payment-config"
+import { isAdminDirectFundChannel, isUgandaAdminAirtelEligible } from "@/lib/server/admin-payment-config"
 import { uploadFundingProof } from "@/lib/server/funding-proof-storage"
 import {
   inferFundingFxRoutingLane,
@@ -342,7 +342,16 @@ export async function POST(request: Request) {
         String(prof?.funding_country_code ?? "")
           .trim()
           .toUpperCase()
-      const cc2 = (userCountry.length === 2 ? userCountry : "UG").slice(0, 2)
+      const cc2 = userCountry.slice(0, 2)
+      if (!isUgandaAdminAirtelEligible(cc2)) {
+        return NextResponse.json(
+          {
+            error: "Uganda Airtel admin funding is only available for Uganda corridor accounts.",
+            code: "CORRIDOR_RAIL_MISMATCH",
+          },
+          { status: 403 },
+        )
+      }
       const corridorFiat = corridorFiatForCountryIso2(cc2) ?? "UGX"
       const explicitLocal = body.amountInputLocal
       const explicitCur = typeof body.inputCurrency === "string" ? body.inputCurrency.trim().toUpperCase() : ""

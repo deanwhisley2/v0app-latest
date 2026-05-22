@@ -60,3 +60,5 @@ export type AdminDirectFundChannel = (typeof ADMIN_DIRECT_FUND_CHANNELS)[number]
 export function isAdminDirectFundChannel(ch: string): ch is AdminDirectFundChannel {
   return ch === "admin_crypto" || ch === "admin_airtel_ug"
 }
+
+export { isUgandaAdminAirtelEligible } from "@/lib/operating-countries"

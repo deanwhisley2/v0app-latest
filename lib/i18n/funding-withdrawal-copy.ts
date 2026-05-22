@@ -181,6 +181,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.error.enterFundedAmount": "Enter funded amount.",
   "funding.error.pickDeskAndTxRef": "Select payee and enter payment reference.",
   "funding.error.senderIdentity": "Enter sender name and mobile number.",
+  "funding.error.corridorRailMismatch": "This payment method is not available in your country corridor.",
   "funding.error.unsupportedAction": "Unsupported action.",
   "funding.error.fundActionFailed": "Funding action failed",
   "withdrawal.toast.success": "Withdrawal submitted.",

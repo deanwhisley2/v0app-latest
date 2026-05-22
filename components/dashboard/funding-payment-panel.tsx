@@ -10,6 +10,7 @@ import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
 type PaymentConfig = {
+  rails?: { globalCrypto?: boolean; ugandaAirtel?: boolean; localMobile?: boolean }
   globalCrypto: {
     network: string
     walletAddress: string
@@ -25,7 +26,7 @@ type PaymentConfig = {
     networkMerchantNamesHint: string
     ussdPrefix: string
     referenceHint: string
-  }
+  } | null
 }
 
 export type L1FundSource = "pick" | "crypto" | "airtel" | "local"
@@ -33,6 +34,8 @@ export type L1FundSource = "pick" | "crypto" | "airtel" | "local"
 type Props = {
   activeSource: L1FundSource
   onSourceChange: (s: L1FundSource) => void
+  /** Profile/corridor ISO2 — Uganda Airtel L5 rail only when UG. */
+  customerFundingCountry?: string
   userEmail: string
   fundTxReference: string
   onTxReferenceChange: (v: string) => void
@@ -62,6 +65,7 @@ const NETWORK_BADGE = "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold up
 export function FundingPaymentPanel({
   activeSource,
   onSourceChange,
+  customerFundingCountry = "",
   userEmail,
   fundTxReference,
   onTxReferenceChange,
@@ -82,6 +86,16 @@ export function FundingPaymentPanel({
   const [configError, setConfigError] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  const corridorCc = customerFundingCountry.trim().toUpperCase().slice(0, 2)
+  const showUgandaAirtel =
+    corridorCc === "UG" || (config?.rails?.ugandaAirtel ?? Boolean(config?.ugandaAirtel))
+
+  useEffect(() => {
+    if (!showUgandaAirtel && activeSource === "airtel") {
+      onSourceChange("crypto")
+    }
+  }, [showUgandaAirtel, activeSource, onSourceChange])
 
   useEffect(() => {
     let cancelled = false
@@ -213,28 +227,30 @@ export function FundingPaymentPanel({
         />
       </button>
 
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeSource === "airtel"}
-        id="fund-method-airtel"
-        onClick={() => onSourceChange("airtel")}
-        className={`${CARD_TRIGGER} ${activeSource === "airtel" ? "border-[#ED1C24]/40 bg-[#ED1C24]/8 ring-1 ring-[#ED1C24]/25" : CARD_INACTIVE}`}
-      >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#ED1C24]/15 text-[#ED1C24]">
-          <Smartphone className="h-5 w-5" aria-hidden />
-        </span>
-        <div className={LABEL_ROW}>
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold text-foreground">{t("funding.payment.ugandaTitle")}</span>
-            <span className="hidden text-[10px] text-muted-foreground sm:inline">{t("funding.payment.ugandaSubtitle")}</span>
+      {showUgandaAirtel ? (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSource === "airtel"}
+          id="fund-method-airtel"
+          onClick={() => onSourceChange("airtel")}
+          className={`${CARD_TRIGGER} ${activeSource === "airtel" ? "border-[#ED1C24]/40 bg-[#ED1C24]/8 ring-1 ring-[#ED1C24]/25" : CARD_INACTIVE}`}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#ED1C24]/15 text-[#ED1C24]">
+            <Smartphone className="h-5 w-5" aria-hidden />
           </span>
-        </div>
-        <ChevronDown
-          aria-hidden
-          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${activeSource === "airtel" ? "rotate-180" : ""}`}
-        />
-      </button>
+          <div className={LABEL_ROW}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-bold text-foreground">{t("funding.payment.ugandaTitle")}</span>
+              <span className="hidden text-[10px] text-muted-foreground sm:inline">{t("funding.payment.ugandaSubtitle")}</span>
+            </span>
+          </div>
+          <ChevronDown
+            aria-hidden
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${activeSource === "airtel" ? "rotate-180" : ""}`}
+          />
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -364,7 +380,7 @@ export function FundingPaymentPanel({
     </div>
   )
 
-  const airtelExpanded = activeSource === "airtel" && config && (
+  const airtelExpanded = showUgandaAirtel && activeSource === "airtel" && config?.ugandaAirtel && (
     <div
       role="tabpanel"
       aria-labelledby="fund-method-airtel"
@@ -375,8 +391,8 @@ export function FundingPaymentPanel({
       </p>
       <p className="text-[10px] leading-snug text-muted-foreground break-words">{t("funding.payment.adminDirectNote")}</p>
       <AirtelPaymentSteps
-        ussdPrefix={config.ugandaAirtel.ussdPrefix}
-        merchantId={config.ugandaAirtel.merchantId}
+        ussdPrefix={config.ugandaAirtel!.ussdPrefix}
+        merchantId={config.ugandaAirtel!.merchantId}
         payerEmail={userEmail || t("funding.payment.yourLoginEmail")}
         t={t}
       />
@@ -429,7 +445,7 @@ export function FundingPaymentPanel({
           {changeMethod}
           {cryptoExpanded}
           {airtelExpanded}
-          {activeSource === "airtel" && !config ? (
+          {showUgandaAirtel && activeSource === "airtel" && !config?.ugandaAirtel ? (
             <p className="text-[11px] text-muted-foreground">Loading Uganda payment corridor…</p>
           ) : null}
           {localExpanded}
