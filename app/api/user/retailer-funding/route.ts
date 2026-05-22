@@ -201,6 +201,7 @@ export async function POST(request: Request) {
     let retailerResponseDeadlineAt: string | null = null
     let insertRetailerId: string | null = null
     let insertOfficialRouteId: string | null = null
+    let customerFundingCountry = ""
 
     if (fundChannel === "local_mobile") {
       const { data: prof } = await admin.from("profiles").select("funding_country_code").eq("id", user.id).maybeSingle()
@@ -209,6 +210,7 @@ export async function POST(request: Request) {
         String(prof?.funding_country_code ?? "")
           .trim()
           .toUpperCase()
+      customerFundingCountry = userCountry
 
       if (userCountry.length !== 2) {
         return NextResponse.json(
@@ -523,7 +525,7 @@ export async function POST(request: Request) {
             if (deskRow) {
               const resolved = await resolveExposedPaymentLine(admin, {
                 retailerProfileId: insertRetailerId,
-                countryCode: userCountry.slice(0, 2),
+                countryCode: customerFundingCountry.slice(0, 2),
                 mobileNetwork: mobileNetwork ?? "",
                 paymentNumbers: deskRow.payment_numbers,
                 userId: user.id,
