@@ -3349,13 +3349,6 @@ export default function DashboardPage() {
                 totalEarnings={totalEarnings}
                 containerWithdrawableEarnings={containerWithdrawableEarnings}
                 withdrawalPendingBalance={withdrawalPendingBalance}
-                activeContainerEarnings={activeContainerEarnings}
-                containerFeesPaid={containerFeesPaid}
-                connectedExchangeTotalUsd={connectedExchanges.reduce(
-                  (sum, ex) => sum + Number(ex.balance ?? 0),
-                  0,
-                )}
-                connectedExchangeCount={connectedExchanges.length}
                 isContainerFlowBusy={isContainerFlowBusy}
                 withdrawalEligibility={withdrawalEligibility}
                 onAddFunds={() => {
@@ -3374,11 +3367,6 @@ export default function DashboardPage() {
                   setFundAmount("")
                 }}
                 onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
-                onExtract={() => void runContainerFlowAction("extract")}
-                onManageExchanges={() => {
-                  setSettingsRequestedView("exchanges")
-                  setActiveTab("settings")
-                }}
               />
             ) : null}
             {!operationalWorkspace ? (

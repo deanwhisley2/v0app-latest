@@ -6,7 +6,6 @@ import {
   ArrowRightLeft,
   Eye,
   EyeOff,
-  Link2,
   Lock,
   Plus,
   TrendingUp,
@@ -14,7 +13,6 @@ import {
 } from "lucide-react"
 import { DashboardProfileWelcome } from "@/components/dashboard/dashboard-profile-welcome"
 import { HomeOverviewGuide } from "@/components/dashboard/home-overview-guide"
-import { WalletInfrastructureCard } from "@/components/dashboard/wallet-infrastructure-card"
 import { Button } from "@/components/ui/button"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import { cn } from "@/lib/utils"
@@ -36,17 +34,11 @@ type RetailBalanceHomePanelsProps = {
   totalEarnings: number
   containerWithdrawableEarnings: number
   withdrawalPendingBalance: number
-  activeContainerEarnings: number
-  containerFeesPaid: number
-  connectedExchangeTotalUsd: number
-  connectedExchangeCount?: number
   isContainerFlowBusy: boolean
   withdrawalEligibility: WithdrawalEligibilityHint | null
   onAddFunds: () => void
   onWithdraw: () => void
   onTransferToMain: () => void
-  onExtract: () => void
-  onManageExchanges?: () => void
 }
 
 const panelClass = "nexus-home-panel block w-full rounded-2xl border border-border bg-card"
@@ -102,17 +94,11 @@ export function RetailBalanceHomePanels({
   totalEarnings,
   containerWithdrawableEarnings,
   withdrawalPendingBalance,
-  activeContainerEarnings,
-  containerFeesPaid,
-  connectedExchangeTotalUsd,
-  connectedExchangeCount = 0,
   isContainerFlowBusy,
   withdrawalEligibility,
   onAddFunds,
   onWithdraw,
   onTransferToMain,
-  onExtract,
-  onManageExchanges,
 }: RetailBalanceHomePanelsProps) {
   const masked = "••••••••"
   const mainDisplay = showBalance ? formatUserMoney(mainBalance) : masked
@@ -203,50 +189,13 @@ export function RetailBalanceHomePanels({
         </div>
       </section>
 
-      <WalletInfrastructureCard
-        t={t}
-        connectedCount={connectedExchangeCount}
-        onManageConnections={onManageExchanges}
-        className="nexus-home-panel"
+      <MetricCard
+        label={t("withdrawal.card.frozenTitle")}
+        value={showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
+        hint={t("withdrawal.card.frozenBody")}
+        icon={Lock}
+        iconClassName="text-amber-700 dark:text-amber-400"
       />
-
-      {/* Account metrics + actions */}
-      <div className="grid grid-cols-1 gap-3 max-md:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard
-          label={t("withdrawal.card.frozenTitle")}
-          value={showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
-          hint={t("withdrawal.card.frozenBody")}
-          icon={Lock}
-          iconClassName="text-amber-700 dark:text-amber-400"
-        />
-        <MetricCard
-          label={t("funding.balance.activeEarningsTitle")}
-          value={showBalance ? formatUserMoney(activeContainerEarnings) : "••••"}
-          icon={TrendingUp}
-          iconClassName="text-primary"
-        >
-          <Button
-            type="button"
-            size="sm"
-            className="mt-3 min-h-11 w-full font-semibold"
-            onClick={onExtract}
-            disabled={isContainerFlowBusy || activeContainerEarnings <= 0}
-          >
-            {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.extractCta")}
-          </Button>
-        </MetricCard>
-        <MetricCard
-          label={t("funding.balance.exchangeTitle")}
-          value={showBalance ? formatUserMoney(connectedExchangeTotalUsd) : "••••"}
-          hint={t("funding.balance.exchangeHint").replace(
-            "{{fees}}",
-            showBalance ? formatUserMoney(containerFeesPaid) : "••••"
-          )}
-          icon={Link2}
-          iconClassName="text-muted-foreground"
-          className="sm:col-span-2 lg:col-span-1"
-        />
-      </div>
 
       {withdrawalEligibility ? (
         <div className={cn(panelClass, "px-4 py-3.5 text-sm leading-relaxed text-muted-foreground")}>

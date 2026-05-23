@@ -124,15 +124,6 @@ export const frNotificationsOverlay: Record<string, string> = {
   "home.overview.availableLabel": "Solde disponible",
   "home.overview.earningsBadge": "Trades haussiers à vie",
   "home.overview.trustLine": "Soldes en {{currency}} · contrôles institutionnels",
-  "home.walletInfra.eyebrow": "Infrastructure d’exécution",
-  "home.walletInfra.title": "Lier l’infrastructure d’échange",
-  "home.walletInfra.titleLinked": "Infrastructure d’échange liée",
-  "home.walletInfra.body":
-    "Connectez une API d’échange prise en charge pour refléter les soldes et activer les flux du guichet. Clés chiffrées ; Nexus ne garde pas les portefeuilles d’échange.",
-  "home.walletInfra.bodyLinked": "{{count}} connexion(s) active(s). Vérifiez les permissions et soldes dans Paramètres.",
-  "home.walletInfra.trustLine": "Clés lecture seule ou trading limité · révocable à tout moment",
-  "home.walletInfra.ctaConnect": "Ouvrir les paramètres de connexion",
-  "home.walletInfra.ctaManage": "Gérer les connexions",
   "home.trading.expand": "Ouvrir l’espace de trading (copie et fixe)",
   "home.trading.collapse": "Masquer l’espace de trading",
 
