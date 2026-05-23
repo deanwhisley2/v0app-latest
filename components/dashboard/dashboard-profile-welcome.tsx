@@ -2,6 +2,7 @@
 
 import { profileGreetingName, profileTimeGreetingKey } from "@/lib/dashboard-display-name"
 import { cn } from "@/lib/utils"
+import { NX_PANEL, NX_PANEL_PAD } from "@/lib/nexus-ui-surfaces"
 
 type Props = {
   fullName?: string | null
@@ -16,12 +17,7 @@ export function DashboardProfileWelcome({ fullName, t, className }: Props) {
   const greeting = t(`home.profile.greeting.${period}`).replace("{{name}}", first)
 
   return (
-    <header
-      className={cn(
-        "rounded-2xl border border-border/50 bg-card/95 px-5 py-5 shadow-[var(--shadow-card)] sm:px-6 sm:py-6",
-        className
-      )}
-    >
+    <header className={cn(NX_PANEL, NX_PANEL_PAD, className)}>
       <p className="text-xs font-medium text-muted-foreground">
         {t("home.profile.eyebrow")}
       </p>

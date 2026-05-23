@@ -44,7 +44,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
   return (
     <details
       ref={detailsRef}
-      className={cn("nexus-home-panel rounded-2xl border border-border/50 bg-card/95 shadow-[var(--shadow-card)]", className)}
+      className={cn("nexus-home-panel border-border/30 shadow-[var(--shadow-card)]", className)}
       onToggle={onToggle}
     >
       <summary className="nexus-home-guide-summary flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5 [&::-webkit-details-marker]:hidden">

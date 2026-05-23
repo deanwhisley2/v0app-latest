@@ -16,7 +16,7 @@ import { HomeOverviewGuide } from "@/components/dashboard/home-overview-guide"
 import { Button } from "@/components/ui/button"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import { cn } from "@/lib/utils"
-import { NX_GROWTH_BADGE, NX_PANEL } from "@/lib/nexus-ui-surfaces"
+import { NX_BTN_ACCENT, NX_BTN_PRIMARY, NX_GROWTH_BADGE, NX_PANEL } from "@/lib/nexus-ui-surfaces"
 
 export type WithdrawalEligibilityHint = {
   minUsd: number
@@ -165,7 +165,7 @@ export function RetailBalanceHomePanels({
             </p>
           ) : null}
           {activeContainerTradeCount > 0 ? (
-            <p className="mt-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
+            <p className="mt-2 rounded-xl border border-primary/15 bg-primary/[0.06] px-3 py-2.5 text-xs font-medium leading-snug text-primary">
               {t("home.overview.activeTradesBanner").replace(
                 "{{count}}",
                 String(activeContainerTradeCount),
@@ -175,7 +175,7 @@ export function RetailBalanceHomePanels({
         </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-border/50 px-5 py-4 sm:px-6">
-          <Button type="button" size="lg" className="min-h-12 w-full font-semibold" onClick={onAddFunds}>
+          <Button type="button" size="lg" className={cn("w-full", NX_BTN_ACCENT)} onClick={onAddFunds}>
             <Plus className="h-4 w-4 shrink-0" aria-hidden />
             {t("funding.button.addFunds")}
           </Button>
@@ -201,7 +201,7 @@ export function RetailBalanceHomePanels({
           <Button
             type="button"
             size="lg"
-            className="min-h-12 w-full shrink-0 font-semibold sm:min-w-[12rem]"
+            className={cn("w-full shrink-0 sm:min-w-[12rem]", NX_BTN_PRIMARY)}
             onClick={onTransferToMain}
             disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
           >

@@ -1720,9 +1720,7 @@ export function ContainerMode({
         <button
           onClick={() => setContainerTab("fix")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
-            activeTab === "fix"
-              ? "bg-secondary text-foreground ring-1 ring-border/60"
-              : NX_TAB_INACTIVE
+            activeTab === "fix" ? NX_TAB_ACTIVE : NX_TAB_INACTIVE
           }`}
         >
           <Lock className="h-4 w-4" />
@@ -1774,7 +1772,7 @@ export function ContainerMode({
                 <p className="mt-1 text-[11px] text-muted-foreground">Crypto committed to strategies</p>
               </div>
               <div className="bg-card p-4 sm:p-5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Bullish Trades (display)</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Session growth</p>
                 <p className="mt-2 font-mono text-2xl font-bold tabular-nums text-success">
                   +{formatUserMoney(totalEarnedDisplayUsd)}
                 </p>
@@ -1840,14 +1838,14 @@ export function ContainerMode({
                             {trade.earned >= 0 ? "+" : ""}
                             {formatUserMoney(trade.earned)}
                           </p>
-                          <p className="text-xs text-muted-foreground">modeled P/L (24h desk)</p>
+                          <p className="text-xs text-muted-foreground">Trading progress (24h)</p>
                         </div>
                       </div>
 
                       {trade.recoveryHold ? (
                         <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-100">
-                          Recovery hold: desk staying in position during stress — not insured. Force pull-out always
-                          available.
+                          Market is moving — the desk is holding your position for now. You can still exit early if you
+                          choose.
                         </div>
                       ) : null}
 
@@ -1887,7 +1885,7 @@ export function ContainerMode({
                           onClick={() => setShowCancelConfirm(trade.traderId)}
                           disabled={isProcessing}
                         >
-                          Force pull out
+                          End session early
                         </Button>
                       </div>
                     </div>

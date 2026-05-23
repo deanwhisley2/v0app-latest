@@ -3,19 +3,19 @@
 import { useEffect, useRef, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { NX_SURFACE_RAISED } from "@/lib/nexus-ui-surfaces"
 
 export type CollapsibleInfoTone = "neutral" | "info" | "promo" | "warning" | "risk"
 
 const toneClass: Record<CollapsibleInfoTone, string> = {
-  neutral: "border-border/60 bg-card",
-  info: "border-primary/20 bg-primary/5",
-  promo: "border-accent/25 bg-accent/5",
-  warning: "border-warning/25 bg-warning/5",
-  risk: "border-destructive/25 bg-destructive/5",
+  neutral: "bg-card/95",
+  info: "bg-primary/[0.04]",
+  promo: "bg-accent/[0.05]",
+  warning: "bg-warning/[0.05]",
+  risk: "bg-destructive/[0.04]",
 }
 
 type Props = {
-  /** Persist open state: "1" = user left it open */
   storageKey?: string
   title: string
   summary: string
@@ -23,13 +23,12 @@ type Props = {
   defaultOpen?: boolean
   tone?: CollapsibleInfoTone
   icon?: ReactNode
-  /** Shown on the summary row (e.g. CTA) */
   trailing?: ReactNode
   className?: string
   viewDetailsLabel?: string
 }
 
-/** Compact preview + native details expand — mobile-safe, no heavy animations. */
+/** Compact preview + native details expand — calm premium surfaces, mobile-safe. */
 export function CollapsibleInfoPanel({
   storageKey,
   title,
@@ -70,32 +69,33 @@ export function CollapsibleInfoPanel({
       ref={detailsRef}
       onToggle={onToggle}
       className={cn(
-        "nexus-collapsible-info group rounded-2xl border shadow-[var(--shadow-card)]",
+        "nexus-collapsible-info group border-border/30",
+        NX_SURFACE_RAISED,
         toneClass[tone],
         className,
       )}
     >
       <summary
         className={cn(
-          "flex min-h-[52px] cursor-pointer list-none items-start gap-3 px-4 py-3.5 sm:px-5",
+          "flex min-h-[3.25rem] cursor-pointer list-none items-start gap-3 px-5 py-4 sm:min-h-[3.5rem] sm:px-6",
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        {icon ? <div className="mt-0.5 shrink-0">{icon}</div> : null}
+        {icon ? <div className="mt-0.5 shrink-0 opacity-90">{icon}</div> : null}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-snug text-foreground">{title}</p>
-          <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{summary}</p>
-          <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+          <p className="text-sm font-semibold leading-snug tracking-tight text-foreground">{title}</p>
+          <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{summary}</p>
+          <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary/90">
             {viewDetailsLabel}
             <ChevronDown
-              className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
+              className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180"
               aria-hidden
             />
           </span>
         </div>
         {trailing ? <div className="shrink-0 self-center">{trailing}</div> : null}
       </summary>
-      <div className="border-t border-border/50 px-4 pb-4 pt-2 text-sm text-muted-foreground sm:px-5">
+      <div className="border-t border-border/25 px-5 pb-5 pt-3 text-[13px] leading-relaxed text-muted-foreground sm:px-6">
         {children}
       </div>
     </details>

@@ -76,7 +76,7 @@ export function ContainerDeskSection({
 
       <div
         className={cn(
-          "nexus-flat-card flex flex-col gap-4 rounded-2xl border border-border bg-card p-2 lg:flex-row lg:p-3",
+          "nexus-flat-card flex flex-col gap-4 rounded-[1.25rem] border border-border/30 bg-card p-2 shadow-[var(--shadow-card)] lg:flex-row lg:p-3",
           isMobile && !deskVisible && "hidden",
         )}
         aria-hidden={isMobile && !deskVisible}
