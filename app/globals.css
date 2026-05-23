@@ -8,22 +8,48 @@
    Navy foundation · emerald growth · soft luxury gold accents
    ============================================================ */
 
+/* Nexus brand tokens (Binance-inspired balance — not a clone) */
+:root {
+  --bg-light: #f4f5f7;
+  --surface-light: #ffffff;
+  --surface-light-2: #eceff3;
+  --border-light: rgba(0, 0, 0, 0.05);
+  --bg-dark: #0f1724;
+  --surface-dark: #172133;
+  --surface-dark-2: #1d2940;
+  --border-dark: rgba(255, 255, 255, 0.06);
+  --primary-green: #57c784;
+  --primary-green-soft: #7ee2a7;
+  --gold-main: #f0b90b;
+  --gold-soft: #ffd95c;
+  --danger-red: #ff5b6e;
+  --text-main: #f3f5f7;
+  --text-soft: #9aa4b2;
+  --nexus-surface-2: var(--surface-light);
+  --nexus-border: var(--border-light);
+}
+
+.dark {
+  --nexus-surface-2: var(--surface-dark-2);
+  --nexus-border: var(--border-dark);
+}
+
 /* Light — warm off-white, breathable cards, calm contrast */
 :root {
   color-scheme: light;
-  --background: oklch(0.988 0.005 95);
+  --background: #f4f5f7;
   --foreground: oklch(0.32 0.018 265);
-  --card: oklch(1 0.002 95);
+  --card: #ffffff;
   --card-foreground: oklch(0.32 0.018 265);
   --popover: oklch(1 0.002 95);
   --popover-foreground: oklch(0.32 0.018 265);
-  --primary: oklch(0.5 0.11 158);
+  --primary: #57c784;
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.965 0.006 265);
   --secondary-foreground: oklch(0.38 0.018 265);
   --muted: oklch(0.96 0.006 265);
   --muted-foreground: oklch(0.52 0.018 265);
-  --accent: oklch(0.64 0.085 88);
+  --accent: #f0b90b;
   --accent-foreground: oklch(0.24 0.025 88);
   --destructive: oklch(0.52 0.16 25);
   --destructive-foreground: oklch(0.99 0 0);
@@ -55,19 +81,19 @@
 /* Dark — soft navy / charcoal-blue (#0f1722 family), low eye fatigue */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.2 0.024 258);
+  --background: #0f1724;
   --foreground: oklch(0.9 0.012 265);
-  --card: oklch(0.24 0.022 258);
+  --card: #172133;
   --card-foreground: oklch(0.9 0.012 265);
   --popover: oklch(0.25 0.022 258);
   --popover-foreground: oklch(0.9 0.012 265);
-  --primary: oklch(0.66 0.1 158);
+  --primary: #57c784;
   --primary-foreground: oklch(0.16 0.02 158);
   --secondary: oklch(0.27 0.02 258);
   --secondary-foreground: oklch(0.84 0.012 265);
   --muted: oklch(0.28 0.018 258);
   --muted-foreground: oklch(0.64 0.016 265);
-  --accent: oklch(0.74 0.075 88);
+  --accent: #f0b90b;
   --accent-foreground: oklch(0.18 0.02 88);
   --destructive: oklch(0.58 0.16 25);
   --destructive-foreground: oklch(0.98 0 0);
@@ -101,6 +127,14 @@
   border: 1px solid color-mix(in oklch, var(--border) 45%, transparent);
   background: color-mix(in oklch, var(--card) 96%, var(--background));
   box-shadow: var(--shadow-card);
+}
+
+.nexus-market-card {
+  border-radius: 1.5rem;
+  padding: 1.125rem;
+  background: var(--nexus-surface-2);
+  border: 1px solid var(--nexus-border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 }
 
 .nexus-panel-pad {

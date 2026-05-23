@@ -155,22 +155,26 @@ export function BottomNav({
                 key={item.id}
                 type="button"
                 onClick={() => onTabChange(item.id)}
-                className="flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors active:bg-muted/60"
+                className={`flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-1 py-1 transition-all ${
+                  isActive ? "bg-[var(--primary-green)]/12" : "active:bg-muted/60"
+                }`}
               >
                 <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-                    isActive ? "bg-primary/10 ring-1 ring-primary/15" : "bg-transparent"
+                  className={`flex h-9 w-9 items-center justify-center rounded-[1.125rem] transition-all ${
+                    isActive
+                      ? "bg-[var(--primary-green)]/15 shadow-[0_0_16px_rgba(87,199,132,0.2)] ring-1 ring-[var(--primary-green)]/20"
+                      : "bg-transparent"
                   }`}
                 >
                   <item.icon
                     className={`h-[1.35rem] w-[1.35rem] ${
-                      isActive ? "text-primary" : "text-muted-foreground"
+                      isActive ? "text-[var(--primary-green)]" : "text-muted-foreground"
                     }`}
                   />
                 </div>
                 <span
                   className={`max-w-full truncate text-[10px] font-medium leading-none ${
-                    isActive ? "text-primary" : "text-muted-foreground"
+                    isActive ? "font-semibold text-[var(--primary-green)]" : "text-muted-foreground"
                   }`}
                 >
                   {item.label}

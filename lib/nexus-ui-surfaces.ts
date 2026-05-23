@@ -1,8 +1,12 @@
 import { cn } from "@/lib/utils"
 
+/** Marketplace / desk card — 24px radius, 18px pad */
+export const NX_MARKET_CARD =
+  "nexus-market-card rounded-[1.5rem] border border-[var(--nexus-border)] bg-[var(--nexus-surface-2)] shadow-[var(--shadow-card)]"
+
 /** Premium panel — soft elevation, minimal border */
 export const NX_PANEL =
-  "rounded-[1.25rem] border border-border/35 bg-card shadow-[var(--shadow-card)]"
+  "rounded-[1.5rem] border border-[var(--nexus-border)] bg-[var(--nexus-surface-2)] shadow-[var(--shadow-card)]"
 
 export const NX_PANEL_PAD = "p-5 sm:p-6"
 
@@ -24,7 +28,7 @@ export const NX_STAT_TILE =
   "nexus-stat-tile p-4 sm:p-5 text-center transition-colors"
 
 export const NX_TAB_ACTIVE =
-  "bg-primary/85 text-primary-foreground shadow-sm ring-1 ring-primary/15"
+  "bg-[var(--primary-green)]/15 text-[var(--primary-green)] shadow-[0_0_20px_rgba(87,199,132,0.15)] ring-1 ring-[var(--primary-green)]/25"
 
 export const NX_TAB_INACTIVE =
   "bg-muted/40 text-muted-foreground hover:bg-muted/55 hover:text-foreground"

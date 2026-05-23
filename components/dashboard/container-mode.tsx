@@ -45,6 +45,13 @@ import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
 import { CollapsibleInfoPanel } from "@/components/dashboard/collapsible-info-panel"
+import {
+  ActiveSessionsStrip,
+  CopyTraderMarketCard,
+  FixDeskMarketCard,
+  LockedTraderCompact,
+  type MarketTrader,
+} from "@/components/dashboard/container-trader-market-cards"
 import { cn } from "@/lib/utils"
 import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
 import { NX_PROMO_CALLOUT, NX_TAB_ACTIVE, NX_TAB_INACTIVE } from "@/lib/nexus-ui-surfaces"
@@ -125,6 +132,22 @@ type ApiContainerDesk = {
   locked?: boolean
   lockReason?: string
   legacyIds?: string[]
+}
+
+function toMarketTrader(trader: MasterTrader): MarketTrader {
+  return {
+    id: trader.id,
+    name: trader.name,
+    avatar: trader.avatar,
+    winRate: trader.winRate,
+    riskLevel: trader.riskLevel,
+    speciality: trader.speciality,
+    monthlyReturn: trader.monthlyReturn,
+    strategies: trader.strategies,
+    locked: trader.locked,
+    lockReason: trader.lockReason,
+    followers: trader.followers,
+  }
 }
 
 function mapApiDesk(row: ApiContainerDesk): MasterTrader {
@@ -700,10 +723,8 @@ export function ContainerMode({
         setActiveCopyTrades(copy)
         setActiveFixTrades(fix)
         onActiveSessionCountsChange?.({ copy: copy.length, fix: fix.length })
-        if (fix.length > 0) {
-          setContainerTab(copy.length > 0 ? "dashboard" : "fix")
-        } else if (copy.length > 0) {
-          setContainerTab("copy")
+        if (copy.length > 0 || fix.length > 0) {
+          setContainerTab("dashboard")
         }
       } catch {
         if (!cancelled) setSessionsLoadError("Could not load your open trades. Tap retry.")
@@ -1699,7 +1720,7 @@ export function ContainerMode({
           }`}
         >
           <Eye className="h-4 w-4" />
-          Dashboard
+          {t("container.tab.dashboard")}
         </button>
         <button
           onClick={() => setContainerTab("copy")}
@@ -1710,7 +1731,7 @@ export function ContainerMode({
           }`}
         >
           <Copy className="h-4 w-4" />
-          Copy
+          {t("container.tab.copy")}
           {activeCopyTrades.length > 0 ? (
             <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
               {activeCopyTrades.length}
@@ -1724,7 +1745,7 @@ export function ContainerMode({
           }`}
         >
           <Lock className="h-4 w-4" />
-          Fix
+          {t("container.tab.fix")}
           {activeFixTrades.length > 0 ? (
             <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">
               {activeFixTrades.length}
@@ -1794,8 +1815,8 @@ export function ContainerMode({
         </div>
       )}
 
-      {/* Active Copy Trades — dashboard overview + copy tab */}
-      {(activeTab === "dashboard" || activeTab === "copy") && activeCopyTrades.length > 0 && (
+      {/* Active Copy Trades — dashboard only (live performance) */}
+      {activeTab === "dashboard" && activeCopyTrades.length > 0 && (
         <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {activeCopyTrades.length > 0 && (
             <Card className="border-border bg-card p-4">
@@ -1897,8 +1918,8 @@ export function ContainerMode({
         </div>
       )}
 
-      {/* Active Fix Trades — dashboard overview + fix tab */}
-      {(activeTab === "dashboard" || activeTab === "fix") && activeFixTrades.length > 0 && (
+      {/* Active Fix Trades — dashboard only */}
+      {activeTab === "dashboard" && activeFixTrades.length > 0 && (
         <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {activeFixTrades.length > 0 && (
             <Card className="border-border bg-card p-4">
@@ -2175,7 +2196,13 @@ export function ContainerMode({
 
       {/* ============ COPY TRADE TAB ============ */}
       {activeTab === "copy" && (
-        <div className="space-y-4">
+        <div className="space-y-4 nexus-section-gap">
+          <ActiveSessionsStrip
+            copyCount={activeCopyTrades.length}
+            fixCount={activeFixTrades.length}
+            onOpenDashboard={() => setContainerTab("dashboard")}
+            label={t("container.market.viewLive")}
+          />
           {catalogLoading ? (
             <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
               Loading copy traders…
@@ -2200,116 +2227,52 @@ export function ContainerMode({
             </ul>
           </CollapsibleInfoPanel>
 
-          {/* Available Traders */}
-          <div className="space-y-3">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Unlock className="h-4 w-4 text-success" />
-              Available Traders ({availableTraders.length})
-            </h3>
-            
+          <div className="space-y-3.5">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight">{t("container.market.copyTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("container.market.copySubtitle")}</p>
+            </div>
             {availableTraders.map((trader) => {
-              const isActive = activeCopyTrades.some((t) => sessionMatchesDesk(t.traderId, trader))
-              
+              const isActive = activeCopyTrades.some((row) => sessionMatchesDesk(row.traderId, trader))
               return (
-                <Card 
+                <CopyTraderMarketCard
                   key={trader.id}
-                  className={`border-border bg-card p-4 transition-all hover:border-primary/40 cursor-pointer ${
-                    isActive ? "ring-2 ring-primary" : ""
-                  }`}
-                  onClick={() => !isActive && setSelectedTrader(trader)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <TraderPersonaAvatar
-                          name={trader.name}
-                          initials={trader.avatar}
-                          riskLevel={trader.riskLevel}
-                          size="lg"
-                        />
-                        {isActive && (
-                          <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-success text-white">
-                            <CheckCircle2 className="h-3 w-3" />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold">{trader.name}</p>
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getRiskColor(trader.riskLevel)}`}>
-                            {trader.riskLevel}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{trader.speciality}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm font-bold text-muted-foreground">{trader.winRate}% desk win (illustr.)</p>
-                      <p className="text-xs text-muted-foreground">24h cycle · uninsured · not fixed-term insurance</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-3 flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-4 text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {trader.followers.toLocaleString()}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <BarChart3 className="h-3 w-3" />
-                        {trader.totalTrades.toLocaleString()} trades
-                      </span>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant={isActive ? "outline" : "default"}
-                      disabled={isActive}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (!isActive) setSelectedTrader(trader)
-                      }}
-                    >
-                      {isActive ? "Active" : <><Play className="h-3 w-3 mr-1" /> Copy</>}
-                    </Button>
-                  </div>
-                </Card>
+                  trader={toMarketTrader(trader)}
+                  isActive={isActive}
+                  copyMinUsd={copyMinUsdPolicy}
+                  formatMoney={formatUserMoney}
+                  riskClassName={getRiskColor(trader.riskLevel)}
+                  t={t}
+                  onPreview={() => setSelectedTrader(trader)}
+                  onCopy={() => setSelectedTrader(trader)}
+                />
               )
             })}
           </div>
 
-          {/* Locked Traders */}
-          {lockedTraders.length > 0 && (
+          {lockedTraders.length > 0 ? (
             <div className="space-y-3">
-              <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
-                <Lock className="h-4 w-4" />
-                Locked Traders ({lockedTraders.length})
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                <Lock className="mr-1 inline h-4 w-4" />
+                {lockedTraders.length} locked
               </h3>
               {lockedTraders.slice(0, 4).map((trader) => (
-                <Card key={trader.id} className="border-border bg-card/50 p-4 opacity-60">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        <Lock className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-semibold">{trader.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {trader.lockReason ?? "Desk locked by operational policy."}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="font-mono text-lg text-muted-foreground">+{trader.monthlyReturn}%</p>
-                  </div>
-                </Card>
+                <LockedTraderCompact key={trader.id} trader={toMarketTrader(trader)} t={t} />
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
       {/* ============ FIX TRADE TAB ============ */}
       {activeTab === "fix" && (
-        <div className="space-y-4">
+        <div className="space-y-4 nexus-section-gap">
+          <ActiveSessionsStrip
+            copyCount={activeCopyTrades.length}
+            fixCount={activeFixTrades.length}
+            onOpenDashboard={() => setContainerTab("dashboard")}
+            label={t("container.market.viewLive")}
+          />
           {catalogLoading ? (
             <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
               Loading fixed desks…
@@ -2332,125 +2295,51 @@ export function ContainerMode({
             </div>
           </CollapsibleInfoPanel>
 
-          {/* Available Traders */}
-          <div className="space-y-3">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Unlock className="h-4 w-4 text-success" />
-              Available for Fix ({fixAvailableTraders.length})
-            </h3>
-            
+          <div className="space-y-3.5">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight">{t("container.market.fixTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("container.market.fixSubtitle")}</p>
+            </div>
             {fixAvailableTraders.map((trader) => {
-              const isActive = activeFixTrades.some((t) => sessionMatchesDesk(t.traderId, trader))
-              
+              const isActive = activeFixTrades.some((row) => sessionMatchesDesk(row.traderId, trader))
               return (
-                <Card 
+                <FixDeskMarketCard
                   key={trader.id}
-                  className={`border-border bg-card p-4 transition-all hover:border-warning/40 cursor-pointer ${
-                    isActive ? "ring-2 ring-warning" : ""
-                  }`}
-                  onClick={() => !isActive && setSelectedTrader(trader)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <TraderPersonaAvatar
-                          name={trader.name}
-                          initials={trader.avatar}
-                          riskLevel={trader.riskLevel}
-                          size="lg"
-                        />
-                        {isActive && (
-                          <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-warning text-white">
-                            <Lock className="h-3 w-3" />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold">{trader.name}</p>
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getRiskColor(trader.riskLevel)}`}>
-                            {trader.riskLevel}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{trader.speciality}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm font-bold text-success">
-                        ~{trader.monthlyReturn}% / mo curve
-                      </p>
-                      <p className="text-xs text-muted-foreground">Scheduled bullish trades on allocation (policy)</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-3 flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-4 text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {trader.followers.toLocaleString()}
-                      </span>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant={isActive ? "outline" : "default"}
-                      className={isActive ? "" : "bg-warning text-warning-foreground hover:bg-warning/90"}
-                      disabled={isActive}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (!isActive) setSelectedTrader(trader)
-                      }}
-                    >
-                      {isActive ? "Locked" : <><Lock className="h-3 w-3 mr-1" /> Fix</>}
-                    </Button>
-                  </div>
-                </Card>
+                  trader={toMarketTrader(trader)}
+                  isActive={isActive}
+                  fixMinUsd={fixMinUsdPolicy}
+                  formatMoney={formatUserMoney}
+                  riskClassName={getRiskColor(trader.riskLevel)}
+                  t={t}
+                  onPreview={() => setSelectedTrader(trader)}
+                  onLock={() => setSelectedTrader(trader)}
+                />
               )
             })}
-
-            {fixTierLockedTraders.length > 0 && (
-              <div className="space-y-3 pt-2">
-                <h3 className="font-semibold flex items-center gap-2 text-muted-foreground">
-                  <Lock className="h-4 w-4" />
-                  Not available at your level ({fixTierLockedTraders.length})
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  These traders stay visible for transparency. {fixedTradeTierHint(userLevel)}
-                </p>
-                {fixTierLockedTraders.map((trader) => (
-                  <Card
-                    key={`fix-locked-${trader.id}`}
-                    className="border-border bg-card/60 p-4 opacity-75"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                          <Lock className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <p className="font-semibold">{trader.name}</p>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getRiskColor(trader.riskLevel)}`}>
-                            {trader.riskLevel}
-                          </span>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {trader.locked && trader.lockReason
-                              ? trader.lockReason
-                              : userLevel <= 1
-                                ? "Level 1 — Low-risk fixed traders only."
-                                : userLevel === 2 && trader.riskLevel === "High"
-                                  ? "Level 2 — High-risk fixed profiles require a higher account tier."
-                                  : "Not available for fixed trade at your current tier."}
-                          </p>
-                        </div>
-                      </div>
-                      <Button size="sm" variant="outline" disabled className="shrink-0">
-                        Locked
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
           </div>
+
+          {fixTierLockedTraders.length > 0 ? (
+            <div className="space-y-3 pt-1">
+              <p className="text-xs text-muted-foreground">{fixedTradeTierHint(userLevel)}</p>
+              {fixTierLockedTraders.map((trader) => {
+                const tierReason =
+                  trader.locked && trader.lockReason
+                    ? trader.lockReason
+                    : userLevel <= 1
+                      ? "Level 1 — low-risk fixed plans only."
+                      : userLevel === 2 && trader.riskLevel === "High"
+                        ? "Higher tier needed for this risk profile."
+                        : "Not available at your level."
+                return (
+                  <LockedTraderCompact
+                    key={`fix-locked-${trader.id}`}
+                    trader={{ ...toMarketTrader(trader), lockReason: tierReason }}
+                    t={t}
+                  />
+                )
+              })}
+            </div>
+          ) : null}
         </div>
       )}
 
