@@ -282,6 +282,8 @@ const levelRequirements = {
 
 type ContainerTab = "copy" | "fix" | "dashboard"
 
+const CONTAINER_SUBTAB_KEY = "nexus_container_subtab_v1"
+
 interface ContainerModeProps {
   userLevel?: UserLevel
   /** Level 2 only: designated retailer credit seller (profiles.retailer_credit_seller or env allowlist). */
@@ -297,6 +299,29 @@ interface ContainerModeProps {
     cooldownActive: boolean
     msRemaining: number
   } | null
+  /** Parent can expand mobile desk / show badges when sessions recover from server. */
+  onActiveSessionCountsChange?: (counts: { copy: number; fix: number }) => void
+}
+
+function fallbackDeskTrader(traderId: string): MasterTrader {
+  const label = traderId.length > 12 ? `${traderId.slice(0, 8)}…` : traderId
+  return {
+    id: traderId,
+    name: `Desk ${label}`,
+    avatar: "DT",
+    winRate: 0,
+    totalProfit: 0,
+    followers: 0,
+    totalTrades: 0,
+    riskLevel: "Medium",
+    speciality: "Active session (desk catalog loading)",
+    minLevel: 1,
+    status: "active",
+    monthlyReturn: 0,
+    maxDrawdown: 0,
+    description: "",
+    strategies: [],
+  }
 }
 
 export function ContainerMode({
@@ -305,10 +330,20 @@ export function ContainerMode({
   retailerLiquidityOpsBlocked = false,
   containerLiquidEarningsUsd = 0,
   withdrawalPolicyHint = null,
+  onActiveSessionCountsChange,
 }: ContainerModeProps) {
   const { formatUserMoney, currency, locale, t } = useUserPreferences()
   const { addNotification } = useNexusNotifications()
-  const [activeTab, setActiveTab] = useState<ContainerTab>("dashboard")
+  const [activeTab, setActiveTab] = useState<ContainerTab>(() => {
+    if (typeof window === "undefined") return "dashboard"
+    try {
+      const raw = sessionStorage.getItem(CONTAINER_SUBTAB_KEY)
+      if (raw === "copy" || raw === "fix" || raw === "dashboard") return raw
+    } catch {
+      /* ignore */
+    }
+    return "dashboard"
+  })
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
   const [copyAmount, setCopyAmount] = useState("500")
@@ -380,8 +415,41 @@ export function ContainerMode({
     starterFixUnlock?: boolean
     starterFixPersonaId?: string
   } | null>(null)
+  const [catalogLoadError, setCatalogLoadError] = useState<string | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogReloadNonce, setCatalogReloadNonce] = useState(0)
+  const [sessionsHydrated, setSessionsHydrated] = useState(false)
+  const [sessionsLoadError, setSessionsLoadError] = useState<string | null>(null)
+  const [sessionsReloadNonce, setSessionsReloadNonce] = useState(0)
 
   const { btc: btcSpotRef, getSymbolPrice, authorityRevision } = useMarketPriceAuthority()
+
+  const setContainerTab = useCallback((tab: ContainerTab) => {
+    setActiveTab(tab)
+    try {
+      sessionStorage.setItem(CONTAINER_SUBTAB_KEY, tab)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const getTraderById = useCallback((id: string) => {
+    const pool = [...copyDeskCatalog, ...fixDeskCatalog]
+    const direct = pool.find((t) => t.id === id)
+    if (direct) return direct
+    return pool.find((t) => (t.legacyIds ?? []).some((l) => l === id))
+  }, [copyDeskCatalog, fixDeskCatalog])
+
+  const resolveDeskTrader = useCallback(
+    (traderId: string) => getTraderById(traderId) ?? fallbackDeskTrader(traderId),
+    [getTraderById],
+  )
+
+  function sessionMatchesDesk(sessionTraderId: string | null | undefined, desk: MasterTrader): boolean {
+    if (!sessionTraderId) return false
+    if (sessionTraderId === desk.id) return true
+    return (desk.legacyIds ?? []).includes(sessionTraderId)
+  }
 
   useEffect(() => {
     if (!authorityRevision) return
@@ -396,18 +464,29 @@ export function ContainerMode({
   useEffect(() => {
     let cancelled = false
     const loadCatalog = async () => {
+      if (!cancelled) {
+        setCatalogLoading(true)
+        setCatalogLoadError(null)
+      }
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
-        if (!token) return
+        if (!token) {
+          if (!cancelled) {
+            setCatalogLoadError("Sign in to load trader desks.")
+            setCatalogLoading(false)
+          }
+          return
+        }
         const res = await fetch("/api/user/container-context", {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         })
         const out = (await res.json().catch(() => ({}))) as {
           ok?: boolean
+          error?: string
           traders?: { copy?: ApiContainerDesk[]; fix?: ApiContainerDesk[] }
           copyMinUsd?: number
           fixMinUsd?: number
@@ -417,14 +496,26 @@ export function ContainerMode({
             starterFixPersonaId?: string
           }
         }
-        if (cancelled || !res.ok || !out.ok || !out.traders) return
+        if (cancelled) return
+        if (!res.ok || !out.ok || !out.traders) {
+          setCatalogLoadError(
+            typeof out.error === "string" && out.error.trim()
+              ? out.error.trim()
+              : "Trader desk could not load. Tap retry.",
+          )
+          setCatalogLoading(false)
+          return
+        }
+        setCatalogLoadError(null)
         setCopyDeskCatalog((out.traders.copy ?? []).map(mapApiDesk))
         setFixDeskCatalog((out.traders.fix ?? []).map(mapApiDesk))
         if (typeof out.copyMinUsd === "number") setCopyMinUsdPolicy(out.copyMinUsd)
         if (typeof out.fixMinUsd === "number") setFixMinUsdPolicy(out.fixMinUsd)
         setContainerLaunch(out.launch ?? null)
       } catch {
-        /* ignore */
+        if (!cancelled) setCatalogLoadError("Trader desk could not load. Tap retry.")
+      } finally {
+        if (!cancelled) setCatalogLoading(false)
       }
     }
     void loadCatalog()
@@ -435,7 +526,7 @@ export function ContainerMode({
       cancelled = true
       sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [catalogReloadNonce])
 
   const [liveStatsTick, setLiveStatsTick] = useState(0)
   useEffect(() => {
@@ -531,7 +622,13 @@ export function ContainerMode({
             leaseEndedAwaitingSettlement?: boolean
           }>
         }
-        if (cancelled || !res.ok || !out.ok) return
+        if (cancelled) return
+        if (!res.ok || !out.ok) {
+          setSessionsLoadError("Could not load your open trades. Tap retry.")
+          setSessionsHydrated(true)
+          return
+        }
+        setSessionsLoadError(null)
 
         const copyList = out.copySessions ?? []
         const fixList = out.fixedSessions ?? []
@@ -587,8 +684,16 @@ export function ContainerMode({
 
         setActiveCopyTrades(copy)
         setActiveFixTrades(fix)
+        onActiveSessionCountsChange?.({ copy: copy.length, fix: fix.length })
+        if (fix.length > 0) {
+          setContainerTab(copy.length > 0 ? "dashboard" : "fix")
+        } else if (copy.length > 0) {
+          setContainerTab("copy")
+        }
       } catch {
-        /* ignore */
+        if (!cancelled) setSessionsLoadError("Could not load your open trades. Tap retry.")
+      } finally {
+        if (!cancelled) setSessionsHydrated(true)
       }
     }
 
@@ -600,6 +705,8 @@ export function ContainerMode({
       else {
         setActiveCopyTrades([])
         setActiveFixTrades([])
+        setSessionsHydrated(true)
+        onActiveSessionCountsChange?.({ copy: 0, fix: 0 })
       }
     })
 
@@ -607,7 +714,7 @@ export function ContainerMode({
       cancelled = true
       sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [onActiveSessionCountsChange, sessionsReloadNonce, setContainerTab])
 
   useEffect(() => {
     const updateCountdowns = () => {
@@ -1383,18 +1490,12 @@ export function ContainerMode({
     }
   }
 
-  const getTraderById = (id: string) => {
-    const pool = [...copyDeskCatalog, ...fixDeskCatalog]
-    const direct = pool.find((t) => t.id === id)
-    if (direct) return direct
-    return pool.find((t) => (t.legacyIds ?? []).some((l) => l === id))
-  }
-
-  function sessionMatchesDesk(sessionTraderId: string | null | undefined, desk: MasterTrader): boolean {
-    if (!sessionTraderId) return false
-    if (sessionTraderId === desk.id) return true
-    return (desk.legacyIds ?? []).includes(sessionTraderId)
-  }
+  useEffect(() => {
+    onActiveSessionCountsChange?.({
+      copy: activeCopyTrades.length,
+      fix: activeFixTrades.length,
+    })
+  }, [activeCopyTrades.length, activeFixTrades.length, onActiveSessionCountsChange])
 
   return (
     <div ref={deskRootRef} className="nexus-container-mode space-y-4">
@@ -1478,7 +1579,7 @@ export function ContainerMode({
           </div>
           <button
             type="button"
-            onClick={() => setActiveTab("fix")}
+            onClick={() => setContainerTab("fix")}
             className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
             {t("container.promo.cta")}
@@ -1533,10 +1634,53 @@ export function ContainerMode({
         </Card>
       )}
 
+      {sessionsLoadError ? (
+        <Card className="border-destructive/30 bg-destructive/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{sessionsLoadError}</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setSessionsReloadNonce((n) => n + 1)}
+            >
+              Retry trades
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {catalogLoadError ? (
+        <Card className="border-destructive/30 bg-destructive/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{catalogLoadError}</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setCatalogReloadNonce((n) => n + 1)}
+            >
+              {t("container.catalog.retry")}
+            </Button>
+          </div>
+          {(activeCopyTrades.length > 0 || activeFixTrades.length > 0) && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Your open server-backed sessions below are unchanged — only the trader picker failed to load.
+            </p>
+          )}
+        </Card>
+      ) : null}
+
       {/* Tab Switcher */}
       <div className="flex gap-2">
         <button
-          onClick={() => setActiveTab("dashboard")}
+          onClick={() => setContainerTab("dashboard")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "dashboard"
               ? NX_TAB_ACTIVE
@@ -1547,7 +1691,7 @@ export function ContainerMode({
           Dashboard
         </button>
         <button
-          onClick={() => setActiveTab("copy")}
+          onClick={() => setContainerTab("copy")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "copy"
               ? NX_TAB_ACTIVE
@@ -1556,9 +1700,14 @@ export function ContainerMode({
         >
           <Copy className="h-4 w-4" />
           Copy
+          {activeCopyTrades.length > 0 ? (
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+              {activeCopyTrades.length}
+            </span>
+          ) : null}
         </button>
         <button
-          onClick={() => setActiveTab("fix")}
+          onClick={() => setContainerTab("fix")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "fix"
               ? "bg-secondary text-foreground ring-1 ring-border/60"
@@ -1567,6 +1716,11 @@ export function ContainerMode({
         >
           <Lock className="h-4 w-4" />
           Fix
+          {activeFixTrades.length > 0 ? (
+            <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">
+              {activeFixTrades.length}
+            </span>
+          ) : null}
         </button>
       </div>
 
@@ -1656,8 +1810,12 @@ export function ContainerMode({
               </div>
             </div>
           </Card>
+        </div>
+      )}
 
-          {/* Active Copy Trades */}
+      {/* Active Copy Trades — dashboard overview + copy tab */}
+      {(activeTab === "dashboard" || activeTab === "copy") && activeCopyTrades.length > 0 && (
+        <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {activeCopyTrades.length > 0 && (
             <Card className="border-border bg-card p-4">
               <h4 className="mb-3 font-semibold flex items-center gap-2">
@@ -1666,11 +1824,10 @@ export function ContainerMode({
               </h4>
               <div className="space-y-3">
                 {activeCopyTrades.map((trade) => {
-                  const trader = getTraderById(trade.traderId)
-                  if (!trader) return null
+                  const trader = resolveDeskTrader(trade.traderId)
 
                   return (
-                    <div key={trade.traderId} className="rounded-lg border border-border bg-muted/30 p-4">
+                    <div key={trade.copySessionId ?? trade.traderId} className="rounded-lg border border-border bg-muted/30 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className="relative">
@@ -1756,8 +1913,12 @@ export function ContainerMode({
               </div>
             </Card>
           )}
+        </div>
+      )}
 
-          {/* Active Fix Trades */}
+      {/* Active Fix Trades — dashboard overview + fix tab */}
+      {(activeTab === "dashboard" || activeTab === "fix") && activeFixTrades.length > 0 && (
+        <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {activeFixTrades.length > 0 && (
             <Card className="border-border bg-card p-4">
               <h4 className="mb-3 font-semibold flex items-center gap-2">
@@ -1766,12 +1927,11 @@ export function ContainerMode({
               </h4>
               <div className="space-y-3">
                 {activeFixTrades.map(trade => {
-                  const trader = getTraderById(trade.traderId)
-                  if (!trader) return null
+                  const trader = resolveDeskTrader(trade.traderId)
 
                   return (
                     <div
-                      key={trade.traderId}
+                      key={trade.serverSessionId ?? trade.traderId}
                       className="relative isolate min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2013,24 +2173,33 @@ export function ContainerMode({
               </div>
             </Card>
           )}
-
-          {activeCopyTrades.length === 0 && activeFixTrades.length === 0 && (
-            <Card className="border-border bg-card p-8 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <Target className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold">No Active Trades</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Start by selecting a trader from Copy or Fix tabs
-              </p>
-            </Card>
-          )}
         </div>
+      )}
+
+      {activeTab === "dashboard" &&
+        sessionsHydrated &&
+        !sessionsLoadError &&
+        activeCopyTrades.length === 0 &&
+        activeFixTrades.length === 0 && (
+        <Card className="border-border bg-card p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Target className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold">No Active Trades</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Start by selecting a trader from Copy or Fix tabs
+          </p>
+        </Card>
       )}
 
       {/* ============ COPY TRADE TAB ============ */}
       {activeTab === "copy" && (
         <div className="space-y-4">
+          {catalogLoading ? (
+            <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              Loading copy traders…
+            </Card>
+          ) : null}
           <Card className="border-destructive/25 bg-destructive/5 p-4">
             <div className="flex items-start gap-3">
               <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
@@ -2161,6 +2330,11 @@ export function ContainerMode({
       {/* ============ FIX TRADE TAB ============ */}
       {activeTab === "fix" && (
         <div className="space-y-4">
+          {catalogLoading ? (
+            <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              Loading fixed desks…
+            </Card>
+          ) : null}
           <Card className="border-warning/30 bg-warning/5 p-4">
             <div className="flex items-start gap-3">
               <Lock className="h-5 w-5 shrink-0 text-warning" />

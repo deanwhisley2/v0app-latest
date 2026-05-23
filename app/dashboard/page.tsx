@@ -15,8 +15,22 @@ import { WalletScreen } from "@/components/dashboard/wallet-screen"
 import { SettingsScreen, type SettingsView } from "@/components/dashboard/settings-screen"
 import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
-import { ContainerMode } from "@/components/dashboard/container-mode"
+import dynamic from "next/dynamic"
+import { Loader2 } from "lucide-react"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
+
+const ContainerMode = dynamic(
+  () => import("@/components/dashboard/container-mode").then((m) => m.ContainerMode),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-border bg-card p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
+        <span className="sr-only">Loading trading workspace…</span>
+      </div>
+    ),
+  },
+)
 import { ContainerDeskSection } from "@/components/dashboard/container-desk-section"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
@@ -223,6 +237,44 @@ export default function DashboardPage() {
     formatUserMoney,
   })
   const [activeTab, setActiveTab] = useState("container")
+  const [containerActiveTradeCount, setContainerActiveTradeCount] = useState(0)
+  const [containerDeskOpenNonce, setContainerDeskOpenNonce] = useState(0)
+  const handleContainerSessionCounts = useCallback((counts: { copy: number; fix: number }) => {
+    setContainerActiveTradeCount(counts.copy + counts.fix)
+  }, [])
+
+  useEffect(() => {
+    if (authLoading || !user || isGuestSession || activeTab !== "container" || operationalWorkspace) return
+    let cancelled = false
+    const loadSessions = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const res = await fetch("/api/user/trade-sessions/active", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        const out = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          copySessions?: unknown[]
+          fixedSessions?: unknown[]
+        }
+        if (cancelled || !res.ok || !out.ok) return
+        setContainerActiveTradeCount(
+          (out.copySessions?.length ?? 0) + (out.fixedSessions?.length ?? 0),
+        )
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadSessions()
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, user, isGuestSession, activeTab, operationalWorkspace])
   useEffect(() => {
     if (activeTab !== "wallet") return
     setActiveTab(operationalWorkspace ? "desk" : "notifications")
@@ -241,6 +293,7 @@ export default function DashboardPage() {
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
+  const [containerLockedUsd, setContainerLockedUsd] = useState(0)
   const [retailBalance, setRetailBalance] = useState(0)
   const [treasuryPoolUsd, setTreasuryPoolUsd] = useState<number | null>(null)
   const [treasuryPoolFormatted, setTreasuryPoolFormatted] = useState("")
@@ -854,6 +907,7 @@ export default function DashboardPage() {
 
       const json = (await res.json()) as {
         available_balance?: number
+        current_stake?: number
         retail_balance?: number
         withdrawal_pending_balance?: number
         total_earnings?: number
@@ -864,6 +918,7 @@ export default function DashboardPage() {
         lifetime_container_fees?: number
       }
       setMainBalance(Number(json.available_balance ?? 0))
+      setContainerLockedUsd(Number(json.current_stake ?? 0))
       setRetailBalance(Number(json.retail_balance ?? 0))
       setWithdrawalPendingBalance(Number(json.withdrawal_pending_balance ?? 0))
       setTotalEarnings(Number(json.total_earnings ?? 0))
@@ -949,6 +1004,7 @@ export default function DashboardPage() {
     const b = op.snapshot?.userBalance
     if (!b) return
     setMainBalance(Number(b.available_balance ?? 0))
+    setContainerLockedUsd(Number(b.current_stake ?? 0))
     setWithdrawalPendingBalance(Number(b.withdrawal_pending_balance ?? 0))
     setTotalEarnings(Number(b.total_earnings ?? 0))
     setActiveContainerEarnings(Number(b.active_container_earnings ?? 0))
@@ -1319,6 +1375,7 @@ export default function DashboardPage() {
         case "trade":
           setSelectedCoinSymbol(nav.symbol ?? "BTC")
           setActiveTab("container")
+          setContainerDeskOpenNonce((n) => n + 1)
           break
         case "wallet":
           if (operationalWorkspace) {
@@ -1422,9 +1479,11 @@ export default function DashboardPage() {
         if (rf.ok) {
           const j = (await rf.json()) as {
             available_balance?: number
+            current_stake?: number
             withdrawal_pending_balance?: number
           }
           setMainBalance(Number(j.available_balance ?? 0))
+          setContainerLockedUsd(Number(j.current_stake ?? 0))
           setWithdrawalPendingBalance(Number(j.withdrawal_pending_balance ?? 0))
         }
       } catch (e) {
@@ -1823,6 +1882,7 @@ export default function DashboardPage() {
         const liveWithdrawPending =
           refreshed.balance.withdrawal_pending_balance ?? withdrawalPendingBalance
         setMainBalance(liveMain)
+        setContainerLockedUsd(Number(refreshed.balance.current_stake ?? containerLockedUsd))
         setRetailBalance(liveRetail)
         setWithdrawalPendingBalance(liveWithdrawPending)
 
@@ -3224,6 +3284,8 @@ export default function DashboardPage() {
                 onToggleShowBalance={() => setShowBalance((v) => !v)}
                 fullName={currentUser?.fullName}
                 mainBalance={mainBalance}
+                containerLockedUsd={containerLockedUsd}
+                activeContainerTradeCount={containerActiveTradeCount}
                 totalEarnings={totalEarnings}
                 containerWithdrawableEarnings={containerWithdrawableEarnings}
                 withdrawalPendingBalance={withdrawalPendingBalance}
@@ -3259,12 +3321,15 @@ export default function DashboardPage() {
               sidebar={sidebarPanel}
               expandLabel={t("home.trading.expand")}
               collapseLabel={t("home.trading.collapse")}
+              activeTradeCount={containerActiveTradeCount}
+              deskOpenNonce={containerDeskOpenNonce}
             >
               <ContainerMode
                 userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
                 retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
                 retailerLiquidityOpsBlocked={retailerOpsBlocked}
                 containerLiquidEarningsUsd={containerWithdrawableEarnings}
+                onActiveSessionCountsChange={handleContainerSessionCounts}
               />
             </ContainerDeskSection>
           </div>

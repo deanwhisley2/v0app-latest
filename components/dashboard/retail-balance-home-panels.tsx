@@ -32,6 +32,9 @@ type RetailBalanceHomePanelsProps = {
   onToggleShowBalance: () => void
   fullName?: string | null
   mainBalance: number
+  /** Principal locked in open copy/fixed sessions (`current_stake`). */
+  containerLockedUsd?: number
+  activeContainerTradeCount?: number
   totalEarnings: number
   containerWithdrawableEarnings: number
   withdrawalPendingBalance: number
@@ -92,6 +95,8 @@ export function RetailBalanceHomePanels({
   onToggleShowBalance,
   fullName,
   mainBalance,
+  containerLockedUsd = 0,
+  activeContainerTradeCount = 0,
   totalEarnings,
   containerWithdrawableEarnings,
   withdrawalPendingBalance,
@@ -151,6 +156,22 @@ export function RetailBalanceHomePanels({
           <p className="mt-4 min-h-[2.5rem] font-mono text-[1.75rem] font-semibold tabular-nums leading-tight tracking-tight text-foreground sm:min-h-[2.75rem] sm:text-[2rem]">
             {mainDisplay}
           </p>
+          {showBalance && containerLockedUsd > 0.009 ? (
+            <p className="mt-2 text-sm leading-snug text-muted-foreground">
+              {t("home.overview.lockedInTrades").replace(
+                "{{amount}}",
+                formatUserMoney(containerLockedUsd),
+              )}
+            </p>
+          ) : null}
+          {activeContainerTradeCount > 0 ? (
+            <p className="mt-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
+              {t("home.overview.activeTradesBanner").replace(
+                "{{count}}",
+                String(activeContainerTradeCount),
+              )}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-border/50 px-5 py-4 sm:px-6">

@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient"
 
 export type LiveBalanceSnapshot = {
   available_balance: number
+  current_stake?: number
   retail_balance?: number
   withdrawal_pending_balance?: number
   total_earnings?: number
@@ -23,6 +24,7 @@ export async function fetchLiveBalanceSnapshot(token: string): Promise<LiveBalan
   if (!json) return null
   return {
     available_balance: Number(json.available_balance ?? 0),
+    current_stake: Number(json.current_stake ?? 0),
     retail_balance: Number(json.retail_balance ?? 0),
     withdrawal_pending_balance: Number(json.withdrawal_pending_balance ?? 0),
     total_earnings: Number(json.total_earnings ?? 0),

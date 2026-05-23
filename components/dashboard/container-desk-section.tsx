@@ -1,28 +1,51 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { cn } from "@/lib/utils"
+
 type Props = {
   sidebar?: ReactNode
   children: ReactNode
   expandLabel?: string
   collapseLabel?: string
+  /** Active copy + fixed sessions — auto-expands desk on mobile when > 0. */
+  activeTradeCount?: number
+  /** Bump from dashboard (e.g. trade notification) to force mobile desk open. */
+  deskOpenNonce?: number
 }
 
 /**
- * Trading desk below wallet home — on mobile, collapsed by default so wallet panels
- * scroll without compositing against animated container UI underneath.
+ * Trading desk below wallet home. ContainerMode stays mounted when collapsed on mobile
+ * so session hydration and polling continue; only visibility toggles.
  */
 export function ContainerDeskSection({
   sidebar,
   children,
   expandLabel = "Open trading workspace",
   collapseLabel = "Hide trading workspace",
+  activeTradeCount = 0,
+  deskOpenNonce = 0,
 }: Props) {
   const isMobile = useIsMobile()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const showDesk = !isMobile || mobileOpen
+  const [mobileOpen, setMobileOpen] = useState(true)
+  const [deskReady, setDeskReady] = useState(false)
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setDeskReady(true))
+    return () => window.cancelAnimationFrame(id)
+  }, [])
+
+  useEffect(() => {
+    if (activeTradeCount > 0) setMobileOpen(true)
+  }, [activeTradeCount])
+
+  useEffect(() => {
+    if (deskOpenNonce > 0) setMobileOpen(true)
+  }, [deskOpenNonce])
+
+  const deskVisible = !isMobile || mobileOpen
 
   return (
     <div className="nexus-container-desk">
@@ -33,17 +56,40 @@ export function ContainerDeskSection({
           className="mb-3 flex min-h-12 w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm font-semibold text-foreground"
           aria-expanded={mobileOpen}
         >
-          <span>{mobileOpen ? collapseLabel : expandLabel}</span>
-          <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="truncate">{mobileOpen ? collapseLabel : expandLabel}</span>
+            {!mobileOpen && activeTradeCount > 0 ? (
+              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">
+                {activeTradeCount} active
+              </span>
+            ) : null}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-5 w-5 shrink-0 text-muted-foreground transition-transform",
+              mobileOpen && "rotate-180",
+            )}
+            aria-hidden
+          />
         </button>
       ) : null}
 
-      {showDesk ? (
-        <div className="nexus-flat-card flex flex-col gap-4 rounded-2xl border border-border bg-card p-2 lg:flex-row lg:p-3">
-          {sidebar ? <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebar}</div> : null}
-          <main className="min-w-0 flex-1">{children}</main>
-        </div>
-      ) : null}
+      <div
+        className={cn(
+          "nexus-flat-card flex flex-col gap-4 rounded-2xl border border-border bg-card p-2 lg:flex-row lg:p-3",
+          isMobile && !deskVisible && "hidden",
+        )}
+        aria-hidden={isMobile && !deskVisible}
+      >
+        {sidebar ? <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebar}</div> : null}
+        <main className="min-w-0 flex-1">
+          {deskReady ? children : (
+            <div className="flex min-h-[220px] items-center justify-center p-6 text-sm text-muted-foreground">
+              Loading trading workspace…
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }
