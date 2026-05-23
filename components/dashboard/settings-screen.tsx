@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTheme } from "next-themes"
 import {
   Shield,
   Bell,
@@ -116,9 +117,16 @@ export function SettingsScreen({
   retailerCreditDesk = false,
 }: SettingsScreenProps) {
   const { t, language: appLanguage, currency: appCurrency, country: appCountry, setPreferences } = useUserPreferences()
+  const { theme = "dark", setTheme } = useTheme()
+  const themeChoice = (theme ?? "dark") as "dark" | "light" | "system"
+  const themeMenuDescription =
+    themeChoice === "light"
+      ? t("settings.theme.light")
+      : themeChoice === "system"
+        ? t("settings.theme.system")
+        : t("settings.theme.dark")
   const [currentView, setCurrentView] = useState<SettingsView>("main")
   const [regionMessage, setRegionMessage] = useState<string | null>(null)
-  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark")
   const [wireCurrency, setWireCurrency] = useState("USD")
   const [securityLevel, setSecurityLevel] = useState<1 | 2 | 3>(1)
   const [mainBalance] = useState(24831.42)
@@ -504,7 +512,7 @@ export function SettingsScreen({
       label: t("settings.item.region"),
       description: countryLabel,
     },
-    { key: "theme", icon: <Palette className="h-5 w-5" />, label: t("settings.menu.theme"), description: theme.charAt(0).toUpperCase() + theme.slice(1) },
+    { key: "theme", icon: <Palette className="h-5 w-5" />, label: t("settings.menu.theme"), description: themeMenuDescription },
     { key: "wire-currency", icon: <Banknote className="h-5 w-5" />, label: t("settings.menu.wireCurrency"), description: wireCurrency },
     { key: "payment-methods", icon: <CreditCard className="h-5 w-5" />, label: t("settings.menu.paymentMethods"), description: t("settings.menu.paymentMethodsDesc") },
     { key: "privacy", icon: <Lock className="h-5 w-5" />, label: t("settings.menu.privacy"), description: t("settings.menu.privacyDesc") },
@@ -1053,31 +1061,35 @@ export function SettingsScreen({
 
   // Theme Selection
   if (currentView === "theme") {
-    const themes = [
-      { key: "dark", label: t("settings.theme.dark"), description: t("settings.theme.darkDesc") },
-      { key: "light", label: t("settings.theme.light"), description: t("settings.theme.lightDesc") },
-      { key: "system", label: t("settings.theme.system"), description: t("settings.theme.systemDesc") },
+    const themeOptions = [
+      { key: "dark" as const, label: t("settings.theme.dark"), description: t("settings.theme.darkDesc") },
+      { key: "light" as const, label: t("settings.theme.light"), description: t("settings.theme.lightDesc") },
+      { key: "system" as const, label: t("settings.theme.system"), description: t("settings.theme.systemDesc") },
     ]
 
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
-          <h3 className="mb-6 text-lg font-semibold">Theme</h3>
+          <h3 className="mb-6 text-lg font-semibold text-foreground">{t("settings.menu.theme")}</h3>
           <div className="space-y-2">
-            {themes.map((t) => (
+            {themeOptions.map((option) => (
               <button
-                key={t.key}
-                onClick={() => { setTheme(t.key as typeof theme); setCurrentView("main") }}
+                key={option.key}
+                type="button"
+                onClick={() => {
+                  setTheme(option.key)
+                  setCurrentView("main")
+                }}
                 className={`flex w-full items-center justify-between rounded-lg px-4 py-4 transition-colors ${
-                  theme === t.key ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
+                  themeChoice === option.key ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
                 }`}
               >
                 <div className="text-left">
-                  <p className="font-medium">{t.label}</p>
-                  <p className="text-sm text-muted-foreground">{t.description}</p>
+                  <p className="font-medium">{option.label}</p>
+                  <p className="text-sm text-muted-foreground">{option.description}</p>
                 </div>
-                {theme === t.key && <Check className="h-5 w-5" />}
+                {themeChoice === option.key && <Check className="h-5 w-5" />}
               </button>
             ))}
           </div>

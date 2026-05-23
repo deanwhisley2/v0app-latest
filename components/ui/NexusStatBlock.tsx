@@ -62,20 +62,20 @@ export function NexusStatBlock({
   return (
     <div
       className={cn(
-        'bg-[#111318] border border-[#1E2028] rounded-lg flex flex-col',
+        'bg-card border border-border rounded-lg flex flex-col text-card-foreground',
         styles.container,
         className
       )}
       {...props}
     >
-      <span className={cn('text-[#8B92A5] font-medium tracking-wide uppercase', styles.label)}>
+      <span className={cn('text-muted-foreground font-medium tracking-wide uppercase', styles.label)}>
         {label}
       </span>
       <div className="flex items-baseline gap-2">
         <span
           className={cn(
             'font-mono font-bold tracking-tight',
-            variant !== 'default' ? variantStyles[variant] : 'text-[#F0F2F5]',
+            variant !== 'default' ? variantStyles[variant] : 'text-foreground',
             styles.value
           )}
         >
@@ -87,14 +87,14 @@ export function NexusStatBlock({
               'inline-flex items-center gap-0.5 text-xs font-mono font-medium',
               isPositive && 'text-[#39FF14]',
               isNegative && 'text-[#FF3A3A]',
-              isNeutral && 'text-[#8B92A5]'
+              isNeutral && 'text-muted-foreground'
             )}
           >
             {isPositive && <TrendingUp className="h-3 w-3" />}
             {isNegative && <TrendingDown className="h-3 w-3" />}
             {isNeutral && <Minus className="h-3 w-3" />}
             {change > 0 ? '+' : ''}{change}%
-            {changeLabel && <span className="text-[#8B92A5] ml-0.5">{changeLabel}</span>}
+            {changeLabel && <span className="text-muted-foreground ml-0.5">{changeLabel}</span>}
           </span>
         )}
       </div>

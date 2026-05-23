@@ -10,6 +10,9 @@ import {
   GoogleAnalyticsScripts,
 } from '@/components/analytics/google-analytics'
 import { Toaster } from 'react-hot-toast'
+import { ThemeProvider } from '@/components/theme-provider'
+import { ThemeScript } from '@/components/theme-script'
+import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
 const inter = Inter({
@@ -100,10 +103,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark bg-background" style={{ backgroundColor: "#070a12", color: "#e8edf5" }}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body
-        className={`${inter.variable} ${spaceMono.variable} font-sans antialiased bg-background`}
-        style={{ backgroundColor: "#070a12", color: "#e8edf5", minHeight: "100%" }}
+        className={`${inter.variable} ${spaceMono.variable} font-sans antialiased bg-background text-foreground min-h-full`}
         suppressHydrationWarning
       >
         {/* Prevent browser extension errors from wallet injectors */}
@@ -122,15 +127,23 @@ export default function RootLayout({
             `,
           }}
         />
-        <div id="nexus-app-root">
-          <AuthProvider>
-            <OperationalBootstrapProvider>
-              <NexusNotificationsProvider>
-                <UserPreferencesProvider>{children}</UserPreferencesProvider>
-              </NexusNotificationsProvider>
-            </OperationalBootstrapProvider>
-          </AuthProvider>
-        </div>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          storageKey={NEXUS_THEME_STORAGE_KEY}
+          disableTransitionOnChange
+        >
+          <div id="nexus-app-root">
+            <AuthProvider>
+              <OperationalBootstrapProvider>
+                <NexusNotificationsProvider>
+                  <UserPreferencesProvider>{children}</UserPreferencesProvider>
+                </NexusNotificationsProvider>
+              </OperationalBootstrapProvider>
+            </AuthProvider>
+          </div>
+        </ThemeProvider>
         <GoogleAnalyticsScripts />
         <GoogleAnalyticsRouteTracker />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />

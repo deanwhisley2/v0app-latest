@@ -10,11 +10,11 @@ export interface NexusCardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const variantStyles: Record<string, string> = {
-  default: 'bg-[#111318] border border-[#1E2028]',
-  glow: 'bg-[#111318] border border-[#1E2028] shadow-[0_0_12px_rgba(0,229,255,0.15)]',
-  glowGreen: 'bg-[#111318] border border-[#1E2028] shadow-[0_0_12px_rgba(57,255,20,0.15)]',
-  glowRed: 'bg-[#111318] border border-[#1E2028] shadow-[0_0_12px_rgba(255,58,58,0.15)]',
-  elevated: 'bg-[#111318] border border-[#1E2028] shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
+  default: 'bg-card border border-border text-card-foreground',
+  glow: 'bg-card border border-border text-card-foreground shadow-[0_0_12px_rgba(0,229,255,0.15)]',
+  glowGreen: 'bg-card border border-border text-card-foreground shadow-[0_0_12px_rgba(57,255,20,0.15)]',
+  glowRed: 'bg-card border border-border text-card-foreground shadow-[0_0_12px_rgba(255,58,58,0.15)]',
+  elevated: 'bg-card border border-border text-card-foreground shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
 };
 
 const paddingStyles: Record<string, string> = {

@@ -24,6 +24,7 @@ import {
   Compass,
   Landmark,
 } from "lucide-react"
+import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
 import { NotificationSwipeRow } from "./notification-swipe-row"
@@ -167,6 +168,9 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     runAppNavigation,
   } = useNexusNotifications()
 
+  const { resolvedTheme, setTheme } = useTheme()
+  const isDarkTheme = resolvedTheme !== "light"
+
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings] = useState({
     sound: true,
@@ -175,7 +179,6 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     securityAlerts: true,
     promoAlerts: false,
     systemAlerts: true,
-    darkMode: true,
     language: "English",
   })
   const panelRef = useRef<HTMLDivElement>(null)
@@ -403,7 +406,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
             <p className="text-xs font-semibold text-muted-foreground">APPEARANCE</p>
             <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2.5">
               <div className="flex items-center gap-2">
-                {settings.darkMode ? (
+                {isDarkTheme ? (
                   <Moon className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <Sun className="h-4 w-4 text-warning" />
@@ -412,12 +415,12 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               </div>
               <button
                 type="button"
-                onClick={() => setSettings((s) => ({ ...s, darkMode: !s.darkMode }))}
-                className={`relative h-5 w-9 rounded-full transition-colors ${settings.darkMode ? "bg-primary" : "bg-muted"}`}
+                onClick={() => setTheme(isDarkTheme ? "light" : "dark")}
+                className={`relative h-5 w-9 rounded-full transition-colors ${isDarkTheme ? "bg-primary" : "bg-muted"}`}
               >
                 <span
                   className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                    settings.darkMode ? "left-4" : "left-0.5"
+                    isDarkTheme ? "left-4" : "left-0.5"
                   }`}
                 />
               </button>

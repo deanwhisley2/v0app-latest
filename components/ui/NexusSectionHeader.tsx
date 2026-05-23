@@ -53,14 +53,14 @@ export function NexusSectionHeader({
         <div className="min-w-0">
           <h3
             className={cn(
-              'font-mono font-bold text-[#F0F2F5] truncate',
+              'font-mono font-bold text-foreground truncate',
               styles.title
             )}
           >
             {title}
           </h3>
           {subtitle && (
-            <p className={cn('text-[#8B92A5] mt-0.5', styles.subtitle)}>
+            <p className={cn('text-muted-foreground mt-0.5', styles.subtitle)}>
               {subtitle}
             </p>
           )}

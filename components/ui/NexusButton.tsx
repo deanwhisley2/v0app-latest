@@ -19,9 +19,9 @@ const variantStyles: Record<string, string> = {
   danger:
     'bg-[#FF3A3A] text-white hover:bg-[#FF3A3A]/90 active:bg-[#FF3A3A]/80',
   ghost:
-    'bg-transparent text-[#F0F2F5] hover:bg-[#1E2028] active:bg-[#1E2028]/80',
+    'bg-transparent text-foreground hover:bg-muted active:bg-muted/80',
   outline:
-    'bg-transparent border border-[#1E2028] text-[#F0F2F5] hover:border-[#00E5FF] hover:text-[#00E5FF] active:border-[#00E5FF]/80',
+    'bg-transparent border border-border text-foreground hover:border-primary hover:text-primary active:border-primary/80',
 };
 
 const sizeStyles: Record<string, string> = {

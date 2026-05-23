@@ -62,7 +62,7 @@ export function NexusTooltip({
             positionStyles[position]
           )}
         >
-          <div className="bg-[#1E2028] text-[#F0F2F5] text-xs font-mono px-3 py-2 rounded shadow-lg border border-[#2A2D3A] whitespace-nowrap max-w-[280px]">
+          <div className="bg-popover text-popover-foreground text-xs font-mono px-3 py-2 rounded shadow-lg border border-border whitespace-nowrap max-w-[280px]">
             {content}
           </div>
         </div>
