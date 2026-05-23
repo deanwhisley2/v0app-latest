@@ -198,6 +198,10 @@ export const fundingWithdrawalEn: Record<string, string> = {
     "Withdraw up to your full withdrawable Nexus Main balance per request (24h cooldown). Locked trade principal not withdrawable.",
   "container.fix.unreleasedLabel": "Unreleased",
   "container.fix.availableToRelease": "Available to release",
+  "container.promo.title": "Grow with Container mode",
+  "container.promo.body":
+    "Join {{memberCount}}+ members who allocate capital to a master trader they trust. Your lock backs the position so the desk can buy and hold through quieter markets—without selling the entire coin on dips, as set out in your signed trader agreement. When price moves above the entry, the trader completes sell legs and your share of profit is credited on your Container screen. Track live milestones across {{daysShort}} / {{daysMid}} / {{daysLong}}‑day programs—results from real buys and sells, not a headline rate in fine print.",
+  "container.promo.cta": "Start Now",
   "home.profile.eyebrow": "Member workspace",
   "home.profile.greeting.morning": "Good morning, {{name}}",
   "home.profile.greeting.afternoon": "Good afternoon, {{name}}",

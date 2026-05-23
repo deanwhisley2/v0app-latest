@@ -35,7 +35,7 @@ import {
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import type { Coin } from "@/lib/coins-data"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
-import { computePlatformLiveStats } from "@/lib/platform-live-stats"
+import { computePlatformLiveStats, PLATFORM_PROMO_MIN_MEMBERS } from "@/lib/platform-live-stats"
 import { Checkbox } from "@/components/ui/checkbox"
 import { fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
@@ -443,6 +443,19 @@ export function ContainerMode({
     return () => window.clearInterval(id)
   }, [])
   const liveStats = useMemo(() => computePlatformLiveStats(), [liveStatsTick])
+  const promoMemberCount = useMemo(
+    () => Math.max(liveStats.totalUsers, PLATFORM_PROMO_MIN_MEMBERS),
+    [liveStats.totalUsers],
+  )
+  const promoBody = useMemo(
+    () =>
+      t("container.promo.body")
+        .replace(/\{\{memberCount\}\}/g, promoMemberCount.toLocaleString(locale))
+        .replace(/\{\{daysShort\}\}/g, String(fixPeriodDayCount(1)))
+        .replace(/\{\{daysMid\}\}/g, String(fixPeriodDayCount(3)))
+        .replace(/\{\{daysLong\}\}/g, String(fixPeriodDayCount(6))),
+    [t, promoMemberCount, locale],
+  )
 
   const fixProjectionPreview = useMemo(() => {
     if (activeTab !== "fix" || !selectedTrader) return null
@@ -1460,20 +1473,15 @@ export function ContainerMode({
             <Trophy className="h-5 w-5 text-accent" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-foreground">Grow with Container mode</h3>
-                <p className="text-sm text-muted-foreground">
-                  Join {liveStats.todayJoins.toLocaleString()}+ members who put capital to work with a trader they trust.
-                  Your lock funds the coin so the desk can hold through quieter tape and still capture moves — earnings
-                  build day by day on your Container screen for {fixPeriodDayCount(1)} / {fixPeriodDayCount(3)} /{" "}
-                  {fixPeriodDayCount(6)}‑day programs, with milestones you can follow live (not a headline rate in fine
-                  print).
-                </p>
+            <h3 className="font-semibold text-foreground">{t("container.promo.title")}</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">{promoBody}</p>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={() => setActiveTab("fix")}
             className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            Start Now
+            {t("container.promo.cta")}
           </button>
         </div>
       </Card>

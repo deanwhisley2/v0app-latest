@@ -1,6 +1,8 @@
 /** Deterministic daily-growing platform stats for marketing banner (display only). */
 
 const LAUNCH_EPOCH_MS = Date.UTC(2024, 0, 15)
+/** Marketing banner: never show fewer than this many community members. */
+export const PLATFORM_PROMO_MIN_MEMBERS = 1372
 const BASE_USERS = 12_400
 const BASE_FIX_TRADES = 2_860
 const BASE_EARNED_USD = 118_000
