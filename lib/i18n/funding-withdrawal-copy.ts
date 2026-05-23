@@ -214,7 +214,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "home.overview.stepWithdraw": "Withdraw",
   "home.overview.stepWithdrawHint": "When eligible",
   "home.overview.availableLabel": "Available balance",
-  "home.overview.earningsBadge": "Lifetime bullish trades",
+  "home.overview.earningsBadge": "Session growth",
   "home.overview.trustLine": "{{currency}} balances · institutional controls",
   "home.trading.expand": "Open trading workspace (copy & fixed)",
   "home.trading.collapse": "Hide trading workspace",

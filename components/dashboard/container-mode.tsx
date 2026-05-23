@@ -1454,13 +1454,13 @@ export function ContainerMode({
       )}
 
       {/* Promo Banner */}
-      <Card className={cn(NX_PROMO_CALLOUT, "p-4")}>
+      <Card className={cn(NX_PROMO_CALLOUT, "p-5 sm:p-6")}>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/20">
-            <Trophy className="h-5 w-5 text-warning" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15">
+            <Trophy className="h-5 w-5 text-accent" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-warning">Grow with Container mode</h3>
+            <h3 className="font-semibold text-foreground">Grow with Container mode</h3>
                 <p className="text-sm text-muted-foreground">
                   Join {liveStats.todayJoins.toLocaleString()}+ members who put capital to work with a trader they trust.
                   Your lock funds the coin so the desk can hold through quieter tape and still capture moves — earnings
@@ -1471,7 +1471,7 @@ export function ContainerMode({
           </div>
           <button 
             onClick={() => setActiveTab("fix")}
-            className="shrink-0 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-warning-foreground hover:bg-warning/90"
+            className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
             Start Now
           </button>
@@ -1553,8 +1553,8 @@ export function ContainerMode({
           onClick={() => setActiveTab("fix")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "fix"
-              ? "bg-warning text-warning-foreground"
-              : "bg-muted text-muted-foreground hover:bg-muted/80"
+              ? "bg-secondary text-foreground ring-1 ring-border/60"
+              : NX_TAB_INACTIVE
           }`}
         >
           <Lock className="h-4 w-4" />

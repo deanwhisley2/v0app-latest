@@ -373,7 +373,7 @@ export function ChatHubScreen({
   }
 
   const listHeader = (
-    <div className="space-y-3 border-b border-border/80 px-4 py-3 sm:px-5">
+    <div className="space-y-4 border-b border-border/50 px-5 py-4 sm:px-6">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5 text-primary" aria-hidden />
@@ -412,7 +412,7 @@ export function ChatHubScreen({
         key={row.id}
         type="button"
         onClick={() => openConversation(row)}
-        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted/50 active:bg-muted/70"
+        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3.5 text-left transition-colors hover:bg-muted/35 active:bg-muted/50"
       >
         <div
           className={cn(

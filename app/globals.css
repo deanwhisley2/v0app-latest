@@ -4,117 +4,127 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   NEXUS PRO — Design System CSS Variables
-   Based on the NEXUS PRO Master Context Brief
+   NEXUS PRO — Premium financial design tokens
+   Navy foundation · emerald growth · soft luxury gold accents
    ============================================================ */
 
-/* Light theme (default CSS variables when `html` has no `.dark` class) */
+/* Light — warm off-white, breathable cards, low-glare type */
 :root {
   color-scheme: light;
-  --background: oklch(0.98 0.006 250);
-  --foreground: oklch(0.17 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.17 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.17 0.02 250);
-  --primary: oklch(0.52 0.17 195);
+  --background: oklch(0.985 0.004 95);
+  --foreground: oklch(0.28 0.02 265);
+  --card: oklch(0.995 0.003 95);
+  --card-foreground: oklch(0.28 0.02 265);
+  --popover: oklch(0.995 0.003 95);
+  --popover-foreground: oklch(0.28 0.02 265);
+  --primary: oklch(0.48 0.12 158);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.94 0.01 250);
-  --secondary-foreground: oklch(0.25 0.02 250);
-  --muted: oklch(0.94 0.01 250);
-  --muted-foreground: oklch(0.44 0.03 250);
-  --accent: oklch(0.52 0.17 195);
-  --accent-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.52 0.22 25);
+  --secondary: oklch(0.96 0.008 265);
+  --secondary-foreground: oklch(0.32 0.02 265);
+  --muted: oklch(0.955 0.008 265);
+  --muted-foreground: oklch(0.48 0.02 265);
+  --accent: oklch(0.62 0.09 88);
+  --accent-foreground: oklch(0.22 0.03 88);
+  --destructive: oklch(0.52 0.18 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.48 0.15 150);
+  --success: oklch(0.48 0.12 158);
   --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.62 0.16 85);
-  --warning-foreground: oklch(0.18 0.03 85);
-  --border: oklch(0.87 0.01 250);
-  --input: oklch(0.92 0.01 250);
-  --ring: oklch(0.52 0.17 195);
-  --chart-1: oklch(0.52 0.17 195);
-  --chart-2: oklch(0.48 0.15 150);
-  --chart-3: oklch(0.52 0.22 25);
-  --chart-4: oklch(0.62 0.16 85);
-  --chart-5: oklch(0.50 0.16 280);
+  --warning: oklch(0.58 0.08 88);
+  --warning-foreground: oklch(0.24 0.03 88);
+  --border: oklch(0.9 0.008 265);
+  --input: oklch(0.97 0.006 265);
+  --ring: oklch(0.48 0.12 158);
+  --chart-1: oklch(0.48 0.12 158);
+  --chart-2: oklch(0.62 0.09 88);
+  --chart-3: oklch(0.52 0.18 25);
+  --chart-4: oklch(0.58 0.08 88);
+  --chart-5: oklch(0.50 0.10 265);
   --radius: 1rem;
-  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 14px oklch(0 0 0 / 0.06);
-  --shadow-elevated: 0 4px 20px oklch(0 0 0 / 0.08);
-  --sidebar: oklch(0.97 0.006 250);
-  --sidebar-foreground: oklch(0.17 0.02 250);
-  --sidebar-primary: oklch(0.52 0.17 195);
+  --shadow-card: 0 1px 1px oklch(0.25 0.02 265 / 0.04), 0 6px 20px oklch(0.25 0.02 265 / 0.06);
+  --shadow-elevated: 0 10px 32px oklch(0.25 0.02 265 / 0.1);
+  --sidebar: oklch(0.98 0.004 95);
+  --sidebar-foreground: oklch(0.28 0.02 265);
+  --sidebar-primary: oklch(0.48 0.12 158);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.94 0.01 250);
-  --sidebar-accent-foreground: oklch(0.25 0.02 250);
-  --sidebar-border: oklch(0.87 0.01 250);
-  --sidebar-ring: oklch(0.52 0.17 195);
+  --sidebar-accent: oklch(0.96 0.008 265);
+  --sidebar-accent-foreground: oklch(0.32 0.02 265);
+  --sidebar-border: oklch(0.9 0.008 265);
+  --sidebar-ring: oklch(0.48 0.12 158);
 }
 
+/* Dark — deep navy layers (not pure black), soft elevation */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.12 0.008 250);
-  --foreground: oklch(0.93 0.01 250);
-  --card: oklch(0.16 0.012 250);
-  --card-foreground: oklch(0.93 0.01 250);
-  --popover: oklch(0.17 0.012 250);
-  --popover-foreground: oklch(0.93 0.01 250);
-  --primary: oklch(0.62 0.16 195);
-  --primary-foreground: oklch(0.12 0.02 250);
-  --secondary: oklch(0.20 0.015 250);
-  --secondary-foreground: oklch(0.88 0.01 250);
-  --muted: oklch(0.22 0.015 250);
-  --muted-foreground: oklch(0.62 0.02 250);
-  --accent: oklch(0.62 0.16 195);
-  --accent-foreground: oklch(0.12 0.02 250);
-  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.28), 0 4px 16px oklch(0 0 0 / 0.22);
-  --shadow-elevated: 0 8px 28px oklch(0 0 0 / 0.35);
-  --destructive: oklch(0.60 0.22 25);
+  --background: oklch(0.17 0.028 265);
+  --foreground: oklch(0.92 0.01 265);
+  --card: oklch(0.21 0.024 265);
+  --card-foreground: oklch(0.92 0.01 265);
+  --popover: oklch(0.22 0.024 265);
+  --popover-foreground: oklch(0.92 0.01 265);
+  --primary: oklch(0.68 0.11 158);
+  --primary-foreground: oklch(0.14 0.02 158);
+  --secondary: oklch(0.24 0.022 265);
+  --secondary-foreground: oklch(0.86 0.01 265);
+  --muted: oklch(0.25 0.02 265);
+  --muted-foreground: oklch(0.66 0.018 265);
+  --accent: oklch(0.76 0.08 88);
+  --accent-foreground: oklch(0.16 0.02 88);
+  --destructive: oklch(0.58 0.18 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.70 0.18 150);
-  --success-foreground: oklch(0.10 0.02 150);
-  --warning: oklch(0.75 0.18 85);
-  --warning-foreground: oklch(0.15 0.03 85);
-  --border: oklch(0.28 0.015 250);
-  --input: oklch(0.19 0.015 250);
-  --ring: oklch(0.62 0.16 195);
-  --chart-1: oklch(0.65 0.20 195);
-  --chart-2: oklch(0.70 0.18 150);
-  --chart-3: oklch(0.60 0.22 25);
-  --chart-4: oklch(0.75 0.18 85);
-  --chart-5: oklch(0.60 0.18 280);
-  --sidebar: oklch(0.14 0.012 250);
-  --sidebar-foreground: oklch(0.95 0.01 250);
-  --sidebar-primary: oklch(0.65 0.20 195);
-  --sidebar-primary-foreground: oklch(0.10 0.02 250);
-  --sidebar-accent: oklch(0.15 0.02 250);
-  --sidebar-accent-foreground: oklch(0.90 0.01 250);
-  --sidebar-border: oklch(0.28 0.015 250);
-  --sidebar-ring: oklch(0.62 0.16 195);
+  --success: oklch(0.68 0.11 158);
+  --success-foreground: oklch(0.14 0.02 158);
+  --warning: oklch(0.72 0.07 88);
+  --warning-foreground: oklch(0.16 0.02 88);
+  --border: oklch(0.32 0.02 265);
+  --input: oklch(0.23 0.022 265);
+  --ring: oklch(0.68 0.11 158);
+  --chart-1: oklch(0.68 0.11 158);
+  --chart-2: oklch(0.76 0.08 88);
+  --chart-3: oklch(0.58 0.18 25);
+  --chart-4: oklch(0.72 0.07 88);
+  --chart-5: oklch(0.62 0.06 265);
+  --shadow-card: 0 1px 0 oklch(1 0 0 / 0.04), 0 8px 24px oklch(0.05 0.02 265 / 0.35);
+  --shadow-elevated: 0 16px 40px oklch(0.05 0.02 265 / 0.45);
+  --sidebar: oklch(0.19 0.026 265);
+  --sidebar-foreground: oklch(0.92 0.01 265);
+  --sidebar-primary: oklch(0.68 0.11 158);
+  --sidebar-primary-foreground: oklch(0.14 0.02 158);
+  --sidebar-accent: oklch(0.24 0.022 265);
+  --sidebar-accent-foreground: oklch(0.86 0.01 265);
+  --sidebar-border: oklch(0.32 0.02 265);
+  --sidebar-ring: oklch(0.68 0.11 158);
 }
 
-/* Institutional surfaces — reuse across dashboard */
+/* Layered surfaces — soft borders, breathable padding */
 .nexus-panel {
   border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background-color: var(--card);
+  border: 1px solid color-mix(in oklch, var(--border) 65%, transparent);
+  background: color-mix(in oklch, var(--card) 94%, var(--background));
   box-shadow: var(--shadow-card);
 }
 
 .nexus-panel-pad {
-  padding: 1rem;
+  padding: 1.125rem;
 }
 @media (min-width: 640px) {
   .nexus-panel-pad {
-    padding: 1.25rem;
+    padding: 1.375rem;
   }
 }
 
 .nexus-stat-tile {
   border-radius: calc(var(--radius) - 4px);
-  border: 1px solid var(--border);
-  background-color: color-mix(in oklch, var(--muted) 55%, transparent);
+  border: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+  background: color-mix(in oklch, var(--muted) 40%, var(--card));
+}
+
+.nexus-section-gap {
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .nexus-section-gap {
+    gap: 1.25rem;
+  }
 }
 
 .nexus-touch-target {
@@ -200,6 +210,24 @@
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  background-color: var(--background);
+}
+
+:root #nexus-app-root {
+  background-image: linear-gradient(
+    180deg,
+    oklch(0.99 0.003 95) 0%,
+    oklch(0.975 0.006 265) 100%
+  );
+}
+
+.dark #nexus-app-root {
+  background-image: linear-gradient(
+    165deg,
+    oklch(0.18 0.03 268) 0%,
+    oklch(0.16 0.026 262) 42%,
+    oklch(0.17 0.028 268) 100%
+  );
 }
 
 /* Custom scrollbar — theme-aware */

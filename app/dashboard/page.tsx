@@ -3213,7 +3213,7 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content — Container desk + Chat hub (no legacy Wallstreet deck). */}
-      <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:pb-4 ${activeTab === "container" ? "" : "pt-3"}`}>
+      <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:px-6 md:pb-6 ${activeTab === "container" ? "" : "pt-4 md:pt-5"}`}>
         {activeTab === "container" && (
           <div className="space-y-4">
             {showRetailBalancePanels ? (

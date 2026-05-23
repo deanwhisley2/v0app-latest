@@ -16,7 +16,7 @@ import { HomeOverviewGuide } from "@/components/dashboard/home-overview-guide"
 import { Button } from "@/components/ui/button"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import { cn } from "@/lib/utils"
-import { NX_PANEL } from "@/lib/nexus-ui-surfaces"
+import { NX_GROWTH_BADGE, NX_PANEL } from "@/lib/nexus-ui-surfaces"
 
 export type WithdrawalEligibilityHint = {
   minUsd: number
@@ -62,7 +62,7 @@ function MetricCard({
   iconClassName?: string
 }) {
   return (
-    <div className={cn(panelClass, "p-3.5 sm:p-4", className)}>
+    <div className={cn(panelClass, "p-5 sm:p-6", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -106,14 +106,14 @@ export function RetailBalanceHomePanels({
   const pocketDisplay = showBalance ? formatUserMoney(containerWithdrawableEarnings) : masked
 
   return (
-    <div className="nexus-home-wallet-stack space-y-3 pb-2 md:space-y-4">
+    <div className="nexus-home-wallet-stack nexus-section-gap flex flex-col pb-3 md:pb-4">
       <DashboardProfileWelcome fullName={fullName} t={t} className="nexus-home-panel" />
 
       <HomeOverviewGuide t={t} />
 
       {/* Nexus Main */}
       <section className={panelClass} aria-label={t("funding.balance.mainTitle")}>
-        <div className="border-b border-border px-4 py-3.5 sm:px-5">
+        <div className="border-b border-border/50 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/80">
               <Wallet className="h-5 w-5 text-primary" aria-hidden />
@@ -127,12 +127,12 @@ export function RetailBalanceHomePanels({
           </div>
         </div>
 
-        <div className="px-4 py-4 sm:px-5 sm:py-5">
-          <div className="grid grid-cols-[1fr_auto] items-start gap-2">
-            <div className="min-w-0 space-y-2">
+        <div className="px-5 py-5 sm:px-6 sm:py-6">
+          <div className="grid grid-cols-[1fr_auto] items-start gap-3">
+            <div className="min-w-0 space-y-2.5">
               <p className="text-sm font-medium text-muted-foreground">{t("home.overview.availableLabel")}</p>
-              <p className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                <TrendingUp className="h-3 w-3 shrink-0 text-primary" aria-hidden />
+              <p className={cn(NX_GROWTH_BADGE, "max-w-full")}>
+                <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="truncate">
                   {t("home.overview.earningsBadge")}: {showBalance ? formatUserMoney(totalEarnings) : "••••"}
                 </span>
@@ -148,12 +148,12 @@ export function RetailBalanceHomePanels({
               {showBalance ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-3 min-h-[2.5rem] font-mono text-[1.75rem] font-semibold tabular-nums leading-tight tracking-tight text-foreground sm:min-h-[2.75rem] sm:text-[2rem]">
+          <p className="mt-4 min-h-[2.5rem] font-mono text-[1.75rem] font-semibold tabular-nums leading-tight tracking-tight text-foreground sm:min-h-[2.75rem] sm:text-[2rem]">
             {mainDisplay}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 border-t border-border px-4 py-3.5 sm:px-5">
+        <div className="grid grid-cols-2 gap-3 border-t border-border/50 px-5 py-4 sm:px-6">
           <Button type="button" size="lg" className="min-h-12 w-full font-semibold" onClick={onAddFunds}>
             <Plus className="h-4 w-4 shrink-0" aria-hidden />
             {t("funding.button.addFunds")}
@@ -166,8 +166,8 @@ export function RetailBalanceHomePanels({
       </section>
 
       {/* Pocket balance */}
-      <section className={cn(panelClass, "p-4 sm:p-5")} aria-label={t("funding.balance.liquidTitle")}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+      <section className={cn(panelClass, "p-5 sm:p-6")} aria-label={t("funding.balance.liquidTitle")}>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">
               {t("funding.balance.liquidTitle")}
@@ -195,7 +195,7 @@ export function RetailBalanceHomePanels({
         value={showBalance ? formatUserMoney(withdrawalPendingBalance) : "••••"}
         hint={t("withdrawal.card.frozenBody")}
         icon={Lock}
-        iconClassName="text-amber-700 dark:text-amber-400"
+        iconClassName="text-muted-foreground"
       />
 
       {withdrawalEligibility ? (

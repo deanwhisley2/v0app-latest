@@ -146,8 +146,8 @@ export function BottomNav({
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border/80 bg-card/95 shadow-[0_-4px_24px_oklch(0_0_0/0.08)] md:hidden touch-manipulation dark:shadow-[0_-4px_24px_oklch(0_0_0/0.35)]">
-        <div className="flex items-stretch justify-around px-1 pt-1.5 pb-1 safe-area-pb">
+      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border/40 bg-card/90 shadow-[0_-8px_32px_oklch(0_0_0/0.06)] backdrop-blur-md md:hidden touch-manipulation dark:bg-card/85 dark:shadow-[0_-8px_32px_oklch(0_0_0/0.32)]">
+        <div className="flex items-stretch justify-around px-2 pt-2 pb-1 safe-area-pb">
           {navItems.map((item) => {
             const isActive = resolvedActiveTab === item.id
             return (
@@ -159,7 +159,7 @@ export function BottomNav({
               >
                 <div
                   className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-                    isActive ? "bg-primary/12" : "bg-transparent"
+                    isActive ? "bg-primary/10 ring-1 ring-primary/15" : "bg-transparent"
                   }`}
                 >
                   <item.icon
