@@ -50,8 +50,14 @@ import {
   CopyTraderMarketCard,
   FixDeskMarketCard,
   LockedTraderCompact,
+  type MarketLiveSnapshot,
   type MarketTrader,
 } from "@/components/dashboard/container-trader-market-cards"
+import {
+  COPY_TRADER_INITIAL_ACCESS,
+  copyEstimatedGrowthPct,
+  fixEstimatedGrowthPct,
+} from "@/lib/container-desk-market-display"
 import { cn } from "@/lib/utils"
 import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
 import { NX_PROMO_CALLOUT, NX_TAB_ACTIVE, NX_TAB_INACTIVE } from "@/lib/nexus-ui-surfaces"
@@ -439,7 +445,24 @@ export function ContainerMode({
   const [sessionsLoadError, setSessionsLoadError] = useState<string | null>(null)
   const [sessionsReloadNonce, setSessionsReloadNonce] = useState(0)
 
-  const { btc: btcSpotRef, getSymbolPrice, authorityRevision } = useMarketPriceAuthority()
+  const { btc: btcSpotRef, getSymbolPrice, authorityRevision, snap: marketSnap } =
+    useMarketPriceAuthority()
+
+  const marketLive = useMemo<MarketLiveSnapshot>(
+    () => ({
+      authorityRevision,
+      getSymbolPrice,
+      getSymbolChange24h: (symbol: string) => {
+        const sym = symbol.toUpperCase()
+        const row = marketSnap.pricesBySymbol[sym]
+        if (row && Number.isFinite(row.change24hPct)) return row.change24hPct
+        if (sym === "BTC" && marketSnap.btc) return marketSnap.btc.change24hPct
+        const coin = marketSnap.catalog.find((c) => c.symbol === sym)
+        return coin?.change24h ?? null
+      },
+    }),
+    [authorityRevision, getSymbolPrice, marketSnap],
+  )
 
   const setContainerTab = useCallback((tab: ContainerTab) => {
     setActiveTab(tab)
@@ -1013,8 +1036,10 @@ export function ContainerMode({
     return () => window.clearInterval(id)
   }, [activeFixTrades.length])
 
-  const availableTraders = copyDeskCatalog.filter((t) => !t.locked)
-  const lockedTraders = copyDeskCatalog.filter((t) => t.locked)
+  const copyUnlockedTraders = copyDeskCatalog.filter((t) => !t.locked)
+  const copyPolicyLockedTraders = copyDeskCatalog.filter((t) => t.locked)
+  const copyAccessibleTraders = copyUnlockedTraders.slice(0, COPY_TRADER_INITIAL_ACCESS)
+  const copyProgressionLockedTraders = copyUnlockedTraders.slice(COPY_TRADER_INITIAL_ACCESS)
 
   const fixLiquidityGate = userLevel === 2 && retailerLiquidityOpsBlocked
   const fixAvailableTraders = fixDeskCatalog.filter((t) => !t.locked)
@@ -2232,13 +2257,32 @@ export function ContainerMode({
               <h3 className="text-base font-semibold tracking-tight">{t("container.market.copyTitle")}</h3>
               <p className="text-sm text-muted-foreground">{t("container.market.copySubtitle")}</p>
             </div>
-            {availableTraders.map((trader) => {
+            {copyAccessibleTraders.map((trader) => {
               const isActive = activeCopyTrades.some((row) => sessionMatchesDesk(row.traderId, trader))
               return (
                 <CopyTraderMarketCard
                   key={trader.id}
                   trader={toMarketTrader(trader)}
                   isActive={isActive}
+                  live={marketLive}
+                  copyMinUsd={copyMinUsdPolicy}
+                  formatMoney={formatUserMoney}
+                  riskClassName={getRiskColor(trader.riskLevel)}
+                  t={t}
+                  onPreview={() => setSelectedTrader(trader)}
+                  onCopy={() => setSelectedTrader(trader)}
+                />
+              )
+            })}
+            {copyProgressionLockedTraders.map((trader) => {
+              const isActive = activeCopyTrades.some((row) => sessionMatchesDesk(row.traderId, trader))
+              return (
+                <CopyTraderMarketCard
+                  key={trader.id}
+                  trader={toMarketTrader(trader)}
+                  isActive={isActive}
+                  copyAccessLocked
+                  live={marketLive}
                   copyMinUsd={copyMinUsdPolicy}
                   formatMoney={formatUserMoney}
                   riskClassName={getRiskColor(trader.riskLevel)}
@@ -2250,14 +2294,19 @@ export function ContainerMode({
             })}
           </div>
 
-          {lockedTraders.length > 0 ? (
+          {copyPolicyLockedTraders.length > 0 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-muted-foreground">
                 <Lock className="mr-1 inline h-4 w-4" />
-                {lockedTraders.length} locked
+                {copyPolicyLockedTraders.length} locked
               </h3>
-              {lockedTraders.slice(0, 4).map((trader) => (
-                <LockedTraderCompact key={trader.id} trader={toMarketTrader(trader)} t={t} />
+              {copyPolicyLockedTraders.slice(0, 4).map((trader) => (
+                <LockedTraderCompact
+                  key={trader.id}
+                  trader={toMarketTrader(trader)}
+                  mode="copy"
+                  t={t}
+                />
               ))}
             </div>
           ) : null}
@@ -2307,6 +2356,7 @@ export function ContainerMode({
                   key={trader.id}
                   trader={toMarketTrader(trader)}
                   isActive={isActive}
+                  live={marketLive}
                   fixMinUsd={fixMinUsdPolicy}
                   formatMoney={formatUserMoney}
                   riskClassName={getRiskColor(trader.riskLevel)}
@@ -2334,6 +2384,7 @@ export function ContainerMode({
                   <LockedTraderCompact
                     key={`fix-locked-${trader.id}`}
                     trader={{ ...toMarketTrader(trader), lockReason: tierReason }}
+                    mode="fix"
                     t={t}
                   />
                 )
@@ -2397,14 +2448,12 @@ export function ContainerMode({
               </div>
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <p className="text-xs text-muted-foreground">
-                  {activeTab === "fix" ? "Schedule target (policy)" : "24h cycle risk"}
+                  {activeTab === "fix" ? t("container.market.estimatedGrowth") : "24h session risk"}
                 </p>
                 <p className="text-lg font-bold text-primary">
                   {activeTab === "fix"
-                    ? fixProjectionPreview
-                      ? formatUserMoney(fixProjectionPreview.totalTargetUsd)
-                      : "—"
-                    : "Uninsured"}
+                    ? `+${fixEstimatedGrowthPct(selectedTrader.monthlyReturn)}%`
+                    : `+${copyEstimatedGrowthPct(selectedTrader.monthlyReturn)}%`}
                 </p>
               </div>
             </div>
@@ -2514,7 +2563,7 @@ export function ContainerMode({
                         Policy schedule (illustrative)
                       </span>
                       <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
-                        {fixProjectionPreview ? `${fixProjectionPreview.dayCount}d curve` : "—"}
+                        {fixProjectionPreview ? `${fixProjectionPreview.dayCount}d session` : "—"}
                       </span>
                     </div>
                     {fixProjectionPreview ? (
