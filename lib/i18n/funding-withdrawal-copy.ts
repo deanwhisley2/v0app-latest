@@ -199,9 +199,34 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.fix.unreleasedLabel": "Unreleased",
   "container.fix.availableToRelease": "Available to release",
   "container.promo.title": "Grow with Container mode",
+  "container.promo.summary":
+    "Join {{memberCount}}+ members — allocate to a trusted desk, track milestones on {{daysShort}} / {{daysMid}} / {{daysLong}}‑day programs.",
   "container.promo.body":
-    "Join {{memberCount}}+ members who allocate capital to a master trader they trust. Your lock backs the position so the desk can buy and hold through quieter markets—without selling the entire coin on dips, as set out in your signed trader agreement. When price moves above the entry, the trader completes sell legs and your share of profit is credited on your Container screen. Track live milestones across {{daysShort}} / {{daysMid}} / {{daysLong}}‑day programs—results from real buys and sells, not a headline rate in fine print.",
+    "Your lock backs the desk so it can buy and hold through quieter markets, per your signed trader agreement. When price clears the entry, sell legs complete and your share of profit credits on this screen — real desk activity, not a headline rate in fine print.",
   "container.promo.cta": "Start Now",
+  "container.welcome.title": "Welcome to Container mode",
+  "container.welcome.summary": "Follow expert traders with copy (24h) or fixed-term locks (1 / 3 / 6 months).",
+  "container.welcome.copyLine":
+    "Copy — 24h cycles, higher risk, not insured like fixed locks. Force exit fees apply.",
+  "container.welcome.fixLine":
+    "Fixed — principal locked for the term; release bullish trades to pocket per policy.",
+  "container.welcome.level": "Your level: {{level}} ({{name}})",
+  "container.copy.risk.title": "Copy trading — higher risk",
+  "container.copy.risk.summary": "24h uninsured cycles · force exit fees · separate from fixed insurance.",
+  "container.copy.risk.detail1": "Capital may pause in recovery-hold during stress; force pull-out is always available.",
+  "container.copy.risk.detail2":
+    "Force exit: modeled {{cancelPct}}% cancel + {{withdrawPct}}% withdrawal + adverse-move haircut at settlement.",
+  "container.copy.risk.detail3": "Auto-adjust targets ~+5% before withdrawal fee — informational until execution confirms.",
+  "container.fix.rules.summary":
+    "Release bullish trades to pocket anytime (fee applies). Principal stays locked until maturity or early exit.",
+  "container.fix.rules.detail1": "Locked allocation tracks your coin reference; commission accrues per desk policy.",
+  "container.fix.rules.detail2": "Live spot on your card is display only — settlement follows Nexus policy.",
+  "container.btc.title": "BTC / USDT live reference",
+  "container.btc.summary": "Market authority display — lock price is set when you open a fixed trade.",
+  "container.platformStats.title": "Platform activity",
+  "container.platformStats.summary": "{{users}} members · {{fix}} active fixed desks",
+  "container.info.viewDetails": "View details",
+  "container.info.hideDetails": "Hide details",
   "home.profile.eyebrow": "Member workspace",
   "home.profile.greeting.morning": "Good morning, {{name}}",
   "home.profile.greeting.afternoon": "Good afternoon, {{name}}",

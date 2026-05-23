@@ -26,7 +26,9 @@ export function DashboardProfileWelcome({ fullName, t, className }: Props) {
         {t("home.profile.eyebrow")}
       </p>
       <h1 className="mt-1.5 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{greeting}</h1>
-      <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">{t("home.profile.subtitle")}</p>
+      <p className="mt-1 max-w-lg text-xs leading-snug text-muted-foreground line-clamp-2 sm:text-sm">
+        {t("home.profile.subtitle")}
+      </p>
     </header>
   )
 }

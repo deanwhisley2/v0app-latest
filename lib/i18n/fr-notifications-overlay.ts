@@ -135,9 +135,14 @@ export const frNotificationsOverlay: Record<string, string> = {
   "container.fix.unreleasedLabel": "Non libéré",
   "container.fix.availableToRelease": "Disponible à libérer",
   "container.promo.title": "Évoluez avec le mode Container",
+  "container.promo.summary":
+    "Rejoignez {{memberCount}}+ membres — programmes {{daysShort}} / {{daysMid}} / {{daysLong}} jours.",
   "container.promo.body":
     "Rejoignez plus de {{memberCount}} membres qui confient leur capital à un trader maître de confiance. Votre verrou finance la position pour que le desk puisse acheter et tenir dans les marchés calmes—sans vendre toute la position à la baisse, selon votre accord signé avec le trader. Quand le prix dépasse l’entrée, le trader réalise des ventes et votre part du profit est créditée sur l’écran Container. Suivez les jalons en direct sur les programmes {{daysShort}} / {{daysMid}} / {{daysLong}} jours—résultats de vrais achats et ventes, pas un taux affiché en petits caractères.",
   "container.promo.cta": "Commencer",
+  "container.welcome.title": "Bienvenue en mode Container",
+  "container.welcome.summary": "Suivez des traders experts — copie (24 h) ou verrous (1 / 3 / 6 mois).",
+  "container.info.viewDetails": "Voir les détails",
   "container.error.invalidLocalAmount":
     "Saisissez un montant valide (ex. 1 519 199,50 ou 1519199,50 en CDF ; 150 000 ou 1 500 000,00 en CFA/XAF ; format US 1,519,990 aussi accepté).",
   "container.error.fixOpenFailed": "Échec d’ouverture du trade fixe.",

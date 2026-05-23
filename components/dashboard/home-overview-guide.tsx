@@ -5,7 +5,7 @@ import { Layers, Plus, Wallet } from "lucide-react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { cn } from "@/lib/utils"
 
-const GUIDE_DISMISS_KEY = "nexus_home_guide_collapsed_v1"
+const GUIDE_STORAGE_KEY = "nexus_home_guide_collapsed_v1"
 
 type Props = {
   t: (key: string) => string
@@ -26,18 +26,16 @@ export function HomeOverviewGuide({ t, className }: Props) {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(GUIDE_DISMISS_KEY) === "0" && detailsRef.current) {
-        detailsRef.current.open = true
-      }
+      const stored = localStorage.getItem(GUIDE_STORAGE_KEY)
+      if (stored === "1" && detailsRef.current) detailsRef.current.open = true
     } catch {
       /* ignore */
     }
   }, [])
 
   const onToggle = () => {
-    const open = detailsRef.current?.open ?? false
     try {
-      localStorage.setItem(GUIDE_DISMISS_KEY, open ? "0" : "1")
+      localStorage.setItem(GUIDE_STORAGE_KEY, detailsRef.current?.open ? "1" : "0")
     } catch {
       /* ignore */
     }
@@ -49,12 +47,11 @@ export function HomeOverviewGuide({ t, className }: Props) {
       className={cn("nexus-home-panel rounded-2xl border border-border/50 bg-card/95 shadow-[var(--shadow-card)]", className)}
       onToggle={onToggle}
     >
-      <summary className="nexus-home-guide-summary flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 sm:px-5 [&::-webkit-details-marker]:hidden">
+      <summary className="nexus-home-guide-summary flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground">
-            {t("home.overview.eyebrow")}
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">{t("home.overview.eyebrow")}</p>
           <p className="mt-0.5 text-sm font-medium text-foreground">{t("home.overview.compactLine")}</p>
+          <p className="mt-1 text-[11px] font-medium text-primary">{t("container.info.viewDetails")}</p>
         </div>
       </summary>
 

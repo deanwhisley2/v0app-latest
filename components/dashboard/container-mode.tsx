@@ -44,15 +44,10 @@ import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-n
 import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
+import { CollapsibleInfoPanel } from "@/components/dashboard/collapsible-info-panel"
 import { cn } from "@/lib/utils"
 import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
-import {
-  NX_INFO_CALLOUT,
-  NX_PROMO_CALLOUT,
-  NX_SOFT_ACCENT,
-  NX_TAB_ACTIVE,
-  NX_TAB_INACTIVE,
-} from "@/lib/nexus-ui-surfaces"
+import { NX_PROMO_CALLOUT, NX_TAB_ACTIVE, NX_TAB_INACTIVE } from "@/lib/nexus-ui-surfaces"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -345,7 +340,6 @@ export function ContainerMode({
     return "dashboard"
   })
   const [selectedTrader, setSelectedTrader] = useState<MasterTrader | null>(null)
-  const [showInstructions, setShowInstructions] = useState(true)
   const [copyAmount, setCopyAmount] = useState("500")
   const [fixAmount, setFixAmount] = useState("1000")
 
@@ -538,14 +532,35 @@ export function ContainerMode({
     () => Math.max(liveStats.totalUsers, PLATFORM_PROMO_MIN_MEMBERS),
     [liveStats.totalUsers],
   )
-  const promoBody = useMemo(
+  const promoPlaceholders = useMemo(
+    () => ({
+      memberCount: promoMemberCount.toLocaleString(locale),
+      daysShort: String(fixPeriodDayCount(1)),
+      daysMid: String(fixPeriodDayCount(3)),
+      daysLong: String(fixPeriodDayCount(6)),
+    }),
+    [promoMemberCount, locale],
+  )
+  const promoSummary = useMemo(
     () =>
-      t("container.promo.body")
-        .replace(/\{\{memberCount\}\}/g, promoMemberCount.toLocaleString(locale))
-        .replace(/\{\{daysShort\}\}/g, String(fixPeriodDayCount(1)))
-        .replace(/\{\{daysMid\}\}/g, String(fixPeriodDayCount(3)))
-        .replace(/\{\{daysLong\}\}/g, String(fixPeriodDayCount(6))),
-    [t, promoMemberCount, locale],
+      t("container.promo.summary")
+        .replace(/\{\{memberCount\}\}/g, promoPlaceholders.memberCount)
+        .replace(/\{\{daysShort\}\}/g, promoPlaceholders.daysShort)
+        .replace(/\{\{daysMid\}\}/g, promoPlaceholders.daysMid)
+        .replace(/\{\{daysLong\}\}/g, promoPlaceholders.daysLong),
+    [t, promoPlaceholders],
+  )
+  const promoBody = useMemo(
+    () => t("container.promo.body"),
+    [t],
+  )
+  const viewDetailsLabel = t("container.info.viewDetails")
+  const platformStatsSummary = useMemo(
+    () =>
+      t("container.platformStats.summary")
+        .replace("{{users}}", liveStats.totalUsers.toLocaleString())
+        .replace("{{fix}}", liveStats.activeFixTrades.toLocaleString()),
+    [t, liveStats.totalUsers, liveStats.activeFixTrades],
   )
 
   const fixProjectionPreview = useMemo(() => {
@@ -1499,57 +1514,62 @@ export function ContainerMode({
 
   return (
     <div ref={deskRootRef} className="nexus-container-mode space-y-4">
-      {/* Live Stats Banner */}
-      <Card className={cn(NX_SOFT_ACCENT, "p-3", MOBILE_FLAT_SURFACE)}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className={cn("flex h-2 w-2 rounded-full bg-success", MOBILE_STATIC_MOTION, "animate-pulse")} />
-            <span className="text-sm font-medium">LIVE Platform Stats</span>
+      <CollapsibleInfoPanel
+        storageKey="nexus_container_platform_stats_v1"
+        title={t("container.platformStats.title")}
+        summary={platformStatsSummary}
+        tone="neutral"
+        viewDetailsLabel={viewDetailsLabel}
+        icon={
+          <div
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-full bg-success/15",
+              MOBILE_STATIC_MOTION,
+            )}
+          >
+            <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <div className="flex items-center gap-1">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="font-mono font-bold">{liveStats.totalUsers.toLocaleString()}</span>
-              <span className="text-muted-foreground">users</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <TrendingUp className="h-4 w-4 text-success" />
-              <span className="font-mono font-bold text-success">+{liveStats.todayJoins.toLocaleString()}</span>
-              <span className="text-muted-foreground">today</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Lock className="h-4 w-4 text-warning" />
-              <span className="font-mono font-bold">{liveStats.activeFixTrades.toLocaleString()}</span>
-              <span className="text-muted-foreground">fix trades</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <DollarSign className="h-4 w-4 text-success" />
-              <span className="font-mono font-bold text-success">{formatUserMoney(liveStats.totalEarnedUsd)}</span>
-              <span className="text-muted-foreground">earned</span>
-            </div>
+        }
+        className={MOBILE_FLAT_SURFACE}
+      >
+        <div className="flex flex-wrap gap-4 text-sm">
+          <div className="flex items-center gap-1">
+            <Users className="h-4 w-4 text-primary" />
+            <span className="font-mono font-bold">{liveStats.totalUsers.toLocaleString()}</span>
+            <span>users</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <TrendingUp className="h-4 w-4 text-success" />
+            <span className="font-mono font-bold text-success">+{liveStats.todayJoins.toLocaleString()}</span>
+            <span>joined today</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <DollarSign className="h-4 w-4 text-success" />
+            <span className="font-mono font-bold text-success">{formatUserMoney(liveStats.totalEarnedUsd)}</span>
+            <span>platform earned (display)</span>
           </div>
         </div>
-      </Card>
+      </CollapsibleInfoPanel>
 
       {retailerCreditSeller && userLevel === 2 && (
-        <Card className={cn(NX_INFO_CALLOUT, "p-4")}>
-          <div className="flex gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
+        <CollapsibleInfoPanel
+          storageKey="nexus_container_retailer_desk_v1"
+          title="Retailer credit desk"
+          summary="Level 2 designated desk — approve inbound funding and manage payment lines."
+          tone="info"
+          viewDetailsLabel={viewDetailsLabel}
+          icon={
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20">
               <Store className="h-5 w-5 text-primary" />
             </div>
-            <div className="min-w-0 text-sm">
-              <h3 className="font-semibold text-foreground">Retailer credit desk (designated Level 2)</h3>
-              <p className="mt-1 text-muted-foreground">
-                Your account is enabled for retailer credit operations alongside fixed trades. Keep payment collection
-                details current in Dashboard → Add Funds (Level 2 retailer setup). Level 1 and Level 2 (non-designated desk)
-                users submit funding with a transaction reference for your approval workflow.
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Policy: up to five retailer credit accounts platform-wide — align basin limits before approving payouts.
-              </p>
-            </div>
-          </div>
-        </Card>
+          }
+        >
+          <p className="text-sm leading-relaxed">
+            Keep payment collection details current under Add Funds. Level 1 and non-designated Level 2 users submit
+            references for your approval. Up to five retailer credit accounts platform-wide — align basin limits before
+            payouts.
+          </p>
+        </CollapsibleInfoPanel>
       )}
 
       {fixLiquidityGate && (
@@ -1567,72 +1587,63 @@ export function ContainerMode({
         </Card>
       )}
 
-      {/* Promo Banner */}
-      <Card className={cn(NX_PROMO_CALLOUT, "p-5 sm:p-6")}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15">
+      <CollapsibleInfoPanel
+        storageKey="nexus_container_promo_v1"
+        title={t("container.promo.title")}
+        summary={promoSummary}
+        tone="promo"
+        viewDetailsLabel={viewDetailsLabel}
+        className={NX_PROMO_CALLOUT}
+        icon={
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/15">
             <Trophy className="h-5 w-5 text-accent" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-foreground">{t("container.promo.title")}</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">{promoBody}</p>
-          </div>
+        }
+        trailing={
           <button
             type="button"
-            onClick={() => setContainerTab("fix")}
-            className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            onClick={(e) => {
+              e.preventDefault()
+              setContainerTab("fix")
+            }}
+            className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 sm:text-sm"
           >
             {t("container.promo.cta")}
           </button>
-        </div>
-      </Card>
+        }
+      >
+        <p className="text-sm leading-relaxed">{promoBody}</p>
+      </CollapsibleInfoPanel>
 
-      {/* Instructions Popup */}
-      {showInstructions && (
-        <Card className={cn(NX_INFO_CALLOUT, "p-4")}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                <Info className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-primary">Welcome to Container Mode</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Follow expert traders and automatically copy their trades. Choose between:
-                </p>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <Copy className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                    <span>
-                      <strong>Copy:</strong> 24h uninsured cycles — aggressive, separate risk pools from fixed insurance.
-                      Force pull-out applies cancel + withdrawal + market haircut.
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Lock className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
-                    <span>
-                      <strong>Fixed:</strong> Locked 1/3/6 months on the scheduled earnings curve (policy) — distinct from
-                      copy-trading risk.
-                    </span>
-                  </li>
-                </ul>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Level:{" "}
-                  <span className="font-semibold text-primary">
-                    Level {userLevel} ({levelRequirements[userLevel]?.name ?? "Starter"})
-                  </span>
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground border-t border-border/60 pt-2">
-                  {fixedTradeTierHint(userLevel)}
-                </p>
-              </div>
-            </div>
-            <button onClick={() => setShowInstructions(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
+      <CollapsibleInfoPanel
+        storageKey="nexus_container_welcome_v1"
+        title={t("container.welcome.title")}
+        summary={t("container.welcome.summary")}
+        tone="info"
+        viewDetailsLabel={viewDetailsLabel}
+        icon={
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20">
+            <Info className="h-5 w-5 text-primary" />
           </div>
-        </Card>
-      )}
+        }
+      >
+        <ul className="space-y-2 text-sm">
+          <li className="flex items-start gap-2">
+            <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+            <span>{t("container.welcome.copyLine")}</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+            <span>{t("container.welcome.fixLine")}</span>
+          </li>
+        </ul>
+        <p className="mt-3 text-xs">
+          {t("container.welcome.level")
+            .replace("{{level}}", String(userLevel))
+            .replace("{{name}}", levelRequirements[userLevel]?.name ?? "Starter")}
+        </p>
+        <p className="mt-2 border-t border-border/60 pt-2 text-xs">{fixedTradeTierHint(userLevel)}</p>
+      </CollapsibleInfoPanel>
 
       {sessionsLoadError ? (
         <Card className="border-destructive/30 bg-destructive/5 p-4">
@@ -1724,65 +1735,37 @@ export function ContainerMode({
         </button>
       </div>
 
-      {/* Live BTC reference — Binance spot (display only; not ledger settlement) */}
-      <Card className={cn("border border-border bg-card p-3 sm:p-4", MOBILE_FLAT_SURFACE)}>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-foreground">
-            <BarChart3 className="h-5 w-5 shrink-0 text-primary" aria-hidden />
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">BTC / USDT · live reference</p>
-              <p className="text-[10px] text-muted-foreground">Multi-provider market authority — display reference only; locks use spot at open.</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-            {btcSpotRef.status === "loading" ? (
-              <span className="text-sm text-muted-foreground">Loading spot…</span>
-            ) : btcSpotRef.status === "live" ? (
-              <>
-                <span className="font-mono text-xl font-semibold tabular-nums text-foreground sm:text-2xl">
-                  $
-                  {btcSpotRef.priceUsd.toLocaleString(undefined, {
-                    minimumFractionDigits: btcSpotRef.priceUsd >= 1000 ? 0 : 2,
-                    maximumFractionDigits: btcSpotRef.priceUsd >= 1000 ? 0 : 2,
-                  })}
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    btcSpotRef.change24hPct >= 0
-                      ? "bg-success/15 text-success"
-                      : "bg-destructive/15 text-destructive"
-                  }`}
-                >
-                  {btcSpotRef.change24hPct >= 0 ? (
-                    <TrendingUp className="h-3.5 w-3.5" aria-hidden />
-                  ) : (
-                    <TrendingDown className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {btcSpotRef.change24hPct >= 0 ? "+" : ""}
-                  {btcSpotRef.change24hPct.toFixed(2)}% 24h
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  Updated {new Date(btcSpotRef.updatedAt).toLocaleTimeString()} · {btcSpotRef.source}
-                </span>
-              </>
-            ) : (
-              <span className="text-sm text-emerald-100/80">Loading spot…</span>
-            )}
-          </div>
-        </div>
-      </Card>
+      <CollapsibleInfoPanel
+        storageKey="nexus_container_btc_ref_v1"
+        title={t("container.btc.title")}
+        summary={
+          btcSpotRef.status === "live"
+            ? `$${btcSpotRef.priceUsd.toLocaleString(undefined, {
+                maximumFractionDigits: btcSpotRef.priceUsd >= 1000 ? 0 : 2,
+              })} · ${btcSpotRef.change24hPct >= 0 ? "+" : ""}${btcSpotRef.change24hPct.toFixed(2)}% 24h`
+            : t("container.btc.summary")
+        }
+        tone="neutral"
+        viewDetailsLabel={viewDetailsLabel}
+        className={MOBILE_FLAT_SURFACE}
+        icon={<BarChart3 className="h-5 w-5 text-primary" aria-hidden />}
+      >
+        <p className="text-xs leading-relaxed">{t("container.btc.summary")}</p>
+        {btcSpotRef.status === "live" ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Updated {new Date(btcSpotRef.updatedAt).toLocaleTimeString()} · {btcSpotRef.source}
+          </p>
+        ) : null}
+      </CollapsibleInfoPanel>
 
       {/* ============ DASHBOARD TAB ============ */}
       {activeTab === "dashboard" && (
         <div className="space-y-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {/* Balance Overview */}
           <Card className="overflow-hidden border-border/90 bg-card p-0">
-            <div className="border-b border-border/60 px-5 py-4">
+            <div className="border-b border-border/60 px-5 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Container desk</p>
-              <h3 className="mt-1 text-lg font-semibold tracking-tight">Balance overview</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Allocation, bullish trades, and open sessions in one overview.
-              </p>
+              <h3 className="mt-0.5 text-base font-semibold tracking-tight sm:text-lg">Balance overview</h3>
             </div>
             <div className="grid gap-px bg-border/50 sm:grid-cols-3">
               <div className="bg-card p-4 sm:p-5">
@@ -2200,25 +2183,24 @@ export function ContainerMode({
               Loading copy traders…
             </Card>
           ) : null}
-          <Card className="border-destructive/25 bg-destructive/5 p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
-              <div className="text-sm">
-                <p className="font-medium text-destructive">Copy trading — higher risk (separate from fixed)</p>
-                <ul className="mt-2 text-muted-foreground space-y-1.5">
-                  <li>24-hour aggressive cycles; not insured — no guaranteed protection vs fixed-term container locks.</li>
-                  <li>Capital may sit in recovery-hold during drawdowns; force pull-out applies fees immediately.</li>
-                  <li>
-                    Force exit uses modeled{" "}
-                    <strong>{(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}%</strong> cancel +{" "}
-                    <strong>{(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}%</strong> withdrawal + adverse-move
-                    haircut (final at settlement).
-                  </li>
-                  <li>Auto-adjust targets ~+5% then withdrawal fee — informational until execution confirms.</li>
-                </ul>
-              </div>
-            </div>
-          </Card>
+          <CollapsibleInfoPanel
+            storageKey="nexus_container_copy_risk_v1"
+            title={t("container.copy.risk.title")}
+            summary={t("container.copy.risk.summary")}
+            tone="risk"
+            viewDetailsLabel={viewDetailsLabel}
+            icon={<AlertCircle className="h-5 w-5 text-destructive" />}
+          >
+            <ul className="space-y-2 text-sm">
+              <li>{t("container.copy.risk.detail1")}</li>
+              <li>
+                {t("container.copy.risk.detail2")
+                  .replace("{{cancelPct}}", (COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1))
+                  .replace("{{withdrawPct}}", (COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1))}
+              </li>
+              <li>{t("container.copy.risk.detail3")}</li>
+            </ul>
+          </CollapsibleInfoPanel>
 
           {/* Available Traders */}
           <div className="space-y-3">
@@ -2335,32 +2317,22 @@ export function ContainerMode({
               Loading fixed desks…
             </Card>
           ) : null}
-          <Card className="border-warning/30 bg-warning/5 p-4">
-            <div className="flex items-start gap-3">
-              <Lock className="h-5 w-5 shrink-0 text-warning" />
-              <div className="text-sm">
-                <p className="font-medium text-warning">{t("container.fix.releaseRulesTitle")}</p>
-                <div className="mt-2 space-y-2 text-muted-foreground">
-                  <p className="text-xs leading-relaxed">{t("container.fix.releaseRulesBody")}</p>
-                  <p className="text-xs leading-relaxed">{t("container.fix.pocketWithdrawCap")}</p>
-                </div>
-                <div className="mt-3 rounded-md bg-background/40 p-2 text-xs text-muted-foreground">
-                  {fixedTradeTierHint(userLevel)}
-                </div>
-                <div className="mt-3 pt-2 border-t border-warning/20 space-y-1 text-xs">
-                  <p>- Your <strong>locked crypto allocation</strong> is held as share-style reference for the traded coin</p>
-                  <p>- Your funds keep the coin alive during market dips</p>
-                  <p>
-                    - When the allocated pair clears the <strong className="text-foreground">reference lock level</strong>{" "}
-                    on your card, commission accrues per policy. For BTC, compare that level to the{" "}
-                    <strong className="text-foreground">live Binance spot strip</strong> above — display only, not a
-                    settlement oracle.
-                  </p>
-                  <p className="text-warning">- If funds appear in main wallet early, system opted out to protect your capital</p>
-                </div>
-              </div>
+          <CollapsibleInfoPanel
+            storageKey="nexus_container_fix_rules_v1"
+            title={t("container.fix.releaseRulesTitle")}
+            summary={t("container.fix.rules.summary")}
+            tone="warning"
+            viewDetailsLabel={viewDetailsLabel}
+            icon={<Lock className="h-5 w-5 text-warning" />}
+          >
+            <div className="space-y-2 text-sm">
+              <p>{t("container.fix.releaseRulesBody")}</p>
+              <p>{t("container.fix.pocketWithdrawCap")}</p>
+              <p>{t("container.fix.rules.detail1")}</p>
+              <p>{t("container.fix.rules.detail2")}</p>
+              <p className="rounded-md bg-background/40 p-2 text-xs">{fixedTradeTierHint(userLevel)}</p>
             </div>
-          </Card>
+          </CollapsibleInfoPanel>
 
           {/* Available Traders */}
           <div className="space-y-3">
