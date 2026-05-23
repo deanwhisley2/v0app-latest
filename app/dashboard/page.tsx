@@ -8,14 +8,13 @@ import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { AIPanel } from "@/components/dashboard/ai-panel"
+import { ChatHubScreen } from "@/components/dashboard/chat-hub-screen"
 import { BottomNav } from "@/components/dashboard/bottom-nav"
 import { ToastNotification, useToast } from "@/components/dashboard/toast-notification"
 import { WalletScreen } from "@/components/dashboard/wallet-screen"
 import { SettingsScreen, type SettingsView } from "@/components/dashboard/settings-screen"
 import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
-import { LiveAnalysisOverlay } from "@/components/dashboard/live-analysis-overlay"
 import { ContainerMode } from "@/components/dashboard/container-mode"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
 import { ContainerDeskSection } from "@/components/dashboard/container-desk-section"
@@ -181,6 +180,15 @@ const initialMarketFeed: MarketFeedState = {
   catalog: [],
 }
 
+const INACTIVE_LIVE_ANALYSIS = {
+  active: false,
+  coin: null as Coin | null,
+  strategies: [] as string[],
+  expertMode: false,
+  autoTrade: false,
+  tradeAmount: 100,
+}
+
 function normalizeSymbol(value: string): string {
   const upper = value.toUpperCase().trim()
   return upper.endsWith("USDT") ? upper.slice(0, -4) : upper
@@ -229,6 +237,7 @@ export default function DashboardPage() {
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   /** Deep-link / notification → operational support thread (wallet Assets). */
   const [supportThreadFocusId, setSupportThreadFocusId] = useState<string | null>(null)
+  const [chatHubFocus, setChatHubFocus] = useState<"ai" | "support" | "notifications" | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
@@ -411,23 +420,6 @@ export default function DashboardPage() {
     }
   }, [user, isGuestSession, op.snapshot, op.isLoading])
   
-  // Live Analysis State
-  const [liveAnalysis, setLiveAnalysis] = useState<{
-    active: boolean
-    coin: Coin | null
-    strategies: string[]
-    expertMode: boolean
-    autoTrade: boolean
-    tradeAmount: number
-  }>({
-    active: false,
-    coin: null,
-    strategies: [],
-    expertMode: false,
-    autoTrade: false,
-    tradeAmount: 100,
-  })
-
   const activityHydratedRef = useRef(false)
   const activityLastSerializedRef = useRef<string>("")
   const persistWorkspaceTimerRef = useRef<number | null>(null)
@@ -440,21 +432,10 @@ export default function DashboardPage() {
     if (snap) {
       let tab = snap.activeTab
       if (tab === "wallet") tab = "notifications"
+      if (tab === "wallstreet") tab = "chat"
       setActiveTab(tab)
       setSelectedCoinSymbol(snap.selectedCoinSymbol)
       setShowBalance(snap.showBalance)
-      const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
-      let liveActive = snap.live.active
-      const coin = liveActive ? resolveCoinForSession(snap.live.coinSymbol, catalog) : null
-      if (liveActive && !coin) liveActive = false
-      setLiveAnalysis({
-        active: liveActive,
-        coin: liveActive ? coin : null,
-        strategies: snap.live.strategies,
-        expertMode: snap.live.expertMode,
-        autoTrade: snap.live.autoTrade,
-        tradeAmount: snap.live.tradeAmount,
-      })
     }
     activityHydratedRef.current = true
     activityLastSerializedRef.current = JSON.stringify(
@@ -463,29 +444,7 @@ export default function DashboardPage() {
         tradeView: snap?.tradeView ?? "overview",
         selectedCoinSymbol: snap?.selectedCoinSymbol ?? "BTC",
         showBalance: snap?.showBalance ?? true,
-        liveAnalysis: snap
-          ? (() => {
-              const cat = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
-              let a = snap.live.active
-              const c = a ? resolveCoinForSession(snap.live.coinSymbol, cat) : null
-              if (a && !c) a = false
-              return {
-                active: a,
-                coin: a ? c : null,
-                strategies: snap.live.strategies,
-                expertMode: snap.live.expertMode,
-                autoTrade: snap.live.autoTrade,
-                tradeAmount: snap.live.tradeAmount,
-              }
-            })()
-          : {
-              active: false,
-              coin: null,
-              strategies: [],
-              expertMode: false,
-              autoTrade: false,
-              tradeAmount: 100,
-            },
+        liveAnalysis: INACTIVE_LIVE_ANALYSIS,
       })
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per session user; catalog resolved inside
@@ -498,13 +457,13 @@ export default function DashboardPage() {
       tradeView,
       selectedCoinSymbol,
       showBalance,
-      liveAnalysis,
+      liveAnalysis: INACTIVE_LIVE_ANALYSIS,
     })
     const serialized = JSON.stringify(snap)
     if (serialized === activityLastSerializedRef.current) return
     activityLastSerializedRef.current = serialized
     writeDashboardActivity(snap)
-  }, [activityUserId, activeTab, tradeView, selectedCoinSymbol, showBalance, liveAnalysis])
+  }, [activityUserId, activeTab, tradeView, selectedCoinSymbol, showBalance])
 
   // Authoritative Postgres workspace replaces tab-local snapshot when bootstrap delivers it.
   useEffect(() => {
@@ -530,25 +489,12 @@ export default function DashboardPage() {
     setActiveTab(tab)
     setSelectedCoinSymbol(parsed.selectedCoinSymbol)
     setShowBalance(parsed.showBalance)
-    const catalog = marketFeed.catalog.length > 0 ? marketFeed.catalog : coinsData
-    let liveActive = parsed.live.active
-    const coin = liveActive ? resolveCoinForSession(parsed.live.coinSymbol, catalog) : null
-    if (liveActive && !coin) liveActive = false
-    const resolvedLive = {
-      active: liveActive,
-      coin: liveActive ? coin : null,
-      strategies: parsed.live.strategies,
-      expertMode: parsed.live.expertMode,
-      autoTrade: parsed.live.autoTrade,
-      tradeAmount: parsed.live.tradeAmount,
-    }
-    setLiveAnalysis(resolvedLive)
     const nextSnap = buildActivitySnapshot(activityUserId, {
       activeTab: tab,
       tradeView: parsed.tradeView,
       selectedCoinSymbol: parsed.selectedCoinSymbol,
       showBalance: parsed.showBalance,
-      liveAnalysis: resolvedLive,
+      liveAnalysis: INACTIVE_LIVE_ANALYSIS,
     })
     writeDashboardActivity(nextSnap)
     activityLastSerializedRef.current = JSON.stringify(nextSnap)
@@ -570,7 +516,7 @@ export default function DashboardPage() {
       tradeView,
       selectedCoinSymbol,
       showBalance,
-      liveAnalysis,
+      liveAnalysis: INACTIVE_LIVE_ANALYSIS,
     })
     const ser = JSON.stringify(snap)
     if (ser === lastWorkspacePostedRef.current) return
@@ -605,26 +551,9 @@ export default function DashboardPage() {
     tradeView,
     selectedCoinSymbol,
     showBalance,
-    liveAnalysis,
     user?.id,
     isGuestSession,
   ])
-
-  useEffect(() => {
-    if (!liveAnalysis.active || !liveAnalysis.coin?.symbol) return
-    const next = resolveCoinForSession(liveAnalysis.coin.symbol, tradeCatalog)
-    if (!next) return
-    if (
-      next.price === liveAnalysis.coin.price &&
-      next.change24h === liveAnalysis.coin.change24h &&
-      next.volume === liveAnalysis.coin.volume
-    ) {
-      return
-    }
-    setLiveAnalysis((prev) =>
-      prev.active && prev.coin?.symbol === next.symbol ? { ...prev, coin: next } : prev
-    )
-  }, [tradeCatalog, liveAnalysis.active, liveAnalysis.coin])
 
   const currentUser = useMemo((): CurrentUser | null => {
     if (!user) return null
@@ -1364,10 +1293,17 @@ export default function DashboardPage() {
   const handleHeaderTabChange = useCallback(
     (tab: string) => {
       if (operationalWorkspace && (tab === "container" || tab === "wallstreet")) {
-        showToast("Trading and execution views are disabled for your operational role. Use Desk or Settings.", "error")
+        showToast("Trading views are disabled for your operational role. Use Desk, Chat, or Settings.", "error")
+        return
+      }
+      if (tab === "wallstreet") {
+        setActiveTab("chat")
+        setChatHubFocus(null)
+        setSettingsRequestedView(null)
         return
       }
       setActiveTab(tab)
+      setChatHubFocus(null)
       setSettingsRequestedView(null)
     },
     [operationalWorkspace, showToast],
@@ -1411,13 +1347,14 @@ export default function DashboardPage() {
             setSupportThreadFocusId(nav.threadId)
             setActiveTab("desk")
           } else {
-            setActiveTab("settings")
-            showToast("For account help, open Settings and use Contact Support.", "success")
+            setSupportThreadFocusId(nav.threadId)
+            setChatHubFocus("support")
+            setActiveTab("chat")
           }
           break
         case "expert-analysis":
-          setActiveTab("wallstreet")
-          showToast("Open Wallstreet for analysis — expert execution routes were retired.", "success")
+          setChatHubFocus("ai")
+          setActiveTab("chat")
           break
         default:
           break
@@ -1435,7 +1372,8 @@ export default function DashboardPage() {
       const tid = raw.trim()
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) return
       setSupportThreadFocusId(tid)
-      setActiveTab(operationalWorkspace ? "desk" : "settings")
+      setActiveTab(operationalWorkspace ? "desk" : "chat")
+      if (!operationalWorkspace) setChatHubFocus("support")
       u.searchParams.delete("supportThread")
       const qs = u.searchParams.toString()
       window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
@@ -1457,66 +1395,6 @@ export default function DashboardPage() {
     }
     return () => registerAppNavigator(null)
   }, [registerAppNavigator, handleNotificationNav])
-
-  // Navigate from Wallstreet — stay on Wallstreet with analysis overlay (no legacy live desk).
-  const handleNavigateToTrade = useCallback(
-    (
-      coin: Coin,
-      strategies: string[],
-      expertMode: boolean,
-      settings: { autoTrade: boolean; tradeAmount: number; executionMode?: "nex_auto" | "manual" }
-    ) => {
-      const mode = settings.executionMode ?? (settings.autoTrade ? "nex_auto" : "manual")
-      const autoTrade = mode === "nex_auto"
-      setSelectedCoinSymbol(coin.symbol)
-      setLiveAnalysis({
-        active: true,
-        coin,
-        strategies,
-        expertMode,
-        autoTrade,
-        tradeAmount: settings.tradeAmount,
-      })
-      setActiveTab("wallstreet")
-      showToast(
-        `${mode === "nex_auto" ? "Nex Auto-Trade" : "Manual trade"} overlay — ${coin.symbol} (${strategies.length} strategies)`,
-        "success"
-      )
-    },
-    [showToast]
-  )
-
-  const handleLiveAnalysisTrade = useCallback(
-    (type: "buy" | "sell", amount: number) => {
-      void (async () => {
-        if (!liveAnalysis.coin) return
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession()
-          const token = session?.access_token
-          if (!token) {
-            showToast("Sign in to trade.", "error")
-            return
-          }
-          const res = await fetch("/api/user/nexus-main/assert-sufficient", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ requiredUsd: amount }),
-          })
-          const out = (await res.json().catch(() => ({}))) as { error?: string }
-          if (!res.ok) {
-            showToast(out.error || "Insufficient Nexus Main balance for this Wallstreet trade.", "error")
-            return
-          }
-          showToast(`${type.toUpperCase()} Order - ${liveAnalysis.coin.symbol} - $${amount}`, "success")
-        } catch (e) {
-          showToast(e instanceof Error ? e.message : "Trade validation failed.", "error")
-        }
-      })()
-    },
-    [liveAnalysis.coin, showToast],
-  )
 
   const handleRetailerIncomingAction = useCallback(
     async (requestId: string, action: "approve" | "reject") => {
@@ -3334,7 +3212,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Main Content — Container desk + Wallstreet assistant only (no legacy live/markets decks). */}
+      {/* Main Content — Container desk + Chat hub (no legacy Wallstreet deck). */}
       <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:pb-4 ${activeTab === "container" ? "" : "pt-3"}`}>
         {activeTab === "container" && (
           <div className="space-y-4">
@@ -3392,48 +3270,18 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {activeTab === "wallstreet" && (
+        {activeTab === "chat" && (
           <main className="relative min-w-0">
-              <AIPanel
-                coins={tradeCatalog}
-                selectedCoin={selectedCoin}
-                onNavigateToTrade={handleNavigateToTrade}
-                onStrategyCoinChange={(c) => setSelectedCoinSymbol(c.symbol)}
-                hasExchangeConnection={
-                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                  connectedExchanges.length > 0
-                }
-                defaultExchangeId={
-                  selectedExchangeId ??
-                  connectedExchanges.find((e) => e.isDefault)?.id ??
-                  connectedExchanges[0]?.id
-                }
-                realTradeEligible={
-                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                  (connectedExchanges.length > 0 &&
-                    connectedExchanges.some((e) => (e.balance ?? 0) > 0))
-                }
-                exchangePermissionsOk={
-                  process.env.NEXT_PUBLIC_ALLOW_SERVER_SIDE_EXECUTION_UI === "1" ||
-                  connectedExchanges.length > 0
-                }
-                userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
-                isGuestSession={isGuestSession}
-              />
-              {liveAnalysis.active && liveAnalysis.coin ? (
-                <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-2 sm:p-4">
-                  <LiveAnalysisOverlay
-                    coin={liveAnalysis.coin}
-                    strategies={liveAnalysis.strategies}
-                    expertMode={liveAnalysis.expertMode}
-                    autoTrade={liveAnalysis.autoTrade}
-                    tradeAmount={liveAnalysis.tradeAmount}
-                    onClose={() => setLiveAnalysis((prev) => ({ ...prev, active: false }))}
-                    onTrade={handleLiveAnalysisTrade}
-                    onToggleAutoTrade={() => setLiveAnalysis((prev) => ({ ...prev, autoTrade: !prev.autoTrade }))}
-                  />
-                </div>
-              ) : null}
+            <ChatHubScreen
+              isGuestSession={isGuestSession}
+              initialFocus={chatHubFocus}
+              supportThreadFocusId={supportThreadFocusId}
+              onSupportThreadFocusConsumed={() => setSupportThreadFocusId(null)}
+              onOpenFullNotifications={() => {
+                setChatHubFocus(null)
+                setActiveTab("notifications")
+              }}
+            />
           </main>
         )}
 

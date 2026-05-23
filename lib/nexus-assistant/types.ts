@@ -9,6 +9,7 @@ export type NexusAssistantSurface =
   | "floating_login"
   | "floating_dashboard"
   | "dashboard_wallstreet_assistant"
+  | "dashboard_chat"
   | "bottom_nav_mini"
   /** Level-5 wallet desk: appeals, investigations, humane reply drafting (not customer Joelin). */
   | "admin_desk_support_chat"

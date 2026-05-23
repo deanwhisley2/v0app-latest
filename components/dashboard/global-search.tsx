@@ -75,7 +75,7 @@ const quickActions: Omit<SearchResult, "id">[] = [
   { title: "Buy Bitcoin", description: "Quick buy BTC", category: "action", icon: <Sparkles className="h-4 w-4 text-warning" />, path: "trade" },
   { title: "Sell Ethereum", description: "Quick sell ETH", category: "action", icon: <Sparkles className="h-4 w-4 text-warning" />, path: "trade" },
   { title: "View Markets", description: "See all available coins", category: "action", icon: <TrendingUp className="h-4 w-4" />, path: "markets" },
-  { title: "Wallstreet · Joelin", description: "Automated trading strategies", category: "action", icon: <Sparkles className="h-4 w-4 text-primary" />, path: "wallstreet" },
+  { title: "Chat · Nexus Assistant", description: "AI help, support, and account messages", category: "action", icon: <Sparkles className="h-4 w-4 text-primary" />, path: "chat" },
 ]
 
 const mockOrders: Omit<SearchResult, "id">[] = [

@@ -136,7 +136,7 @@ export function Header({
   
   const mainTabsAll = [
     { id: "container", labelKey: "nav.container" },
-    { id: "wallstreet", labelKey: "nav.wallstreet" },
+    { id: "chat", labelKey: "nav.chat" },
     { id: "notifications", labelKey: "nav.notifications" },
     { id: "settings", labelKey: "nav.settings" },
   ] as const

@@ -5,7 +5,7 @@
 
 export const DASHBOARD_MAIN_TABS = [
   "container",
-  "wallstreet",
+  "chat",
   "notifications",
   "settings",
   "desk",

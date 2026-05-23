@@ -10,6 +10,7 @@ const surfaces: [NexusAssistantSurface, ...NexusAssistantSurface[]] = [
   "floating_login",
   "floating_dashboard",
   "dashboard_wallstreet_assistant",
+  "dashboard_chat",
   "bottom_nav_mini",
   "admin_desk_support_chat",
 ]

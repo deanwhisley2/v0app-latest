@@ -207,8 +207,8 @@ function greetingReply(surface: NexusAssistantSurface, isGuest: boolean): string
 
 function helpTour(surface: NexusAssistantSurface): string {
   const tail =
-    surface === "dashboard_wallstreet_assistant"
-      ? "Desk: strategies · container · on-screen limits."
+    surface === "dashboard_wallstreet_assistant" || surface === "dashboard_chat"
+      ? "Chat: assistant · support · account alerts."
       : "Settings: exchanges · security · wallet."
   return ["Navigation:", NEXUS_UI_WHERE_TO_GO, tail].join("\n")
 }
@@ -225,7 +225,8 @@ export function getNexusAssistantWelcome(surface: NexusAssistantSurface, isGuest
     case "bottom_nav_mini":
       return `Nexus assistant · wallet · trade · container.`
     case "dashboard_wallstreet_assistant":
-      return `Nexus assistant · desk navigation.`
+    case "dashboard_chat":
+      return `Nexus assistant · wallet · container · funding · security.`
     case "admin_desk_support_chat":
       return "Level-5 support copilot — appeals, investigations, and humane reply drafting. Outputs are drafts for you to review before any outbound message."
     default:

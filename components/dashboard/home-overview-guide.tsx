@@ -65,7 +65,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
             return (
               <li
                 key={step.key}
-                className="flex min-h-[48px] items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5"
+                className="flex min-h-[48px] items-start gap-2.5 rounded-xl border border-border bg-muted/35 px-3 py-2.5"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
                   <Icon className="h-3.5 w-3.5" aria-hidden />

@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback } from "react"
 import {
   Home,
-  TrendingUp,
+  MessageCircle,
   Bell,
   Settings,
   Zap,
@@ -25,7 +25,7 @@ interface BottomNavProps {
 
 const navDefs = [
   { id: "container", icon: Home, labelKey: "nav.container", color: "from-blue-500 to-cyan-500" },
-  { id: "wallstreet", icon: TrendingUp, labelKey: "nav.wallstreet", color: "from-purple-500 to-pink-500" },
+  { id: "chat", icon: MessageCircle, labelKey: "nav.chat", color: "from-primary/80 to-accent/80" },
   { id: "notifications", icon: Bell, labelKey: "nav.notifications", color: "from-green-500 to-emerald-500" },
   { id: "settings", icon: Settings, labelKey: "nav.settings", color: "from-orange-500 to-amber-500" },
   { id: "desk", icon: Briefcase, labelKey: "nav.desk", color: "from-green-500 to-emerald-500" },
@@ -74,7 +74,7 @@ export function BottomNav({
 
   const navItems = useMemo(() => {
     const defs = operationalWorkspace
-      ? navDefs.filter((d) => d.id === "desk" || d.id === "settings")
+      ? navDefs.filter((d) => d.id === "desk" || d.id === "chat" || d.id === "settings")
       : navDefs.filter((d) => d.id !== "desk")
     return defs.map((d) => ({ ...d, label: t(d.labelKey) }))
   }, [t, operationalWorkspace])
