@@ -237,20 +237,20 @@ export function WalletScreen({
           <Card className="border-border bg-card p-6">
             <h2 className="mb-4 text-lg font-semibold">Portfolio Overview</h2>
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 p-4 text-center">
+              <div className="nexus-stat-tile p-4 text-center">
                 <p className="text-sm text-muted-foreground">Total Value</p>
                 <p className="font-mono text-2xl font-bold text-primary">
                   ${totalValue.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="rounded-lg bg-gradient-to-br from-success/20 to-success/5 p-4 text-center">
+              <div className="nexus-stat-tile p-4 text-center">
                 <p className="text-sm text-muted-foreground">24h Change</p>
                 <div className="flex items-center justify-center gap-1">
                   <TrendingUp className="h-5 w-5 text-success" />
                   <p className="font-mono text-2xl font-bold text-success">+$342.50</p>
                 </div>
               </div>
-              <div className="rounded-lg bg-gradient-to-br from-success/20 to-success/5 p-4 text-center">
+              <div className="nexus-stat-tile p-4 text-center">
                 <p className="text-sm text-muted-foreground">All Time P&L</p>
                 <div className="flex items-center justify-center gap-1">
                   <ArrowUpRight className="h-5 w-5 text-success" />

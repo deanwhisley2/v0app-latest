@@ -289,13 +289,13 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[104] bg-black/40"
+        className="fixed inset-0 z-[104] bg-foreground/25 backdrop-blur-[2px] dark:bg-black/50"
         aria-hidden
         onClick={onClose}
       />
       <div
         ref={panelRef}
-        className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border/90 bg-card shadow-lg sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
+        className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)] sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
       >
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between gap-2">

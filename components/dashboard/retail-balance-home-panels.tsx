@@ -16,6 +16,7 @@ import { HomeOverviewGuide } from "@/components/dashboard/home-overview-guide"
 import { Button } from "@/components/ui/button"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import { cn } from "@/lib/utils"
+import { NX_PANEL } from "@/lib/nexus-ui-surfaces"
 
 export type WithdrawalEligibilityHint = {
   minUsd: number
@@ -41,7 +42,7 @@ type RetailBalanceHomePanelsProps = {
   onTransferToMain: () => void
 }
 
-const panelClass = "nexus-home-panel block w-full rounded-2xl border border-border bg-card"
+const panelClass = cn("nexus-home-panel block w-full", NX_PANEL)
 
 function MetricCard({
   label,
@@ -64,15 +65,15 @@ function MetricCard({
     <div className={cn(panelClass, "p-3.5 sm:p-4", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="mt-2 min-h-[1.75rem] font-mono text-lg font-bold tabular-nums leading-none text-foreground sm:text-xl">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="mt-2 min-h-[1.75rem] font-mono text-lg font-semibold tabular-nums leading-none tracking-tight text-foreground sm:text-xl">
             {value}
           </p>
           {hint ? <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{hint}</p> : null}
         </div>
         <div
           className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted ring-1 ring-border",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/80",
             iconClassName
           )}
         >
@@ -114,11 +115,11 @@ export function RetailBalanceHomePanels({
       <section className={panelClass} aria-label={t("funding.balance.mainTitle")}>
         <div className="border-b border-border px-4 py-3.5 sm:px-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/80">
               <Wallet className="h-5 w-5 text-primary" aria-hidden />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <p className="text-xs font-medium text-muted-foreground">
                 {t("funding.balance.mainTitle")}
               </p>
               <p className="text-xs leading-snug text-muted-foreground">{t("funding.balance.mainHint")}</p>
@@ -147,7 +148,7 @@ export function RetailBalanceHomePanels({
               {showBalance ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-3 min-h-[2.5rem] font-mono text-2xl font-bold tabular-nums leading-tight tracking-tight text-foreground sm:min-h-[2.75rem] sm:text-3xl">
+          <p className="mt-3 min-h-[2.5rem] font-mono text-[1.75rem] font-semibold tabular-nums leading-tight tracking-tight text-foreground sm:min-h-[2.75rem] sm:text-[2rem]">
             {mainDisplay}
           </p>
         </div>
@@ -168,10 +169,10 @@ export function RetailBalanceHomePanels({
       <section className={cn(panelClass, "p-4 sm:p-5")} aria-label={t("funding.balance.liquidTitle")}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               {t("funding.balance.liquidTitle")}
             </p>
-            <p className="mt-2 min-h-[2rem] font-mono text-2xl font-bold tabular-nums leading-none text-foreground sm:min-h-[2.25rem] sm:text-3xl">
+            <p className="mt-2 min-h-[2rem] font-mono text-[1.75rem] font-semibold tabular-nums leading-none tracking-tight text-foreground sm:min-h-[2.25rem] sm:text-[2rem]">
               {pocketDisplay}
             </p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t("funding.balance.pocketHint")}</p>

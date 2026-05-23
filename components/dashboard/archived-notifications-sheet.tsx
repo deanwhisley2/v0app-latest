@@ -166,7 +166,7 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex justify-end bg-black/45 p-0 sm:p-4"
+      className="fixed inset-0 z-[130] flex justify-end bg-foreground/20 backdrop-blur-[2px] dark:bg-black/45 p-0 sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}

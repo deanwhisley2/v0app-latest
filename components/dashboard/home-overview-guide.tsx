@@ -51,7 +51,7 @@ export function HomeOverviewGuide({ t, className }: Props) {
     >
       <summary className="nexus-home-guide-summary flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 sm:px-5 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs font-medium text-muted-foreground">
             {t("home.overview.eyebrow")}
           </p>
           <p className="mt-0.5 text-sm font-medium text-foreground">{t("home.overview.compactLine")}</p>

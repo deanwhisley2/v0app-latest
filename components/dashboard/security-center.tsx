@@ -356,7 +356,7 @@ export function SecurityCenter({ currentLevel, onLevelChange }: SecurityCenterPr
       )}
 
       {/* Current Security Level */}
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-accent/10 p-4">
+      <Card className="border border-primary/20 bg-primary/5 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">

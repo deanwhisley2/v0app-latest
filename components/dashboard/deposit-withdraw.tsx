@@ -301,7 +301,7 @@ export function DepositWithdraw({
     return (
       <div className="space-y-4">
         {showBalanceBanner ? (
-          <Card className="bg-gradient-to-br from-primary/10 to-accent/10 p-4">
+          <Card className="border border-border bg-muted/35 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Available Balance</p>

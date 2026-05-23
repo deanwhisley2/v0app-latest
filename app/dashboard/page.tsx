@@ -2218,7 +2218,7 @@ export default function DashboardPage() {
     )
 
   return (
-    <div className="nexus-mobile-stable min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
+    <div className="nexus-mobile-stable min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
       {/* Header */}
       <Header
         activeTab={activeTab}

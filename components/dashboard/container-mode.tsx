@@ -46,6 +46,13 @@ import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
 import { cn } from "@/lib/utils"
 import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
+import {
+  NX_INFO_CALLOUT,
+  NX_PROMO_CALLOUT,
+  NX_SOFT_ACCENT,
+  NX_TAB_ACTIVE,
+  NX_TAB_INACTIVE,
+} from "@/lib/nexus-ui-surfaces"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -1379,7 +1386,7 @@ export function ContainerMode({
   return (
     <div ref={deskRootRef} className="nexus-container-mode space-y-4">
       {/* Live Stats Banner */}
-      <Card className={cn("border-accent/30 bg-gradient-to-r from-accent/5 via-primary/5 to-success/5 p-3", MOBILE_FLAT_SURFACE)}>
+      <Card className={cn(NX_SOFT_ACCENT, "p-3", MOBILE_FLAT_SURFACE)}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className={cn("flex h-2 w-2 rounded-full bg-success", MOBILE_STATIC_MOTION, "animate-pulse")} />
@@ -1411,7 +1418,7 @@ export function ContainerMode({
       </Card>
 
       {retailerCreditSeller && userLevel === 2 && (
-        <Card className="border-primary/35 bg-gradient-to-r from-primary/10 to-accent/10 p-4">
+        <Card className={cn(NX_INFO_CALLOUT, "p-4")}>
           <div className="flex gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
               <Store className="h-5 w-5 text-primary" />
@@ -1447,7 +1454,7 @@ export function ContainerMode({
       )}
 
       {/* Promo Banner */}
-      <Card className="border-warning/30 bg-gradient-to-r from-warning/10 to-success/10 p-4">
+      <Card className={cn(NX_PROMO_CALLOUT, "p-4")}>
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/20">
             <Trophy className="h-5 w-5 text-warning" />
@@ -1473,7 +1480,7 @@ export function ContainerMode({
 
       {/* Instructions Popup */}
       {showInstructions && (
-        <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5 p-4">
+        <Card className={cn(NX_INFO_CALLOUT, "p-4")}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
@@ -1524,8 +1531,8 @@ export function ContainerMode({
           onClick={() => setActiveTab("dashboard")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "dashboard"
-              ? cn("bg-gradient-to-r from-primary to-accent text-white", "max-md:bg-primary max-md:text-primary-foreground")
-              : "bg-muted text-muted-foreground hover:bg-muted/80"
+              ? NX_TAB_ACTIVE
+              : NX_TAB_INACTIVE
           }`}
         >
           <Eye className="h-4 w-4" />
@@ -1535,8 +1542,8 @@ export function ContainerMode({
           onClick={() => setActiveTab("copy")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
             activeTab === "copy"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-muted/80"
+              ? NX_TAB_ACTIVE
+              : NX_TAB_INACTIVE
           }`}
         >
           <Copy className="h-4 w-4" />
@@ -1556,21 +1563,21 @@ export function ContainerMode({
       </div>
 
       {/* Live BTC reference — Binance spot (display only; not ledger settlement) */}
-      <Card className={cn("border border-emerald-500/50 bg-gradient-to-r from-emerald-950/40 via-slate-900/80 to-slate-900/90 p-3 shadow-md sm:p-4", MOBILE_FLAT_SURFACE)}>
+      <Card className={cn("border border-border bg-card p-3 sm:p-4", MOBILE_FLAT_SURFACE)}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-emerald-100">
-            <BarChart3 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+          <div className="flex items-center gap-2 text-foreground">
+            <BarChart3 className="h-5 w-5 shrink-0 text-primary" aria-hidden />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">BTC / USDT · live reference</p>
-              <p className="text-[10px] text-emerald-100/70">Multi-provider market authority — display reference only; locks use spot at open.</p>
+              <p className="text-xs font-medium text-muted-foreground">BTC / USDT · live reference</p>
+              <p className="text-[10px] text-muted-foreground">Multi-provider market authority — display reference only; locks use spot at open.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 sm:justify-end">
             {btcSpotRef.status === "loading" ? (
-              <span className="text-sm text-emerald-100/80">Loading spot…</span>
+              <span className="text-sm text-muted-foreground">Loading spot…</span>
             ) : btcSpotRef.status === "live" ? (
               <>
-                <span className="font-mono text-xl font-bold tabular-nums text-white sm:text-2xl">
+                <span className="font-mono text-xl font-semibold tabular-nums text-foreground sm:text-2xl">
                   $
                   {btcSpotRef.priceUsd.toLocaleString(undefined, {
                     minimumFractionDigits: btcSpotRef.priceUsd >= 1000 ? 0 : 2,
@@ -1580,8 +1587,8 @@ export function ContainerMode({
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
                     btcSpotRef.change24hPct >= 0
-                      ? "bg-emerald-500/25 text-emerald-200"
-                      : "bg-rose-500/25 text-rose-100"
+                      ? "bg-success/15 text-success"
+                      : "bg-destructive/15 text-destructive"
                   }`}
                 >
                   {btcSpotRef.change24hPct >= 0 ? (
@@ -1592,7 +1599,7 @@ export function ContainerMode({
                   {btcSpotRef.change24hPct >= 0 ? "+" : ""}
                   {btcSpotRef.change24hPct.toFixed(2)}% 24h
                 </span>
-                <span className="text-[10px] text-emerald-100/60">
+                <span className="text-[10px] text-muted-foreground">
                   Updated {new Date(btcSpotRef.updatedAt).toLocaleTimeString()} · {btcSpotRef.source}
                 </span>
               </>

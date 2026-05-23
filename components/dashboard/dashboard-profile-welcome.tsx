@@ -22,7 +22,7 @@ export function DashboardProfileWelcome({ fullName, t, className }: Props) {
         className
       )}
     >
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <p className="text-xs font-medium text-muted-foreground">
         {t("home.profile.eyebrow")}
       </p>
       <h1 className="mt-1.5 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{greeting}</h1>

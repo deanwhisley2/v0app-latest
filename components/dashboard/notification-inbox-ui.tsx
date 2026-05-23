@@ -245,7 +245,7 @@ export function NotificationDetailSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col bg-black/50 sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[120] flex flex-col bg-foreground/20 backdrop-blur-[2px] dark:bg-black/45 sm:items-center sm:justify-center sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}

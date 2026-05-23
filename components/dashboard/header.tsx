@@ -152,13 +152,13 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-border bg-background max-md:[backdrop-filter:none] md:bg-background/95 md:backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4">
+      <header className="sticky top-0 z-50 border-b border-border/80 bg-background/95 max-md:[backdrop-filter:none] md:backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 sm:h-16">
           {/* Brand Name */}
           <div className="flex items-center">
-            <div className="flex flex-col">
-              <span className="font-mono text-2xl font-black tracking-tight text-primary">NEXUS</span>
-              <span className="text-xs font-bold tracking-[0.3em] text-cyan-400">PRO</span>
+            <div className="flex flex-col leading-none">
+              <span className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">NEXUS</span>
+              <span className="text-[10px] font-semibold tracking-[0.28em] text-muted-foreground sm:text-xs">PRO</span>
             </div>
           </div>
 
@@ -169,10 +169,10 @@ export function Header({
                 key={tab.id}
                 type="button"
                 onClick={() => onTabChange(tab.id)}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:px-4 ${
+                className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 lg:px-4 ${
                   resolvedHeaderActive === tab.id
                     ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                 }`}
               >
                 {t(tab.labelKey)}
@@ -227,7 +227,7 @@ export function Header({
                   setShowArchivedNotifications(false)
                 }}
                 title="View Profile"
-                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground max-md:hover:scale-100 md:bg-gradient-to-br md:from-primary/80 md:to-accent md:transition-all md:hover:scale-105 ${showProfileMenu ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 ${showProfileMenu ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""}`}
               >
                 <span className="text-sm font-bold">{userInitials}</span>
               </button>
@@ -241,7 +241,7 @@ export function Header({
                     {profileView === "main" && (
                       <>
                         {/* Profile Header */}
-                        <div className="relative bg-gradient-to-br from-primary/20 to-accent/20 p-4">
+                        <div className="relative border-b border-border bg-muted/40 p-4">
                           <button
                             onClick={() => { setShowProfileMenu(false); setProfileView("main") }}
                             className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-background/50 text-muted-foreground hover:bg-background hover:text-foreground"
@@ -250,7 +250,7 @@ export function Header({
                           </button>
                           <div className="flex items-center gap-3">
                             <div className="relative">
-                              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-xl font-bold text-white">
+                              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
                                 {userInitials}
                               </div>
                               <button 
@@ -371,7 +371,7 @@ export function Header({
                         
                         <div className="flex justify-center mb-4">
                           <div className="relative">
-                            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-2xl font-bold text-white">
+                            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
                               {userInitials}
                             </div>
                             <button className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-card bg-primary text-white">
@@ -442,7 +442,7 @@ export function Header({
                           </button>
                         </div>
                         
-                        <div className="rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 p-4 text-center mb-4">
+                        <div className="nexus-stat-tile mb-4 p-4 text-center">
                           <p className="text-lg font-semibold text-primary">Referral rewards</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Bonus pays after each referee&apos;s first successful deposit (once per user).
@@ -528,7 +528,7 @@ export function Header({
                           </button>
                         </div>
                         
-                        <div className="rounded-xl bg-gradient-to-br from-success/20 to-primary/20 p-4 text-center mb-4">
+                        <div className="nexus-stat-tile mb-4 p-4 text-center">
                           <p className="text-2xl font-bold text-success">Up to 12% APY</p>
                           <p className="text-xs text-muted-foreground">on your crypto holdings</p>
                         </div>

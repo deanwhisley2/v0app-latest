@@ -146,31 +146,30 @@ export function BottomNav({
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border bg-card md:hidden touch-manipulation">
-        <div className="flex items-center justify-around px-2 py-2 safe-area-pb">
+      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border/80 bg-card/95 shadow-[0_-4px_24px_oklch(0_0_0/0.08)] md:hidden touch-manipulation dark:shadow-[0_-4px_24px_oklch(0_0_0/0.35)]">
+        <div className="flex items-stretch justify-around px-1 pt-1.5 pb-1 safe-area-pb">
           {navItems.map((item) => {
             const isActive = resolvedActiveTab === item.id
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => onTabChange(item.id)}
-                className="flex flex-1 flex-col items-center gap-1 py-1"
+                className="flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors active:bg-muted/60"
               >
-                {/* Icon Container */}
                 <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                    isActive ? "bg-primary text-primary-foreground" : "bg-transparent"
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                    isActive ? "bg-primary/12" : "bg-transparent"
                   }`}
                 >
                   <item.icon
-                    className={`h-5 w-5 ${
-                      isActive ? "text-primary-foreground" : "text-muted-foreground"
+                    className={`h-[1.35rem] w-[1.35rem] ${
+                      isActive ? "text-primary" : "text-muted-foreground"
                     }`}
                   />
                 </div>
-                {/* Label */}
                 <span
-                  className={`text-[10px] font-medium ${
+                  className={`max-w-full truncate text-[10px] font-medium leading-none ${
                     isActive ? "text-primary" : "text-muted-foreground"
                   }`}
                 >

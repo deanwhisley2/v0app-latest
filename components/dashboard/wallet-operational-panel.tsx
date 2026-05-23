@@ -360,7 +360,7 @@ export function RetailerOperationalAssets({ isGuest }: { isGuest?: boolean }) {
 
   return (
     <div className="space-y-4">
-      <Card className="border-border bg-gradient-to-br from-primary/10 to-card p-4">
+      <Card className="border-border bg-muted/35 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Retailer operations</p>
