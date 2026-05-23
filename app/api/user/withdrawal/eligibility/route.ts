@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     const withdrawableMainUsd = roundUsd2(
       Math.max(0, available - nexusMainMinimumRetainUsd(fundingCountryCode)),
     )
-    const maxUsd = roundUsd2(Math.min(withdrawableMainUsd, Math.max(0, total * 0.5)))
+    const maxUsd = withdrawableMainUsd
 
     const since = new Date(Date.now() - WINDOW_MS).toISOString()
     const { data: recent, error: wErr } = await admin

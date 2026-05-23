@@ -2503,7 +2503,7 @@ export function ContainerMode({
                       coin stays supported during slower periods.
                     </p>
                     <p className="text-xs">
-                      Release accrued bullish trades to your pocket anytime; Nexus Main withdrawals follow the 50% liquid-total cap on your dashboard.
+                      Release accrued bullish trades to your pocket anytime; withdraw your full withdrawable Nexus Main balance from the dashboard (24h cooldown).
                     </p>
                   </div>
 

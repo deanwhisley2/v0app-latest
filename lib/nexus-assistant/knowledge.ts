@@ -89,7 +89,7 @@ export function nexusPlatformOverviewForAssistant(): string {
 }
 
 export const CONTAINER_WITHDRAWAL_SUMMARY =
-  "Bullish trades release to pocket when available. Principal locked until maturity or early exit. Pocket withdrawal cap: 50% of liquid total per request."
+  "Bullish trades release to pocket when available. Principal locked until maturity or early exit. Withdraw up to your full withdrawable Nexus Main balance per request (24h cooldown)."
 
 export function containerCustomerEarningsStory(): string {
   return [
@@ -113,7 +113,7 @@ export const NEXUS_FUNDING_AND_RETAIL_DESK_HINT = [
 ].join("\n")
 
 export const CONTAINER_ILLUSTRATIVE_MICRO_USD30 =
-  "Illustrative only (not guaranteed): ~$6–9 / 1 mo, ~$20–28 / 3 mo, ~$42–58 / 6 mo on ~$30 — see Container screen."
+  "Illustrative only (not guaranteed): ~$8–9 / 1 mo, ~$24–27 / 3 mo, ~$48–53 / 6 mo on ~$30 at 27–30% monthly policy — see Container screen."
 
 export const NEXUS_WALLET_AND_WITHDRAWAL_RULES = [
   "Main balance: deposits, trade funding, transfers.",

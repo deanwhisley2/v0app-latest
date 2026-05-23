@@ -190,12 +190,12 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.modal.waitHours": "Next withdrawal in ~{{hours}} hours.",
   "withdrawal.modal.readyNow": "Withdrawal available now.",
   "withdrawal.modal.minLine": "Minimum withdrawal: {{min}}",
-  "withdrawal.modal.maxLine": "Maximum: 50% of liquid total (~{{max}}).",
+  "withdrawal.modal.maxLine": "Maximum: full withdrawable Nexus Main balance (~{{max}}).",
   "container.fix.releaseRulesTitle": "Bullish Trades release",
   "container.fix.releaseRulesBody":
     "Release fixed-trade bullish trades to pocket anytime. Release fee applies. Principal remains locked until maturity or early exit.",
   "container.fix.pocketWithdrawCap":
-    "Pocket withdrawal capped at 50% of liquid total per request. Locked trade principal not withdrawable.",
+    "Withdraw up to your full withdrawable Nexus Main balance per request (24h cooldown). Locked trade principal not withdrawable.",
   "container.fix.unreleasedLabel": "Unreleased",
   "container.fix.availableToRelease": "Available to release",
   "home.profile.eyebrow": "Member workspace",
@@ -285,7 +285,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.apiErr.insufficientMain": "Amount exceeds main balance.",
   "withdrawal.apiErr.genericFailed": "Withdrawal could not be completed.",
   "withdrawal.apiErr.cooldownNext": "One withdrawal per 24 hours. Next window: {{when}}.",
-  "withdrawal.apiErr.maxHalfBalance": "Maximum withdrawal: 50% of liquid total (~{{max}}).",
+  "withdrawal.apiErr.maxHalfBalance": "Amount exceeds withdrawable Nexus Main balance (~{{max}}).",
 }
 
 /** French funding copy — generated base + curated overrides for sensitive lines. */

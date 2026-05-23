@@ -171,7 +171,7 @@ export const frFundingOverlay: Record<string, string> = {
   "withdrawal.modal.waitHours": "Next withdrawal in ~{{heures}} heures.",
   "withdrawal.modal.readyNow": "Retireral available now.",
   "withdrawal.modal.minLine": "Minimum withdrawal: {{min}}",
-  "withdrawal.modal.maxLine": "Maximum: 50% of liquid total (~{{max}}).",
+  "withdrawal.modal.maxLine": "Maximum : solde Nexus Main retirable (~{{max}}).",
   "home.profile.eyebrow": "Espace membre",
   "home.profile.greeting.morning": "Bonjour, {{name}}",
   "home.profile.greeting.afternoon": "Bon après-midi, {{name}}",
@@ -228,5 +228,5 @@ export const frFundingOverlay: Record<string, string> = {
   "withdrawal.apiErr.insufficientMain": "Montant exceeds main solde.",
   "withdrawal.apiErr.genericFailed": "Retireral could not be completed.",
   "withdrawal.apiErr.cooldownNext": "One withdrawal per 24 heures. Next window: {{when}}.",
-  "withdrawal.apiErr.maxHalfBalance": "Maximum withdrawal: 50% of liquid total (~{{max}}).",
+  "withdrawal.apiErr.maxHalfBalance": "Montant supérieur au solde Nexus Main retirable (~{{max}}).",
 }

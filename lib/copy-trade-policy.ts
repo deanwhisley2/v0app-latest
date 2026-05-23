@@ -3,13 +3,20 @@
  * Amounts are USD-normalized; UI converts via user FX preferences.
  */
 
+import {
+  CONTAINER_PERIOD_RETURN_MONTHLY_PCT,
+  copyTradeCycleProfitRateFromMonthlyPct,
+} from "@/lib/container-earnings-schedule"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 
 /** Active copy rotation length (spec). */
 export const COPY_TRADE_CYCLE_MS = 24 * 60 * 60 * 1000
 
 /** Canonical gross profit target per completed 24h cycle (on stake, no insurance). */
-export const COPY_TRADE_TARGET_PROFIT_RATE = 0.0071
+export const COPY_TRADE_TARGET_PROFIT_RATE = copyTradeCycleProfitRateFromMonthlyPct(
+  CONTAINER_PERIOD_RETURN_MONTHLY_PCT,
+  COPY_TRADE_CYCLE_MS,
+)
 
 /** Execution / withdrawal fee applied to **scheduled** copy earnings only (not on returned stake). */
 export const COPY_TRADE_SCHEDULED_EARNINGS_FEE_RATE = 0.015

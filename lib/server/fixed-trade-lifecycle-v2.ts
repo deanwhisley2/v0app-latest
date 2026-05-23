@@ -1,5 +1,9 @@
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
-import { fixPeriodDayCount } from "@/lib/container-earnings-schedule"
+import {
+  CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MAX,
+  CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN,
+  fixPeriodDayCount,
+} from "@/lib/container-earnings-schedule"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { buildExactSumBuckets, stringSeed } from "@/lib/server/target-driven-accrual"
 
@@ -32,7 +36,9 @@ export function buildFixedTradeLifecycleV2(
 ): FixedTradeLifecycleV2 {
   const principal = roundUsd2(principalUsd)
   const rnd = mulberry32(stringSeed(`fixed-rate|${sessionId}|${userId}`))
-  const targetProfitRate = Math.round((0.19 + rnd() * 0.06) * 1_000_000) / 1_000_000
+  const span = CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MAX - CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN
+  const targetProfitRate =
+    Math.round((CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN / 100 + rnd() * (span / 100)) * 1_000_000) / 1_000_000
   const targetProfitUsd = roundUsd2(principal * targetProfitRate)
   const termDays = fixPeriodDayCount(fixPeriodMonths)
   const seed = `fixed-buckets|${sessionId}|${principal}|${termDays}|${fixPeriodMonths}`

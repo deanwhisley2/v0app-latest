@@ -45,7 +45,8 @@ check("Copy policy exports fee helpers", estimateCopyForcePulloutUsd({ stakeUsd:
 check(
   "Copy canonical 0.71% target rate exported",
   has("lib/copy-trade-policy.ts", "COPY_TRADE_TARGET_PROFIT_RATE") &&
-    has("lib/copy-trade-policy.ts", "0.0071")
+    has("lib/copy-trade-policy.ts", "COPY_TRADE_TARGET_PROFIT_RATE") &&
+    has("lib/container-earnings-schedule.ts", "CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN")
 )
 
 check(

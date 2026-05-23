@@ -4,7 +4,7 @@ import { sumActiveSessionAccrualUsd } from "@/lib/server/container-session-accru
 import { computeFixedSessionPolicyGrossUsd, type FixedSessionEarnedRow } from "@/lib/server/fixed-trade-earnings-snapshot"
 
 /**
- * Liquid account base for pocket-withdrawal caps (50% rule).
+ * Liquid account base for withdrawal eligibility (main + container liquid; trade principal excluded).
  * Main + pending + container pocket liquid + unreleased fixed headroom + active copy accrual.
  * Excludes locked trade principal (stakes / fixed allocations).
  */

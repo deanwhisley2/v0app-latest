@@ -1,10 +1,26 @@
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 
-/**
- * Nominal monthly policy return rate on **yield base** (principal minus opening insurance),
- * applied for each month in the lock. Daily buckets sum to this target over the full period.
- */
-export const CONTAINER_PERIOD_RETURN_MONTHLY_PCT = 23
+/** Monthly return band on yield base (principal minus opening insurance). */
+export const CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN = 27
+export const CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MAX = 30
+
+/** Midpoint for copy-trade cycle sizing and display defaults. */
+export const CONTAINER_PERIOD_RETURN_MONTHLY_PCT =
+  (CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN + CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MAX) / 2
+
+const MS_PER_POLICY_MONTH = 30 * 86_400_000
+
+/** Deterministic monthly % in [MIN, MAX] from session seed (legacy schedule path). */
+export function resolveContainerPeriodReturnMonthlyPct(seedKey: string): number {
+  const rnd = mulberry32(stringSeed(`monthly-pct|${seedKey}`))
+  const pct = CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN + rnd() * (CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MAX - CONTAINER_PERIOD_RETURN_MONTHLY_PCT_MIN)
+  return Math.round(pct * 100) / 100
+}
+
+/** 24h copy cycle gross profit rate aligned to a monthly policy %. */
+export function copyTradeCycleProfitRateFromMonthlyPct(monthlyPct: number, cycleMs = 24 * 60 * 60 * 1000): number {
+  return Math.round((monthlyPct / 100) * (cycleMs / MS_PER_POLICY_MONTH) * 1_000_000) / 1_000_000
+}
 
 export type FixPeriodMonths = 1 | 3 | 6
 
@@ -32,7 +48,7 @@ export function stringSeed(s: string): number {
 
 /**
  * Deterministic daily accrual buckets that sum to:
- *   (principal − opening insurance) × CONTAINER_PERIOD_RETURN_MONTHLY_PCT × periodMonths
+ *   (principal − opening insurance) × resolveContainerPeriodReturnMonthlyPct(seed) × periodMonths
  * (falls back to full principal if the net base would be non-positive).
  * Weights are tightly banded (~±12% around the equal-per-day mean) so the curve feels “alive”
  * day to day while reconciling exactly to the policy total (ledger-aligned targets on the server).
@@ -47,7 +63,8 @@ export function buildContainerDailySchedule(
   const ins = Math.max(0, roundUsd2(insuranceFeeUsd))
   const netForYield = roundUsd2(principalUsd - ins)
   const baseUsd = netForYield > 0 ? netForYield : roundUsd2(principalUsd)
-  const target = roundUsd2(baseUsd * (CONTAINER_PERIOD_RETURN_MONTHLY_PCT / 100) * periodMonths)
+  const monthlyPct = resolveContainerPeriodReturnMonthlyPct(seedKey)
+  const target = roundUsd2(baseUsd * (monthlyPct / 100) * periodMonths)
 
   const rnd = mulberry32(stringSeed(seedKey))
   const weights: number[] = []

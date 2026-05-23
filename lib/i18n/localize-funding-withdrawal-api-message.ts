@@ -58,8 +58,8 @@ const MIN_WITHDRAW_LOCAL_RE = /^Minimum withdrawal is (.+)\.$/
 const WITHDRAW_COOLDOWN_RE =
   /^(?:You can submit one withdrawal every 24 hours\. Next withdrawal is available after|Withdrawal limit: one per 24 hours\. Next window:) (.+)\.$/
 
-const WITHDRAW_MAX_HALF_RE =
-  /^For security, each withdrawal is capped at 50% of your total balance \(about ([\d.]+) USD right now\)\.$/
+const WITHDRAW_MAX_BALANCE_RE =
+  /^Withdrawal amount exceeds your withdrawable Nexus Main balance \(about ([^)]+)\)\.$/
 
 export function localizeFundingWithdrawalApiMessage(
   raw: string | undefined | null,
@@ -85,7 +85,7 @@ export function localizeFundingWithdrawalApiMessage(
       : iso
     return t("withdrawal.apiErr.cooldownNext").replace("{{when}}", human)
   }
-  const mMax = s.match(WITHDRAW_MAX_HALF_RE)
+  const mMax = s.match(WITHDRAW_MAX_BALANCE_RE)
   if (mMax) return t("withdrawal.apiErr.maxHalfBalance").replace("{{max}}", mMax[1])
   return s
 }

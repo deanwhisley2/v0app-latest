@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     const totalBalance = liquid.totalLiquidUsd
     const mainRetainUsd = nexusMainMinimumRetainUsd(fundingCountryCode)
     const withdrawableMainUsd = round2(Math.max(0, available - mainRetainUsd))
-    const maxAllowed = round2(Math.min(withdrawableMainUsd, totalBalance * 0.5))
+    const maxAllowed = withdrawableMainUsd
 
     const { data: row, error: selErr } = await admin
       .from("user_balances")
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       const maxFmt = await formatCustomerMoneyForUser(admin, user.id, maxAllowed)
       return NextResponse.json(
         {
-          error: `For security, each withdrawal is capped at 50% of your total balance (about ${maxFmt}).`,
+          error: `Withdrawal amount exceeds your withdrawable Nexus Main balance (about ${maxFmt}).`,
           maxUsd: maxAllowed,
           totalBalanceUsd: totalBalance,
         },
