@@ -1,5 +1,5 @@
-/* Nexus Pro PWA shell — v20260525c (never Response.error on navigate) */
-const CACHE = "nexus-shell-20260525c"
+/* Nexus Pro PWA shell — v20260525d (soft offline copy) */
+const CACHE = "nexus-shell-20260525d"
 
 const SHELL_URLS = [
   "/offline",
@@ -16,7 +16,7 @@ const OFFLINE_HTML = `<!DOCTYPE html>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <meta name="theme-color" content="#0f7669"/>
-  <title>Nexus Pro — Offline</title>
+  <title>Nexus Pro — Reconnecting</title>
   <style>
     body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
       font-family:system-ui,sans-serif;background:#070a12;color:#e8eaef;padding:24px;text-align:center}
@@ -29,9 +29,9 @@ const OFFLINE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div class="card">
-    <h1>You're offline</h1>
-    <p>Nexus Pro needs a connection. Check your network and try again.</p>
-    <button type="button" onclick="location.reload()">Reload</button>
+    <h1>Connection interrupted</h1>
+    <p>Trying to reconnect… Your workspace will resume automatically.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
     <a href="/dashboard" style="background:#0f7669;color:#fff">Open dashboard</a>
   </div>
   <script>window.addEventListener("online",function(){location.reload()})</script>

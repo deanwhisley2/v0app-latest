@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import Link from "next/link"
-import { Smartphone, Wifi } from "lucide-react"
+import { Loader2, Smartphone } from "lucide-react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 
 export default function OfflinePage() {
@@ -15,7 +15,11 @@ export default function OfflinePage() {
       }
     }
     window.addEventListener("online", retry)
-    return () => window.removeEventListener("online", retry)
+    const interval = window.setInterval(retry, 4000)
+    return () => {
+      window.removeEventListener("online", retry)
+      window.clearInterval(interval)
+    }
   }, [])
 
   return (
@@ -23,17 +27,18 @@ export default function OfflinePage() {
       <Smartphone className="h-10 w-10 text-primary" aria-hidden />
       <h1 className="text-lg font-semibold">{t("mobile.offline.title")}</h1>
       <p className="max-w-sm text-sm text-muted-foreground">{t("mobile.offline.lead")}</p>
-      <div className="flex flex-col gap-2 pt-2">
+      <div className="flex flex-col items-center gap-3 pt-2">
+        <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin opacity-70" aria-hidden />
+          {t("mobile.connectivity.reconnecting")}
+        </p>
         <Link
           href="/dashboard"
-          className="nexus-touch-press rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground touch-manipulation"
+          className="nexus-touch-press rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium touch-manipulation"
         >
           {t("mobile.offline.retry")}
         </Link>
-        <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <Wifi className="h-3.5 w-3.5" aria-hidden />
-          {t("mobile.offline.autoRetry")}
-        </p>
+        <p className="text-xs text-muted-foreground">{t("mobile.offline.autoRetry")}</p>
       </div>
     </main>
   )

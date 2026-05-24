@@ -3,25 +3,29 @@ export const mobileMessagesEn: Record<string, string> = {
   "nav.search": "Search",
   "nav.profile": "Profile",
   "common.dismiss": "Dismiss",
-  "mobile.connectivity.offline": "You're offline — trading and wallet actions need a connection.",
-  "mobile.connectivity.reconnected": "Back online — syncing your workspace.",
-  "mobile.offline.title": "You're offline",
+  "mobile.connectivity.reconnecting": "Reconnecting…",
+  "mobile.connectivity.offline":
+    "Connection interrupted — your workspace will resume automatically.",
+  "mobile.connectivity.reconnected": "Back online",
+  "mobile.offline.title": "Connection interrupted",
   "mobile.offline.lead":
-    "Nexus Pro needs a connection for trading and wallet actions. Reconnect and we'll resume automatically.",
-  "mobile.offline.retry": "Retry",
-  "mobile.offline.autoRetry": "We'll retry when your connection returns.",
+    "Trying to reconnect… Your workspace will resume automatically when the connection returns.",
+  "mobile.offline.retry": "Try again",
+  "mobile.offline.autoRetry": "We'll restore your session when you're back online.",
 }
 
 export const mobileMessagesFr: Partial<Record<string, string>> = {
   "nav.search": "Rechercher",
   "nav.profile": "Profil",
-  "mobile.connectivity.offline": "Hors ligne — connexion requise pour trader.",
-  "mobile.connectivity.reconnected": "De retour en ligne — synchronisation.",
+  "mobile.connectivity.reconnecting": "Reconnexion…",
+  "mobile.connectivity.offline": "Connexion interrompue — reprise automatique.",
+  "mobile.connectivity.reconnected": "De retour en ligne",
 }
 
 export const mobileMessagesSw: Partial<Record<string, string>> = {
   "nav.search": "Tafuta",
   "nav.profile": "Wasifu",
-  "mobile.connectivity.offline": "Huna mtandao — biashara inahitaji muunganisho.",
-  "mobile.connectivity.reconnected": "Umerudi mtandaoni — tunasawazisha.",
+  "mobile.connectivity.reconnecting": "Inaunganisha tena…",
+  "mobile.connectivity.offline": "Muunganisho umekatika — tutaendelea kiotomatiki.",
+  "mobile.connectivity.reconnected": "Umerudi mtandaoni",
 }
