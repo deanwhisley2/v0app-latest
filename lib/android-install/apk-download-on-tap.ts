@@ -1,44 +1,53 @@
-import type { AndroidReleasePayload } from "@/lib/android-install/apk-download-client"
 import {
-  logInstallEvent,
-  resolveApkDownloadUrl,
-  triggerApkBrowserDownload,
-} from "@/lib/android-install/apk-download-client"
+  fetchReleaseInfoOnUserTap,
+  resolveReleaseDownloadUrl,
+  type AndroidReleaseInfo,
+} from "@/lib/android-install/release-info"
+import { logInstallEvent, triggerApkBrowserDownload } from "@/lib/android-install/apk-download-client"
+import { writeInstallState } from "@/lib/android-install/storage"
 
-export type ApkDownloadOnTapResult = "ok" | "unavailable" | "failed"
+export type ApkTapResult =
+  | { status: "ok"; release: AndroidReleaseInfo }
+  | { status: "unavailable" | "failed" }
 
 /**
- * User-initiated APK flow only — call from an explicit button click handler.
- * One JSON request to release metadata, then browser download. No mount-time work.
+ * User-initiated APK flow — fetch static release-info.json on tap, then download.
+ * No mount-time work, API polling, or auth coupling.
  */
-export async function fetchAndDownloadApkOnUserTap(
+export async function fetchReleaseAndDownloadApkOnUserTap(
   surface: string,
-): Promise<ApkDownloadOnTapResult> {
+): Promise<ApkTapResult> {
   try {
-    const res = await fetch("/api/app/android-release", { cache: "no-store" })
-    if (!res.ok) return "failed"
-
-    const release = (await res.json()) as AndroidReleasePayload
-    if (!release.apkAvailable) {
+    const release = await fetchReleaseInfoOnUserTap()
+    if (!release?.published) {
       void logInstallEvent({
         event: "apk_unavailable",
         surface,
         browser: null,
-        version: release.version ?? null,
+        version: release?.version ?? null,
       })
-      return "unavailable"
+      return { status: "unavailable" }
     }
 
-    const url = resolveApkDownloadUrl(release)
+    const url = resolveReleaseDownloadUrl(release)
     triggerApkBrowserDownload(url, release.version)
+    writeInstallState({
+      lastSeenReleaseVersion: release.version,
+      installMode: "apk",
+    })
     void logInstallEvent({
       event: "apk_download_started",
       surface,
       browser: null,
       version: release.version,
     })
-    return "ok"
+    return { status: "ok", release }
   } catch {
-    return "failed"
+    return { status: "failed" }
   }
+}
+
+/** Load release metadata only (no download) — user-initiated. */
+export async function fetchReleaseInfoForDisplayOnUserTap(): Promise<AndroidReleaseInfo | null> {
+  return fetchReleaseInfoOnUserTap()
 }

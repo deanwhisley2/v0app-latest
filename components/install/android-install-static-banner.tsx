@@ -1,10 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Loader2, X } from "lucide-react"
+import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { AndroidInstallApkHelpPanel } from "@/components/install/android-install-apk-help-panel"
 import { AndroidInstallGuidancePanel } from "@/components/install/android-install-guidance-panel"
-import { fetchAndDownloadApkOnUserTap } from "@/lib/android-install/apk-download-on-tap"
+import {
+  fetchReleaseAndDownloadApkOnUserTap,
+  fetchReleaseInfoForDisplayOnUserTap,
+} from "@/lib/android-install/apk-download-on-tap"
+import {
+  formatReleaseVersionLabel,
+  type AndroidReleaseInfo,
+} from "@/lib/android-install/release-info"
 import { cn } from "@/lib/utils"
 
 type AndroidInstallStaticBannerProps = {
@@ -16,8 +24,7 @@ type AndroidInstallStaticBannerProps = {
 type DownloadUiState = "idle" | "loading" | "ok" | "unavailable" | "failed"
 
 /**
- * Phases 4–6 install rebuild — dismiss, user-tap APK fetch, inline guidance panel.
- * No mount effects, preload, detection hooks, portals, or install lifecycle managers.
+ * Safe install card — user-tap release fetch only, inline panels, no mount effects.
  */
 export function AndroidInstallStaticBanner({
   variant = "banner",
@@ -26,6 +33,9 @@ export function AndroidInstallStaticBanner({
 }: AndroidInstallStaticBannerProps) {
   const [dismissed, setDismissed] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
+  const [showApkHelp, setShowApkHelp] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
+  const [releaseInfo, setReleaseInfo] = useState<AndroidReleaseInfo | null>(null)
   const [downloadState, setDownloadState] = useState<DownloadUiState>("idle")
 
   if (dismissed) return null
@@ -33,17 +43,35 @@ export function AndroidInstallStaticBanner({
   const handleDownload = async () => {
     if (downloadState === "loading") return
     setDownloadState("loading")
-    const result = await fetchAndDownloadApkOnUserTap(surface)
-    setDownloadState(result === "ok" ? "ok" : result)
+    const result = await fetchReleaseAndDownloadApkOnUserTap(surface)
+    if (result.status === "ok") {
+      setReleaseInfo(result.release)
+      setDownloadState("ok")
+      return
+    }
+    setDownloadState(result.status)
+  }
+
+  const handleViewVersion = async () => {
+    if (downloadState === "loading") return
+    setDownloadState("loading")
+    const info = await fetchReleaseInfoForDisplayOnUserTap()
+    setDownloadState("idle")
+    if (info) {
+      setReleaseInfo(info)
+      setShowNotes(true)
+      return
+    }
+    setDownloadState("failed")
   }
 
   const statusMessage =
     downloadState === "ok"
       ? "Download started — check your notifications or Downloads folder."
       : downloadState === "unavailable"
-        ? "APK is not published yet. Use Add to Home Screen below, or try again later."
+        ? "APK is not published yet. Use install help below, or try again later."
         : downloadState === "failed"
-          ? "Could not reach the release server. Check your connection and try again."
+          ? "Could not load release info. Check your connection and try again."
           : null
 
   return (
@@ -73,6 +101,13 @@ export function AndroidInstallStaticBanner({
           Download the official Android package or add Nexus Pro to your home screen.
         </p>
 
+        {releaseInfo ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Latest: {formatReleaseVersionLabel(releaseInfo)}
+            {releaseInfo.size_mb > 0 ? ` · ${releaseInfo.size_mb} MB` : null}
+          </p>
+        ) : null}
+
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
             type="button"
@@ -95,12 +130,53 @@ export function AndroidInstallStaticBanner({
             size="sm"
             variant="outline"
             className="min-h-9 touch-manipulation"
+            disabled={downloadState === "loading"}
+            onClick={() => void handleViewVersion()}
+          >
+            Version info
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="min-h-9 touch-manipulation"
+            onClick={() => setShowApkHelp((v) => !v)}
+            aria-expanded={showApkHelp}
+          >
+            {showApkHelp ? "Hide APK help" : "How to install APK"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="min-h-9 touch-manipulation"
             onClick={() => setShowGuide((v) => !v)}
             aria-expanded={showGuide}
           >
-            {showGuide ? "Hide install help" : "How to install"}
+            {showGuide ? "Hide home screen" : "Add to home screen"}
           </Button>
         </div>
+
+        {releaseInfo && releaseInfo.notes.length > 0 ? (
+          <div className="mt-2">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[11px] font-medium text-primary"
+              onClick={() => setShowNotes((v) => !v)}
+              aria-expanded={showNotes}
+            >
+              Release notes
+              {showNotes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+            {showNotes ? (
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] leading-relaxed text-muted-foreground">
+                {releaseInfo.notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         {statusMessage ? (
           <p
@@ -113,6 +189,7 @@ export function AndroidInstallStaticBanner({
           </p>
         ) : null}
 
+        <AndroidInstallApkHelpPanel open={showApkHelp} />
         <AndroidInstallGuidancePanel open={showGuide} />
       </div>
     </div>

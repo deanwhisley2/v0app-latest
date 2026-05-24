@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "build": 12,
+  "published": true,
+  "min_supported_android": 10,
+  "download_url": "/api/app/android-apk",
+  "static_download_url": "/releases/android/nexus-pro-v1.apk",
+  "size_mb": 18,
+  "release_date": "2026-05-25",
+  "notes": [
+    "Improved dashboard stability",
+    "Native mobile scrolling",
+    "Reduced rendering glitches"
+  ]
+}

@@ -22,6 +22,7 @@ export async function resolveAndroidApkFile(): Promise<AndroidApkFileInfo | null
   const release = getDefaultAndroidRelease()
   const candidates = [
     process.env.ANDROID_APK_PATH?.trim(),
+    path.join(process.cwd(), "public", "releases", "android", "nexus-pro-v1.apk"),
     path.join(process.cwd(), "public", "releases", "nexus-pro.apk"),
     path.join(process.cwd(), "releases", "nexus-pro.apk"),
   ].filter((p): p is string => Boolean(p))
