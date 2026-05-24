@@ -763,6 +763,51 @@ html:not(.nexus-pwa-ready) body {
     overscroll-behavior-y: contain;
   }
 
+  /* Native scroll isolation — undo aggressive mobile-stable / scroll hacks */
+  html.nexus-native-scroll .nexus-app-shell {
+    overscroll-behavior-y: auto;
+  }
+
+  html.nexus-native-scroll .nexus-smart-header-shell-native,
+  html.nexus-native-scroll .nexus-smart-header-shell-native .nexus-smart-header-inner {
+    position: static !important;
+    top: auto !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+
+  html.nexus-native-scroll .nexus-smart-header-spacer {
+    display: none !important;
+    height: 0 !important;
+  }
+
+  html.nexus-native-scroll html.nexus-scroll-locked body,
+  html.nexus-native-scroll body {
+    overflow: visible !important;
+    position: static !important;
+    top: auto !important;
+    width: auto !important;
+    touch-action: auto !important;
+    overscroll-behavior: auto !important;
+  }
+
+  html.nexus-native-scroll {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  html.nexus-native-scroll #nexus-app-root {
+    touch-action: auto !important;
+  }
+
+  html.nexus-native-scroll .nexus-mobile-overlay-root {
+    touch-action: auto;
+  }
+
+  html.nexus-native-scroll .nexus-app-shell .nexus-touch-press:active {
+    transform: none !important;
+  }
+
   .nexus-app-shell .nexus-touch-press {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;

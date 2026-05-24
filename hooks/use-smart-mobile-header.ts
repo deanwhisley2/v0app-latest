@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { getBodyScrollLockCount } from "@/lib/mobile/body-scroll-lock"
 import { computeSmartHeaderVisibility } from "@/lib/mobile/smart-header-scroll"
+import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
 import { NEXUS_HEADER_REVEAL } from "@/lib/mobile/mobile-chrome-events"
 
 const MOBILE_MQ = "(max-width: 767px)"
@@ -23,14 +24,20 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
   useEffect(() => {
     if (typeof window === "undefined") return
     const mq = window.matchMedia(MOBILE_MQ)
-    const syncEnabled = () => setEnabled(mq.matches)
+    const syncEnabled = () => {
+      if (isNativeMobileScrollMode()) {
+        setEnabled(false)
+        return
+      }
+      setEnabled(mq.matches)
+    }
     syncEnabled()
     mq.addEventListener("change", syncEnabled)
     return () => mq.removeEventListener("change", syncEnabled)
   }, [])
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || isNativeMobileScrollMode()) {
       setVisible(true)
       setAtTop(true)
       scrollRef.current = { lastY: 0, hidden: false }
@@ -43,6 +50,7 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
     setAtTop(window.scrollY <= 12)
 
     const onScroll = () => {
+      if (isNativeMobileScrollMode()) return
       if (getBodyScrollLockCount() > 0) return
       if (rafRef.current != null) return
       rafRef.current = window.requestAnimationFrame(() => {

@@ -33,6 +33,7 @@ import {
 import { getTierBadgeLabel } from "@/lib/nexus-tier-matrix"
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { MobileOverlaySheet } from "@/components/mobile/mobile-overlay-sheet"
+import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
 
 interface HeaderProps {
   activeTab: string
@@ -625,16 +626,28 @@ export function Header({
               {/* Floating Profile Menu */}
               {showProfileMenu && (
                 <>
-                  <div className="absolute right-0 top-12 z-50 hidden w-80 md:block md:animate-in md:fade-in md:slide-in-from-top-2 md:duration-200">
-                    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+                  <div
+                    className={`absolute right-0 top-12 z-50 w-80 md:animate-in md:fade-in md:slide-in-from-top-2 md:duration-200 ${
+                      isNativeMobileScrollMode()
+                        ? "max-md:block max-md:max-h-[min(88dvh,720px)]"
+                        : "hidden md:block"
+                    }`}
+                  >
+                    <div
+                      className={`overflow-hidden rounded-2xl border border-border bg-card shadow-2xl ${
+                        isNativeMobileScrollMode() ? "max-md:max-h-[inherit] max-md:overflow-y-auto" : ""
+                      }`}
+                    >
                       {renderProfilePanelBody()}
                     </div>
                   </div>
-                  <MobileOverlaySheet open={showProfileMenu} onClose={closeProfileMenu}>
-                    <div className="bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                      {renderProfilePanelBody()}
-                    </div>
-                  </MobileOverlaySheet>
+                  {!isNativeMobileScrollMode() ? (
+                    <MobileOverlaySheet open={showProfileMenu} onClose={closeProfileMenu}>
+                      <div className="bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                        {renderProfilePanelBody()}
+                      </div>
+                    </MobileOverlaySheet>
+                  ) : null}
                 </>
               )}
             </div>

@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
 import { PwaSafeModeBootstrap } from '@/components/mobile/pwa-safe-mode-bootstrap'
+import { NativeScrollBootstrap } from '@/components/mobile/native-scroll-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
 import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
@@ -168,6 +169,7 @@ export default function RootLayout({
         <GoogleAnalyticsRouteTracker />
         <ProductionErrorReporter />
         <ScrollLockSafety />
+        <NativeScrollBootstrap />
         <PwaSafeModeBootstrap />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { forceUnlockBodyScroll, getBodyScrollLockCount } from "@/lib/mobile/body-scroll-lock"
+import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
 
 /**
  * Recovers stuck scroll locks after app resume or bfcache restore (common on Samsung A-series).
@@ -9,6 +10,10 @@ import { forceUnlockBodyScroll, getBodyScrollLockCount } from "@/lib/mobile/body
 export function ScrollLockSafety() {
   useEffect(() => {
     const recover = () => {
+      if (isNativeMobileScrollMode()) {
+        forceUnlockBodyScroll()
+        return
+      }
       if (getBodyScrollLockCount() > 0) return
       const body = document.body
       const html = document.documentElement

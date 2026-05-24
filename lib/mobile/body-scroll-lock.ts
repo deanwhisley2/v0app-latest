@@ -1,7 +1,9 @@
 /**
  * Central body scroll lock — reference counted; iOS-safe fixed body + touch containment.
- * Scrollable overlay regions must use `data-nexus-overlay-scroll` (see `.nexus-overlay-scroll`).
+ * Disabled entirely when {@link isNativeMobileScrollMode} is active.
  */
+
+import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
 
 let lockCount = 0
 let savedBodyOverflow = ""
@@ -32,7 +34,7 @@ function blockBackgroundTouchMove(e: TouchEvent): void {
 }
 
 export function lockBodyScroll(): () => void {
-  if (typeof document === "undefined") return () => undefined
+  if (typeof document === "undefined" || isNativeMobileScrollMode()) return () => undefined
 
   if (lockCount === 0) {
     const body = document.body
