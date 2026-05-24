@@ -42,7 +42,7 @@ export function Ticker({ coins, mobileStatic = false }: TickerProps) {
   if (mobileStatic) {
     return (
       <>
-        <div className="border-y border-border bg-card md:hidden">
+        <div className="nexus-live-ticker border-y border-border bg-card md:hidden">
           <div className="flex gap-0 overflow-x-auto py-2.5 [-webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">
             <TickerRow coins={slice} />
           </div>

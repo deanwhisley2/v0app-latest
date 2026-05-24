@@ -20,7 +20,7 @@ export function LiveMarketFeedBar({
 
   return (
     <div
-      className="border-b border-border bg-muted/40 px-4 py-2 text-xs md:text-sm"
+      className="nexus-live-market-feed-bar border-b border-border bg-muted/40 px-4 py-2 text-xs md:text-sm"
       role="status"
       aria-live="polite"
     >

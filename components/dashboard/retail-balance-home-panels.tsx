@@ -45,7 +45,7 @@ type RetailBalanceHomePanelsProps = {
   onTransferToMain: () => void
 }
 
-const panelClass = cn("nexus-home-panel block w-full", NX_PANEL)
+const panelClass = cn("nexus-home-panel nexus-flat-card block w-full", NX_PANEL)
 
 function MetricCard({
   label,
@@ -187,7 +187,7 @@ export function RetailBalanceHomePanels({
       </section>
 
       {/* Pocket balance */}
-      <section className={cn(panelClass, "p-5 sm:p-6")} aria-label={t("funding.balance.liquidTitle")}>
+      <section className={cn(panelClass, "nexus-transfer-panel p-5 sm:p-6")} aria-label={t("funding.balance.liquidTitle")}>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">

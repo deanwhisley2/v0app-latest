@@ -887,6 +887,101 @@ html:not(.nexus-pwa-ready) body {
       opacity: 1;
     }
   }
+
+  /* ========== LOW GPU MODE (Samsung A0x / budget Android) ========== */
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-smart-header-shell {
+    position: relative !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+    box-shadow: none !important;
+    background-color: var(--background) !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-smart-header-spacer {
+    display: none !important;
+    height: 0 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-mobile-header-chrome {
+    background-color: var(--background) !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable header [class*="ring-"],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable header [class*="ring-offset"] {
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    box-shadow: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-overlay-scrim {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    background-color: var(--background) !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-flat-card,
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-home-panel,
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-transfer-panel,
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-home-wallet-stack section {
+    contain: layout paint;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: auto !important;
+    background-color: var(--card) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-home-wallet-stack [class*="bg-primary/"],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-home-wallet-stack [class*="bg-muted/"],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-home-wallet-stack [class*="opacity-"] {
+    background-color: var(--muted) !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-live-ticker {
+    display: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-live-market-feed-bar {
+    background-color: var(--muted) !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-live-market-feed-bar [class*="animate-"] {
+    animation: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-app-shell .nexus-touch-press,
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-app-shell .nexus-touch-press:active {
+    transform: none !important;
+    opacity: 1 !important;
+    transition: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-tab-panel {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="filter"],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="drop-shadow"],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="shadow-["] {
+    filter: none !important;
+    box-shadow: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .fixed.z-\[105\],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .fixed.z-\[120\],
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .fixed.z-\[130\] {
+    box-shadow: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

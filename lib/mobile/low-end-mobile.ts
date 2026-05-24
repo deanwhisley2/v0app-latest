@@ -12,7 +12,9 @@ export function isLowEndMobileDevice(): boolean {
   if (typeof cores === "number" && cores > 0 && cores <= 4) return true
 
   const ua = navigator.userAgent.toLowerCase()
-  if (/sm-a0|sm-a1|sm-a2|sm-a3|tecno|itel|infinix|redmi 9a|galaxy a0/i.test(ua)) return true
+  if (/sm-a0|sm-a1|sm-a2|sm-a3|sm-a4|sm-a5|sm-a05|sm-a055|tecno|itel|infinix|redmi 9a|galaxy a0|galaxy a1|galaxy a2/i.test(ua)) {
+    return true
+  }
 
   return false
 }

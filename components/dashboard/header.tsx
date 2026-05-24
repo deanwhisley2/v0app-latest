@@ -541,7 +541,7 @@ export function Header({
 
   return (
     <>
-      <header className="nexus-smart-header-inner sticky top-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-md max-md:border-b-0 max-md:bg-background max-md:[backdrop-filter:none]">
+      <header className="nexus-smart-header-inner nexus-mobile-header-chrome sticky top-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-md max-md:border-b max-md:border-border max-md:bg-background max-md:[backdrop-filter:none]">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 sm:h-16">
           {/* Brand Name */}
           <div className="flex items-center">
@@ -618,7 +618,7 @@ export function Header({
                   setShowArchivedNotifications(false)
                 }}
                 title="View Profile"
-                className={`nexus-touch-press flex h-10 w-10 min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 touch-manipulation ${showProfileMenu ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""}`}
+                className={`nexus-touch-press flex h-10 w-10 min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 touch-manipulation max-md:ring-0 ${showProfileMenu ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background max-md:ring-0 max-md:ring-offset-0" : ""}`}
               >
                 <span className="text-sm font-bold">{userInitials}</span>
               </button>

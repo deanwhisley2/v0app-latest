@@ -279,7 +279,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[104] bg-foreground/25 backdrop-blur-[2px] dark:bg-black/50"
+        className="nexus-overlay-scrim fixed inset-0 z-[104] bg-foreground/25 backdrop-blur-[2px] dark:bg-black/50"
         aria-hidden
         onClick={onClose}
       />

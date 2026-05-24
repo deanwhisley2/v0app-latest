@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
 import { PwaSafeModeBootstrap } from '@/components/mobile/pwa-safe-mode-bootstrap'
+import { MobileLowGpuBootstrap } from '@/components/mobile/mobile-low-gpu-bootstrap'
 import { NativeScrollBootstrap } from '@/components/mobile/native-scroll-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
@@ -181,6 +182,7 @@ export default function RootLayout({
           <MobileNavigationDiagnostics />
         </Suspense>
         <ScrollLockSafety />
+        <MobileLowGpuBootstrap />
         <NativeScrollBootstrap />
         <PwaSafeModeBootstrap />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />

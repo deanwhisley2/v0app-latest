@@ -1,20 +1,25 @@
 import { isLowEndMobileDevice } from "@/lib/mobile/low-end-mobile"
+import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
 
 function isMobileViewport(): boolean {
   if (typeof window === "undefined") return false
   return window.matchMedia("(max-width: 767px)").matches
 }
 
+function mobileGpuTierSlow(): boolean {
+  return isMobileLowGpuMode() || isLowEndMobileDevice()
+}
+
 /** Countdown label refresh — slower on phones to avoid repaint storms. */
 export function workspaceCountdownIntervalMs(): number {
   if (!isMobileViewport()) return 1000
-  return isLowEndMobileDevice() ? 30_000 : 15_000
+  return mobileGpuTierSlow() ? 60_000 : 15_000
 }
 
 /** Fixed-trade accrual display tick between server hydrates. */
 export function workspaceEarnTickIntervalMs(): number {
   if (!isMobileViewport()) return 10_000
-  return isLowEndMobileDevice() ? 60_000 : 30_000
+  return mobileGpuTierSlow() ? 120_000 : 30_000
 }
 
 /** rAF number tween on earned USD — desktop only. */
@@ -25,13 +30,13 @@ export function shouldAnimateFixEarnedDisplay(): boolean {
 /** Fixed-trade local earned sync between server polls. */
 export function workspaceFixSyncIntervalMs(): number {
   if (!isMobileViewport()) return 15_000
-  return isLowEndMobileDevice() ? 60_000 : 30_000
+  return mobileGpuTierSlow() ? 120_000 : 30_000
 }
 
 /** Active session API poll — was 8s everywhere; too heavy for desk cards on phones. */
 export function workspaceSessionPollIntervalMs(): number {
   if (!isMobileViewport()) return 8_000
-  return isLowEndMobileDevice() ? 60_000 : 30_000
+  return mobileGpuTierSlow() ? 120_000 : 30_000
 }
 
 /** Live schedule accrual + progress bar — server/poll snapshots only on mobile. */
