@@ -17,8 +17,8 @@ Only one install surface flag should be `true` at a time.
 |------|--------|-----|
 | 0 | both `false` | Stable baseline |
 | 1 | `NEXUS_INSTALL_STATIC_BANNER=true` | Static text banner (no hooks) — **PASS** |
-| 2 | — | Dismiss button (local `useState` only) — **current** |
-| 3 | — | Android-only CSS/media or simple UA check |
+| 2 | — | Dismiss button (local `useState` only) — **PASS** |
+| 3 | — | Android-only via server `User-Agent` substring — **current** |
 | 4 | — | APK link button (no prefetch) |
 | 5 | — | On-demand `/api/app/android-release` fetch (user click only) |
 
@@ -26,7 +26,7 @@ Do **not** re-enable `NEXUS_LIGHTWEIGHT_ANDROID_INSTALL` until each step passes 
 
 ## Auth wiring
 
-Login/register use `AndroidInstallStaticBanner` when static flag is on — **no import** of `android-install-prompt.tsx` on auth pages during rebuild.
+Login/register: server `page.tsx` reads `User-Agent` → passes `showAndroidInstallBanner` boolean to client form. **No client navigator** during hydration.
 
 ## Rollback
 

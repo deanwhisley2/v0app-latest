@@ -25,7 +25,6 @@ import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { AndroidInstallStaticBanner } from "@/components/install/android-install-static-banner"
-import { isInstallStaticBannerEnabled } from "@/lib/mobile/pwa-safe-mode"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -56,7 +55,11 @@ const REGISTER_JOELIN_CHIPS = [
 
 const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
 
-export default function RegisterPage() {
+export default function RegisterForm({
+  showAndroidInstallBanner = false,
+}: {
+  showAndroidInstallBanner?: boolean
+}) {
   const router = useRouter()
   const { language: ctxLang, currency: ctxCur, setPreferences, formatUserMoney } = useUserPreferences()
   const testimonialNotif = useAuthTestimonialNotifs({
@@ -297,7 +300,7 @@ export default function RegisterPage() {
 
         <RegisterStepIndicator steps={steps} current={step} />
 
-        {isInstallStaticBannerEnabled() ? (
+        {showAndroidInstallBanner ? (
           <div className="mb-4">
             <AndroidInstallStaticBanner variant="card" />
           </div>

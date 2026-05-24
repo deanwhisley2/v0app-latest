@@ -21,7 +21,6 @@ import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { AndroidInstallStaticBanner } from "@/components/install/android-install-static-banner"
-import { isInstallStaticBannerEnabled } from "@/lib/mobile/pwa-safe-mode"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 const REMEMBER_KEY = "nexus_auth_remember_id"
 
@@ -38,7 +37,11 @@ const LOGIN_JOELIN_CHIPS = [
 const inputClass =
   "min-h-12 text-base sm:text-sm touch-manipulation"
 
-export default function LoginPage() {
+export default function LoginForm({
+  showAndroidInstallBanner = false,
+}: {
+  showAndroidInstallBanner?: boolean
+}) {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
   const { language, formatUserMoney } = useUserPreferences()
@@ -202,7 +205,7 @@ export default function LoginPage() {
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t.login.subtitle}</p>
         </header>
 
-        {isInstallStaticBannerEnabled() ? (
+        {showAndroidInstallBanner ? (
           <div className="mb-4">
             <AndroidInstallStaticBanner variant="card" />
           </div>
