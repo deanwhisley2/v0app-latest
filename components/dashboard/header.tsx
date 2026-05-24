@@ -209,12 +209,14 @@ export function Header({
           <div className="flex items-center gap-3">
             {/* Search Button with Animation */}
             <button
+              type="button"
               onClick={() => setShowSearch(true)}
-              className="nexus-touch-press group flex min-h-10 min-w-10 items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-sm transition-all hover:border-primary hover:bg-muted touch-manipulation"
+              aria-label={t("header.searchHint")}
+              className="nexus-touch-press flex min-h-10 min-w-10 items-center justify-center rounded-full border border-border bg-muted/50 touch-manipulation md:gap-2 md:px-3 md:py-1.5"
             >
-              <Search className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-              <span className="hidden sm:inline text-muted-foreground group-hover:text-foreground">
-                <span className="max-md:animate-none md:animate-pulse">{t("header.cantFind")}</span>
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <span className="hidden md:inline text-sm text-muted-foreground">
+                {t("header.cantFind")}
               </span>
               <kbd className="hidden lg:inline-flex items-center rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 /

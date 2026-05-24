@@ -13,7 +13,7 @@ export function AndroidInstallDashboardReminder() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pt-2">
+      <div className="mx-auto max-w-[1600px] px-4 pt-2 max-md:pt-1">
       <AndroidInstallPrompt
         surface="dashboard"
         variant="banner"

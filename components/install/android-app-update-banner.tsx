@@ -24,7 +24,7 @@ export function AndroidAppUpdateBanner() {
 
   return (
     <div
-      className="mx-auto max-w-[1600px] px-4 pt-2"
+      className="mx-auto max-w-[1600px] px-4 pt-2 max-md:pt-1"
       role="region"
       aria-label={title}
     >

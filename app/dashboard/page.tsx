@@ -7,7 +7,8 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
-import { SmartMobileHeaderShell } from "@/components/dashboard/smart-mobile-header-shell"
+import { MobileAppBar } from "@/components/dashboard/mobile-app-bar"
+import { DashboardMobileNotices } from "@/components/dashboard/dashboard-mobile-notices"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { BottomNav } from "@/components/dashboard/bottom-nav"
@@ -2245,31 +2246,39 @@ export default function DashboardPage() {
 
   return (
     <div className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-      {/* Header — smart reveal on mobile scroll-up */}
-      <SmartMobileHeaderShell>
-        <Header
-          activeTab={activeTab}
-          onTabChange={handleHeaderTabChange}
-          coins={headerSearchCoins}
-          currentUser={currentUser ?? undefined}
-          referral={referralInfo}
-          onLogout={handleLogout}
-          retailerCreditDesk={retailerCreditDesk}
-          operationalWorkspace={operationalWorkspace}
-        />
-      </SmartMobileHeaderShell>
+      {/* Unified mobile app bar — single search/nav hierarchy */}
+      <MobileAppBar
+        header={
+          <Header
+            activeTab={activeTab}
+            onTabChange={handleHeaderTabChange}
+            coins={headerSearchCoins}
+            currentUser={currentUser ?? undefined}
+            referral={referralInfo}
+            onLogout={handleLogout}
+            retailerCreditDesk={retailerCreditDesk}
+            operationalWorkspace={operationalWorkspace}
+          />
+        }
+      />
 
-      <LaunchStatusBanner />
-      <AndroidInstallDashboardReminder />
-      <AndroidAppUpdateBanner />
+      <DashboardMobileNotices />
+
+      <div className="hidden md:block">
+        <LaunchStatusBanner />
+        <AndroidInstallDashboardReminder />
+        <AndroidAppUpdateBanner />
+      </div>
       <StartupCapitalPromoModal />
 
       {showRetailBalancePanels && (
-        <LiveMarketFeedBar
-          status={marketFeed.status}
-          updatedAt={marketFeed.updatedAt}
-          errorMessage={marketFeed.error}
-        />
+        <div className="max-md:hidden">
+          <LiveMarketFeedBar
+            status={marketFeed.status}
+            updatedAt={marketFeed.updatedAt}
+            errorMessage={marketFeed.error}
+          />
+        </div>
       )}
 
       {showRetailBalancePanels ? (

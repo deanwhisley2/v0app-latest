@@ -8,14 +8,12 @@ import {
   Settings,
   Zap,
   Briefcase,
-  Search,
 } from "lucide-react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { isDashboardMobileFabEnabled } from "@/lib/dashboard-mobile-render-policy"
-import { openMobileSearch } from "@/lib/mobile/mobile-chrome-events"
 
 interface BottomNavProps {
   activeTab: string
@@ -27,10 +25,9 @@ interface BottomNavProps {
 
 const navDefs = [
   { id: "container", icon: Home, labelKey: "nav.container", color: "from-blue-500 to-cyan-500" },
-  { id: "search", icon: Search, labelKey: "nav.search", color: "from-violet-500 to-purple-500", action: "search" as const },
+  { id: "chat", icon: MessageCircle, labelKey: "nav.chat", color: "from-primary/80 to-accent/80" },
   { id: "notifications", icon: Bell, labelKey: "nav.notifications", color: "from-green-500 to-emerald-500" },
   { id: "settings", icon: Settings, labelKey: "nav.profile", color: "from-orange-500 to-amber-500" },
-  { id: "chat", icon: MessageCircle, labelKey: "nav.chat", color: "from-primary/80 to-accent/80" },
   { id: "desk", icon: Briefcase, labelKey: "nav.desk", color: "from-green-500 to-emerald-500" },
 ] as const
 
@@ -78,7 +75,7 @@ export function BottomNav({
   const navItems = useMemo(() => {
     const defs = operationalWorkspace
       ? navDefs.filter((d) => d.id === "desk" || d.id === "chat" || d.id === "settings")
-      : navDefs.filter((d) => d.id !== "desk" && d.id !== "chat")
+      : navDefs.filter((d) => d.id !== "desk")
     return defs.map((d) => ({ ...d, label: t(d.labelKey) }))
   }, [t, operationalWorkspace])
 
@@ -152,21 +149,12 @@ export function BottomNav({
       <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border/30 bg-card/95 shadow-[var(--shadow-elevated)] max-md:backdrop-blur-none md:hidden md:bg-card/92 md:backdrop-blur-md touch-manipulation">
         <div className="flex items-stretch justify-around px-2 pt-2 pb-1 safe-area-pb">
           {navItems.map((item) => {
-            const isActive =
-              item.id === "search"
-                ? false
-                : resolvedActiveTab === item.id
+            const isActive = resolvedActiveTab === item.id
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  if ("action" in item && item.action === "search") {
-                    openMobileSearch()
-                    return
-                  }
-                  onTabChange(item.id)
-                }}
+                onClick={() => onTabChange(item.id)}
                 className={`nexus-touch-press flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-1 py-1 transition-all touch-manipulation ${
                   isActive ? "bg-[var(--primary-green)]/12" : "active:bg-muted/60"
                 }`}

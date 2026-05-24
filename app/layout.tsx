@@ -14,7 +14,6 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
 import { PwaServiceWorkerRegister } from '@/components/install/pwa-service-worker-register'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
-import { ConnectivityBanner } from '@/components/mobile/connectivity-banner'
 import { PwaRuntimeBootstrap } from '@/components/mobile/pwa-runtime-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
@@ -147,7 +146,6 @@ export default function RootLayout({
                 <MobileConnectivityProvider>
                   <NexusNotificationsProvider>
                     <UserPreferencesProvider>
-                      <ConnectivityBanner />
                       {children}
                       <PwaRuntimeBootstrap />
                       <BrowserNotificationAlerts />

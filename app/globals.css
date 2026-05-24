@@ -595,6 +595,11 @@ html:not(.nexus-pwa-ready) body {
     top: auto !important;
   }
 
+  .nexus-mobile-app-bar {
+    position: relative;
+    z-index: 52;
+  }
+
   .nexus-smart-header-spacer {
     pointer-events: none;
   }
