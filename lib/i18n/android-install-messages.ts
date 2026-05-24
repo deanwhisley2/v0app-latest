@@ -6,7 +6,7 @@ export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.benefitNotify": "Better session continuity on mobile",
   "install.installApp.benefitTrust": "Official Nexus Pro app — secure install",
   "install.installApp.install": "Install App",
-  "install.installApp.installPwa": "Add to Home Screen",
+  "install.installApp.installPwa": "Install App",
   "install.installApp.downloadApk": "Download APK",
   "install.installApp.openApp": "Open Nexus Pro App",
   "install.installApp.update": "Update App",
@@ -14,9 +14,9 @@ export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.notNow": "Not now",
   "install.installApp.manualTitle": "Manual install steps",
   "install.installApp.manualChrome":
-    "Tap the menu (⋮) → Install app or Add to Home screen. If prompted, allow installation from this site.",
+    "Tap Install App in the prompt, or open the menu (⋮) → Install app. Allow installation from Nexus Pro when asked.",
   "install.installApp.manualSamsung":
-    "Tap Menu → Add page to → Home screen, then confirm Install.",
+    "Tap Install App, or use Menu → Install app / Add to Home screen, then confirm.",
   "install.installApp.manualOpera":
     "Open this page in Chrome or Samsung Internet for one-tap install, or download the signed APK below.",
   "install.installApp.manualApk":

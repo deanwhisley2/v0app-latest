@@ -9,13 +9,12 @@ import {
   type AndroidBrowserKind,
 } from "@/lib/android-install/device-detection"
 import {
-  isAuthInstallDismissed,
   isDashboardInstallReminderSnoozed,
-  markAuthInstallDismissed,
   markInstalled,
   readInstallState,
   snoozeDashboardInstallReminder,
   writeInstallState,
+  clearLegacyAuthInstallDismiss,
 } from "@/lib/android-install/storage"
 
 type BeforeInstallPromptEvent = Event & {
@@ -40,7 +39,7 @@ export type AndroidInstallPromotion = {
   install: () => Promise<void>
   downloadApk: () => void
   openApp: () => void
-  dismiss: (permanent?: boolean) => void
+  dismiss: () => void
   statusMessage: string | null
 }
 
@@ -74,6 +73,10 @@ export function useAndroidInstallPromotion(
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState(false)
   const [installedFlag, setInstalledFlag] = useState(false)
+
+  useEffect(() => {
+    if (opts.surface === "auth") clearLegacyAuthInstallDismiss()
+  }, [opts.surface])
 
   useEffect(() => {
     setSurfaceState(detectInstallSurface())
@@ -119,23 +122,32 @@ export function useAndroidInstallPromotion(
 
   const uiMode: AndroidInstallUiMode = useMemo(() => {
     if (dismissed) return "hidden"
+
+    if (isStandalonePwa()) return "hidden"
+
     if (!surfaceState?.eligible) {
-      if (stored.installedVersion && !isStandalonePwa() && opts.surface === "dashboard") {
+      if (stored.installedVersion && opts.surface === "dashboard") {
         if (release && compareReleaseVersions(release.version, stored.installedVersion) > 0) return "update"
         return "open"
       }
       return "hidden"
     }
 
+    if (opts.surface === "auth") {
+      if (release && stored.installedVersion && compareReleaseVersions(release.version, stored.installedVersion) > 0) {
+        return "update"
+      }
+      if (surfaceState.needsManualInstructions) return "manual"
+      return "install"
+    }
+
     if (stored.installedVersion || installedFlag) {
-      if (opts.surface === "auth") return "hidden"
       if (release && stored.installedVersion && compareReleaseVersions(release.version, stored.installedVersion) > 0) {
         return "update"
       }
       return "open"
     }
 
-    if (opts.surface === "auth" && isAuthInstallDismissed()) return "hidden"
     if (opts.surface === "dashboard") {
       if (opts.freshLoginOnly && !opts.freshLogin) return "hidden"
       if (isDashboardInstallReminderSnoozed()) return "hidden"
@@ -186,10 +198,10 @@ export function useAndroidInstallPromotion(
       document.body.appendChild(a)
       a.click()
       a.remove()
-      markInstalled("apk", release.version)
+      if (opts.surface !== "auth") markInstalled("apk", release.version)
       setStatusMessage("download")
     }
-  }, [release])
+  }, [opts.surface, release])
 
   const downloadApk = useCallback(() => {
     if (!release?.apkUrl) return
@@ -200,25 +212,18 @@ export function useAndroidInstallPromotion(
     document.body.appendChild(a)
     a.click()
     a.remove()
-    markInstalled("apk", release.version)
+    if (opts.surface !== "auth") markInstalled("apk", release.version)
     setStatusMessage("download")
-  }, [release])
+  }, [opts.surface, release])
 
   const openApp = useCallback(() => {
     window.location.href = "/dashboard?source=open_app"
   }, [])
 
-  const dismiss = useCallback(
-    (permanent = false) => {
-      if (opts.surface === "auth" || permanent) {
-        markAuthInstallDismissed()
-      } else {
-        snoozeDashboardInstallReminder()
-      }
-      setDismissed(true)
-    },
-    [opts.surface],
-  )
+  const dismiss = useCallback(() => {
+    if (opts.surface === "dashboard") snoozeDashboardInstallReminder()
+    setDismissed(true)
+  }, [opts.surface])
 
   return {
     visible,

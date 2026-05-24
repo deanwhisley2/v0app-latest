@@ -54,11 +54,7 @@ export function AndroidInstallPrompt({
     ? t("install.installApp.openApp")
     : isUpdate
       ? t("install.installApp.update")
-      : promo.canNativePwaPrompt
-        ? t("install.installApp.install")
-        : isManual
-          ? t("install.installApp.downloadApk")
-          : t("install.installApp.installPwa")
+      : t("install.installApp.install")
 
   const onPrimary = () => {
     if (isOpenMode) promo.openApp()
@@ -89,7 +85,7 @@ export function AndroidInstallPrompt({
     >
       <button
         type="button"
-        onClick={() => promo.dismiss(surface === "auth")}
+        onClick={() => promo.dismiss()}
         className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground hover:bg-muted/60"
         aria-label={t("install.installApp.notNow")}
       >
@@ -144,7 +140,7 @@ export function AndroidInstallPrompt({
                 size="sm"
                 variant="ghost"
                 className="min-h-9 touch-manipulation text-muted-foreground"
-                onClick={() => promo.dismiss(surface === "auth")}
+                onClick={() => promo.dismiss()}
               >
                 {t("install.installApp.notNow")}
               </Button>

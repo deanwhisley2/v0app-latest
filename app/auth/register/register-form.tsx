@@ -296,6 +296,10 @@ export default function RegisterPage() {
 
         <RegisterStepIndicator steps={steps} current={step} />
 
+        <div className="mb-4">
+          <AndroidInstallPrompt surface="auth" variant="card" />
+        </div>
+
         <form
           className="space-y-4"
           onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}
@@ -561,9 +565,6 @@ export default function RegisterPage() {
           </Link>
         </p>
 
-        <div className="mt-4">
-          <AndroidInstallPrompt surface="auth" variant="card" />
-        </div>
       </AuthLayoutShell>
 
       <AuthAssistantPanel

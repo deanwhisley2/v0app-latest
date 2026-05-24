@@ -43,19 +43,19 @@ export function writeInstallState(patch: Partial<AndroidInstallPersistedState>):
 export function markAuthInstallDismissed(): void {
   if (typeof window === "undefined") return
   try {
-    localStorage.setItem(ANDROID_INSTALL_AUTH_DISMISS_KEY, "1")
+    localStorage.removeItem(ANDROID_INSTALL_AUTH_DISMISS_KEY)
   } catch {
     /* ignore */
   }
 }
 
+/** Clear legacy permanent auth dismiss so install shows on every login visit. */
+export function clearLegacyAuthInstallDismiss(): void {
+  markAuthInstallDismissed()
+}
+
 export function isAuthInstallDismissed(): boolean {
-  if (typeof window === "undefined") return false
-  try {
-    return localStorage.getItem(ANDROID_INSTALL_AUTH_DISMISS_KEY) === "1"
-  } catch {
-    return false
-  }
+  return false
 }
 
 export function snoozeDashboardInstallReminder(): void {

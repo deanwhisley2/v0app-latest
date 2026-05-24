@@ -201,6 +201,10 @@ export default function LoginPage() {
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t.login.subtitle}</p>
         </header>
 
+        <div className="mb-4">
+          <AndroidInstallPrompt surface="auth" variant="card" />
+        </div>
+
         {isDevLocalOnly() ? (
           <p className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2.5 text-xs text-cyan-100">
             <strong>Local dev:</strong> Sign in opens guest dashboard. Disable{" "}
@@ -333,9 +337,6 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        <div className="mt-4">
-          <AndroidInstallPrompt surface="auth" variant="card" />
-        </div>
       </AuthLayoutShell>
 
       <AuthAssistantPanel
