@@ -25,6 +25,14 @@ type AndroidInstallStaticBannerProps = {
 
 type DownloadUiState = "idle" | "loading" | "ok" | "unavailable" | "failed" | "offline" | "malformed"
 
+function mapReleaseFetchReason(
+  reason: "offline" | "malformed" | "network",
+): Exclude<DownloadUiState, "idle" | "loading" | "ok" | "unavailable"> {
+  if (reason === "offline") return "offline"
+  if (reason === "malformed") return "malformed"
+  return "failed"
+}
+
 const APK_UNAVAILABLE_MSG = "APK temporarily unavailable."
 
 /**
@@ -66,7 +74,7 @@ export function AndroidInstallStaticBanner({
       setShowNotes(true)
       return
     }
-    setDownloadState(result.reason)
+    setDownloadState(mapReleaseFetchReason(result.reason))
   }
 
   const statusMessage =
