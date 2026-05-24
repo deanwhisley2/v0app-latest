@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { getBodyScrollLockCount } from "@/lib/mobile/body-scroll-lock"
+import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
 import { computeSmartHeaderVisibility } from "@/lib/mobile/smart-header-scroll"
 import { NEXUS_HEADER_REVEAL } from "@/lib/mobile/mobile-chrome-events"
 
@@ -24,7 +25,7 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
   useEffect(() => {
     if (typeof window === "undefined") return
     const mq = window.matchMedia(MOBILE_MQ)
-    const syncEnabled = () => setEnabled(mq.matches)
+    const syncEnabled = () => setEnabled(mq.matches && !isMobileLowGpuMode())
     syncEnabled()
     mq.addEventListener("change", syncEnabled)
     return () => mq.removeEventListener("change", syncEnabled)

@@ -33,6 +33,7 @@ import { formatNotificationTimeAgo, presentNotification } from "@/lib/notificati
 import { NotificationInboxEmpty, NotificationInboxRow } from "@/components/dashboard/notification-inbox-ui"
 import { cn } from "@/lib/utils"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
 
 interface NotificationPanelProps {
   isOpen: boolean
@@ -132,11 +133,23 @@ function PanelDetailOverlay({ detail, onClose }: { detail: NexusNotificationItem
 
 const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight, onSwipeLeft }: InboxRowProps) {
   const { t, currency, country, locale } = useUserPreferences()
+  const flatGpu = isMobileLowGpuMode()
   const p = presentNotification(notification, t, {
     fundingCountryCode: country ?? null,
     displayCurrency: currency,
     locale,
   })
+  const row = (
+    <NotificationInboxRow
+      item={notification}
+      presented={p}
+      onOpen={() => onActivate(notification)}
+      className="rounded-xl [contain-intrinsic-size:76px_1px]"
+    />
+  )
+  if (flatGpu) {
+    return <div className="mb-1.5">{row}</div>
+  }
   return (
     <NotificationSwipeRow
       className="mb-1.5"
@@ -145,12 +158,7 @@ const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight
       deleteLabel={t("notifications.center.delete")}
       archiveLabel={t("notifications.center.archive")}
     >
-      <NotificationInboxRow
-        item={notification}
-        presented={p}
-        onOpen={() => onActivate(notification)}
-        className="rounded-xl [contain-intrinsic-size:76px_1px]"
-      />
+      {row}
     </NotificationSwipeRow>
   )
 })
@@ -264,7 +272,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     }
   }, [isOpen, showSettings, recomputeWindow])
 
-  const useVirtualInbox = inbox.length >= INBOX_VIRTUAL_MIN
+  const useVirtualInbox = inbox.length >= INBOX_VIRTUAL_MIN && !isMobileLowGpuMode()
 
   const visibleInbox = useMemo(
     () => (useVirtualInbox ? inbox.slice(vWindow.start, vWindow.end) : inbox),
@@ -279,13 +287,13 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   return createPortal(
     <>
       <div
-        className="nexus-overlay-scrim fixed inset-0 z-[104] bg-foreground/25 backdrop-blur-[2px] dark:bg-black/50"
+        className="nexus-overlay-scrim nexus-notification-portal fixed inset-0 z-[104] bg-foreground/25 backdrop-blur-[2px] dark:bg-black/50"
         aria-hidden
         onClick={onClose}
       />
       <div
         ref={panelRef}
-        className="fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)] sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
+        className="nexus-notification-portal nexus-notification-panel fixed bottom-4 left-4 right-4 z-[105] flex min-h-0 max-h-[min(100dvh-2rem,600px)] w-auto flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)] sm:left-auto sm:right-4 sm:max-w-[380px] sm:w-[min(380px,calc(100%-2rem))]"
       >
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between gap-2">

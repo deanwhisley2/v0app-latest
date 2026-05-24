@@ -1997,7 +1997,7 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.serverSessionId ?? trade.traderId}
-                      className="nexus-desk-session-card relative min-w-0 rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4 max-md:border-border max-md:bg-card max-md:overflow-visible"
+                      className="nexus-desk-session-card nexus-fixed-trade-card relative min-w-0 rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4 max-md:border-border max-md:bg-card max-md:overflow-visible"
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">

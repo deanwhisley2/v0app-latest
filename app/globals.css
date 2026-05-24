@@ -982,6 +982,132 @@ html:not(.nexus-pwa-ready) body {
   html.nexus-mobile-low-gpu .nexus-mobile-stable .fixed.z-\[130\] {
     box-shadow: none !important;
   }
+
+  /* Document-wide — portaled notification overlays live on body, outside .nexus-mobile-stable */
+  html.nexus-mobile-low-gpu [class*="backdrop-blur"],
+  html.nexus-mobile-low-gpu [class*="backdrop-filter"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-overlay-scrim,
+  html.nexus-mobile-low-gpu .nexus-notification-portal {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    background-color: var(--background) !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-panel,
+  html.nexus-mobile-low-gpu .nexus-notification-portal .shadow-xl,
+  html.nexus-mobile-low-gpu .nexus-notification-portal .shadow-lg,
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="shadow-"] {
+    box-shadow: none !important;
+    filter: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-portal .nexus-notification-panel,
+  html.nexus-mobile-low-gpu .nexus-notification-portal > .rounded-none,
+  html.nexus-mobile-low-gpu .nexus-notification-portal > .rounded-2xl {
+    contain: layout paint;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: auto !important;
+    background-color: var(--card) !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="bg-foreground/"],
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="bg-black/"],
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="bg-muted/"],
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="bg-primary/"] {
+    background-color: var(--muted) !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="ring-"],
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="ring-offset"] {
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    box-shadow: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="animate-"],
+  html.nexus-mobile-low-gpu .nexus-notification-portal [class*="transition-"] {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-smart-header-shell {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+    box-shadow: none !important;
+    padding-top: 0 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-smart-header-shell.is-hidden,
+  html.nexus-mobile-low-gpu .nexus-smart-header-shell.is-elevated {
+    transform: none !important;
+    box-shadow: none !important;
+    pointer-events: auto !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-smart-header-spacer {
+    display: none !important;
+    height: 0 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-mobile-header-chrome {
+    background-color: var(--background) !important;
+    border-bottom: 1px solid var(--border) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card,
+  html.nexus-mobile-low-gpu .nexus-mobile-stable .nexus-fixed-trade-card {
+    contain: layout paint;
+    backface-visibility: hidden;
+    transform: none !important;
+    will-change: auto !important;
+    background-color: var(--card) !important;
+    border-color: var(--border) !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="bg-warning/"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="bg-primary/"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="bg-background/"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="bg-muted/"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="bg-amber-"] {
+    background-color: var(--card) !important;
+    background-image: none !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="border-warning/"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="border-primary/"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="border-amber-"] {
+    border-color: var(--border) !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="animate-"],
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="transition-"] {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-fixed-trade-card [class*="shadow-"] {
+    box-shadow: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

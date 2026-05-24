@@ -26,6 +26,10 @@ import {
   MOBILE_NAV_DIAGNOSTICS_BOOT_SCRIPT,
 } from '@/lib/mobile/mobile-navigation-diagnostics'
 import { isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
+import {
+  MOBILE_LOW_GPU_BOOT_SCRIPT,
+  NEXUS_MOBILE_LOW_GPU_MODE,
+} from '@/lib/mobile/mobile-low-gpu-mode'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
@@ -131,6 +135,9 @@ export default function RootLayout({
         ) : null}
         {isPwaSafeMode() ? (
           <script dangerouslySetInnerHTML={{ __html: PWA_SAFE_MODE_TEARDOWN_SCRIPT }} />
+        ) : null}
+        {NEXUS_MOBILE_LOW_GPU_MODE ? (
+          <script dangerouslySetInnerHTML={{ __html: MOBILE_LOW_GPU_BOOT_SCRIPT }} />
         ) : null}
       </head>
       <body
