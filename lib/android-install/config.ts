@@ -19,13 +19,16 @@ export const ANDROID_INSTALL_REMIND_SNOOZE_KEY = "nexus_android_install_remind_s
 /** Days before a snoozed dashboard reminder may reappear (auth dismiss is permanent). */
 export const ANDROID_INSTALL_REMIND_SNOOZE_DAYS = 7
 
+/** Canonical APK download route (correct MIME + Content-Disposition). */
+export const ANDROID_APK_API_PATH = "/api/app/android-apk"
+
 export function getDefaultAndroidRelease(): AndroidReleaseManifest {
   const version = process.env.NEXT_PUBLIC_ANDROID_APK_VERSION ?? "20260524"
   const versionCode = Number(process.env.NEXT_PUBLIC_ANDROID_APK_VERSION_CODE ?? "20260524")
   return {
     version,
     versionCode: Number.isFinite(versionCode) ? versionCode : 20260524,
-    apkUrl: process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? "/releases/nexus-pro.apk",
+    apkUrl: process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? "/api/app/android-apk",
     sha256: process.env.ANDROID_APK_SHA256 ?? "",
     sizeBytes: Number(process.env.ANDROID_APK_SIZE_BYTES ?? "0"),
     publishedAt: process.env.ANDROID_APK_PUBLISHED_AT ?? "2026-05-24T00:00:00.000Z",

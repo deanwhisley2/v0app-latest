@@ -3,8 +3,10 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import {
   getDefaultAndroidRelease,
+  ANDROID_APK_API_PATH,
   type AndroidReleaseManifest,
 } from "@/lib/android-install/config"
+import { resolveAndroidApkFile } from "@/lib/server/android-apk-delivery"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +20,6 @@ async function readManifestFile(): Promise<AndroidReleaseManifest | null> {
   }
 }
 
-/** Signed Android release metadata for install prompts and APK integrity checks. */
 export async function GET() {
   const fromFile = await readManifestFile()
   const release = fromFile ?? getDefaultAndroidRelease()
@@ -26,13 +27,27 @@ export async function GET() {
   const envSha = process.env.ANDROID_APK_SHA256
   if (envSha) release.sha256 = envSha
 
-  const envUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL
-  if (envUrl) release.apkUrl = envUrl
+  const apkFile = await resolveAndroidApkFile()
+  const apkAvailable = apkFile != null
 
-  return NextResponse.json(release, {
-    headers: {
-      "Cache-Control": "public, max-age=300",
-      "X-Nexus-Release-Version": release.version,
+  if (apkFile) {
+    release.sizeBytes = apkFile.sizeBytes
+  }
+
+  release.apkUrl = ANDROID_APK_API_PATH
+
+  return NextResponse.json(
+    {
+      ...release,
+      apkAvailable,
+      downloadUrl: ANDROID_APK_API_PATH,
     },
-  })
+    {
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Nexus-Release-Version": release.version,
+        "X-Nexus-Apk-Available": apkAvailable ? "1" : "0",
+      },
+    },
+  )
 }

@@ -24,6 +24,17 @@ export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.verifying": "Checking release…",
   "install.installApp.installStarted": "Install started — follow your browser prompt.",
   "install.installApp.downloadStarted": "Download started. Open the file when complete.",
+  "install.installApp.downloadTapHint": "When download finishes, tap the file in your notifications or Downloads folder to install.",
+  "install.installApp.downloadFailed": "Download could not start. Retry or use the web app while we fix this.",
+  "install.installApp.downloadRateLimited": "Please wait a moment before retrying the download.",
+  "install.installApp.apkUnavailable": "APK is not published yet — tap Install App to add Nexus Pro to your home screen.",
+  "install.installApp.pwaPreferredLead": "Install instantly to your home screen — no app store required.",
+  "install.installApp.retryDownload": "Retry download",
+  "install.installApp.useWebVersion": "Continue in browser",
+  "install.installApp.unknownSourcesGeneric":
+    "If Android asks, allow Install unknown apps for Chrome, then tap the downloaded file.",
+  "install.installApp.unknownSourcesSamsung":
+    "If blocked, enable Install unknown apps for Samsung Internet in Settings, then open Downloads.",
   "install.installApp.alreadyInstalledHint": "You're using the installed app.",
   "install.installApp.secureSource": "Signed release from nexuspro.it.com",
 }

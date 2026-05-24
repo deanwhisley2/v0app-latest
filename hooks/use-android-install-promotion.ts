@@ -1,13 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { AndroidReleaseManifest } from "@/lib/android-install/config"
 import { compareReleaseVersions } from "@/lib/android-install/config"
 import {
   detectInstallSurface,
   isStandalonePwa,
   type AndroidBrowserKind,
 } from "@/lib/android-install/device-detection"
+import {
+  startApkDownload,
+  type AndroidReleasePayload,
+} from "@/lib/android-install/apk-download-client"
 import {
   isDashboardInstallReminderSnoozed,
   markInstalled,
@@ -29,32 +32,43 @@ export type AndroidInstallUiMode =
   | "open"
   | "manual"
 
+export type InstallDownloadState =
+  | "idle"
+  | "checking"
+  | "downloading"
+  | "failed"
+  | "unavailable"
+  | "rate_limited"
+
 export type AndroidInstallPromotion = {
   visible: boolean
   uiMode: AndroidInstallUiMode
   browser: AndroidBrowserKind | null
-  release: AndroidReleaseManifest | null
+  release: AndroidReleasePayload | null
   loadingRelease: boolean
   canNativePwaPrompt: boolean
+  apkAvailable: boolean
+  downloadState: InstallDownloadState
   install: () => Promise<void>
-  downloadApk: () => void
+  downloadApk: () => Promise<void>
+  retryDownload: () => Promise<void>
   openApp: () => void
+  useWebVersion: () => void
   dismiss: () => void
-  statusMessage: string | null
+  statusKey: string | null
 }
 
 type UseAndroidInstallPromotionOptions = {
   surface: "auth" | "dashboard"
-  /** Dashboard: only show on fresh login landing */
   freshLoginOnly?: boolean
   freshLogin?: boolean
 }
 
-async function fetchRelease(): Promise<AndroidReleaseManifest | null> {
+async function fetchRelease(): Promise<AndroidReleasePayload | null> {
   try {
     const res = await fetch("/api/app/android-release", { cache: "no-store" })
     if (!res.ok) return null
-    return (await res.json()) as AndroidReleaseManifest
+    return (await res.json()) as AndroidReleasePayload
   } catch {
     return null
   }
@@ -67,10 +81,11 @@ export function useAndroidInstallPromotion(
   const [surfaceState, setSurfaceState] = useState(() =>
     typeof window === "undefined" ? null : detectInstallSurface(),
   )
-  const [release, setRelease] = useState<AndroidReleaseManifest | null>(null)
+  const [release, setRelease] = useState<AndroidReleasePayload | null>(null)
   const [loadingRelease, setLoadingRelease] = useState(false)
   const [canNativePwaPrompt, setCanNativePwaPrompt] = useState(false)
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [downloadState, setDownloadState] = useState<InstallDownloadState>("idle")
+  const [statusKey, setStatusKey] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState(false)
   const [installedFlag, setInstalledFlag] = useState(false)
 
@@ -93,6 +108,8 @@ export function useAndroidInstallPromotion(
       setInstalledFlag(true)
       deferredRef.current = null
       setCanNativePwaPrompt(false)
+      setDownloadState("idle")
+      setStatusKey("install.installApp.installStarted")
     }
 
     window.addEventListener("beforeinstallprompt", onBip)
@@ -119,10 +136,10 @@ export function useAndroidInstallPromotion(
   }, [surfaceState?.eligible])
 
   const stored = readInstallState()
+  const apkAvailable = Boolean(release?.apkAvailable)
 
   const uiMode: AndroidInstallUiMode = useMemo(() => {
     if (dismissed) return "hidden"
-
     if (isStandalonePwa()) return "hidden"
 
     if (!surfaceState?.eligible) {
@@ -137,7 +154,7 @@ export function useAndroidInstallPromotion(
       if (release && stored.installedVersion && compareReleaseVersions(release.version, stored.installedVersion) > 0) {
         return "update"
       }
-      if (surfaceState.needsManualInstructions) return "manual"
+      if (surfaceState.needsManualInstructions && !apkAvailable && !canNativePwaPrompt) return "manual"
       return "install"
     }
 
@@ -153,13 +170,11 @@ export function useAndroidInstallPromotion(
       if (isDashboardInstallReminderSnoozed()) return "hidden"
     }
 
-    if (release && stored.installedVersion) {
-      if (compareReleaseVersions(release.version, stored.installedVersion) > 0) return "update"
-    }
-
-    if (surfaceState.needsManualInstructions) return "manual"
+    if (surfaceState.needsManualInstructions && !apkAvailable && !canNativePwaPrompt) return "manual"
     return "install"
   }, [
+    apkAvailable,
+    canNativePwaPrompt,
     dismissed,
     installedFlag,
     opts.freshLogin,
@@ -172,52 +187,91 @@ export function useAndroidInstallPromotion(
 
   const visible = uiMode !== "hidden"
 
-  const install = useCallback(async () => {
-    setStatusMessage(null)
+  const runPwaPrompt = useCallback(async (): Promise<boolean> => {
     const deferred = deferredRef.current
-    if (deferred) {
-      try {
-        await deferred.prompt()
-        const choice = await deferred.userChoice
-        if (choice.outcome === "accepted") {
-          markInstalled("pwa", release?.version ?? "pwa")
-          setInstalledFlag(true)
-        }
-        deferredRef.current = null
-        setCanNativePwaPrompt(false)
-        return
-      } catch {
-        /* fall through to APK */
+    if (!deferred) return false
+    try {
+      await deferred.prompt()
+      const choice = await deferred.userChoice
+      if (choice.outcome === "accepted") {
+        markInstalled("pwa", release?.version ?? "pwa")
+        setInstalledFlag(true)
+        setStatusKey("install.installApp.installStarted")
       }
+      deferredRef.current = null
+      setCanNativePwaPrompt(false)
+      return choice.outcome === "accepted"
+    } catch {
+      return false
     }
-    if (release?.apkUrl) {
-      const a = document.createElement("a")
-      a.href = release.apkUrl
-      a.rel = "noopener"
-      a.download = `nexus-pro-${release.version}.apk`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      if (opts.surface !== "auth") markInstalled("apk", release.version)
-      setStatusMessage("download")
-    }
-  }, [opts.surface, release])
+  }, [release?.version])
 
-  const downloadApk = useCallback(() => {
-    if (!release?.apkUrl) return
-    const a = document.createElement("a")
-    a.href = release.apkUrl
-    a.rel = "noopener"
-    a.download = `nexus-pro-${release.version}.apk`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    if (opts.surface !== "auth") markInstalled("apk", release.version)
-    setStatusMessage("download")
-  }, [opts.surface, release])
+  const runApkDownload = useCallback(
+    async (skipPreflight = false) => {
+      if (!release) return
+      setDownloadState("checking")
+      setStatusKey("install.installApp.verifying")
+      const result = await startApkDownload({
+        release,
+        surface: opts.surface,
+        browser: surfaceState?.eligible ? surfaceState.browser : null,
+        skipPreflight,
+      })
+      if (result.ok) {
+        setDownloadState("downloading")
+        setStatusKey("install.installApp.downloadStarted")
+        window.setTimeout(() => setStatusKey("install.installApp.downloadTapHint"), 2500)
+        return
+      }
+      if (result.reason === "rate_limited") {
+        setDownloadState("rate_limited")
+        setStatusKey("install.installApp.downloadRateLimited")
+        return
+      }
+      setDownloadState(result.reason === "unavailable" ? "unavailable" : "failed")
+      setStatusKey(
+        result.reason === "unavailable"
+          ? "install.installApp.apkUnavailable"
+          : "install.installApp.downloadFailed",
+      )
+    },
+    [opts.surface, release, surfaceState],
+  )
+
+  const install = useCallback(async () => {
+    setStatusKey(null)
+    if (canNativePwaPrompt) {
+      const ok = await runPwaPrompt()
+      if (ok) return
+    }
+    if (release?.apkAvailable) {
+      await runApkDownload(false)
+      return
+    }
+    if (canNativePwaPrompt) {
+      await runPwaPrompt()
+      return
+    }
+    setDownloadState("unavailable")
+    setStatusKey("install.installApp.apkUnavailable")
+  }, [canNativePwaPrompt, release?.apkAvailable, runApkDownload, runPwaPrompt])
+
+  const downloadApk = useCallback(async () => {
+    await runApkDownload(false)
+  }, [runApkDownload])
+
+  const retryDownload = useCallback(async () => {
+    setDownloadState("idle")
+    setStatusKey(null)
+    await runApkDownload(true)
+  }, [runApkDownload])
 
   const openApp = useCallback(() => {
     window.location.href = "/dashboard?source=open_app"
+  }, [])
+
+  const useWebVersion = useCallback(() => {
+    window.location.href = "/dashboard?source=web_fallback"
   }, [])
 
   const dismiss = useCallback(() => {
@@ -232,10 +286,14 @@ export function useAndroidInstallPromotion(
     release,
     loadingRelease,
     canNativePwaPrompt,
+    apkAvailable,
+    downloadState,
     install,
     downloadApk,
+    retryDownload,
     openApp,
+    useWebVersion,
     dismiss,
-    statusMessage,
+    statusKey,
   }
 }

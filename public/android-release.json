@@ -1,7 +1,7 @@
 {
   "version": "20260524",
   "versionCode": 20260524,
-  "apkUrl": "/releases/nexus-pro.apk",
+  "apkUrl": "/api/app/android-apk",
   "sha256": "",
   "sizeBytes": 0,
   "publishedAt": "2026-05-24T00:00:00.000Z",

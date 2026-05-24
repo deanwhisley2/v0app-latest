@@ -1,5 +1,5 @@
-/* Nexus Pro PWA offline shell — version 20260524 */
-const CACHE = "nexus-shell-20260524"
+/* Nexus Pro PWA offline shell — version 20260524b */
+const CACHE = "nexus-shell-20260524b"
 const SHELL = [
   "/offline",
   "/manifest.webmanifest",
@@ -41,6 +41,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(req.url)
+  if (url.pathname.startsWith("/api/app/android-apk") || url.pathname.endsWith(".apk")) {
+    return
+  }
+
   if (url.pathname.startsWith("/brand/") || url.pathname.endsWith(".webmanifest")) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {

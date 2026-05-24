@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, Smartphone, X } from "lucide-react"
+import { Download, Loader2, Smartphone, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import {
@@ -24,6 +24,11 @@ function manualHint(mode: AndroidInstallUiMode, browser: string | null, t: (k: s
   return t("install.installApp.manualChrome")
 }
 
+function unknownSourcesHint(browser: string | null, t: (k: string) => string): string {
+  if (browser === "samsung") return t("install.installApp.unknownSourcesSamsung")
+  return t("install.installApp.unknownSourcesGeneric")
+}
+
 export function AndroidInstallPrompt({
   surface,
   variant = "banner",
@@ -38,7 +43,12 @@ export function AndroidInstallPrompt({
 
   const isOpenMode = promo.uiMode === "open"
   const isUpdate = promo.uiMode === "update"
-  const isManual = promo.uiMode === "manual"
+  const busy = promo.downloadState === "checking" || promo.loadingRelease
+  const showFallback =
+    promo.downloadState === "failed" ||
+    promo.downloadState === "unavailable" ||
+    promo.downloadState === "rate_limited"
+
   const title = isOpenMode
     ? t("install.installApp.openApp")
     : isUpdate
@@ -48,28 +58,21 @@ export function AndroidInstallPrompt({
     ? t("install.installApp.alreadyInstalledHint")
     : isUpdate
       ? t("install.installApp.updateLead")
-      : t("install.installApp.lead")
+      : !promo.apkAvailable && promo.canNativePwaPrompt
+        ? t("install.installApp.pwaPreferredLead")
+        : t("install.installApp.lead")
 
   const primaryLabel = isOpenMode
     ? t("install.installApp.openApp")
     : isUpdate
       ? t("install.installApp.update")
-      : t("install.installApp.install")
+      : busy
+        ? t("install.installApp.verifying")
+        : t("install.installApp.install")
 
-  const onPrimary = () => {
-    if (isOpenMode) promo.openApp()
-    else if (isManual && !promo.canNativePwaPrompt) promo.downloadApk()
-    else void promo.install()
-  }
-
-  const statusMsg =
-    promo.statusMessage === "download"
-      ? t("install.installApp.downloadStarted")
-      : promo.statusMessage === "install"
-        ? t("install.installApp.installStarted")
-        : promo.loadingRelease
-          ? t("install.installApp.verifying")
-          : null
+  const statusMsg = promo.statusKey ? t(promo.statusKey) : null
+  const showUnknownSources =
+    promo.downloadState === "downloading" && !promo.canNativePwaPrompt && promo.apkAvailable
 
   return (
     <div
@@ -94,7 +97,13 @@ export function AndroidInstallPrompt({
 
       <div className="flex gap-3 pr-6">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-          {isOpenMode ? <Smartphone className="h-5 w-5" /> : <Download className="h-5 w-5" />}
+          {busy ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : isOpenMode ? (
+            <Smartphone className="h-5 w-5" />
+          ) : (
+            <Download className="h-5 w-5" />
+          )}
         </div>
 
         <div className="min-w-0 flex-1 space-y-2">
@@ -109,32 +118,92 @@ export function AndroidInstallPrompt({
             </ul>
           ) : null}
 
-          {(isManual || promo.uiMode === "install") && !promo.canNativePwaPrompt ? (
+          {(promo.uiMode === "manual" || (promo.uiMode === "install" && !promo.canNativePwaPrompt)) &&
+          !showFallback ? (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {manualHint(promo.uiMode, promo.browser, t)}
             </p>
           ) : null}
 
+          {showUnknownSources ? (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {unknownSourcesHint(promo.browser, t)}
+            </p>
+          ) : null}
+
           <p className="text-[10px] text-muted-foreground/80">{t("install.installApp.secureSource")}</p>
 
-          {statusMsg ? <p className="text-xs text-primary">{statusMsg}</p> : null}
+          {statusMsg ? (
+            <p
+              className={cn(
+                "text-xs",
+                showFallback ? "text-destructive" : "text-primary",
+              )}
+            >
+              {statusMsg}
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap gap-2 pt-0.5">
-            <Button type="button" size="sm" className="min-h-9 touch-manipulation" onClick={onPrimary}>
+            <Button
+              type="button"
+              size="sm"
+              className="min-h-9 touch-manipulation"
+              disabled={busy}
+              onClick={() => (isOpenMode ? promo.openApp() : void promo.install())}
+            >
               {primaryLabel}
             </Button>
-            {!isOpenMode && promo.canNativePwaPrompt && promo.release?.apkUrl ? (
+
+            {showFallback ? (
+              <>
+                {promo.apkAvailable ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="min-h-9 touch-manipulation"
+                    onClick={() => void promo.retryDownload()}
+                  >
+                    {t("install.installApp.retryDownload")}
+                  </Button>
+                ) : null}
+                {promo.canNativePwaPrompt ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="min-h-9 touch-manipulation"
+                    onClick={() => void promo.install()}
+                  >
+                    {t("install.installApp.installPwa")}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="min-h-9 touch-manipulation text-muted-foreground"
+                  onClick={promo.useWebVersion}
+                >
+                  {t("install.installApp.useWebVersion")}
+                </Button>
+              </>
+            ) : null}
+
+            {!isOpenMode && !showFallback && promo.apkAvailable && promo.canNativePwaPrompt ? (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 className="min-h-9 touch-manipulation"
-                onClick={promo.downloadApk}
+                onClick={() => void promo.downloadApk()}
               >
                 {t("install.installApp.downloadApk")}
               </Button>
             ) : null}
-            {!isOpenMode ? (
+
+            {!isOpenMode && !showFallback ? (
               <Button
                 type="button"
                 size="sm"
