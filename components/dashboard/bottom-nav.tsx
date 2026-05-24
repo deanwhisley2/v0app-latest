@@ -155,7 +155,7 @@ export function BottomNav({
                 key={item.id}
                 type="button"
                 onClick={() => onTabChange(item.id)}
-                className={`flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-1 py-1 transition-all ${
+                className={`nexus-touch-press flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-1 py-1 transition-all touch-manipulation ${
                   isActive ? "bg-[var(--primary-green)]/12" : "active:bg-muted/60"
                 }`}
               >

@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
+import { SmartMobileHeaderShell } from "@/components/dashboard/smart-mobile-header-shell"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { ChatHubScreen } from "@/components/dashboard/chat-hub-screen"
@@ -2220,18 +2221,20 @@ export default function DashboardPage() {
     )
 
   return (
-    <div className="nexus-mobile-stable min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-      {/* Header */}
-      <Header
-        activeTab={activeTab}
-        onTabChange={handleHeaderTabChange}
-        coins={headerSearchCoins}
-        currentUser={currentUser ?? undefined}
-        referral={referralInfo}
-        onLogout={handleLogout}
-        retailerCreditDesk={retailerCreditDesk}
-        operationalWorkspace={operationalWorkspace}
-      />
+    <div className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+      {/* Header — smart reveal on mobile scroll-up */}
+      <SmartMobileHeaderShell>
+        <Header
+          activeTab={activeTab}
+          onTabChange={handleHeaderTabChange}
+          coins={headerSearchCoins}
+          currentUser={currentUser ?? undefined}
+          referral={referralInfo}
+          onLogout={handleLogout}
+          retailerCreditDesk={retailerCreditDesk}
+          operationalWorkspace={operationalWorkspace}
+        />
+      </SmartMobileHeaderShell>
 
       <LaunchStatusBanner />
       <AndroidInstallDashboardReminder />
@@ -3343,7 +3346,10 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content — Container desk + Chat hub (no legacy Wallstreet deck). */}
-      <div className={`mx-auto max-w-[1600px] px-4 pb-24 md:px-6 md:pb-6 ${activeTab === "container" ? "" : "pt-4 md:pt-5"}`}>
+      <div
+        key={activeTab}
+        className={`nexus-tab-panel mx-auto max-w-[1600px] px-4 pb-24 md:px-6 md:pb-6 ${activeTab === "container" ? "" : "pt-4 md:pt-5"}`}
+      >
         {activeTab === "container" && (
           <div className="space-y-4">
             {showRetailBalancePanels ? (

@@ -13,6 +13,7 @@
     "nexus:financial-batch1-check": "npx tsx scripts/nexus-financial-batch1-check.ts",
     "test:fixed-trade-earnings-conservation": "npx tsx scripts/test-fixed-trade-earnings-conservation.ts",
     "test:android-install-detection": "npx tsx scripts/test-android-install-detection.ts",
+    "test:smart-header-scroll": "npx tsx scripts/test-smart-header-scroll.ts",
     "nexus:master-liquidity-check": "npx tsx scripts/master-liquidity-architecture-check.ts",
     "nexus:local-mm-flow-check": "npx tsx scripts/local-mm-funding-flow-check.ts",
     "lint": "eslint .",

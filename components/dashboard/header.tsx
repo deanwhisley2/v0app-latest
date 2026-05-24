@@ -152,7 +152,7 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-md max-md:[backdrop-filter:none]">
+      <header className="nexus-smart-header-inner sticky top-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-md max-md:border-b-0 max-md:bg-background max-md:[backdrop-filter:none]">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 sm:h-16">
           {/* Brand Name */}
           <div className="flex items-center">
@@ -185,7 +185,7 @@ export function Header({
             {/* Search Button with Animation */}
             <button
               onClick={() => setShowSearch(true)}
-              className="group flex items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-sm transition-all hover:border-primary hover:bg-muted"
+              className="nexus-touch-press group flex min-h-10 min-w-10 items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-sm transition-all hover:border-primary hover:bg-muted touch-manipulation"
             >
               <Search className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
               <span className="hidden sm:inline text-muted-foreground group-hover:text-foreground">
@@ -200,7 +200,7 @@ export function Header({
             <Button
               variant="ghost"
               size="icon"
-              className="relative"
+              className="nexus-touch-press relative min-h-10 min-w-10 touch-manipulation"
               onClick={() => {
                 setShowProfileMenu(false)
                 if (window.matchMedia("(min-width: 768px)").matches) {
@@ -227,7 +227,7 @@ export function Header({
                   setShowArchivedNotifications(false)
                 }}
                 title="View Profile"
-                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 ${showProfileMenu ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""}`}
+                className={`nexus-touch-press flex h-10 w-10 min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 touch-manipulation ${showProfileMenu ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""}`}
               >
                 <span className="text-sm font-bold">{userInitials}</span>
               </button>
