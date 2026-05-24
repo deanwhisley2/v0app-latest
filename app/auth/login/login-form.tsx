@@ -20,7 +20,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
-import { AndroidInstallPrompt } from "@/components/install/android-install-prompt"
+import { AndroidInstallStaticBanner } from "@/components/install/android-install-static-banner"
+import { isInstallStaticBannerEnabled } from "@/lib/mobile/pwa-safe-mode"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 const REMEMBER_KEY = "nexus_auth_remember_id"
 
@@ -201,9 +202,11 @@ export default function LoginPage() {
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t.login.subtitle}</p>
         </header>
 
-        <div className="mb-4">
-          <AndroidInstallPrompt surface="auth" variant="card" />
-        </div>
+        {isInstallStaticBannerEnabled() ? (
+          <div className="mb-4">
+            <AndroidInstallStaticBanner variant="card" />
+          </div>
+        ) : null}
 
         {isDevLocalOnly() ? (
           <p className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2.5 text-xs text-cyan-100">

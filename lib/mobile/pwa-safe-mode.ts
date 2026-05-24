@@ -14,7 +14,21 @@ export function isPwaSafeMode(): boolean {
  * Lightweight install UX only — APK download + manual Add to Home Screen guidance.
  * No service worker, manifest, standalone runtime, or navigation changes.
  */
-export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = true
+export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = false
+
+/**
+ * Phase 1 install rebuild — static banner only (see android-install-static-banner.tsx).
+ * Enable only after full install card is confirmed off and baseline is stable.
+ */
+export const NEXUS_INSTALL_STATIC_BANNER = false
+
+export function isInstallStaticBannerEnabled(): boolean {
+  return (
+    NEXUS_BROWSER_ONLY_LOCK &&
+    NEXUS_INSTALL_STATIC_BANNER &&
+    !NEXUS_LIGHTWEIGHT_ANDROID_INSTALL
+  )
+}
 
 export function isLightweightAndroidInstallEnabled(): boolean {
   return NEXUS_BROWSER_ONLY_LOCK && NEXUS_LIGHTWEIGHT_ANDROID_INSTALL

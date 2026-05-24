@@ -24,7 +24,8 @@ import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-test
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
-import { AndroidInstallPrompt } from "@/components/install/android-install-prompt"
+import { AndroidInstallStaticBanner } from "@/components/install/android-install-static-banner"
+import { isInstallStaticBannerEnabled } from "@/lib/mobile/pwa-safe-mode"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -296,9 +297,11 @@ export default function RegisterPage() {
 
         <RegisterStepIndicator steps={steps} current={step} />
 
-        <div className="mb-4">
-          <AndroidInstallPrompt surface="auth" variant="card" />
-        </div>
+        {isInstallStaticBannerEnabled() ? (
+          <div className="mb-4">
+            <AndroidInstallStaticBanner variant="card" />
+          </div>
+        ) : null}
 
         <form
           className="space-y-4"
