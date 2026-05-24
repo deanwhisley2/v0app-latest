@@ -160,6 +160,12 @@ export default function RootLayout({
                     <UserPreferencesProvider>
                       {children}
                       <BrowserNotificationAlerts />
+                      {pwaInstallEnabled ? (
+                        <>
+                          <PwaServiceWorkerRegister />
+                          <PwaRuntimeBootstrap />
+                        </>
+                      ) : null}
                     </UserPreferencesProvider>
                   </NexusNotificationsProvider>
                 </MobileConnectivityProvider>
@@ -172,12 +178,6 @@ export default function RootLayout({
         <ProductionErrorReporter />
         <ScrollLockSafety />
         <NativeScrollBootstrap />
-        {pwaInstallEnabled ? (
-          <>
-            <PwaServiceWorkerRegister />
-            <PwaRuntimeBootstrap />
-          </>
-        ) : null}
         <PwaSafeModeBootstrap />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
