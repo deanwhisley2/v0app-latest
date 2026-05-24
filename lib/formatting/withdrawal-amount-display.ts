@@ -12,12 +12,15 @@ export type WithdrawalAmountDisplayInput = {
   feeRate?: number | null
   amountInputLocal?: number | null
   inputCurrency?: string | null
+  metadata?: unknown
 }
 
 export type WithdrawalAmountDisplayLines = {
   grossPrimary: string
   feeLine: string | null
   payoutLine: string | null
+  /** Local cash the desk should pay the user (intent after fee, when known). */
+  cashToUserLine: string | null
   intentLine: string | null
 }
 
@@ -40,7 +43,8 @@ export function parseWithdrawalIntentFromRow(row: {
     .trim()
     .toUpperCase()
   if (!(local > 0) && row.metadata && typeof row.metadata === "object") {
-    const intent = (row.metadata as Record<string, unknown>).request_intent
+    const meta = row.metadata as Record<string, unknown>
+    const intent = meta.request_intent
     if (intent && typeof intent === "object") {
       const o = intent as Record<string, unknown>
       local = num(o.amount_input_local)
@@ -55,6 +59,43 @@ export function parseWithdrawalIntentFromRow(row: {
   return { amountInputLocal: local, inputCurrency: ccy }
 }
 
+/** Local cash payout stored at request time or derived from intent × (payout / gross). */
+export function resolveLocalCashPayoutUsd(input: {
+  amountInputLocal?: number | null
+  inputCurrency?: string | null
+  grossUsd: number
+  payoutUsd?: number | null
+  metadata?: unknown
+}): { amount: number; currency: string } | null {
+  const ccy = String(input.inputCurrency ?? "")
+    .trim()
+    .toUpperCase()
+  if (ccy.length < 3) return null
+
+  if (input.metadata && typeof input.metadata === "object") {
+    const cash = (input.metadata as Record<string, unknown>).local_cash_payout
+    if (cash && typeof cash === "object") {
+      const o = cash as Record<string, unknown>
+      const amt = num(o.amount)
+      const cur = String(o.currency ?? ccy)
+        .trim()
+        .toUpperCase()
+      if (amt > 0 && cur.length >= 3) return { amount: amt, currency: cur }
+    }
+  }
+
+  const intent = num(input.amountInputLocal)
+  if (!(intent > 0)) return null
+  const gross = num(input.grossUsd)
+  const payout = num(input.payoutUsd ?? input.grossUsd)
+  if (!(gross > 0) || !(payout > 0)) {
+    return { amount: intent, currency: ccy }
+  }
+  const ratio = payout >= gross - 1e-9 ? 1 : payout / gross
+  const cash = Math.round(intent * ratio * 100) / 100
+  return { amount: cash, currency: ccy }
+}
+
 export function formatWithdrawalAmountDisplay(
   input: WithdrawalAmountDisplayInput,
 ): WithdrawalAmountDisplayLines {
@@ -67,7 +108,15 @@ export function formatWithdrawalAmountDisplay(
     .toUpperCase()
   const hasIntent = local > 0 && ccy.length >= 3
 
-  const grossPrimary = Number.isFinite(gross) ? `$${fmtUsd(gross)}` : "—"
+  const cashResolved = resolveLocalCashPayoutUsd({
+    amountInputLocal: local,
+    inputCurrency: ccy,
+    grossUsd: gross,
+    payoutUsd: payout,
+    metadata: input.metadata,
+  })
+
+  const grossPrimary = Number.isFinite(gross) ? `$${fmtUsd(gross)} USD gross` : "—"
   const feeLine =
     Number.isFinite(fee) && fee > 0
       ? `Fee $${fmtUsd(fee)}${
@@ -76,10 +125,15 @@ export function formatWithdrawalAmountDisplay(
             : ""
         }`
       : null
-  const payoutLine = Number.isFinite(payout) ? `Payout $${fmtUsd(payout)}` : null
-  const intentLine = hasIntent ? `Intent: ${formatLocalFundingAmount(local, ccy)}` : null
+  const payoutLine = Number.isFinite(payout) ? `Ledger payout $${fmtUsd(payout)} USD` : null
+  const cashToUserLine = cashResolved
+    ? `Cash to user: ${formatLocalFundingAmount(cashResolved.amount, cashResolved.currency)}`
+    : null
+  const intentLine = hasIntent
+    ? `User entered: ${formatLocalFundingAmount(local, ccy)}`
+    : null
 
-  return { grossPrimary, feeLine, payoutLine, intentLine }
+  return { grossPrimary, feeLine, payoutLine, cashToUserLine, intentLine }
 }
 
 /** Single-line label for compact receipts (customer / retailer lists). */

@@ -19,11 +19,11 @@ type ThreadRow = {
   category: string
   category_label?: string
   status: string
-  linked_kind: string | null
-  linked_id: string | null
-  linked_summary: string | null
-  user_email: string | null
-  user_name: string | null
+  linked_kind?: string | null
+  linked_id?: string | null
+  linked_summary?: string | null
+  user_email?: string | null
+  user_name?: string | null
   unread_for_admin: boolean
   escalated?: boolean
   priority?: string
@@ -57,6 +57,15 @@ export function AdminSupportChatPanel(props: {
   onUnreadCount?: (n: number) => void
 }) {
   const { user } = useAuth()
+  const {
+    initialThreadId,
+    onInitialThreadConsumed,
+    initialLinkedKind,
+    initialLinkedId,
+    onInitialLinkedConsumed,
+    refreshTick,
+    onUnreadCount,
+  } = props
   const [threads, setThreads] = useState<ThreadRow[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [categoryFilter, setCategoryFilter] = useState("")
@@ -87,7 +96,12 @@ export function AdminSupportChatPanel(props: {
 
   const loadThreads = useCallback(async () => {
     const h = await authHeaders()
-    if (!h) return
+    if (!h) {
+      setError("Session expired — sign out and back in to open Human support.")
+      setThreads([])
+      setLoadingList(false)
+      return
+    }
     setLoadingList(true)
     setError(null)
     try {
@@ -102,18 +116,24 @@ export function AdminSupportChatPanel(props: {
       })
       const j = (await res.json()) as { threads?: ThreadRow[]; unreadCount?: number; error?: string }
       if (!res.ok) {
-        setError(j.error ?? "Failed to load threads")
+        const msg = j.error ?? "Failed to load threads"
+        setError(
+          msg.includes("Level 5")
+            ? `${msg} Set profiles.trading_user_level = 5 for this admin account.`
+            : msg,
+        )
+        setThreads([])
         return
       }
       const list = j.threads ?? []
       setThreads(list)
       const uc = j.unreadCount ?? list.filter((t) => t.unread_for_admin).length
       setUnreadCount(uc)
-      props.onUnreadCount?.(uc)
+      onUnreadCount?.(uc)
     } finally {
       setLoadingList(false)
     }
-  }, [categoryFilter, unreadOnly, unresolvedOnly, searchQuery, props])
+  }, [categoryFilter, unreadOnly, unresolvedOnly, searchQuery, onUnreadCount])
 
   const loadMessages = useCallback(
     async (tid: string) => {
@@ -148,10 +168,10 @@ export function AdminSupportChatPanel(props: {
 
   useEffect(() => {
     void loadThreads()
-  }, [loadThreads, props.refreshTick, rtTick])
+  }, [loadThreads, refreshTick, rtTick])
 
   useEffect(() => {
-    const id = props.initialThreadId?.trim()
+    const id = initialThreadId?.trim()
     if (!id) {
       consumedInitial.current = null
       return
@@ -159,12 +179,12 @@ export function AdminSupportChatPanel(props: {
     if (consumedInitial.current === id) return
     consumedInitial.current = id
     setSelectedId(id)
-    props.onInitialThreadConsumed?.()
-  }, [props.initialThreadId, props.onInitialThreadConsumed])
+    onInitialThreadConsumed?.()
+  }, [initialThreadId, onInitialThreadConsumed])
 
   useEffect(() => {
-    const kind = props.initialLinkedKind?.trim()
-    const lid = props.initialLinkedId?.trim()
+    const kind = initialLinkedKind?.trim()
+    const lid = initialLinkedId?.trim()
     if (!kind || !lid) {
       consumedLinked.current = null
       return
@@ -176,12 +196,12 @@ export function AdminSupportChatPanel(props: {
     consumedLinked.current = key
     setSelectedId(match.id)
     setUnresolvedOnly(false)
-    props.onInitialLinkedConsumed?.()
-  }, [threads, props.initialLinkedKind, props.initialLinkedId, props.onInitialLinkedConsumed])
+    onInitialLinkedConsumed?.()
+  }, [threads, initialLinkedKind, initialLinkedId, onInitialLinkedConsumed])
 
   useEffect(() => {
     if (selectedId) void loadMessages(selectedId)
-  }, [selectedId, loadMessages, props.refreshTick, rtTick])
+  }, [selectedId, loadMessages, refreshTick, rtTick])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -232,6 +252,18 @@ export function AdminSupportChatPanel(props: {
     }
     await loadThreads()
     if (selectedId) await loadMessages(selectedId)
+  }
+
+  if (error && !loadingList && threads.length === 0) {
+    return (
+      <Card className="border-destructive/40 bg-destructive/5 p-4">
+        <p className="text-sm font-semibold text-destructive">Human support could not load</p>
+        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+        <Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => void loadThreads()}>
+          Retry
+        </Button>
+      </Card>
+    )
   }
 
   return (

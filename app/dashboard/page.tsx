@@ -227,6 +227,7 @@ export default function DashboardPage() {
     !isGuestSession &&
     op.isLoading &&
     !op.snapshot?.profile &&
+    !op.error &&
     Boolean(roleHint?.isOperationalDesk)
 
   const activityUserId = user?.id ?? "guest"
@@ -2168,6 +2169,11 @@ export default function DashboardPage() {
             {roleHint?.tradingUserLevel === 5
               ? "Loading treasury and approval desk…"
               : "Loading operations desk…"}
+          </p>
+        ) : op.error && roleHint?.isOperationalDesk ? (
+          <p className="max-w-sm text-center text-sm text-destructive">
+            Operations profile could not load ({op.error}). Continuing with cached role — open Desk → Human support
+            or refresh.
           </p>
         ) : null}
       </div>

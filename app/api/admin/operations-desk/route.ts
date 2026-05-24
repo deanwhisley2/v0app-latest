@@ -72,6 +72,7 @@ export type OperationsDeskRow = {
   /** User-typed local withdrawal intent (withdrawal_requests). */
   withdrawal_amount_input_local?: number | null
   withdrawal_input_currency?: string | null
+  withdrawal_metadata?: Record<string, unknown> | null
 }
 
 function msSince(iso: string): number | null {
@@ -449,6 +450,7 @@ export async function GET(request: Request) {
         withdrawal_amount_input_local:
           Number.isFinite(wdInputLocal) && wdInputLocal > 0 ? wdInputLocal : null,
         withdrawal_input_currency: wdInputCur.length >= 3 ? wdInputCur : null,
+        withdrawal_metadata: meta,
       }
     }
 

@@ -160,6 +160,16 @@ export async function POST(request: Request) {
     const amountInputLocal =
       Number.isFinite(rawLocal) && rawLocal > 0 && isSupportedFiat(inputCurRaw) ? rawLocal : null
     const inputCurrency = amountInputLocal != null ? inputCurRaw : null
+    const localCashPayout =
+      amountInputLocal != null &&
+      inputCurrency &&
+      settlement.grossAmount > 0 &&
+      settlement.payoutAmount > 0
+        ? {
+            amount: round2(amountInputLocal * (settlement.payoutAmount / settlement.grossAmount)),
+            currency: inputCurrency,
+          }
+        : null
 
     const { data: ins, error: wrErr } = await admin
       .from("withdrawal_requests")
@@ -188,6 +198,7 @@ export async function POST(request: Request) {
                   amount_input_local: amountInputLocal,
                   input_currency: inputCurrency,
                 },
+                ...(localCashPayout ? { local_cash_payout: localCashPayout } : {}),
               }
             : {}),
           ...(rail ? { payout_rail: rail } : {}),

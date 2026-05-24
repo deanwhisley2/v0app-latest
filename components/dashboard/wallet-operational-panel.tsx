@@ -89,14 +89,17 @@ function WithdrawalApprovalAmountBlock({
   const subClass = size === "md" ? "text-[11px]" : "text-[10px]"
   return (
     <div className={`space-y-0.5 font-mono ${subClass}`}>
-      <p className="font-semibold text-foreground">Gross {lines.grossPrimary}</p>
-      {lines.intentLine ? <p className="text-muted-foreground">{lines.intentLine}</p> : null}
-      {lines.feeLine ? <p className="text-amber-800 dark:text-amber-200">{lines.feeLine}</p> : null}
-      {lines.payoutLine ? (
-        <p className={`font-bold text-emerald-800 dark:text-emerald-200 ${size === "md" ? "text-base" : ""}`}>
-          {lines.payoutLine}
+      {lines.cashToUserLine ? (
+        <p
+          className={`font-bold text-emerald-800 dark:text-emerald-200 ${size === "md" ? "text-base" : "text-xs"}`}
+        >
+          {lines.cashToUserLine}
         </p>
       ) : null}
+      {lines.intentLine ? <p className="text-muted-foreground">{lines.intentLine}</p> : null}
+      <p className="font-semibold text-foreground">{lines.grossPrimary}</p>
+      {lines.feeLine ? <p className="text-amber-800 dark:text-amber-200">{lines.feeLine}</p> : null}
+      {lines.payoutLine ? <p className="text-muted-foreground">{lines.payoutLine}</p> : null}
     </div>
   )
 }
@@ -704,6 +707,7 @@ type OperationsDeskApiRow = {
   fx_rate_snapshot?: number | null
   withdrawal_amount_input_local?: number | null
   withdrawal_input_currency?: string | null
+  withdrawal_metadata?: Record<string, unknown> | null
 }
 
 function withdrawalApprovalAmountInput(row: OperationsDeskApiRow): WithdrawalAmountDisplayInput {
@@ -714,6 +718,7 @@ function withdrawalApprovalAmountInput(row: OperationsDeskApiRow): WithdrawalAmo
     feeRate: row.withdrawal_fee_rate ?? null,
     amountInputLocal: row.withdrawal_amount_input_local ?? null,
     inputCurrency: row.withdrawal_input_currency ?? null,
+    metadata: row.withdrawal_metadata ?? null,
   }
 }
 
@@ -2046,11 +2051,19 @@ export function AdminOperationalAssets({
                     <p className="mt-2 text-muted-foreground">{reviewRow.request_type_label}</p>
                     <p className="mt-2 font-mono break-all">Ref · {reviewRow.tx_reference}</p>
                     {reviewRow.kind === "user_withdrawal" ? (
-                      <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                      <div className="mt-2 rounded border border-emerald-500/40 bg-emerald-500/10 p-3">
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">
+                          Local cash payout (what you pay the user)
+                        </p>
                         <WithdrawalApprovalAmountBlock
                           input={withdrawalApprovalAmountInput(reviewRow)}
                           size="md"
                         />
+                        {reviewRow.mobile_network ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Payout rail · {reviewRow.mobile_network}
+                          </p>
+                        ) : null}
                       </div>
                     ) : reviewRow.kind === "user_add_funds" ? (
                       <div className="mt-1">
