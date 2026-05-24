@@ -81,7 +81,6 @@ import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital
 import { AndroidInstallDashboardReminder } from "@/components/install/android-install-dashboard-reminder"
 import { AndroidAppUpdateBanner } from "@/components/install/android-app-update-banner"
 import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
-import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
@@ -2248,7 +2247,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={`${isNativeMobileScrollMode() ? "nexus-native-scroll" : "nexus-mobile-stable"} nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0`}
+      className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
     >
       {/* Unified mobile app bar — single search/nav hierarchy */}
       <MobileAppBar

@@ -478,6 +478,8 @@ html:not(.nexus-pwa-ready) body {
 /* ============================================================
    Android / mobile dashboard — flat compositor-safe mode
    Applied on /dashboard root: .nexus-mobile-stable
+   (Always on phones — independent of native scroll isolation.)
+   Scroll interception overrides live under html.nexus-native-scroll.
    ============================================================ */
 @media (max-width: 767px) {
   .nexus-mobile-stable {
@@ -763,17 +765,19 @@ html:not(.nexus-pwa-ready) body {
     overscroll-behavior-y: contain;
   }
 
-  /* Native scroll isolation — undo aggressive mobile-stable / scroll hacks */
+  /* Native scroll isolation — undo scroll interception only; keep nexus-mobile-stable compositor rules */
   html.nexus-native-scroll .nexus-app-shell {
     overscroll-behavior-y: auto;
   }
 
+  html.nexus-native-scroll .nexus-smart-header-shell,
   html.nexus-native-scroll .nexus-smart-header-shell-native,
   html.nexus-native-scroll .nexus-smart-header-shell-native .nexus-smart-header-inner {
     position: static !important;
     top: auto !important;
     transform: none !important;
     will-change: auto !important;
+    pointer-events: auto !important;
   }
 
   html.nexus-native-scroll .nexus-smart-header-spacer {

@@ -2,7 +2,8 @@
  * Native mobile scroll isolation — disables custom scroll/gesture management on phones.
  *
  * Hard-locked ON until mobile scrolling is revalidated. Set to false to re-enable
- * body lock, smart header hide/show, and compositor "mobile-stable" overrides.
+ * body lock, smart header hide/show, and touch/overscroll interception only.
+ * Compositor-safe rendering (nexus-mobile-stable CSS) stays enabled on the dashboard.
  */
 export const NEXUS_NATIVE_MOBILE_SCROLL_LOCK = true
 

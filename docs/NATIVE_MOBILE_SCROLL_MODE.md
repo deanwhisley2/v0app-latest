@@ -11,7 +11,8 @@ Disables custom mobile scroll management to restore **browser-native** scrolling
 - `useBodyScrollLock` / `lockBodyScroll` (no `position:fixed` body, no `touchmove` preventDefault)
 - Smart header hide/show on scroll
 - Fixed smart-header shell + spacer
-- Dashboard `nexus-mobile-stable` compositor overrides (uses `nexus-native-scroll` instead)
+- Dashboard keeps `nexus-mobile-stable` compositor overrides (flat surfaces, no glass/gradients)
+- `html.nexus-native-scroll` (from bootstrap) only undoes scroll interception CSS
 - `overscroll-behavior-y: contain` on `.nexus-app-shell`
 - `MobileOverlaySheet` for profile (simple anchored panel; no overlay scroll lock)
 - Touch-press scale transform on active
