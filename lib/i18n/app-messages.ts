@@ -16,6 +16,11 @@ import {
   startupCapitalMarketingEn,
   startupCapitalMarketingFr,
 } from "@/lib/i18n/startup-capital-marketing"
+import {
+  androidInstallMessagesEn,
+  androidInstallMessagesFr,
+  androidInstallMessagesSw,
+} from "@/lib/i18n/android-install-messages"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -168,6 +173,7 @@ const en: Record<string, string> = {
   ...fundingWithdrawalEn,
   ...companyMessagesEn,
   ...startupCapitalMarketingEn,
+  ...androidInstallMessagesEn,
 }
 
 const fr: Partial<Record<string, string>> = {
@@ -199,6 +205,7 @@ const fr: Partial<Record<string, string>> = {
   ...(fundingWithdrawalOverlays.fr ?? {}),
   ...frNotificationsOverlay,
   ...startupCapitalMarketingFr,
+  ...androidInstallMessagesFr,
 }
 
 const sw: Partial<Record<string, string>> = {
@@ -228,6 +235,7 @@ const sw: Partial<Record<string, string>> = {
   "settings.regionApplySuggestion": "Tumia lugha na sarafu zilizopendekezwa",
   "settings.regionSaved": "Nchi imehifadhiwa kwa ulinganifu wa fedha.",
   ...(fundingWithdrawalOverlays.sw ?? {}),
+  ...androidInstallMessagesSw,
 }
 
 const ar: Partial<Record<string, string>> = {

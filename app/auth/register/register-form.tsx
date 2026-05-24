@@ -24,6 +24,7 @@ import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-test
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
+import { AndroidInstallPrompt } from "@/components/install/android-install-prompt"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -559,6 +560,10 @@ export default function RegisterPage() {
             {authT.register.home}
           </Link>
         </p>
+
+        <div className="mt-4">
+          <AndroidInstallPrompt surface="auth" variant="card" />
+        </div>
       </AuthLayoutShell>
 
       <AuthAssistantPanel

@@ -52,6 +52,7 @@ import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
+import { AndroidInstallDashboardReminder } from "@/components/install/android-install-dashboard-reminder"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -2233,6 +2234,7 @@ export default function DashboardPage() {
       />
 
       <LaunchStatusBanner />
+      <AndroidInstallDashboardReminder />
       <StartupCapitalPromoModal />
 
       {showRetailBalancePanels && (

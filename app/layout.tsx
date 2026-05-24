@@ -12,6 +12,7 @@ import {
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
+import { PwaServiceWorkerRegister } from '@/components/install/pwa-service-worker-register'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
@@ -146,6 +147,7 @@ export default function RootLayout({
         </ThemeProvider>
         <GoogleAnalyticsScripts />
         <GoogleAnalyticsRouteTracker />
+        <PwaServiceWorkerRegister />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
     </html>

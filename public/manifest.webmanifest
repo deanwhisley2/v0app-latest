@@ -6,30 +6,47 @@
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "background_color": "#070a12",
   "theme_color": "#0f7669",
   "lang": "en",
   "dir": "ltr",
-  "version": "20260518",
+  "version": "20260524",
+  "categories": ["finance", "business"],
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/brand/icons/icon-192.png?v=20260518",
+      "src": "/brand/icons/icon-192.png?v=20260524",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/icons/icon-512.png?v=20260518",
+      "src": "/brand/icons/icon-512.png?v=20260524",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/icons/icon-512-maskable.png?v=20260518",
+      "src": "/brand/icons/icon-512-maskable.png?v=20260524",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard?source=pwa_shortcut",
+      "icons": [{ "src": "/brand/icons/icon-192.png?v=20260524", "sizes": "192x192" }]
+    },
+    {
+      "name": "Wallet",
+      "short_name": "Wallet",
+      "url": "/dashboard?tab=container&source=pwa_shortcut",
+      "icons": [{ "src": "/brand/icons/icon-192.png?v=20260524", "sizes": "192x192" }]
     }
   ]
 }
