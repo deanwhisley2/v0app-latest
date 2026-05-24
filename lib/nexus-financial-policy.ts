@@ -95,7 +95,10 @@ export const NEXUS_FIXED_EARLY_EXIT_AGREEMENT_RATE = 0.1
 
 export type EarlyExitSettlementUsd = {
   principalUsd: number
-  /** Schedule-based earnings accrued during the active session (never reduced by exit penalties). */
+  /**
+   * Unreleased schedule earnings only (total modeled − cumulative_earnings_released_usd).
+   * Never pass full session gross after freedom / partial releases.
+   */
   sessionEarnedUsd: number
   agreementPenaltyUsd: number
   /** Same nominal charge as opening insurance, taken from principal return only — not from earned. */
@@ -108,7 +111,7 @@ export type EarlyExitSettlementUsd = {
 
 /**
  * Early exit: penalties apply only to the **principal/stake** bucket.
- * **Session earned funds are added in full** to the amount returned outside the fix.
+ * `sessionEarnedUsd` must be **unreleased** earnings only (see fixed-trade-earnings-conservation).
  */
 export function computeEarlyExitSettlementUsd(
   principalUsd: number,

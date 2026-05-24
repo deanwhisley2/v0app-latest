@@ -1820,49 +1820,50 @@ export default function DashboardPage() {
     }
   }, [showFundModal, l1FundSource])
 
-  useEffect(() => {
+  const loadWithdrawalEligibility = useCallback(async () => {
     if (isGuestSession || !user || operationalWorkspace) {
       setWithdrawalEligibility(null)
       return
     }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token || cancelled) return
-        const res = await fetch("/api/user/withdrawal/eligibility", {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        })
-        if (!res.ok || cancelled) return
-        const j = (await res.json().catch(() => ({}))) as {
-          minUsd?: number
-          maxUsd?: number
-          cooldownActive?: boolean
-          msRemaining?: number
-          nextEligibleAt?: string | null
-          totalBalanceUsd?: number
-        }
-        if (cancelled) return
-        setWithdrawalEligibility({
-          minUsd: Number(j.minUsd ?? 0),
-          maxUsd: Number(j.maxUsd ?? 0),
-          cooldownActive: Boolean(j.cooldownActive),
-          msRemaining: Number(j.msRemaining ?? 0),
-          nextEligibleAt: j.nextEligibleAt ?? null,
-          totalBalanceUsd: Number(j.totalBalanceUsd ?? 0),
-        })
-      } catch {
-        if (!cancelled) setWithdrawalEligibility(null)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/withdrawal/eligibility", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      if (!res.ok) return
+      const j = (await res.json().catch(() => ({}))) as {
+        minUsd?: number
+        maxUsd?: number
+        cooldownActive?: boolean
+        msRemaining?: number
+        nextEligibleAt?: string | null
+        totalBalanceUsd?: number
       }
-    })()
-    return () => {
-      cancelled = true
+      setWithdrawalEligibility({
+        minUsd: Number(j.minUsd ?? 0),
+        maxUsd: Number(j.maxUsd ?? 0),
+        cooldownActive: Boolean(j.cooldownActive),
+        msRemaining: Number(j.msRemaining ?? 0),
+        nextEligibleAt: j.nextEligibleAt ?? null,
+        totalBalanceUsd: Number(j.totalBalanceUsd ?? 0),
+      })
+    } catch {
+      setWithdrawalEligibility(null)
     }
   }, [isGuestSession, user, operationalWorkspace])
+
+  useEffect(() => {
+    void loadWithdrawalEligibility()
+  }, [loadWithdrawalEligibility])
+
+  useEffect(() => {
+    if (showFundModal === "withdraw") void loadWithdrawalEligibility()
+  }, [showFundModal, loadWithdrawalEligibility])
 
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseCustomerLocalAmountInput(fundAmount)
@@ -1913,7 +1914,37 @@ export default function DashboardPage() {
 
         if (showFundModal === "withdraw") {
           if (!(amount > 0)) throw new Error(t("withdrawal.error.enterAmount"))
-          if (amount > liveMain) throw new Error(t("withdrawal.error.insufficientBalance"))
+          if (withdrawalEligibility) {
+            if (withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd) {
+              throw new Error(t("withdrawal.error.nothingWithdrawable"))
+            }
+            if (withdrawalEligibility.cooldownActive) {
+              throw new Error(
+                t("withdrawal.error.cooldownActive").replace(
+                  "{{hours}}",
+                  String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
+                ),
+              )
+            }
+            if (amount + 1e-6 < withdrawalEligibility.minUsd) {
+              throw new Error(
+                t("withdrawal.error.belowMinimum").replace(
+                  "{{min}}",
+                  formatUserMoney(withdrawalEligibility.minUsd),
+                ),
+              )
+            }
+            if (amount > withdrawalEligibility.maxUsd + 1e-6) {
+              const locked = Math.max(0, containerLockedUsd)
+              throw new Error(
+                t("withdrawal.error.aboveWithdrawableMax")
+                  .replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))
+                  .replace("{{locked}}", formatUserMoney(locked)),
+              )
+            }
+          } else if (amount > liveMain) {
+            throw new Error(t("withdrawal.error.insufficientBalance"))
+          }
           if (retailerCreditDesk && retailerOpsBlocked) {
             throw new Error(t("withdrawal.error.retailerPendingBlocksWithdraw"))
           }
@@ -2125,6 +2156,8 @@ export default function DashboardPage() {
     retailerCreditDesk,
     formatUserMoney,
     withdrawalPendingBalance,
+    withdrawalEligibility,
+    containerLockedUsd,
     currency,
     localMmWizardStep,
     fundPaymentProofDataUrl,
@@ -3192,13 +3225,14 @@ export default function DashboardPage() {
                     <p className="mt-1">
                       {t("withdrawal.modal.minLine").replace(
                         "{{min}}",
-                        formatLocalFiatAmount(
-                          minDepositLocalAmount(currency),
-                          currency,
-                          locale || "en-US",
-                        ),
+                        formatUserMoney(withdrawalEligibility.minUsd),
                       )}
                     </p>
+                    {withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd ? (
+                      <p className="mt-1 font-medium text-amber-800 dark:text-amber-200">
+                        {t("withdrawal.error.nothingWithdrawable")}
+                      </p>
+                    ) : null}
                     <p className="mt-0.5">
                       {t("withdrawal.modal.maxLine").replace(
                         "{{max}}",
@@ -3234,6 +3268,10 @@ export default function DashboardPage() {
                 onClick={handleFundSubmit}
                 disabled={
                   isFundProcessing ||
+                  (showFundModal === "withdraw" &&
+                    (withdrawalEligibility != null &&
+                      (withdrawalEligibility.cooldownActive ||
+                        withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd))) ||
                   (showFundModal === "withdraw" && (!fundAmount || parseCustomerLocalAmountInput(fundAmount) <= 0)) ||
                   (showFundModal === "add" &&
                     customerRetailFunding &&

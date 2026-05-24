@@ -103,7 +103,7 @@ const en: Record<string, string> = {
   "notifications.center.clearInbox": "Clear inbox",
   "notifications.inbox.loadMore": "Load more ({{n}})",
   "security.devices.title": "Device management",
-  "security.devices.hint": "Trust known devices. Block unknown logins. New devices: email verification + 6h cooldown.",
+  "security.devices.hint": "Trust known devices. Block unknown logins. You can use multiple phones when you sign in with your full email.",
   "security.devices.ip": "IP",
   "security.devices.trust": "Trust",
   "security.devices.block": "Block",

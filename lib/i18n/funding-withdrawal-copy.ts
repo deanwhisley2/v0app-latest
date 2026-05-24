@@ -172,6 +172,12 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.error.sessionExpired": "Session expired.",
   "withdrawal.error.enterAmount": "Enter amount.",
   "withdrawal.error.insufficientBalance": "Insufficient balance",
+  "withdrawal.error.belowMinimum": "Amount is below the minimum withdrawal ({{min}}).",
+  "withdrawal.error.aboveWithdrawableMax":
+    "Amount exceeds withdrawable Nexus Main balance ({{max}}). {{locked}} is locked in open container trades.",
+  "withdrawal.error.cooldownActive": "One withdrawal per 24 hours. Try again in about {{hours}} hour(s).",
+  "withdrawal.error.nothingWithdrawable":
+    "Withdrawable balance is below the minimum right now. Only free Nexus Main can be withdrawn; open trades stay locked until they settle.",
   "withdrawal.error.retailerPendingBlocksWithdraw":
     "Clear pending local desk items before withdrawal.",
   "funding.error.useDeskOrAdminQueue": "Use desk save, incoming queue, or crypto top-up in this dialog.",

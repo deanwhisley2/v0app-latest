@@ -3,9 +3,10 @@ import { officialLeaseEndDate } from "@/lib/fixed-trade-session-lease"
 import type { FixPeriodMonths } from "@/lib/container-earnings-schedule"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import {
-  computeFixedSessionPolicyGrossUsd,
-  type FixedSessionEarnedRow,
-} from "@/lib/server/fixed-trade-earnings-snapshot"
+  assertReleaseLedgerReconciles,
+  computeFixedTradeEarningsConservation,
+} from "@/lib/server/fixed-trade-earnings-conservation"
+import type { FixedSessionEarnedRow } from "@/lib/server/fixed-trade-earnings-snapshot"
 import {
   fixedLifecycleDailySumReconcilesTarget,
   parseFixedTradeLifecycleV2,
@@ -65,9 +66,12 @@ export async function settleFixedTradeMaturityForUser(
     throw new Error("FIXED_LIFECYCLE_BUCKET_RECONCILE_FAILED")
   }
 
-  const finalGross = roundUsd2(computeFixedSessionPolicyGrossUsd(earnedRow, leaseEnd))
-  const cumulative = roundUsd2(Number((row as { cumulative_earnings_released_usd?: unknown }).cumulative_earnings_released_usd ?? 0))
-  const remainderGross = roundUsd2(Math.max(0, finalGross - cumulative))
+  const conservation = computeFixedTradeEarningsConservation(earnedRow, leaseEnd)
+  const finalGross = conservation.totalModeledEarnedUsd
+  const cumulative = conservation.cumulativeReleasedUsd
+  const remainderGross = conservation.unreleasedEarnedUsd
+
+  assertReleaseLedgerReconciles(conservation, remainderGross, "fixed-trade-maturity-settle")
 
   const feePreview = roundUsd2(remainderGross * MATURITY_RELEASE_FEE_RATE)
   const liquidPreview = roundUsd2(remainderGross - feePreview)

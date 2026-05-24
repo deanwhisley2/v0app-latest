@@ -13,6 +13,21 @@ function normalizePhoneCandidates(raw: string): string[] {
   if (digits) {
     candidates.add(digits)
     candidates.add(`+${digits}`)
+    // Kenya / East Africa: 07xxxxxxxx <-> 2547xxxxxxxx
+    if (digits.startsWith("0") && digits.length >= 10) {
+      const intl = `254${digits.slice(1)}`
+      candidates.add(intl)
+      candidates.add(`+${intl}`)
+    }
+    if (digits.startsWith("254") && digits.length >= 12) {
+      candidates.add(`0${digits.slice(3)}`)
+      candidates.add(`+${digits}`)
+    }
+    if (digits.length === 9 && /^[17]/.test(digits)) {
+      candidates.add(`254${digits}`)
+      candidates.add(`+254${digits}`)
+      candidates.add(`0${digits}`)
+    }
   }
   return [...candidates].filter(Boolean)
 }
@@ -49,29 +64,21 @@ export async function resolveIdentifierToEmail(
     if (phoneEmails.length === 1) return phoneEmails[0]
   }
 
-  // 2) Try explicit username column when present.
-  const { data: usernameRows, error: usernameErr } = await admin
-    .from("profiles")
-    .select("email")
-    .eq("username", identifier.toLowerCase())
-    .limit(2)
-  if (!usernameErr) {
-    const emails = uniqueEmails((usernameRows ?? []) as Array<{ email: string | null }>)
-    if (emails.length === 1) return emails[0]
+  // 2) Email local-part prefix (e.g. "kisumu" -> kisumusahil8@gmail.com when unique).
+  const localKey = identifier.toLowerCase()
+  if (localKey.length >= 4) {
+    const { data: localPartRows, error: localPartErr } = await admin
+      .from("profiles")
+      .select("email")
+      .ilike("email", `${localKey}%@%`)
+      .limit(3)
+    if (localPartErr) {
+      console.error("resolveIdentifierToEmail local-part lookup:", localPartErr)
+      return null
+    }
+    const localPartEmails = uniqueEmails((localPartRows ?? []) as Array<{ email: string | null }>)
+    if (localPartEmails.length === 1) return localPartEmails[0]
   }
-
-  // 3) Username-like fallback: email local-part match (e.g. "dean" -> dean@...).
-  const { data: localPartRows, error: localPartErr } = await admin
-    .from("profiles")
-    .select("email")
-    .ilike("email", `${identifier.toLowerCase()}@%`)
-    .limit(3)
-  if (localPartErr) {
-    console.error("resolveIdentifierToEmail local-part lookup:", localPartErr)
-    return null
-  }
-  const localPartEmails = uniqueEmails((localPartRows ?? []) as Array<{ email: string | null }>)
-  if (localPartEmails.length === 1) return localPartEmails[0]
 
   return null
 }

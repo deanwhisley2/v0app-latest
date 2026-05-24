@@ -7,6 +7,7 @@ import {
   computeEarlyExitSettlementUsd,
   computeFixedTradeMainDebitUsd,
   fixInsuranceAndWithdrawFees,
+  roundUsd2,
   splitFixedTradeOpenCommitUsd,
   NEXUS_EMERGENCY_PULLOUT_THRESHOLD,
   NEXUS_FIXED_EARLY_EXIT_AGREEMENT_RATE,
@@ -51,6 +52,16 @@ function main() {
   assert(early.agreementPenaltyUsd === 100 && early.insuranceExitFromPrincipalUsd === 20, "penalties on principal")
   assert(early.sessionEarnedUsd === 150, "earned untouched in math")
   assert(early.netPrincipalReturnedUsd === 880 && early.totalCreditedToMainUsd === 1030, "credit = earned + net principal")
+
+  const partialEarned = 150
+  const priorReleased = 93.69
+  const unreleased = roundUsd2(Math.max(0, partialEarned - priorReleased))
+  const earlyPartial = computeEarlyExitSettlementUsd(1000, 20, unreleased)
+  assert(earlyPartial.sessionEarnedUsd === unreleased, "early exit must use unreleased slice only")
+  assert(
+    earlyPartial.totalCreditedToMainUsd === roundUsd2(earlyPartial.netPrincipalReturnedUsd + unreleased),
+    "no double-count of prior released gross",
+  )
 
   readFxLocalPerUsdMap()
   const ugx = usdToLocalUnits(5, "UGX")

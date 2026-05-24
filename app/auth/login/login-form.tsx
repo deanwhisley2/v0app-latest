@@ -115,7 +115,9 @@ export default function LoginPage() {
           error?: string
         }
         if (!resolveRes.ok || !resolveData.email) {
-          setError("Invalid login credentials.")
+          setError(
+            "No account matches that phone or username. Sign in with your full email address (the one you registered with).",
+          )
           return
         }
         emailForAuth = resolveData.email
@@ -126,7 +128,14 @@ export default function LoginPage() {
         password,
       })
       if (signInError) {
-        setError(signInError.message)
+        const msg = signInError.message
+        if (msg.toLowerCase().includes("invalid login credentials")) {
+          setError(
+            "Wrong email or password. Use your full email (e.g. name@gmail.com), check caps lock, or tap Forgot password.",
+          )
+        } else {
+          setError(msg)
+        }
         return
       }
       if (!data.session || !data.user) {
