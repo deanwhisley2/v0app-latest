@@ -18,9 +18,8 @@ Only one install surface flag should be `true` at a time.
 | 0 | both `false` | Stable baseline |
 | 1 | `NEXUS_INSTALL_STATIC_BANNER=true` | Static text banner (no hooks) — **PASS** |
 | 2 | — | Dismiss button (local `useState` only) — **PASS** |
-| 3 | — | Android-only via server `User-Agent` substring — **current** |
-| 4 | — | APK link button (no prefetch) |
-| 5 | — | On-demand `/api/app/android-release` fetch (user click only) |
+| 3 | — | Android-only via server `User-Agent` substring — **PASS** |
+| 4–6 | — | User-tap APK download + inline install help — **current** |
 
 Do **not** re-enable `NEXUS_LIGHTWEIGHT_ANDROID_INSTALL` until each step passes on A05.
 
