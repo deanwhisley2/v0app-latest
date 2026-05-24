@@ -80,6 +80,7 @@ import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { AndroidInstallDashboardReminder } from "@/components/install/android-install-dashboard-reminder"
 import { AndroidAppUpdateBanner } from "@/components/install/android-app-update-banner"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
@@ -2266,8 +2267,12 @@ export default function DashboardPage() {
 
       <div className="hidden md:block">
         <LaunchStatusBanner />
-        <AndroidInstallDashboardReminder />
-        <AndroidAppUpdateBanner />
+        {!isPwaSafeMode() ? (
+          <>
+            <AndroidInstallDashboardReminder />
+            <AndroidAppUpdateBanner />
+          </>
+        ) : null}
       </div>
       <StartupCapitalPromoModal />
 

@@ -3,9 +3,15 @@
 import { useEffect, useState } from "react"
 import { consumeFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { AndroidInstallPrompt } from "@/components/install/android-install-prompt"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 /** Post-login Android install reminder (one-shot per fresh login, snoozeable). */
 export function AndroidInstallDashboardReminder() {
+  if (isPwaSafeMode()) return null
+  return <AndroidInstallDashboardReminderActive />
+}
+
+function AndroidInstallDashboardReminderActive() {
   const [freshLogin, setFreshLogin] = useState(false)
 
   useEffect(() => {
@@ -13,7 +19,7 @@ export function AndroidInstallDashboardReminder() {
   }, [])
 
   return (
-      <div className="mx-auto max-w-[1600px] px-4 pt-2 max-md:pt-1">
+    <div className="mx-auto max-w-[1600px] px-4 pt-2 max-md:pt-1">
       <AndroidInstallPrompt
         surface="dashboard"
         variant="banner"

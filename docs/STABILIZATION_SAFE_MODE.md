@@ -1,39 +1,49 @@
-# Stabilization safe mode (browser-first)
+# Browser-only stabilization (hard lock)
 
 ## Status
 
-**Default:** safe mode **ON** (`NEXT_PUBLIC_PWA_FULL` unset).
+**`NEXUS_BROWSER_ONLY_LOCK = true`** in `lib/mobile/pwa-safe-mode.ts`
 
-## What is disabled
+The entire PWA/APK runtime layer is disconnected. Nexus runs as a **pure browser application**.
 
-- Service worker registration (all clients unregistered + caches cleared)
-- Offline / reconnect banners and fetch stability patching
-- PWA install prompt capture and Android install/update promotion UI
-- PWA runtime bootstrap (install persistence, SW update reload)
+## Disabled globally
 
-## What still works
+- Service worker registration (`sw.js` self-unregisters if ever loaded)
+- All cache storage (cleared on load + repeated teardown for 20s)
+- Offline / reconnect banners and fetch patching
+- Install / APK / update promotion UI
+- PWA manifest link in HTML metadata
+- `apple-mobile-web-app-capable` metadata
+- PWA runtime bootstrap
 
-- Normal Next.js App Router navigation (browser network only)
-- Auth, dashboard, API routes
-- Core trading and wallet UI
+## Still active
 
-## Re-enable PWA (after validation)
+- Next.js App Router (normal client + server navigation)
+- Auth, dashboard, APIs via direct browser networking
+- Core trading / wallet UI
 
-1. Set `NEXT_PUBLIC_PWA_FULL=1` in the VPS build environment.
-2. Redeploy.
-3. Test landing → `/auth/login`, `/auth/register`, dashboard on desktop + Android.
-4. Reintroduce offline/install features incrementally.
+## Clean-state test (required)
 
-## Clean-state test checklist
+1. DevTools → Application → **Clear site data**
+2. Service Workers → confirm **none** control the page
+3. Hard refresh (`Ctrl+Shift+R`)
+4. Test: landing → Get started, I have an account, `/auth/login`, `/auth/register`, dashboard
 
-1. DevTools → Application → Service Workers → Unregister all.
-2. Clear site data (cookies, cache, storage).
-3. Hard refresh (`Ctrl+Shift+R`).
-4. Verify landing → Get started → login form loads.
-5. Network tab: no `sw.js` controller; document requests go direct to origin.
+If a controlling service worker still appears, close all tabs for the domain and reopen.
 
-## 501 / gateway notes
+## Diagnostic interpretation
 
-- App APK route returns **503** when no signed APK is published (`/api/app/android-apk`).
-- **501** usually indicates reverse-proxy/nginx rejecting a method or upstream mismatch — capture the exact failing URL + method from Network tab.
-- RSC requests must not be cached or rewritten by SW (safe mode avoids SW entirely).
+| Result | Conclusion |
+|--------|------------|
+| Navigation works after clean state | Root cause was PWA/SW/runtime layer |
+| Still “This page couldn’t load” | Investigate nginx, proxy, RSC, SSR, PM2 — not PWA |
+
+## 501 / gateway
+
+Capture exact URL + method from Network tab. App APK endpoint returns **503** when no signed APK is published (not 501).
+
+## Re-enable PWA (later, one layer at a time)
+
+1. Set `NEXUS_BROWSER_ONLY_LOCK = false` in `lib/mobile/pwa-safe-mode.ts`
+2. Redeploy and test auth navigation only (no SW changes yet)
+3. Reintroduce SW, offline UI, install prompts in separate slices with device QA

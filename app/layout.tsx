@@ -12,9 +12,7 @@ import {
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
-import { PwaServiceWorkerRegister } from '@/components/install/pwa-service-worker-register'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
-import { PwaRuntimeBootstrap } from '@/components/mobile/pwa-runtime-bootstrap'
 import { PwaSafeModeBootstrap } from '@/components/mobile/pwa-safe-mode-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
@@ -22,6 +20,8 @@ import { BrowserNotificationAlerts } from '@/components/mobile/browser-notificat
 import { isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
+
+const browserOnly = isPwaSafeMode()
 
 const inter = Inter({
   subsets: ['latin'],
@@ -53,12 +53,20 @@ export const metadata: Metadata = {
   description:
     'Nexus Pro — institutional multi-asset trading workspace with funding controls, market continuity, and mobile-first operations.',
   applicationName: SITE_BRAND.name,
-  manifest: brandAsset('/manifest.webmanifest'),
-  appleWebApp: {
-    capable: true,
-    title: SITE_BRAND.name,
-    statusBarStyle: 'black-translucent',
-  },
+  ...(browserOnly
+    ? {}
+    : {
+        manifest: brandAsset('/manifest.webmanifest'),
+        appleWebApp: {
+          capable: true,
+          title: SITE_BRAND.name,
+          statusBarStyle: 'black-translucent' as const,
+        },
+        other: {
+          'mobile-web-app-capable': 'yes',
+          'apple-mobile-web-app-title': SITE_BRAND.name,
+        },
+      }),
   icons: {
     icon: [
       { url: brandAsset('/favicon.ico'), sizes: 'any' },
@@ -98,10 +106,6 @@ export const metadata: Metadata = {
     description:
       'Institutional multi-asset trading workspace — funding, markets, and operational controls.',
     images: [brandAsset('/brand/og-image.png')],
-  },
-  other: {
-    'mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-title': SITE_BRAND.name,
   },
 }
 
@@ -152,7 +156,6 @@ export default function RootLayout({
                   <NexusNotificationsProvider>
                     <UserPreferencesProvider>
                       {children}
-                      {!isPwaSafeMode() ? <PwaRuntimeBootstrap /> : null}
                       <BrowserNotificationAlerts />
                     </UserPreferencesProvider>
                   </NexusNotificationsProvider>
@@ -165,7 +168,7 @@ export default function RootLayout({
         <GoogleAnalyticsRouteTracker />
         <ProductionErrorReporter />
         <ScrollLockSafety />
-        {isPwaSafeMode() ? <PwaSafeModeBootstrap /> : <PwaServiceWorkerRegister />}
+        <PwaSafeModeBootstrap />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
     </html>

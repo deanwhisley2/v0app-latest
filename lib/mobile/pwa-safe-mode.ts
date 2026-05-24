@@ -1,27 +1,38 @@
 /**
- * Browser-first stabilization mode.
+ * Browser-only stabilization lock.
  *
- * Default ON in production builds. Re-enable full PWA (SW, offline UI, install prompts)
- * only after routing is validated: set NEXT_PUBLIC_PWA_FULL=1 at build time.
+ * Hard-locked ON until routing is proven stable across desktop + Android.
+ * To reintroduce PWA/APK: set NEXUS_BROWSER_ONLY_LOCK = false and redeploy.
  */
+export const NEXUS_BROWSER_ONLY_LOCK = true
+
 export function isPwaSafeMode(): boolean {
-  return process.env.NEXT_PUBLIC_PWA_FULL !== "1"
+  return NEXUS_BROWSER_ONLY_LOCK
 }
 
-/** Runs before React hydration to tear down stale workers/caches. */
+/** Runs before React hydration — unregister SW, clear caches, one-time reload if a controller was active. */
 export const PWA_SAFE_MODE_TEARDOWN_SCRIPT = `
 (function(){
   try {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs){
-        for (var i = 0; i < regs.length; i++) regs[i].unregister();
+    var hadController = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+    function clearCaches() {
+      if (!('caches' in window)) return Promise.resolve();
+      return caches.keys().then(function(keys) {
+        return Promise.all(keys.map(function(k) { return caches.delete(k); }));
       });
     }
-    if ('caches' in window) {
-      caches.keys().then(function(keys){
-        for (var j = 0; j < keys.length; j++) caches.delete(keys[j]);
-      });
+    function unregisterAll() {
+      if (!('serviceWorker' in navigator)) return clearCaches();
+      return navigator.serviceWorker.getRegistrations().then(function(regs) {
+        return Promise.all(regs.map(function(r) { return r.unregister(); }));
+      }).then(clearCaches);
     }
+    unregisterAll().then(function() {
+      if (hadController && !sessionStorage.getItem('nexus_browser_only_reload')) {
+        sessionStorage.setItem('nexus_browser_only_reload', '1');
+        location.reload();
+      }
+    });
   } catch (e) {}
 })();
 `.trim()

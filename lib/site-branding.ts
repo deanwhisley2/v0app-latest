@@ -6,7 +6,7 @@ export const SITE_BRAND = {
   name: "Nexus Pro",
   shortName: "Nexus Pro",
   /** Cache-bust query for favicon, manifest, and OG assets */
-  assetVersion: "20260526b",
+  assetVersion: "20260526c",
   themeColor: "#0f7669",
   backgroundColor: "#070a12",
   siteUrl: "https://www.nexuspro.it.com",

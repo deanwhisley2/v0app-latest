@@ -3,8 +3,9 @@
 import { useEffect } from "react"
 import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
-async function tearDownPwaClientState(): Promise<void> {
-  if (typeof window === "undefined") return
+async function tearDownPwaClientState(): Promise<boolean> {
+  if (typeof window === "undefined") return false
+  const hadController = Boolean(navigator.serviceWorker?.controller)
   try {
     if ("serviceWorker" in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations()
@@ -17,13 +18,35 @@ async function tearDownPwaClientState(): Promise<void> {
   } catch {
     /* ignore */
   }
+  return hadController
 }
 
-/** Ensures no SW/cache survives after deploy while safe mode is active. */
+/** Ensures no SW/cache survives; repeats teardown during first seconds after load. */
 export function PwaSafeModeBootstrap() {
   useEffect(() => {
     if (!isPwaSafeMode()) return
-    void tearDownPwaClientState()
+
+    let cancelled = false
+    const run = async () => {
+      const hadController = await tearDownPwaClientState()
+      if (cancelled) return
+      if (hadController && !sessionStorage.getItem("nexus_browser_only_reload")) {
+        sessionStorage.setItem("nexus_browser_only_reload", "1")
+        window.location.reload()
+      }
+    }
+
+    void run()
+    const interval = window.setInterval(() => {
+      void tearDownPwaClientState()
+    }, 4000)
+    const stop = window.setTimeout(() => window.clearInterval(interval), 20000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.clearTimeout(stop)
+    }
   }, [])
 
   return null
