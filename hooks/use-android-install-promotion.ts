@@ -21,7 +21,7 @@ import {
   writeInstallState,
   clearLegacyAuthInstallDismiss,
 } from "@/lib/android-install/storage"
-import { isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
+import { isLightweightAndroidInstallEnabled, isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
 
 const HIDDEN_PROMOTION: AndroidInstallPromotion = {
   visible: false,
@@ -101,7 +101,10 @@ async function fetchRelease(): Promise<AndroidReleasePayload | null> {
 export function useAndroidInstallPromotion(
   opts: UseAndroidInstallPromotionOptions,
 ): AndroidInstallPromotion {
-  const { canNativeInstall, probeSettled } = usePwaInstallCapability()
+  const lightweight = isLightweightAndroidInstallEnabled()
+  const pwaCap = usePwaInstallCapability()
+  const canNativeInstall = lightweight ? false : pwaCap.canNativeInstall
+  const probeSettled = lightweight ? true : pwaCap.probeSettled
   const [surfaceState, setSurfaceState] = useState(() =>
     typeof window === "undefined" ? null : detectInstallSurface(),
   )
@@ -152,13 +155,18 @@ export function useAndroidInstallPromotion(
   const canNativePwaPrompt = canNativeInstall
 
   const primaryInstallKind: PrimaryInstallKind = useMemo(() => {
+    if (lightweight) {
+      if (apkAvailable) return "apk"
+      return "manual"
+    }
     if (canNativePwaPrompt) return "pwa"
     if (apkAvailable) return "apk"
     return "manual"
-  }, [canNativePwaPrompt, apkAvailable])
+  }, [lightweight, canNativePwaPrompt, apkAvailable])
 
-  const probingInstall =
-    !probeSettled && primaryInstallKind === "manual" && surfaceState?.eligible === true
+  const probingInstall = lightweight
+    ? false
+    : !probeSettled && primaryInstallKind === "manual" && surfaceState?.eligible === true
 
   const installButtonEnabled =
     !probingInstall &&
@@ -307,7 +315,7 @@ export function useAndroidInstallPromotion(
     setDismissed(true)
   }, [opts.surface])
 
-  if (!isPwaInstallEnabled()) return HIDDEN_PROMOTION
+  if (!isPwaInstallEnabled() && !isLightweightAndroidInstallEnabled()) return HIDDEN_PROMOTION
 
   return {
     visible,

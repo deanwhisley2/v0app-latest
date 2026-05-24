@@ -3,11 +3,11 @@
 import { Loader2, Wifi, X } from "lucide-react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useMobileConnectivity } from "@/contexts/MobileConnectivityContext"
-import { isPwaOfflineRuntimeEnabled } from "@/lib/mobile/pwa-safe-mode"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 /** Lightweight in-flow connection status — non-blocking, debounced for weak mobile networks. */
 export function ConnectivityStrip() {
-  if (!isPwaOfflineRuntimeEnabled()) return null
+  if (isPwaSafeMode()) return null
   const { t } = useUserPreferences()
   const { showDegradedBanner, showOfflineBanner, showReconnectedBanner, dismissOfflineBanner } =
     useMobileConnectivity()

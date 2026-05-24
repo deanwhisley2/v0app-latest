@@ -17,7 +17,7 @@ import {
   type ConnectionPhase,
 } from "@/lib/mobile/network-stability"
 import { gaEvent } from "@/lib/analytics/google-analytics"
-import { isPwaOfflineRuntimeEnabled } from "@/lib/mobile/pwa-safe-mode"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 export type MobileConnectivityState = {
   phase: ConnectionPhase
@@ -47,7 +47,7 @@ const STABLE_ONLINE: MobileConnectivityState = {
 }
 
 export function MobileConnectivityProvider({ children }: { children: ReactNode }) {
-  if (!isPwaOfflineRuntimeEnabled()) {
+  if (isPwaSafeMode()) {
     return (
       <MobileConnectivityContext.Provider value={STABLE_ONLINE}>
         {children}

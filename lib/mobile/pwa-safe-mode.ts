@@ -1,46 +1,31 @@
 /**
- * PWA / install phased reintroduction (Phase 3).
+ * Browser-only stabilization lock.
  *
- * Emergency full browser-only: set NEXUS_BROWSER_ONLY_LOCK = true (disables everything below).
- * Native scroll + compositor policies live in native slice files — unchanged here.
+ * Hard-locked ON until routing is proven stable across desktop + Android.
+ * To reintroduce PWA/APK: set NEXUS_BROWSER_ONLY_LOCK = false and redeploy.
  */
-
-/** Master kill-switch — instant revert to pure browser (SW teardown, no manifest). */
-export const NEXUS_BROWSER_ONLY_LOCK = false
-
-/** Step 1: manifest, icons, standalone chrome, beforeinstallprompt install UX. */
-export const NEXUS_PWA_INSTALL_LAYER = true
-
-/** Step 1/2: register SW for installability — precache shell assets only, NO fetch handler. */
-export const NEXUS_PWA_MINIMAL_SW = true
-
-/** Step 5: refresh auth session on app resume (visibility). */
-export const NEXUS_PWA_RESUME_LAYER = false
-
-/** Step 6–7: connectivity banners, fetch stability hooks, SW navigate/offline routing. */
-export const NEXUS_PWA_OFFLINE_LAYER = false
+export const NEXUS_BROWSER_ONLY_LOCK = true
 
 export function isPwaSafeMode(): boolean {
   return NEXUS_BROWSER_ONLY_LOCK
 }
 
+/**
+ * Lightweight install UX only — APK download + manual Add to Home Screen guidance.
+ * No service worker, manifest, standalone runtime, or navigation changes.
+ */
+export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = true
+
+export function isLightweightAndroidInstallEnabled(): boolean {
+  return NEXUS_BROWSER_ONLY_LOCK && NEXUS_LIGHTWEIGHT_ANDROID_INSTALL
+}
+
+/** Full PWA layer (manifest/SW/runtime) — off until separately revalidated. */
 export function isPwaInstallEnabled(): boolean {
-  return !NEXUS_BROWSER_ONLY_LOCK && NEXUS_PWA_INSTALL_LAYER
+  return !NEXUS_BROWSER_ONLY_LOCK
 }
 
-export function isPwaMinimalSwEnabled(): boolean {
-  return isPwaInstallEnabled() && NEXUS_PWA_MINIMAL_SW
-}
-
-export function isPwaResumeEnabled(): boolean {
-  return isPwaInstallEnabled() && NEXUS_PWA_RESUME_LAYER
-}
-
-export function isPwaOfflineRuntimeEnabled(): boolean {
-  return !NEXUS_BROWSER_ONLY_LOCK && NEXUS_PWA_OFFLINE_LAYER
-}
-
-/** Runs before React hydration when full browser-only lock is active. */
+/** Runs before React hydration — unregister SW, clear caches, one-time reload if a controller was active. */
 export const PWA_SAFE_MODE_TEARDOWN_SCRIPT = `
 (function(){
   try {

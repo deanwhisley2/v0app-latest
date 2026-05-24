@@ -7,7 +7,7 @@ import {
   useAndroidInstallPromotion,
 } from "@/hooks/use-android-install-promotion"
 import { openDownloadsQuickAction } from "@/lib/android-install/app-update-client"
-import { isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
+import { isLightweightAndroidInstallEnabled, isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
 import { cn } from "@/lib/utils"
 
 type AndroidInstallPromptProps = {
@@ -31,7 +31,7 @@ function unknownSourcesHint(browser: string | null, t: (k: string) => string): s
 }
 
 export function AndroidInstallPrompt(props: AndroidInstallPromptProps) {
-  if (!isPwaInstallEnabled()) return null
+  if (!isLightweightAndroidInstallEnabled() && !isPwaInstallEnabled()) return null
   return <AndroidInstallPromptActive {...props} />
 }
 
@@ -43,6 +43,7 @@ function AndroidInstallPromptActive({
   className,
 }: AndroidInstallPromptProps) {
   const { t } = useUserPreferences()
+  const lightweight = isLightweightAndroidInstallEnabled()
   const promo = useAndroidInstallPromotion({ surface, freshLogin, freshLoginOnly })
 
   if (!promo.visible) return null
@@ -70,11 +71,13 @@ function AndroidInstallPromptActive({
     ? t("install.installApp.alreadyInstalledHint")
     : isUpdate
       ? t("install.installApp.updateLead")
-      : isManualMode
-        ? t("install.installApp.manualOnlyLead")
-        : promo.primaryInstallKind === "apk"
-          ? t("install.installApp.apkLead")
-          : t("install.installApp.lead")
+      : lightweight
+        ? t("install.installApp.lightweightLead")
+        : isManualMode
+          ? t("install.installApp.manualOnlyLead")
+          : promo.primaryInstallKind === "apk"
+            ? t("install.installApp.apkLead")
+            : t("install.installApp.lead")
 
   const primaryLabel = isOpenMode
     ? t("install.installApp.openApp")
@@ -92,12 +95,15 @@ function AndroidInstallPromptActive({
   const showUnknownSources =
     promo.downloadState === "downloading" && promo.primaryInstallKind === "apk" && promo.apkAvailable
 
-  const showManualSteps = isManualMode || (!promo.installButtonEnabled && !isOpenMode && !isUpdate)
+  const showManualSteps =
+    lightweight || isManualMode || (!promo.installButtonEnabled && !isOpenMode && !isUpdate)
 
   return (
     <div
       className={cn(
-        "relative overflow-hidden border border-primary/25 bg-gradient-to-br from-primary/10 via-background to-background",
+        lightweight
+          ? "relative overflow-hidden border border-border/70 bg-card"
+          : "relative overflow-hidden border border-primary/25 bg-gradient-to-br from-primary/10 via-background to-background",
         variant === "banner"
           ? "mx-auto w-full max-w-lg rounded-xl px-4 py-3 shadow-sm"
           : "rounded-2xl px-4 py-4",

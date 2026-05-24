@@ -1,6 +1,8 @@
 /** Android install / PWA promotion copy (UI only: install.installApp.*). */
 export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.title": "Install Nexus Pro App",
+  "install.installApp.lightweightLead":
+    "Get the app on your phone — download the official APK or add this site to your home screen from the browser menu.",
   "install.installApp.instantTitle": "Instant App Available",
   "install.installApp.instantLead": "Add Nexus Pro to your home screen in one tap — fast, secure, no download required.",
   "install.installApp.lead": "Get faster access, home-screen launch, and a smoother mobile experience.",
