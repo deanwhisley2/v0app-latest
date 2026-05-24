@@ -16,8 +16,8 @@ Only one install surface flag should be `true` at a time.
 | Step | Enable | Add |
 |------|--------|-----|
 | 0 | both `false` | Stable baseline |
-| 1 | `NEXUS_INSTALL_STATIC_BANNER=true` | Static text banner (no hooks) |
-| 2 | — | Dismiss button (local state only) |
+| 1 | `NEXUS_INSTALL_STATIC_BANNER=true` | Static text banner (no hooks) — **PASS** |
+| 2 | — | Dismiss button (local `useState` only) — **current** |
 | 3 | — | Android-only CSS/media or simple UA check |
 | 4 | — | APK link button (no prefetch) |
 | 5 | — | On-demand `/api/app/android-release` fetch (user click only) |
