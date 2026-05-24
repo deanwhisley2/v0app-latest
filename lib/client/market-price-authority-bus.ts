@@ -1,6 +1,7 @@
 "use client"
 
 import { MARKET_PRICE_CLIENT_POLL_MS } from "@/lib/market-price-constants"
+import { shouldRunMarketContinuityNudge } from "@/lib/mobile/workspace-render-policy"
 import { broadcastAuthorityRevision } from "@/lib/client/market-price-authority-revision"
 import type { Coin } from "@/lib/coins-data"
 
@@ -154,7 +155,9 @@ function startPolling() {
   started = true
   void fetchAuthority()
   pollTimer = setInterval(() => void fetchAuthority(), MARKET_PRICE_CLIENT_POLL_MS)
-  continuityTimer = setInterval(applyContinuityNudge, 8_000)
+  if (shouldRunMarketContinuityNudge()) {
+    continuityTimer = setInterval(applyContinuityNudge, 8_000)
+  }
 }
 
 function stopPolling() {

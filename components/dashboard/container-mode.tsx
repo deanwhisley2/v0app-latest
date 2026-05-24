@@ -67,6 +67,11 @@ import {
   workspaceCountdownIntervalMs,
   workspaceEarnTickIntervalMs,
   workspaceFixSyncIntervalMs,
+  workspaceSessionPollIntervalMs,
+  shouldUseLiveFixAccrualDisplay,
+  shouldShowFixSessionProgressBar,
+  shouldRunDeskEarnDisplayTick,
+  shouldShowSessionCountdownSeconds,
 } from "@/lib/mobile/workspace-render-policy"
 import { NX_PROMO_CALLOUT, NX_TAB_ACTIVE, NX_TAB_INACTIVE } from "@/lib/nexus-ui-surfaces"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
@@ -786,7 +791,9 @@ export function ContainerMode({
           const hours = Math.floor(remaining / (1000 * 60 * 60))
           const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60))
           const seconds = Math.floor((remaining % (1000 * 60)) / 1000)
-          newCountdowns[`copy_${trade.traderId}`] = `${hours}h ${minutes}m ${seconds}s`
+          newCountdowns[`copy_${trade.traderId}`] = shouldShowSessionCountdownSeconds()
+            ? `${hours}h ${minutes}m ${seconds}s`
+            : `${hours}h ${minutes}m`
         } else {
           newCountdowns[`copy_${trade.traderId}`] = "Can cancel"
         }
@@ -879,10 +886,12 @@ export function ContainerMode({
         /* ignore */
       }
     }
+    if (!deskInView) return
+    if (activeCopyTrades.length === 0 && activeFixTrades.length === 0) return
     void poll()
-    const id = window.setInterval(() => void poll(), 8000)
+    const id = window.setInterval(() => void poll(), workspaceSessionPollIntervalMs())
     return () => window.clearInterval(id)
-  }, [activeCopyTrades.length, activeFixTrades.length])
+  }, [activeCopyTrades.length, activeFixTrades.length, deskInView])
 
   const maturitySweepPending = useMemo(
     () => activeFixTrades.some((t) => t.leaseEndedAwaitingSettlement === true),
@@ -1016,6 +1025,7 @@ export function ContainerMode({
   }, [formatUserMoney, notifyCopy, t])
 
   useEffect(() => {
+    if (!shouldRunDeskEarnDisplayTick()) return
     if (!deskInView || activeFixTrades.length === 0) return
     const id = window.setInterval(() => setEarnDisplayTick((n) => n + 1), workspaceEarnTickIntervalMs())
     return () => window.clearInterval(id)
@@ -1023,20 +1033,23 @@ export function ContainerMode({
 
   // Fixed-trade: keep `earned` aligned with intra-day schedule accrual (bounded, ledger-style gross − withdrawals).
   useEffect(() => {
+    if (activeFixTrades.length === 0) return
     const sync = () => {
       setActiveFixTrades((trades) =>
         trades.map((trade) => {
           if (trade.serverAccrued) return trade
           if (!trade.dailySchedule?.length) return trade
+          if (!shouldUseLiveFixAccrualDisplay()) return trade
           const nextEarned = fixPolicyDisplayedRemainingUsd(trade)
           return Math.abs(nextEarned - trade.earned) > 0.005 ? { ...trade, earned: nextEarned } : trade
         })
       )
     }
+    if (!deskInView) return
     sync()
     const id = window.setInterval(sync, workspaceFixSyncIntervalMs())
     return () => window.clearInterval(id)
-  }, [activeFixTrades.length])
+  }, [activeFixTrades.length, deskInView])
 
   const copyUnlockedTraders = copyDeskCatalog.filter((t) => !t.locked)
   const copyPolicyLockedTraders = copyDeskCatalog.filter((t) => t.locked)
@@ -1055,9 +1068,14 @@ export function ContainerMode({
   )
 
   const totalEarnedDisplayUsd = useMemo(() => {
-    void earnDisplayTick
+    if (shouldRunDeskEarnDisplayTick()) void earnDisplayTick
     const copySum = activeCopyTrades.reduce((sum, t) => sum + t.earned, 0)
-    const fixSum = activeFixTrades.reduce((sum, t) => sum + fixPolicyDisplayedRemainingUsd(t), 0)
+    const fixSum = activeFixTrades.reduce(
+      (sum, t) =>
+        sum +
+        (shouldUseLiveFixAccrualDisplay() ? fixPolicyDisplayedRemainingUsd(t) : t.earned),
+      0,
+    )
     const liq = Number.isFinite(containerLiquidEarningsUsd) ? containerLiquidEarningsUsd : 0
     return copySum + fixSum + liq
   }, [activeCopyTrades, activeFixTrades, earnDisplayTick, containerLiquidEarningsUsd])
@@ -1826,7 +1844,7 @@ export function ContainerMode({
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Container desk</p>
               <h3 className="mt-0.5 text-base font-semibold tracking-tight sm:text-lg">Balance overview</h3>
             </div>
-            <div className="grid gap-px bg-border/50 sm:grid-cols-3">
+            <div className="grid nexus-desk-balance-grid gap-px bg-border/50 sm:grid-cols-3 max-md:gap-0 max-md:bg-transparent">
               <div className="bg-card p-4 sm:p-5">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total allocation</p>
                 <p className="mt-2 font-mono text-2xl font-bold tabular-nums">{formatUserMoney(totalCryptoAllocationUsd)}</p>
@@ -1871,7 +1889,10 @@ export function ContainerMode({
                   const trader = resolveDeskTrader(trade.traderId)
 
                   return (
-                    <div key={trade.copySessionId ?? trade.traderId} className="rounded-lg border border-border bg-muted/30 p-4">
+                    <div
+                      key={trade.copySessionId ?? trade.traderId}
+                      className="nexus-desk-session-card rounded-lg border border-border bg-muted/30 p-4 max-md:border-border max-md:bg-card"
+                    >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className="relative">
@@ -1976,7 +1997,7 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.serverSessionId ?? trade.traderId}
-                      className="relative min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
+                      className="nexus-desk-session-card relative min-w-0 rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4 max-md:border-border max-md:bg-card max-md:overflow-visible"
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -2007,7 +2028,11 @@ export function ContainerMode({
                         <div className="text-right">
                           <div className="font-mono text-lg">
                             <FixEarnedDisplay
-                              amountUsd={fixPolicyDisplayedRemainingUsd(trade)}
+                              amountUsd={
+                                shouldUseLiveFixAccrualDisplay()
+                                  ? fixPolicyDisplayedRemainingUsd(trade)
+                                  : trade.earned
+                              }
                               formatUserMoney={formatUserMoney}
                             />
                           </div>
@@ -2026,7 +2051,7 @@ export function ContainerMode({
                                   .replace("{{total}}", String(fixPeriodDayCount(trade.period)))
                               : t("notifications.container.earningsLabel")}
                           </p>
-                          {trade.dailySchedule?.length ? (
+                          {trade.dailySchedule?.length && shouldShowFixSessionProgressBar() ? (
                             <>
                               <div className="mt-2 h-1.5 w-full max-w-[220px] ml-auto overflow-hidden rounded-full bg-muted">
                                 <div
@@ -2034,16 +2059,18 @@ export function ContainerMode({
                                   style={{
                                     width: `${Math.min(
                                       100,
-                                      (fixPolicyDisplayedGrossUsd(trade) /
-                                        Math.max(1e-9, totalScheduleTargetUsd(trade.dailySchedule))) *
-                                        100
+                                      Math.round(
+                                        (fixPolicyDisplayedGrossUsd(trade) /
+                                          Math.max(1e-9, totalScheduleTargetUsd(trade.dailySchedule))) *
+                                          100,
+                                      ),
                                     )}%`,
                                   }}
                                 />
                               </div>
                               {btcSpotRef.status === "live" ? (
                                 <p
-                                  className={`mt-1 text-[10px] ${
+                                  className={`mt-1 text-[10px] max-md:hidden ${
                                     btcSpotRef.change24hPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                                   }`}
                                 >

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { MARKET_PRICE_DISPLAY_BLEND_MS } from "@/lib/market-price-constants"
+import { shouldBlendMarketPriceDisplay } from "@/lib/mobile/workspace-render-policy"
 import {
   getLiveSymbolPrice,
   subscribeMarketPriceAuthority,
@@ -31,6 +32,10 @@ export function useMarketPriceAuthority() {
 
   useEffect(() => {
     if (targetBtc == null) return
+    if (!shouldBlendMarketPriceDisplay()) {
+      setDisplayBtcUsd(targetBtc)
+      return
+    }
     const from = displayBtcUsd ?? targetBtc
     if (Math.abs(from - targetBtc) < 0.01) {
       setDisplayBtcUsd(targetBtc)

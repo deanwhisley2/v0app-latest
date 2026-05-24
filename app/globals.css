@@ -762,6 +762,36 @@ html:not(.nexus-pwa-ready) body {
     transition-delay: 0ms !important;
   }
 
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-session-card {
+    background-color: var(--card) !important;
+    background-image: none !important;
+    overflow: visible !important;
+    contain: layout paint;
+    opacity: 1 !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-session-card [class*="bg-muted/"],
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-session-card [class*="bg-background"],
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-session-card [class*="bg-warning/"],
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-session-card [class*="bg-amber-"] {
+    background-color: var(--muted) !important;
+    background-image: none !important;
+    opacity: 1 !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-balance-grid {
+    gap: 0 !important;
+    background: transparent !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-balance-grid > div {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-desk-balance-grid > div:last-child {
+    border-bottom: none;
+  }
+
   .nexus-mobile-stable .nexus-container-mode .nexus-trader-avatar-inner {
     background: var(--muted) !important;
     background-image: none !important;
