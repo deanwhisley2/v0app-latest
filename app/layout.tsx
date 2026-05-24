@@ -14,15 +14,17 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
 import { PwaSafeModeBootstrap } from '@/components/mobile/pwa-safe-mode-bootstrap'
+import { PwaRuntimeBootstrap } from '@/components/mobile/pwa-runtime-bootstrap'
+import { PwaServiceWorkerRegister } from '@/components/install/pwa-service-worker-register'
 import { NativeScrollBootstrap } from '@/components/mobile/native-scroll-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
 import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
-import { isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
+import { isPwaInstallEnabled, isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
-const browserOnly = isPwaSafeMode()
+const pwaInstallEnabled = isPwaInstallEnabled()
 
 const inter = Inter({
   subsets: ['latin'],
@@ -54,7 +56,7 @@ export const metadata: Metadata = {
   description:
     'Nexus Pro — institutional multi-asset trading workspace with funding controls, market continuity, and mobile-first operations.',
   applicationName: SITE_BRAND.name,
-  ...(browserOnly
+  ...(pwaInstallEnabled
     ? {}
     : {
         manifest: brandAsset('/manifest.webmanifest'),
@@ -170,6 +172,12 @@ export default function RootLayout({
         <ProductionErrorReporter />
         <ScrollLockSafety />
         <NativeScrollBootstrap />
+        {pwaInstallEnabled ? (
+          <>
+            <PwaServiceWorkerRegister />
+            <PwaRuntimeBootstrap />
+          </>
+        ) : null}
         <PwaSafeModeBootstrap />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>

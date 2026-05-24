@@ -21,7 +21,7 @@ import {
   writeInstallState,
   clearLegacyAuthInstallDismiss,
 } from "@/lib/android-install/storage"
-import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+import { isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
 
 const HIDDEN_PROMOTION: AndroidInstallPromotion = {
   visible: false,
@@ -307,7 +307,7 @@ export function useAndroidInstallPromotion(
     setDismissed(true)
   }, [opts.surface])
 
-  if (isPwaSafeMode()) return HIDDEN_PROMOTION
+  if (!isPwaInstallEnabled()) return HIDDEN_PROMOTION
 
   return {
     visible,

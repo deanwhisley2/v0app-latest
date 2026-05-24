@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { openDownloadsQuickAction } from "@/lib/android-install/app-update-client"
 import { useAndroidAppUpdate } from "@/hooks/use-android-app-update"
-import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+import { isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
 
 export function AndroidAppUpdateBanner() {
-  if (isPwaSafeMode()) return null
+  if (!isPwaInstallEnabled()) return null
   return <AndroidAppUpdateBannerActive />
 }
 

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react"
 import { consumeFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { AndroidInstallPrompt } from "@/components/install/android-install-prompt"
-import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+import { isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
 
 /** Post-login Android install reminder (one-shot per fresh login, snoozeable). */
 export function AndroidInstallDashboardReminder() {
-  if (isPwaSafeMode()) return null
+  if (!isPwaInstallEnabled()) return null
   return <AndroidInstallDashboardReminderActive />
 }
 

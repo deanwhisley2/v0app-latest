@@ -6,16 +6,19 @@ import { isStandalonePwa } from "@/lib/android-install/device-detection"
 import { readInstallState, markInstalled, writeInstallState } from "@/lib/android-install/storage"
 import { fetchAppVersionCheck } from "@/lib/android-install/app-update-client"
 import { NEXUS_NETWORK_RECONNECTED } from "@/lib/mobile/mobile-chrome-events"
-import { requestBrowserNotificationPermission } from "@/lib/mobile/browser-notifications"
 import { gaEvent } from "@/lib/analytics/google-analytics"
-import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+import {
+  isPwaInstallEnabled,
+  isPwaOfflineRuntimeEnabled,
+  isPwaResumeEnabled,
+} from "@/lib/mobile/pwa-safe-mode"
 
-/** PWA runtime: standalone detection, install persistence, resume recovery, SW updates. */
+/** Phase 3: standalone chrome + install persistence only; resume/offline layers gated separately. */
 export function PwaRuntimeBootstrap() {
   const { refreshSession } = useAuth()
 
   useEffect(() => {
-    if (isPwaSafeMode()) return
+    if (!isPwaInstallEnabled()) return
 
     const html = document.documentElement
     if (isStandalonePwa()) {
@@ -40,18 +43,22 @@ export function PwaRuntimeBootstrap() {
     window.addEventListener("appinstalled", onInstalled)
 
     const onVisibility = () => {
+      if (!isPwaResumeEnabled()) return
       if (document.visibilityState !== "visible") return
       void refreshSession()
       writeInstallState({ lastSeenReleaseVersion: readInstallState().installedVersion })
     }
-    document.addEventListener("visibilitychange", onVisibility)
+    if (isPwaResumeEnabled()) {
+      document.addEventListener("visibilitychange", onVisibility)
+    }
 
     const onReconnect = () => {
+      if (!isPwaOfflineRuntimeEnabled()) return
       void refreshSession()
     }
-    window.addEventListener(NEXUS_NETWORK_RECONNECTED, onReconnect)
-
-    void requestBrowserNotificationPermission()
+    if (isPwaOfflineRuntimeEnabled()) {
+      window.addEventListener(NEXUS_NETWORK_RECONNECTED, onReconnect)
+    }
 
     html.classList.add("nexus-pwa-ready")
 

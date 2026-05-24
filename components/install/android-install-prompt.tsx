@@ -7,7 +7,7 @@ import {
   useAndroidInstallPromotion,
 } from "@/hooks/use-android-install-promotion"
 import { openDownloadsQuickAction } from "@/lib/android-install/app-update-client"
-import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+import { isPwaInstallEnabled } from "@/lib/mobile/pwa-safe-mode"
 import { cn } from "@/lib/utils"
 
 type AndroidInstallPromptProps = {
@@ -31,7 +31,7 @@ function unknownSourcesHint(browser: string | null, t: (k: string) => string): s
 }
 
 export function AndroidInstallPrompt(props: AndroidInstallPromptProps) {
-  if (isPwaSafeMode()) return null
+  if (!isPwaInstallEnabled()) return null
   return <AndroidInstallPromptActive {...props} />
 }
 
