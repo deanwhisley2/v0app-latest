@@ -20,7 +20,7 @@ export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = false
  * Phase 1 install rebuild — static banner only (see android-install-static-banner.tsx).
  * Enable only after full install card is confirmed off and baseline is stable.
  */
-export const NEXUS_INSTALL_STATIC_BANNER = false
+export const NEXUS_INSTALL_STATIC_BANNER = true
 
 export function isInstallStaticBannerEnabled(): boolean {
   return (
