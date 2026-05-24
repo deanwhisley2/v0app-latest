@@ -5,11 +5,13 @@ import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AndroidInstallApkHelpPanel } from "@/components/install/android-install-apk-help-panel"
 import { AndroidInstallGuidancePanel } from "@/components/install/android-install-guidance-panel"
+import { AndroidInstallPostDownloadHelper } from "@/components/install/android-install-post-download-helper"
 import {
   fetchReleaseAndDownloadApkOnUserTap,
   fetchReleaseInfoForDisplayOnUserTap,
 } from "@/lib/android-install/apk-download-on-tap"
 import {
+  formatReleaseProductLine,
   formatReleaseVersionLabel,
   type AndroidReleaseInfo,
 } from "@/lib/android-install/release-info"
@@ -21,10 +23,12 @@ type AndroidInstallStaticBannerProps = {
   surface?: "auth" | "dashboard"
 }
 
-type DownloadUiState = "idle" | "loading" | "ok" | "unavailable" | "failed"
+type DownloadUiState = "idle" | "loading" | "ok" | "unavailable" | "failed" | "offline" | "malformed"
+
+const APK_UNAVAILABLE_MSG = "APK temporarily unavailable."
 
 /**
- * Safe install card — user-tap release fetch only, inline panels, no mount effects.
+ * Safe install card — user-tap release fetch + validation only, inline panels.
  */
 export function AndroidInstallStaticBanner({
   variant = "banner",
@@ -55,29 +59,35 @@ export function AndroidInstallStaticBanner({
   const handleViewVersion = async () => {
     if (downloadState === "loading") return
     setDownloadState("loading")
-    const info = await fetchReleaseInfoForDisplayOnUserTap()
+    const result = await fetchReleaseInfoForDisplayOnUserTap()
     setDownloadState("idle")
-    if (info) {
-      setReleaseInfo(info)
+    if (result.ok) {
+      setReleaseInfo(result.release)
       setShowNotes(true)
       return
     }
-    setDownloadState("failed")
+    setDownloadState(result.reason)
   }
 
   const statusMessage =
     downloadState === "ok"
-      ? "Download started — check your notifications or Downloads folder."
+      ? null
       : downloadState === "unavailable"
-        ? "APK is not published yet. Use install help below, or try again later."
-        : downloadState === "failed"
-          ? "Could not load release info. Check your connection and try again."
-          : null
+        ? APK_UNAVAILABLE_MSG
+        : downloadState === "offline"
+          ? "You appear to be offline. Connect and try again."
+          : downloadState === "malformed"
+            ? "Release info could not be read. Try again later."
+            : downloadState === "failed"
+              ? "Could not reach the release server. Check your connection."
+              : null
+
+  const title = releaseInfo?.app_name ?? "Install Nexus App"
 
   return (
     <div
       role="region"
-      aria-label="Install Nexus App"
+      aria-label={title}
       className={cn(
         "relative border border-border/70 bg-card text-foreground",
         variant === "banner"
@@ -96,16 +106,19 @@ export function AndroidInstallStaticBanner({
       </button>
 
       <div className="pr-6">
-        <p className="text-sm font-semibold">Install Nexus App</p>
+        <p className="text-sm font-semibold">{title}</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           Download the official Android package or add Nexus Pro to your home screen.
         </p>
 
         {releaseInfo ? (
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Latest: {formatReleaseVersionLabel(releaseInfo)}
-            {releaseInfo.size_mb > 0 ? ` · ${releaseInfo.size_mb} MB` : null}
-          </p>
+          <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
+            <p>{formatReleaseProductLine(releaseInfo)}</p>
+            {releaseInfo.package_id ? <p className="text-[10px] opacity-80">{releaseInfo.package_id}</p> : null}
+            {releaseInfo.size_mb > 0 ? (
+              <p>{formatReleaseVersionLabel(releaseInfo)} · {releaseInfo.size_mb} MB</p>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -119,7 +132,7 @@ export function AndroidInstallStaticBanner({
             {downloadState === "loading" ? (
               <>
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                Preparing…
+                Validating…
               </>
             ) : (
               "Download Nexus APK"
@@ -179,16 +192,10 @@ export function AndroidInstallStaticBanner({
         ) : null}
 
         {statusMessage ? (
-          <p
-            className={cn(
-              "mt-2 text-xs leading-relaxed",
-              downloadState === "ok" ? "text-primary" : "text-muted-foreground",
-            )}
-          >
-            {statusMessage}
-          </p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{statusMessage}</p>
         ) : null}
 
+        <AndroidInstallPostDownloadHelper open={downloadState === "ok"} />
         <AndroidInstallApkHelpPanel open={showApkHelp} />
         <AndroidInstallGuidancePanel open={showGuide} />
       </div>

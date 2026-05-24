@@ -15,6 +15,13 @@
 - Download / version check / update check → **button tap only**
 - Static install banner path disables legacy `useAndroidAppUpdate` interval polling
 
+## Download validation (user tap only)
+
+1. Fetch `release-info.json` (5-minute session cache)
+2. Validate metadata: `published`, `sha256`, `size_mb`, version/build
+3. Probe `/api/app/android-apk/validate` for on-disk APK + server checksum
+4. Start download only when all checks pass — otherwise show **APK temporarily unavailable.**
+
 ## API compatibility
 
 `/api/app/android-apk` serves the APK with correct headers when `nexus-pro-v1.apk` exists on disk.
