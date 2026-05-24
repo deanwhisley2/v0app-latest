@@ -27,7 +27,6 @@ import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { GlobalSearch } from "./global-search"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import {
-  NEXUS_HEADER_REVEAL,
   NEXUS_OPEN_PROFILE,
   NEXUS_OPEN_SEARCH,
 } from "@/lib/mobile/mobile-chrome-events"
@@ -108,17 +107,24 @@ export function Header({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Close profile menu on click outside
+  // Close profile menu on tap outside (touchstart for Android reliability)
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+    const handleOutside = (e: Event) => {
+      const target = e.target
+      if (!(target instanceof Node)) return
+      if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
         setShowProfileMenu(false)
+        setProfileView("main")
       }
     }
     if (showProfileMenu) {
-      document.addEventListener("mousedown", handleClickOutside)
+      document.addEventListener("touchstart", handleOutside, { passive: true })
+      document.addEventListener("mousedown", handleOutside)
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("touchstart", handleOutside)
+      document.removeEventListener("mousedown", handleOutside)
+    }
   }, [showProfileMenu])
 
   // Keyboard shortcuts: Ctrl+K or "/" to open search
@@ -253,6 +259,16 @@ export function Header({
 
               {/* Floating Profile Menu */}
               {showProfileMenu && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 md:hidden"
+                    aria-label={t("common.dismiss")}
+                    onClick={() => {
+                      setShowProfileMenu(false)
+                      setProfileView("main")
+                    }}
+                  />
                 <div className="absolute right-0 top-12 z-50 w-80 max-md:animate-none md:animate-in md:fade-in md:slide-in-from-top-2 md:duration-200">
                   <div className="overflow-hidden rounded-2xl border border-border bg-card max-md:shadow-none md:shadow-2xl">
                     
@@ -608,6 +624,7 @@ export function Header({
                     )}
                   </div>
                 </div>
+                </>
               )}
             </div>
           </div>

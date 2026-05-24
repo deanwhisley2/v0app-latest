@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import {
   Archive,
   ChevronLeft,
@@ -242,6 +243,8 @@ export function NotificationDetailSheet({
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const hasNav = item.nav && item.nav.kind !== "detail"
+
+  useBodyScrollLock(true)
 
   return (
     <div

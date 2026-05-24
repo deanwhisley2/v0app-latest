@@ -595,6 +595,20 @@ html:not(.nexus-pwa-ready) body {
     top: auto !important;
   }
 
+  .nexus-smart-header-spacer {
+    pointer-events: none;
+  }
+
+  html.nexus-scroll-locked {
+    overflow: hidden !important;
+    height: 100%;
+  }
+
+  html.nexus-scroll-locked body {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
+
   .nexus-smart-header-shell {
     position: fixed;
     top: 0;

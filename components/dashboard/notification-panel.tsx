@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import {
@@ -185,18 +186,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<NexusNotificationItem | null>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const html = document.documentElement
-    const prevHtml = html.style.overflow
-    const prevBody = document.body.style.overflow
-    html.style.overflow = "hidden"
-    document.body.style.overflow = "hidden"
-    return () => {
-      html.style.overflow = prevHtml
-      document.body.style.overflow = prevBody
-    }
-  }, [isOpen])
+  useBodyScrollLock(isOpen)
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

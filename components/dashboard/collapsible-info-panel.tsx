@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { NX_SURFACE_RAISED } from "@/lib/nexus-ui-surfaces"
@@ -42,20 +42,30 @@ export function CollapsibleInfoPanel({
   viewDetailsLabel = "View details",
 }: Props) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
+  const [expanded, setExpanded] = useState(defaultOpen)
 
   useEffect(() => {
     if (!storageKey) return
     try {
       const stored = localStorage.getItem(storageKey)
-      if (stored === "1" && detailsRef.current) detailsRef.current.open = true
-      else if (stored === "0" && detailsRef.current) detailsRef.current.open = false
-      else if (detailsRef.current) detailsRef.current.open = defaultOpen
+      if (stored === "1" && detailsRef.current) {
+        detailsRef.current.open = true
+        setExpanded(true)
+      } else if (stored === "0" && detailsRef.current) {
+        detailsRef.current.open = false
+        setExpanded(false)
+      } else if (detailsRef.current) {
+        detailsRef.current.open = defaultOpen
+        setExpanded(defaultOpen)
+      }
     } catch {
       /* ignore */
     }
   }, [storageKey, defaultOpen])
 
   const onToggle = () => {
+    const open = detailsRef.current?.open ?? false
+    setExpanded(open)
     if (!storageKey) return
     try {
       localStorage.setItem(storageKey, detailsRef.current?.open ? "1" : "0")
@@ -96,7 +106,7 @@ export function CollapsibleInfoPanel({
         {trailing ? <div className="shrink-0 self-center">{trailing}</div> : null}
       </summary>
       <div className="border-t border-border/25 px-5 pb-5 pt-3 text-[13px] leading-relaxed text-muted-foreground sm:px-6">
-        {children}
+        {expanded ? children : null}
       </div>
     </details>
   )

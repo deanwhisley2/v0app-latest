@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -70,6 +71,8 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
   const [serverArchived, setServerArchived] = useState<NexusNotificationItem[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<NexusNotificationItem | null>(null)
+
+  useBodyScrollLock(isOpen)
 
   const pullServer = useCallback(async () => {
     setLoading(true)

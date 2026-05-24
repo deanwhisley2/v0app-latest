@@ -17,6 +17,7 @@ import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext
 import { ConnectivityBanner } from '@/components/mobile/connectivity-banner'
 import { PwaRuntimeBootstrap } from '@/components/mobile/pwa-runtime-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
+import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
 import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
@@ -160,6 +161,7 @@ export default function RootLayout({
         <GoogleAnalyticsScripts />
         <GoogleAnalyticsRouteTracker />
         <ProductionErrorReporter />
+        <ScrollLockSafety />
         <PwaServiceWorkerRegister />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { createPortal } from "react-dom"
 import toast from "react-hot-toast"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -45,6 +46,7 @@ import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { TraderPersonaAvatar } from "@/components/dashboard/trader-persona-avatar"
 import { CollapsibleInfoPanel } from "@/components/dashboard/collapsible-info-panel"
+import { DeferredMount } from "@/components/mobile/deferred-mount"
 import {
   ActiveSessionsStrip,
   CopyTraderMarketCard,
@@ -405,14 +407,7 @@ export function ContainerMode({
     setDeskModalMounted(true)
   }, [])
 
-  useEffect(() => {
-    if (!selectedTrader && !showCancelConfirm) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [selectedTrader, showCancelConfirm])
+  useBodyScrollLock(Boolean(selectedTrader || showCancelConfirm))
 
   useEffect(() => {
     if (selectedTrader) setCopyRiskAcknowledged(false)
@@ -1560,6 +1555,15 @@ export function ContainerMode({
 
   return (
     <div ref={deskRootRef} className="nexus-container-mode space-y-4">
+      <DeferredMount
+        idleMs={80}
+        placeholder={
+          <div className="space-y-3" aria-hidden>
+            <div className="h-14 animate-pulse rounded-2xl bg-muted/40 max-md:animate-none" />
+            <div className="h-14 animate-pulse rounded-2xl bg-muted/35 max-md:animate-none" />
+          </div>
+        }
+      >
       <CollapsibleInfoPanel
         storageKey="nexus_container_platform_stats_v1"
         title={t("container.platformStats.title")}
@@ -1573,7 +1577,7 @@ export function ContainerMode({
               MOBILE_STATIC_MOTION,
             )}
           >
-            <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+            <div className="h-2 w-2 rounded-full bg-success max-md:animate-none md:animate-pulse" />
           </div>
         }
         className={MOBILE_FLAT_SURFACE}
@@ -1690,6 +1694,7 @@ export function ContainerMode({
         </p>
         <p className="mt-2 border-t border-border/60 pt-2 text-xs">{fixedTradeTierHint(userLevel)}</p>
       </CollapsibleInfoPanel>
+      </DeferredMount>
 
       {sessionsLoadError ? (
         <Card className="border-destructive/30 bg-destructive/5 p-4">

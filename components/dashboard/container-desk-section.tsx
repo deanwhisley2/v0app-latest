@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { isLowEndMobileDevice } from "@/lib/mobile/low-end-mobile"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -29,13 +30,8 @@ export function ContainerDeskSection({
   deskOpenNonce = 0,
 }: Props) {
   const isMobile = useIsMobile()
-  const [mobileOpen, setMobileOpen] = useState(true)
-  const [deskReady, setDeskReady] = useState(false)
-
-  useEffect(() => {
-    const id = window.requestAnimationFrame(() => setDeskReady(true))
-    return () => window.cancelAnimationFrame(id)
-  }, [])
+  const lowEnd = isLowEndMobileDevice()
+  const [mobileOpen, setMobileOpen] = useState(() => !lowEnd)
 
   useEffect(() => {
     if (activeTradeCount > 0) setMobileOpen(true)
@@ -83,11 +79,7 @@ export function ContainerDeskSection({
       >
         {sidebar ? <div className="hidden lg:block lg:w-[240px] lg:flex-shrink-0">{sidebar}</div> : null}
         <main className="min-w-0 flex-1">
-          {deskReady ? children : (
-            <div className="flex min-h-[220px] items-center justify-center p-6 text-sm text-muted-foreground">
-              Loading trading workspace…
-            </div>
-          )}
+          {children}
         </main>
       </div>
     </div>

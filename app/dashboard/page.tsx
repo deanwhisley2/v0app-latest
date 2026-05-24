@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from "react"
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
@@ -23,9 +24,9 @@ const ContainerMode = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-border bg-card p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-        <span className="sr-only">Loading trading workspace…</span>
+      <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading trading workspace">
+        <div className="h-12 rounded-xl bg-muted/40 max-md:animate-none" />
+        <div className="h-32 rounded-xl bg-muted/30 max-md:animate-none" />
       </div>
     ),
   },
@@ -62,6 +63,7 @@ import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useDashboardTestimonialNotifs } from "@/hooks/use-dashboard-testimonial-notifs"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
+import { DeferredMount } from "@/components/mobile/deferred-mount"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
 import {
   buildActivitySnapshot,
@@ -1816,14 +1818,7 @@ export default function DashboardPage() {
     if (showFundModal !== "add") setLocalMmWizardStep(1)
   }, [showFundModal])
 
-  useEffect(() => {
-    if (!showFundModal) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [showFundModal])
+  useBodyScrollLock(Boolean(showFundModal))
 
   useEffect(() => {
     if (showFundModal !== "add" || l1FundSource !== "crypto") return
@@ -3415,12 +3410,17 @@ export default function DashboardPage() {
               />
             ) : null}
             {!operationalWorkspace ? (
-              <DashboardTestimonialStrip
-                visible={testimonialNotif.visible}
-                text={testimonialNotif.text}
-                onDismiss={testimonialNotif.dismiss}
-                inFlowOnMobile
-              />
+              <DeferredMount
+                idleMs={200}
+                placeholder={null}
+              >
+                <DashboardTestimonialStrip
+                  visible={testimonialNotif.visible}
+                  text={testimonialNotif.text}
+                  onDismiss={testimonialNotif.dismiss}
+                  inFlowOnMobile
+                />
+              </DeferredMount>
             ) : null}
             <ContainerDeskSection
               sidebar={sidebarPanel}

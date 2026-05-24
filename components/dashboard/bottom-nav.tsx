@@ -149,7 +149,7 @@ export function BottomNav({
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border/30 bg-card/92 shadow-[var(--shadow-elevated)] backdrop-blur-md md:hidden touch-manipulation">
+      <nav className="fixed bottom-0 left-0 right-0 z-[50] border-t border-border/30 bg-card/95 shadow-[var(--shadow-elevated)] max-md:backdrop-blur-none md:hidden md:bg-card/92 md:backdrop-blur-md touch-manipulation">
         <div className="flex items-stretch justify-around px-2 pt-2 pb-1 safe-area-pb">
           {navItems.map((item) => {
             const isActive =

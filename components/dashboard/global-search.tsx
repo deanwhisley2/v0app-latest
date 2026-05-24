@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { 
   Search, 
   X, 
@@ -95,6 +96,8 @@ export function GlobalSearch({ isOpen, onClose, onNavigate, coins }: GlobalSearc
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
+
+  useBodyScrollLock(isOpen)
 
   // Focus input when opened
   useEffect(() => {
@@ -266,7 +269,7 @@ export function GlobalSearch({ isOpen, onClose, onNavigate, coins }: GlobalSearc
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 sm:pt-32">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-background/80 max-md:backdrop-blur-none md:backdrop-blur-sm"
         onClick={onClose}
       />
 
