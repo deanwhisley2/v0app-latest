@@ -18,6 +18,12 @@ import { NativeScrollBootstrap } from '@/components/mobile/native-scroll-bootstr
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
 import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
+import { Suspense } from 'react'
+import { MobileNavigationDiagnostics } from '@/components/mobile/mobile-navigation-diagnostics'
+import {
+  isMobileNavDiagnosticsEnabled,
+  MOBILE_NAV_DIAGNOSTICS_BOOT_SCRIPT,
+} from '@/lib/mobile/mobile-navigation-diagnostics'
 import { isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
@@ -119,6 +125,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <ThemeScript />
+        {isMobileNavDiagnosticsEnabled() ? (
+          <script dangerouslySetInnerHTML={{ __html: MOBILE_NAV_DIAGNOSTICS_BOOT_SCRIPT }} />
+        ) : null}
         {isPwaSafeMode() ? (
           <script dangerouslySetInnerHTML={{ __html: PWA_SAFE_MODE_TEARDOWN_SCRIPT }} />
         ) : null}
@@ -168,6 +177,9 @@ export default function RootLayout({
         <GoogleAnalyticsScripts />
         <GoogleAnalyticsRouteTracker />
         <ProductionErrorReporter />
+        <Suspense fallback={null}>
+          <MobileNavigationDiagnostics />
+        </Suspense>
         <ScrollLockSafety />
         <NativeScrollBootstrap />
         <PwaSafeModeBootstrap />

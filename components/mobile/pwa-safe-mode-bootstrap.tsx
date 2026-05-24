@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnostics"
 
 async function tearDownPwaClientState(): Promise<boolean> {
   if (typeof window === "undefined") return false
@@ -31,6 +32,10 @@ export function PwaSafeModeBootstrap() {
       const hadController = await tearDownPwaClientState()
       if (cancelled) return
       if (hadController && !sessionStorage.getItem("nexus_browser_only_reload")) {
+        reportClientDiagnostic({
+          kind: "sw_teardown_reload",
+          message: "reloading after SW unregister (client bootstrap)",
+        })
         sessionStorage.setItem("nexus_browser_only_reload", "1")
         window.location.reload()
       }

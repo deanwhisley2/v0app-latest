@@ -16,15 +16,13 @@ The entire PWA/APK runtime layer is disconnected. Nexus runs as a **pure browser
 - PWA runtime bootstrap
 - Native PWA install prompt (`beforeinstallprompt`)
 
-## Lightweight install UX (browser-only)
+## Lightweight install UX (paused for debug)
 
-**`NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = true`** — Android-only install card on auth + dashboard:
+**`NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = false`** — install card **temporarily off** while routing is investigated.
 
-- Download official APK (existing `/api/app/android-release` flow)
-- Manual “browser menu → Add to Home Screen” instructions
-- **No** service worker, manifest, standalone routing, or offline layer
+When re-enabled: APK download + manual Add to Home Screen only (no SW/manifest). See `docs/LIGHTWEIGHT_ANDROID_INSTALL.md`.
 
-See `docs/LIGHTWEIGHT_ANDROID_INSTALL.md`.
+**Active now:** `NEXUS_MOBILE_NAV_DIAGNOSTICS = true` — see `docs/MOBILE_ROUTING_DEBUG.md`.
 
 ## Still active
 

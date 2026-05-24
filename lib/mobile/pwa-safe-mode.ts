@@ -14,7 +14,7 @@ export function isPwaSafeMode(): boolean {
  * Lightweight install UX only — APK download + manual Add to Home Screen guidance.
  * No service worker, manifest, standalone runtime, or navigation changes.
  */
-export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = true
+export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = false
 
 export function isLightweightAndroidInstallEnabled(): boolean {
   return NEXUS_BROWSER_ONLY_LOCK && NEXUS_LIGHTWEIGHT_ANDROID_INSTALL
@@ -44,6 +44,9 @@ export const PWA_SAFE_MODE_TEARDOWN_SCRIPT = `
     }
     unregisterAll().then(function() {
       if (hadController && !sessionStorage.getItem('nexus_browser_only_reload')) {
+        if (typeof window.__nexusDiagReport === 'function') {
+          window.__nexusDiagReport('sw_teardown_reload', 'reloading after SW unregister');
+        }
         sessionStorage.setItem('nexus_browser_only_reload', '1');
         location.reload();
       }
