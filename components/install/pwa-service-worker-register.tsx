@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react"
 import { SITE_BRAND } from "@/lib/site-branding"
 
-/** Registers the PWA service worker, handles updates, and enables install prompt capture. */
+/** Registers the PWA service worker, handles updates, and captures install prompts globally. */
+import { initPwaInstallController } from "@/lib/android-install/pwa-install-controller"
 export function PwaServiceWorkerRegister() {
   const reloadingRef = useRef(false)
 
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return
+    initPwaInstallController()
     const version = SITE_BRAND.assetVersion
 
     void navigator.serviceWorker

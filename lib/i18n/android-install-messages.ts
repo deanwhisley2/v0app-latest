@@ -14,11 +14,19 @@ export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.update": "Update App",
   "install.installApp.updateLead": "A newer signed Nexus Pro build is available.",
   "install.installApp.notNow": "Not now",
-  "install.installApp.manualTitle": "Manual install steps",
+  "install.installApp.manualTitle": "Add Nexus Pro to Home Screen",
+  "install.installApp.manualOnlyLead":
+    "Your browser needs a quick manual step. Follow the instructions below — no errors, no download required.",
+  "install.installApp.manualFirefox":
+    "Open the menu (☰) → Install, or Add to Home screen. Confirm when Android asks.",
+  "install.installApp.apkLead": "Download the signed Nexus Pro APK, then tap the file to install.",
+  "install.installApp.preparingInstall": "Checking install…",
+  "install.installApp.installDismissed":
+    "Install was cancelled. Use the menu steps below, or tap Install App again when ready.",
   "install.installApp.manualChrome":
-    "Tap Install App in the prompt, or open the menu (⋮) → Install app. Allow installation from Nexus Pro when asked.",
+    "Open your browser menu (⋮) → Install app, or Add to Home screen. Confirm when prompted.",
   "install.installApp.manualSamsung":
-    "Tap Install App, or use Menu → Install app / Add to Home screen, then confirm.",
+    "Samsung Internet: tap Menu (≡) at the bottom → Add page to → Home screen. Or use ⋮ → Install app if shown.",
   "install.installApp.manualOpera":
     "Open this page in Chrome or Samsung Internet for one-tap install, or download the signed APK below.",
   "install.installApp.manualApk":

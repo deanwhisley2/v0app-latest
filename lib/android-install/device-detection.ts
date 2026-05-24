@@ -57,6 +57,7 @@ export function detectAndroidBrowser(ua = readUserAgent()): AndroidBrowserKind {
   const s = ua.toLowerCase()
   if (/samsungbrowser/.test(s)) return "samsung"
   if (/opr\//.test(s) || /opera mini/.test(s) || /opt\//.test(s)) return "opera"
+  if (/edg\//.test(s)) return "chrome"
   if (/firefox|fxios/.test(s)) return "firefox"
   if (/chrome|crios/.test(s) && !/edg\//.test(s)) return "chrome"
   return "other"
