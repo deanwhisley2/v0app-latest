@@ -9,15 +9,13 @@ import { Header } from "@/components/dashboard/header"
 import { SmartMobileHeaderShell } from "@/components/dashboard/smart-mobile-header-shell"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { ChatHubScreen } from "@/components/dashboard/chat-hub-screen"
 import { BottomNav } from "@/components/dashboard/bottom-nav"
 import { ToastNotification, useToast } from "@/components/dashboard/toast-notification"
-import { WalletScreen } from "@/components/dashboard/wallet-screen"
-import { SettingsScreen, type SettingsView } from "@/components/dashboard/settings-screen"
 import { LiveMarketFeedBar } from "@/components/dashboard/live-market-feed-bar"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
+import type { SettingsView } from "@/components/dashboard/settings-screen"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
 
 const ContainerMode = dynamic(
@@ -32,6 +30,30 @@ const ContainerMode = dynamic(
     ),
   },
 )
+
+const WalletScreen = dynamic(
+  () => import("@/components/dashboard/wallet-screen").then((m) => m.WalletScreen),
+  { ssr: false, loading: () => <PanelLoader label="Loading wallet…" /> },
+)
+
+const SettingsScreen = dynamic(
+  () => import("@/components/dashboard/settings-screen").then((m) => m.SettingsScreen),
+  { ssr: false, loading: () => <PanelLoader label="Loading settings…" /> },
+)
+
+const ChatHubScreen = dynamic(
+  () => import("@/components/dashboard/chat-hub-screen").then((m) => m.ChatHubScreen),
+  { ssr: false, loading: () => <PanelLoader label="Loading chat…" /> },
+)
+
+function PanelLoader({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-border bg-card p-6">
+      <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden />
+      <span className="sr-only">{label}</span>
+    </div>
+  )
+}
 import { ContainerDeskSection } from "@/components/dashboard/container-desk-section"
 import { coinsData } from "@/lib/coins-data"
 import type { DashboardTradeView } from "@/lib/dashboard-trade-view"
@@ -55,6 +77,7 @@ import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { AndroidInstallDashboardReminder } from "@/components/install/android-install-dashboard-reminder"
 import { AndroidAppUpdateBanner } from "@/components/install/android-app-update-banner"
+import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -1367,6 +1390,10 @@ export default function DashboardPage() {
       setActiveTab(tab)
       setChatHubFocus(null)
       setSettingsRequestedView(null)
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "instant" in window ? ("instant" as ScrollBehavior) : "auto" })
+        revealMobileHeader()
+      }
     },
     [operationalWorkspace, showToast],
   )

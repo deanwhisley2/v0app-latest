@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { computeSmartHeaderVisibility } from "@/lib/mobile/smart-header-scroll"
+import { NEXUS_HEADER_REVEAL } from "@/lib/mobile/mobile-chrome-events"
 
 const MOBILE_MQ = "(max-width: 767px)"
 
@@ -53,8 +54,17 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
     }
 
     window.addEventListener("scroll", onScroll, { passive: true })
+
+    const onReveal = () => {
+      scrollRef.current.hidden = false
+      setVisible(true)
+      setAtTop(window.scrollY <= 12)
+    }
+    window.addEventListener(NEXUS_HEADER_REVEAL, onReveal)
+
     return () => {
       window.removeEventListener("scroll", onScroll)
+      window.removeEventListener(NEXUS_HEADER_REVEAL, onReveal)
       if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current)
     }
   }, [enabled])

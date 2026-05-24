@@ -338,6 +338,28 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* PWA standalone — status bar blend + no browser chrome flash */
+html.nexus-pwa-standalone {
+  background-color: #070a12;
+}
+
+html.nexus-pwa-standalone #nexus-app-root {
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+html.nexus-pwa-ready body {
+  opacity: 1;
+}
+
+html:not(.nexus-pwa-ready) body {
+  opacity: 1;
+}
+
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* Better touch targets on mobile */
 @media (max-width: 768px) {
   button, a, input, select, textarea {

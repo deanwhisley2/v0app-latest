@@ -1,11 +1,12 @@
-/* Nexus Pro PWA offline shell — version 20260524b */
-const CACHE = "nexus-shell-20260524b"
+/* Nexus Pro PWA offline shell — version 20260525 */
+const CACHE = "nexus-shell-20260525"
 const SHELL = [
   "/offline",
   "/manifest.webmanifest",
   "/brand/icons/icon-192.png",
   "/brand/icons/icon-512.png",
   "/brand/icons/icon-512-maskable.png",
+  "/brand/icons/apple-touch-icon.png",
 ]
 
 self.addEventListener("install", (event) => {
@@ -26,26 +27,41 @@ self.addEventListener("activate", (event) => {
   )
 })
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting()
+  }
+})
+
 self.addEventListener("fetch", (event) => {
   const req = event.request
   if (req.method !== "GET") return
 
-  if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req).catch(async () => {
-        const cache = await caches.open(CACHE)
-        return (await cache.match("/offline")) || Response.error()
-      }),
-    )
-    return
-  }
-
   const url = new URL(req.url)
+
+  if (url.pathname.startsWith("/api/")) return
+
   if (url.pathname.startsWith("/api/app/android-apk") || url.pathname.endsWith(".apk")) {
     return
   }
 
-  if (url.pathname.startsWith("/brand/") || url.pathname.endsWith(".webmanifest")) {
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req)
+        .then((res) => res)
+        .catch(async () => {
+          const cache = await caches.open(CACHE)
+          return (await cache.match("/offline")) || Response.error()
+        }),
+    )
+    return
+  }
+
+  if (
+    url.pathname.startsWith("/brand/") ||
+    url.pathname.endsWith(".webmanifest") ||
+    url.pathname.endsWith(".ico")
+  ) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
         const cached = await cache.match(req)

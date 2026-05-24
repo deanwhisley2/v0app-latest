@@ -26,6 +26,11 @@ import { ArchivedNotificationsSheet } from "./archived-notifications-sheet"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { GlobalSearch } from "./global-search"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import {
+  NEXUS_HEADER_REVEAL,
+  NEXUS_OPEN_PROFILE,
+  NEXUS_OPEN_SEARCH,
+} from "@/lib/mobile/mobile-chrome-events"
 import { getTierBadgeLabel } from "@/lib/nexus-tier-matrix"
 
 interface HeaderProps {
@@ -133,6 +138,20 @@ export function Header({
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [showSearch])
+
+  useEffect(() => {
+    const onSearch = () => setShowSearch(true)
+    const onProfile = () => {
+      setShowProfileMenu(true)
+      setProfileView("main")
+    }
+    window.addEventListener(NEXUS_OPEN_SEARCH, onSearch)
+    window.addEventListener(NEXUS_OPEN_PROFILE, onProfile)
+    return () => {
+      window.removeEventListener(NEXUS_OPEN_SEARCH, onSearch)
+      window.removeEventListener(NEXUS_OPEN_PROFILE, onProfile)
+    }
+  }, [])
   
   const mainTabsAll = [
     { id: "container", labelKey: "nav.container" },

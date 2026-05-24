@@ -21,6 +21,11 @@ import {
   androidInstallMessagesFr,
   androidInstallMessagesSw,
 } from "@/lib/i18n/android-install-messages"
+import {
+  mobileMessagesEn,
+  mobileMessagesFr,
+  mobileMessagesSw,
+} from "@/lib/i18n/mobile-messages"
 
 /** Flat key → English source of truth */
 const en: Record<string, string> = {
@@ -174,6 +179,7 @@ const en: Record<string, string> = {
   ...companyMessagesEn,
   ...startupCapitalMarketingEn,
   ...androidInstallMessagesEn,
+  ...mobileMessagesEn,
 }
 
 const fr: Partial<Record<string, string>> = {
@@ -206,6 +212,7 @@ const fr: Partial<Record<string, string>> = {
   ...frNotificationsOverlay,
   ...startupCapitalMarketingFr,
   ...androidInstallMessagesFr,
+  ...mobileMessagesFr,
 }
 
 const sw: Partial<Record<string, string>> = {
@@ -236,6 +243,7 @@ const sw: Partial<Record<string, string>> = {
   "settings.regionSaved": "Nchi imehifadhiwa kwa ulinganifu wa fedha.",
   ...(fundingWithdrawalOverlays.sw ?? {}),
   ...androidInstallMessagesSw,
+  ...mobileMessagesSw,
 }
 
 const ar: Partial<Record<string, string>> = {

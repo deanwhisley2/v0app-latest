@@ -19,6 +19,7 @@ import {
   writeOperationalBootstrapCache,
 } from "@/lib/operational-role-hint"
 import { NEXUS_OPERATIONAL_BC } from "@/lib/nexus-operational-sync-broadcast"
+import { NEXUS_NETWORK_RECONNECTED } from "@/lib/mobile/mobile-chrome-events"
 import { supabase } from "@/lib/supabaseClient"
 
 type OperationalBootstrapCtx = {
@@ -101,9 +102,11 @@ export function OperationalBootstrapProvider({ children }: { children: ReactNode
     }
     window.addEventListener("nexus-exchanges-synced", onSync as EventListener)
     window.addEventListener("nexus-workspace-synced", onSync as EventListener)
+    window.addEventListener(NEXUS_NETWORK_RECONNECTED, onSync as EventListener)
     return () => {
       window.removeEventListener("nexus-exchanges-synced", onSync as EventListener)
       window.removeEventListener("nexus-workspace-synced", onSync as EventListener)
+      window.removeEventListener(NEXUS_NETWORK_RECONNECTED, onSync as EventListener)
     }
   }, [fetchBootstrap])
 

@@ -13,6 +13,11 @@ import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
 import { PwaServiceWorkerRegister } from '@/components/install/pwa-service-worker-register'
+import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
+import { ConnectivityBanner } from '@/components/mobile/connectivity-banner'
+import { PwaRuntimeBootstrap } from '@/components/mobile/pwa-runtime-bootstrap'
+import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
+import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
@@ -138,15 +143,23 @@ export default function RootLayout({
           <div id="nexus-app-root">
             <AuthProvider>
               <OperationalBootstrapProvider>
-                <NexusNotificationsProvider>
-                  <UserPreferencesProvider>{children}</UserPreferencesProvider>
-                </NexusNotificationsProvider>
+                <MobileConnectivityProvider>
+                  <NexusNotificationsProvider>
+                    <UserPreferencesProvider>
+                      <ConnectivityBanner />
+                      {children}
+                      <PwaRuntimeBootstrap />
+                      <BrowserNotificationAlerts />
+                    </UserPreferencesProvider>
+                  </NexusNotificationsProvider>
+                </MobileConnectivityProvider>
               </OperationalBootstrapProvider>
             </AuthProvider>
           </div>
         </ThemeProvider>
         <GoogleAnalyticsScripts />
         <GoogleAnalyticsRouteTracker />
+        <ProductionErrorReporter />
         <PwaServiceWorkerRegister />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
