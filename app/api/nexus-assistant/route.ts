@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { getUserFromBearer } from "@/lib/auth-api"
 import { runNexusAssistant } from "@/lib/nexus-assistant/model"
 import type { NexusAssistantSurface } from "@/lib/nexus-assistant/types"
 import { buildJoelinDeepseekSystemPrompt } from "@/lib/nexus-assistant/deepseek-prompt"
+import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
+import {
+  assistantEscalationReplySuffix,
+  maybeEscalateAssistantToOperations,
+} from "@/lib/server/assistant-operational-escalation"
 
 const surfaces: [NexusAssistantSurface, ...NexusAssistantSurface[]] = [
   "auth_screen",
@@ -99,10 +105,35 @@ export async function POST(req: Request) {
     )
 
     const deepseek = await generateWithDeepSeek(system, input.userMessage)
-    const reply = deepseek?.trim() || draft
+    let reply = deepseek?.trim() || draft
+
+    let escalation: { threadId: string; created: boolean } | null = null
+    if (!input.isGuest && input.tradingUserLevel !== 5 && input.surface !== "admin_desk_support_chat") {
+      try {
+        const bearerUser = await getUserFromBearer(req)
+        const cookieClient = bearerUser ? null : await createRouteHandlerSupabaseClient()
+        const sessionUser =
+          bearerUser ??
+          (cookieClient ? (await cookieClient.auth.getUser()).data.user ?? null : null)
+        if (sessionUser) {
+          const esc = await maybeEscalateAssistantToOperations(sessionUser, input.userMessage, {
+            tradingUserLevel: input.tradingUserLevel,
+            isGuest: input.isGuest,
+          })
+          if (esc) {
+            escalation = { threadId: esc.threadId, created: esc.created }
+            reply = `${reply.trim()}${assistantEscalationReplySuffix(esc.threadId)}`
+          }
+        }
+      } catch (e) {
+        console.error("[api/nexus-assistant] operational escalation failed", e)
+      }
+    }
+
     return NextResponse.json({
       reply,
       source: deepseek ? "deepseek" : "local",
+      escalation,
     })
   } catch (e) {
     console.error("[api/nexus-assistant]", e)

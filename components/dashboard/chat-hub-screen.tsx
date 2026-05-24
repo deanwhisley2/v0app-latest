@@ -85,12 +85,17 @@ export function ChatHubScreen({
   initialFocus = null,
   supportThreadFocusId = null,
   onSupportThreadFocusConsumed,
+  showOperationalInboxHint = false,
+  onGoToOperationalInbox,
   onOpenFullNotifications,
 }: {
   isGuestSession?: boolean
   initialFocus?: "ai" | "support" | "notifications" | null
   supportThreadFocusId?: string | null
   onSupportThreadFocusConsumed?: () => void
+  /** Level-5 desk: customer Chat is not the operational inbox. */
+  showOperationalInboxHint?: boolean
+  onGoToOperationalInbox?: () => void
   onOpenFullNotifications?: () => void
 }) {
   const { t, language, country, currency, locale } = useUserPreferences()
@@ -386,6 +391,19 @@ export function ChatHubScreen({
         ) : null}
       </div>
       <p className="text-sm text-muted-foreground">{t("chat.subtitle")}</p>
+      {showOperationalInboxHint ? (
+        <div className="rounded-xl border border-primary/35 bg-primary/5 px-3 py-2.5 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Liquidity admin inbox</p>
+          <p className="mt-1 text-xs">
+            Customer appeals and escalations are in Desk → Human support, not this chat list.
+          </p>
+          {onGoToOperationalInbox ? (
+            <Button type="button" size="sm" variant="outline" className="mt-2 h-8" onClick={onGoToOperationalInbox}>
+              Open Human support
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="relative">
         <Input
           value={search}

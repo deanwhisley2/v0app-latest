@@ -289,6 +289,8 @@ export default function DashboardPage() {
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   /** Deep-link / notification → operational support thread (wallet Assets). */
   const [supportThreadFocusId, setSupportThreadFocusId] = useState<string | null>(null)
+  const supportThreadFromUrlRef = useRef<string | null>(null)
+  const supportThreadUrlParsedRef = useRef(false)
   const [chatHubFocus, setChatHubFocus] = useState<"ai" | "support" | "notifications" | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
@@ -1421,23 +1423,45 @@ export default function DashboardPage() {
   )
 
   useEffect(() => {
-    if (typeof window === "undefined" || authLoading) return
+    if (typeof window === "undefined" || authLoading || supportThreadUrlParsedRef.current) return
     try {
       const u = new URL(window.location.href)
       const raw = u.searchParams.get("supportThread")
-      if (!raw?.trim()) return
+      if (!raw?.trim()) {
+        supportThreadUrlParsedRef.current = true
+        return
+      }
       const tid = raw.trim()
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) return
-      setSupportThreadFocusId(tid)
-      setActiveTab(operationalWorkspace ? "desk" : "chat")
-      if (!operationalWorkspace) setChatHubFocus("support")
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) {
+        supportThreadUrlParsedRef.current = true
+        return
+      }
+      supportThreadFromUrlRef.current = tid
+      supportThreadUrlParsedRef.current = true
       u.searchParams.delete("supportThread")
       const qs = u.searchParams.toString()
       window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
     } catch {
-      /* ignore */
+      supportThreadUrlParsedRef.current = true
     }
-  }, [authLoading, operationalWorkspace])
+  }, [authLoading])
+
+  useEffect(() => {
+    if (authLoading) return
+    const tid = supportThreadFromUrlRef.current
+    if (!tid) return
+    if (op.isLoading && !op.snapshot?.profile && Boolean(roleHint?.isOperationalDesk)) return
+    setSupportThreadFocusId(tid)
+    setActiveTab(operationalWorkspace ? "desk" : "chat")
+    if (!operationalWorkspace) setChatHubFocus("support")
+    supportThreadFromUrlRef.current = null
+  }, [
+    authLoading,
+    operationalWorkspace,
+    op.isLoading,
+    op.snapshot?.profile,
+    roleHint?.isOperationalDesk,
+  ])
 
   useEffect(() => {
     registerAppNavigator(handleNotificationNav)
@@ -3342,6 +3366,8 @@ export default function DashboardPage() {
               initialFocus={chatHubFocus}
               supportThreadFocusId={supportThreadFocusId}
               onSupportThreadFocusConsumed={() => setSupportThreadFocusId(null)}
+              showOperationalInboxHint={level5Operational}
+              onGoToOperationalInbox={() => setActiveTab("desk")}
               onOpenFullNotifications={() => {
                 setChatHubFocus(null)
                 setActiveTab("notifications")

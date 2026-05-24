@@ -761,6 +761,10 @@ export function AdminOperationalAssets({
   const [sub, setSub] = useState<"approval" | "users" | "retailers" | "history" | "support">("approval")
   const [supportFeedTick, setSupportFeedTick] = useState(0)
   const [supportUnreadCount, setSupportUnreadCount] = useState(0)
+  const [supportLinkedFocus, setSupportLinkedFocus] = useState<{
+    kind: string
+    id: string
+  } | null>(null)
   const bumpSupportFeed = useCallback(() => setSupportFeedTick((n) => n + 1), [])
   const [approvalView, setApprovalView] = useState<"active" | "history">("active")
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
@@ -948,6 +952,18 @@ export function AdminOperationalAssets({
     const id = focusSupportThreadId?.trim()
     if (id) setSub("support")
   }, [focusSupportThreadId])
+
+  const openHumanSupportForDeskRow = useCallback((row: OperationsDeskApiRow) => {
+    const linkedKind =
+      row.kind === "user_add_funds"
+        ? "retailer_fund_request"
+        : row.kind === "user_withdrawal"
+          ? "withdrawal_request"
+          : null
+    if (!linkedKind) return
+    setSupportLinkedFocus({ kind: linkedKind, id: row.id })
+    setSub("support")
+  }, [])
 
   useOperationalRealtime({
     enabled: !isGuest && Boolean(authUser?.id),
@@ -1296,6 +1312,9 @@ export function AdminOperationalAssets({
         <AdminSupportChatPanel
           initialThreadId={focusSupportThreadId}
           onInitialThreadConsumed={onFocusSupportThreadConsumed}
+          initialLinkedKind={supportLinkedFocus?.kind ?? null}
+          initialLinkedId={supportLinkedFocus?.id ?? null}
+          onInitialLinkedConsumed={() => setSupportLinkedFocus(null)}
           refreshTick={supportFeedTick}
           onUnreadCount={setSupportUnreadCount}
         />
@@ -2047,6 +2066,19 @@ export function AdminOperationalAssets({
                     <div className="rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-800 dark:text-rose-100">
                       {reviewRow.duplicate_risk_hint}
                     </div>
+                  ) : null}
+                  {reviewRow.kind === "user_add_funds" || reviewRow.kind === "user_withdrawal" ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary"
+                      onClick={() => {
+                        openHumanSupportForDeskRow(reviewRow)
+                        setReviewRow(null)
+                      }}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Open in Human support
+                    </button>
                   ) : null}
                   <div className="grid gap-2 text-xs">
                     <p>

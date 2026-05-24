@@ -50,6 +50,9 @@ const CATEGORY_FILTERS = [
 export function AdminSupportChatPanel(props: {
   initialThreadId?: string | null
   onInitialThreadConsumed?: () => void
+  initialLinkedKind?: string | null
+  initialLinkedId?: string | null
+  onInitialLinkedConsumed?: () => void
   refreshTick?: number
   onUnreadCount?: (n: number) => void
 }) {
@@ -71,6 +74,7 @@ export function AdminSupportChatPanel(props: {
   const [rtTick, setRtTick] = useState(0)
   const endRef = useRef<HTMLDivElement>(null)
   const consumedInitial = useRef<string | null>(null)
+  const consumedLinked = useRef<string | null>(null)
 
   const authHeaders = async () => {
     const {
@@ -157,6 +161,23 @@ export function AdminSupportChatPanel(props: {
     setSelectedId(id)
     props.onInitialThreadConsumed?.()
   }, [props.initialThreadId, props.onInitialThreadConsumed])
+
+  useEffect(() => {
+    const kind = props.initialLinkedKind?.trim()
+    const lid = props.initialLinkedId?.trim()
+    if (!kind || !lid) {
+      consumedLinked.current = null
+      return
+    }
+    const key = `${kind}:${lid}`
+    if (consumedLinked.current === key) return
+    const match = threads.find((t) => t.linked_kind === kind && t.linked_id === lid)
+    if (!match) return
+    consumedLinked.current = key
+    setSelectedId(match.id)
+    setUnresolvedOnly(false)
+    props.onInitialLinkedConsumed?.()
+  }, [threads, props.initialLinkedKind, props.initialLinkedId, props.onInitialLinkedConsumed])
 
   useEffect(() => {
     if (selectedId) void loadMessages(selectedId)
