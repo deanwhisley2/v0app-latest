@@ -1,6 +1,8 @@
 /** Android install / PWA promotion copy (UI only: install.installApp.*). */
 export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.title": "Install Nexus Pro App",
+  "install.installApp.instantTitle": "Instant App Available",
+  "install.installApp.instantLead": "Add Nexus Pro to your home screen in one tap — fast, secure, no download required.",
   "install.installApp.lead": "Get faster access, home-screen launch, and a smoother mobile experience.",
   "install.installApp.benefitSpeed": "Quick launch from your home screen",
   "install.installApp.benefitNotify": "Better session continuity on mobile",
@@ -27,8 +29,8 @@ export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.downloadTapHint": "When download finishes, tap the file in your notifications or Downloads folder to install.",
   "install.installApp.downloadFailed": "Download could not start. Retry or use the web app while we fix this.",
   "install.installApp.downloadRateLimited": "Please wait a moment before retrying the download.",
-  "install.installApp.apkUnavailable": "APK is not published yet — tap Install App to add Nexus Pro to your home screen.",
-  "install.installApp.pwaPreferredLead": "Install instantly to your home screen — no app store required.",
+  "install.installApp.apkUnavailable": "Instant app ready — tap Install App to add Nexus Pro to your home screen now.",
+  "install.installApp.pwaPreferredLead": "Add to home screen instantly — works like a native app, no APK download needed.",
   "install.installApp.retryDownload": "Retry download",
   "install.installApp.useWebVersion": "Continue in browser",
   "install.installApp.unknownSourcesGeneric":
@@ -36,7 +38,16 @@ export const androidInstallMessagesEn: Record<string, string> = {
   "install.installApp.unknownSourcesSamsung":
     "If blocked, enable Install unknown apps for Samsung Internet in Settings, then open Downloads.",
   "install.installApp.alreadyInstalledHint": "You're using the installed app.",
+  "install.installApp.openDownloads": "Open Downloads",
   "install.installApp.secureSource": "Signed release from nexuspro.it.com",
+  "install.update.availableTitle": "Update available",
+  "install.update.availableLead": "Version {{version}} is ready — download once and tap to install.",
+  "install.update.readyTitle": "Update ready",
+  "install.update.readyLead": "Tap Open Downloads, then select the Nexus Pro file to finish installing.",
+  "install.update.forceTitle": "Required update",
+  "install.update.downloadNow": "Download update",
+  "install.update.downloading": "Downloading…",
+  "install.update.openDownloads": "Open Downloads",
 }
 
 export const androidInstallMessagesFr: Partial<Record<string, string>> = {

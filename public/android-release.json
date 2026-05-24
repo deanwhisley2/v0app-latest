@@ -6,5 +6,8 @@
   "sizeBytes": 0,
   "publishedAt": "2026-05-24T00:00:00.000Z",
   "minSupportedVersion": "20260524",
-  "pwaAssetVersion": "20260524"
+  "pwaAssetVersion": "20260524",
+  "forceUpdate": false,
+  "stagedRolloutPercent": 100,
+  "updateWifiOnlyDefault": true
 }

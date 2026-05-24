@@ -54,6 +54,7 @@ import { OperationalContinuityHud } from "@/components/dashboard/operational-con
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { AndroidInstallDashboardReminder } from "@/components/install/android-install-dashboard-reminder"
+import { AndroidAppUpdateBanner } from "@/components/install/android-app-update-banner"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -2238,6 +2239,7 @@ export default function DashboardPage() {
 
       <LaunchStatusBanner />
       <AndroidInstallDashboardReminder />
+      <AndroidAppUpdateBanner />
       <StartupCapitalPromoModal />
 
       {showRetailBalancePanels && (

@@ -7,6 +7,7 @@ import {
   useAndroidInstallPromotion,
   type AndroidInstallUiMode,
 } from "@/hooks/use-android-install-promotion"
+import { openDownloadsQuickAction } from "@/lib/android-install/app-update-client"
 import { cn } from "@/lib/utils"
 
 type AndroidInstallPromptProps = {
@@ -49,17 +50,20 @@ export function AndroidInstallPrompt({
     promo.downloadState === "unavailable" ||
     promo.downloadState === "rate_limited"
 
+  const isInstantAppMode = !promo.apkAvailable && (promo.canNativePwaPrompt || promo.uiMode === "install")
   const title = isOpenMode
     ? t("install.installApp.openApp")
     : isUpdate
       ? t("install.installApp.update")
-      : t("install.installApp.title")
+      : isInstantAppMode
+        ? t("install.installApp.instantTitle")
+        : t("install.installApp.title")
   const lead = isOpenMode
     ? t("install.installApp.alreadyInstalledHint")
     : isUpdate
       ? t("install.installApp.updateLead")
-      : !promo.apkAvailable && promo.canNativePwaPrompt
-        ? t("install.installApp.pwaPreferredLead")
+      : isInstantAppMode
+        ? t("install.installApp.instantLead")
         : t("install.installApp.lead")
 
   const primaryLabel = isOpenMode
@@ -154,6 +158,18 @@ export function AndroidInstallPrompt({
             >
               {primaryLabel}
             </Button>
+
+            {promo.downloadState === "downloading" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="min-h-9 touch-manipulation"
+                onClick={() => openDownloadsQuickAction()}
+              >
+                {t("install.installApp.openDownloads")}
+              </Button>
+            ) : null}
 
             {showFallback ? (
               <>

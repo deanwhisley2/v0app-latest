@@ -197,9 +197,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.modal.readyNow": "Withdrawal available now.",
   "withdrawal.modal.minLine": "Minimum withdrawal: {{min}}",
   "withdrawal.modal.maxLine": "Maximum: full withdrawable Nexus Main balance (~{{max}}).",
-  "container.fix.releaseRulesTitle": "Session growth release",
+  "container.fix.releaseRulesTitle": "Trade performance release",
   "container.fix.releaseRulesBody":
-    "Move session growth to your pocket when you are ready. A small release fee may apply. Your main lock stays in place until the plan ends or you choose early exit.",
+    "Move trade performance gains to your pocket when you are ready. A small release fee may apply. Your main lock stays in place until the plan ends or you choose early exit.",
   "container.fix.pocketWithdrawCap":
     "You can withdraw available Nexus Main balance on your schedule (once per 24 hours). Money still inside an active trade lock stays allocated until that trade ends.",
   "container.fix.unreleasedLabel": "Ready to release",
@@ -215,7 +215,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.welcome.copyLine":
     "Copy moves faster (about 24 hours). Markets can swing more — good for active traders who accept higher movement.",
   "container.welcome.fixLine":
-    "Fixed keeps your lock for the full term. Session growth can be released to pocket along the way.",
+    "Fixed keeps your lock for the full term. Trade performance can be released to pocket along the way.",
   "container.welcome.level": "Your level: {{level}} · {{name}}",
   "container.copy.risk.title": "Copy sessions — faster pace",
   "container.copy.risk.summary": "Shorter cycles · more market movement · different from fixed plans.",
@@ -225,9 +225,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.copy.risk.detail3":
     "Optional auto-adjust aims for a modest growth target before you cash out — shown for guidance until the desk confirms.",
   "container.fix.rules.summary":
-    "Release session growth to pocket anytime. Your locked amount stays in the trade until maturity or early exit.",
+    "Release trade performance gains to pocket anytime. Your locked amount stays in the trade until maturity or early exit.",
   "container.fix.rules.detail1":
-    "Your lock supports the coin pair on your card. Growth builds as the plan progresses.",
+    "Your lock supports the coin pair on your card. Performance builds as the plan progresses.",
   "container.fix.rules.detail2":
     "Prices on screen are for reference. Final results follow Nexus rules on your account.",
   "container.btc.title": "BTC live price",
@@ -242,7 +242,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.market.lock": "Lock plan",
   "container.market.copy": "Copy",
   "container.market.preview": "Preview",
-  "container.market.estimatedGrowth": "Estimated growth",
+  "container.tradePerformance.label": "Trade Performance",
+  "container.tradePerformance.hint": "Profits generated from completed buy and sell trades.",
+  "container.market.estimatedGrowth": "Estimated returns",
   "container.market.estimatedGrowthShort": "est. growth",
   "container.market.estimatedGrowthHint": "Guide — not guaranteed",
   "container.market.liveGrowth": "Live growth",

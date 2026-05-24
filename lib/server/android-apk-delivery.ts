@@ -1,7 +1,8 @@
 import { createReadStream } from "node:fs"
-import { access, stat } from "node:fs/promises"
+import { access, readFile, stat } from "node:fs/promises"
 import path from "node:path"
 import { getDefaultAndroidRelease } from "@/lib/android-install/config"
+import { validateApkFile } from "@/lib/server/android-apk-publish"
 
 export type AndroidApkFileInfo = {
   absolutePath: string
@@ -28,8 +29,8 @@ export async function resolveAndroidApkFile(): Promise<AndroidApkFileInfo | null
   for (const candidate of candidates) {
     try {
       await access(candidate)
+      await validateApkFile(candidate)
       const info = await stat(candidate)
-      if (!info.isFile() || info.size < 1024) continue
       return {
         absolutePath: candidate,
         sizeBytes: info.size,

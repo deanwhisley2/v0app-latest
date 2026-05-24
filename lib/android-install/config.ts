@@ -10,6 +10,9 @@ export type AndroidReleaseManifest = {
   publishedAt: string
   minSupportedVersion: string
   pwaAssetVersion: string
+  forceUpdate?: boolean
+  stagedRolloutPercent?: number
+  updateWifiOnlyDefault?: boolean
 }
 
 export const ANDROID_INSTALL_STORAGE_KEY = "nexus_android_install_v1"

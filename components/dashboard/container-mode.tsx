@@ -1818,12 +1818,14 @@ export function ContainerMode({
                 <p className="mt-1 text-[11px] text-muted-foreground">Crypto committed to strategies</p>
               </div>
               <div className="bg-card p-4 sm:p-5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Session growth</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground" title={t("container.tradePerformance.hint")}>
+                  {t("container.tradePerformance.label")}
+                </p>
                 <p className="mt-2 font-mono text-2xl font-bold tabular-nums text-success">
                   +{formatUserMoney(totalEarnedDisplayUsd)}
                 </p>
                 <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                  Session accruals + realized liquid (separate buckets)
+                  Completed trade gains + realized liquid
                 </p>
               </div>
               <div className="bg-card p-4 sm:p-5">

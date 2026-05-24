@@ -240,20 +240,20 @@ export function useAndroidInstallPromotion(
 
   const install = useCallback(async () => {
     setStatusKey(null)
+    if (!release?.apkAvailable) {
+      if (canNativePwaPrompt) {
+        await runPwaPrompt()
+        return
+      }
+      setDownloadState("unavailable")
+      setStatusKey("install.installApp.instantLead")
+      return
+    }
     if (canNativePwaPrompt) {
       const ok = await runPwaPrompt()
       if (ok) return
     }
-    if (release?.apkAvailable) {
-      await runApkDownload(false)
-      return
-    }
-    if (canNativePwaPrompt) {
-      await runPwaPrompt()
-      return
-    }
-    setDownloadState("unavailable")
-    setStatusKey("install.installApp.apkUnavailable")
+    await runApkDownload(false)
   }, [canNativePwaPrompt, release?.apkAvailable, runApkDownload, runPwaPrompt])
 
   const downloadApk = useCallback(async () => {
