@@ -21,6 +21,28 @@ import {
   writeInstallState,
   clearLegacyAuthInstallDismiss,
 } from "@/lib/android-install/storage"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
+
+const HIDDEN_PROMOTION: AndroidInstallPromotion = {
+  visible: false,
+  uiMode: "hidden",
+  browser: null,
+  release: null,
+  loadingRelease: false,
+  canNativePwaPrompt: false,
+  primaryInstallKind: "manual",
+  installButtonEnabled: false,
+  probingInstall: false,
+  apkAvailable: false,
+  downloadState: "idle",
+  install: async () => undefined,
+  downloadApk: async () => undefined,
+  retryDownload: async () => undefined,
+  openApp: () => undefined,
+  useWebVersion: () => undefined,
+  dismiss: () => undefined,
+  statusKey: null,
+}
 
 export type AndroidInstallUiMode =
   | "hidden"
@@ -284,6 +306,8 @@ export function useAndroidInstallPromotion(
     if (opts.surface === "dashboard") snoozeDashboardInstallReminder()
     setDismissed(true)
   }, [opts.surface])
+
+  if (isPwaSafeMode()) return HIDDEN_PROMOTION
 
   return {
     visible,

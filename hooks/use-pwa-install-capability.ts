@@ -7,6 +7,7 @@ import {
   initPwaInstallController,
   subscribePwaInstall,
 } from "@/lib/android-install/pwa-install-controller"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 function getServerDiagnostic() {
   return {
@@ -26,23 +27,28 @@ function getServerDiagnostic() {
  * Subscribes to global PWA install state (deferred prompt + service worker readiness).
  */
 export function usePwaInstallCapability() {
+  const safeMode = isPwaSafeMode()
   const [probeSettled, setProbeSettled] = useState(false)
 
   useEffect(() => {
+    if (safeMode) {
+      setProbeSettled(true)
+      return
+    }
     initPwaInstallController()
     const t = window.setTimeout(() => setProbeSettled(true), 2800)
     return () => window.clearTimeout(t)
-  }, [])
+  }, [safeMode])
 
   const canNativeInstall = useSyncExternalStore(
     subscribePwaInstall,
-    canTriggerNativePwaInstall,
+    () => (safeMode ? false : canTriggerNativePwaInstall()),
     () => false,
   )
 
   const diagnostic = useSyncExternalStore(
     subscribePwaInstall,
-    getPwaInstallDiagnostic,
+    () => (safeMode ? getServerDiagnostic() : getPwaInstallDiagnostic()),
     getServerDiagnostic,
   )
 

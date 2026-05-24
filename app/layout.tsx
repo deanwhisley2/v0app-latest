@@ -15,9 +15,11 @@ import { ThemeScript } from '@/components/theme-script'
 import { PwaServiceWorkerRegister } from '@/components/install/pwa-service-worker-register'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
 import { PwaRuntimeBootstrap } from '@/components/mobile/pwa-runtime-bootstrap'
+import { PwaSafeModeBootstrap } from '@/components/mobile/pwa-safe-mode-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
 import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
 import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
+import { isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
@@ -112,6 +114,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <ThemeScript />
+        {isPwaSafeMode() ? (
+          <script dangerouslySetInnerHTML={{ __html: PWA_SAFE_MODE_TEARDOWN_SCRIPT }} />
+        ) : null}
       </head>
       <body
         className={`${inter.variable} ${spaceMono.variable} font-sans antialiased bg-background text-foreground min-h-full`}
@@ -147,7 +152,7 @@ export default function RootLayout({
                   <NexusNotificationsProvider>
                     <UserPreferencesProvider>
                       {children}
-                      <PwaRuntimeBootstrap />
+                      {!isPwaSafeMode() ? <PwaRuntimeBootstrap /> : null}
                       <BrowserNotificationAlerts />
                     </UserPreferencesProvider>
                   </NexusNotificationsProvider>
@@ -160,7 +165,7 @@ export default function RootLayout({
         <GoogleAnalyticsRouteTracker />
         <ProductionErrorReporter />
         <ScrollLockSafety />
-        <PwaServiceWorkerRegister />
+        {isPwaSafeMode() ? <PwaSafeModeBootstrap /> : <PwaServiceWorkerRegister />}
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
     </html>

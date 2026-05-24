@@ -8,13 +8,14 @@ import { fetchAppVersionCheck } from "@/lib/android-install/app-update-client"
 import { NEXUS_NETWORK_RECONNECTED } from "@/lib/mobile/mobile-chrome-events"
 import { requestBrowserNotificationPermission } from "@/lib/mobile/browser-notifications"
 import { gaEvent } from "@/lib/analytics/google-analytics"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 /** PWA runtime: standalone detection, install persistence, resume recovery, SW updates. */
 export function PwaRuntimeBootstrap() {
   const { refreshSession } = useAuth()
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (isPwaSafeMode()) return
 
     const html = document.documentElement
     if (isStandalonePwa()) {

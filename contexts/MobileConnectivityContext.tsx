@@ -17,6 +17,7 @@ import {
   type ConnectionPhase,
 } from "@/lib/mobile/network-stability"
 import { gaEvent } from "@/lib/analytics/google-analytics"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 export type MobileConnectivityState = {
   phase: ConnectionPhase
@@ -34,7 +35,29 @@ const MobileConnectivityContext = createContext<MobileConnectivityState | undefi
 
 const RECONNECTED_BANNER_MS = 2500
 
+const STABLE_ONLINE: MobileConnectivityState = {
+  phase: "online",
+  isOnline: true,
+  wasOffline: false,
+  reconnectCount: 0,
+  dismissOfflineBanner: () => undefined,
+  showDegradedBanner: false,
+  showOfflineBanner: false,
+  showReconnectedBanner: false,
+}
+
 export function MobileConnectivityProvider({ children }: { children: ReactNode }) {
+  if (isPwaSafeMode()) {
+    return (
+      <MobileConnectivityContext.Provider value={STABLE_ONLINE}>
+        {children}
+      </MobileConnectivityContext.Provider>
+    )
+  }
+  return <MobileConnectivityMonitorProvider>{children}</MobileConnectivityMonitorProvider>
+}
+
+function MobileConnectivityMonitorProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<ConnectionPhase>("online")
   const [wasOffline, setWasOffline] = useState(false)
   const [reconnectCount, setReconnectCount] = useState(0)

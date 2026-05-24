@@ -5,6 +5,7 @@
 
 import { isStandalonePwa } from "@/lib/android-install/device-detection"
 import { logInstallEvent } from "@/lib/android-install/apk-download-client"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 export type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -114,6 +115,7 @@ function logProbeOnce(): void {
 
 /** Call once from root layout (PwaServiceWorkerRegister). */
 export function initPwaInstallController(): void {
+  if (isPwaSafeMode()) return
   if (initialized || typeof window === "undefined") return
   initialized = true
 

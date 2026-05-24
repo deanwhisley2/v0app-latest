@@ -14,6 +14,7 @@ import {
 import { startApkDownload, type AndroidReleasePayload } from "@/lib/android-install/apk-download-client"
 import { readInstallState, markInstalled } from "@/lib/android-install/storage"
 import { detectInstallSurface, isStandalonePwa } from "@/lib/android-install/device-detection"
+import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 
 export type AppUpdateState = {
   visible: boolean
@@ -26,6 +27,7 @@ export type AppUpdateState = {
 }
 
 export function useAndroidAppUpdate(): AppUpdateState {
+  const safeMode = isPwaSafeMode()
   const [check, setCheck] = useState<AppVersionCheck | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [downloadReady, setDownloadReady] = useState(false)
@@ -41,10 +43,11 @@ export function useAndroidAppUpdate(): AppUpdateState {
   }, [])
 
   useEffect(() => {
+    if (safeMode) return
     void runCheck()
     const id = window.setInterval(() => void runCheck(), UPDATE_CHECK_INTERVAL_MS)
     return () => window.clearInterval(id)
-  }, [runCheck])
+  }, [runCheck, safeMode])
 
   const applyUpdate = useCallback(async () => {
     if (!check?.apkAvailable) return
@@ -83,9 +86,11 @@ export function useAndroidAppUpdate(): AppUpdateState {
     setCheck(null)
   }, [])
 
-  const visible = check
-    ? shouldPromptForUpdate(check) || Boolean(check.forceUpdate && check.updateAvailable)
-    : false
+  const visible = safeMode
+    ? false
+    : check
+      ? shouldPromptForUpdate(check) || Boolean(check.forceUpdate && check.updateAvailable)
+      : false
 
   return {
     visible,
