@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { getBodyScrollLockCount } from "@/lib/mobile/body-scroll-lock"
 import { computeSmartHeaderVisibility } from "@/lib/mobile/smart-header-scroll"
 import { NEXUS_HEADER_REVEAL } from "@/lib/mobile/mobile-chrome-events"
 
@@ -42,6 +43,7 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
     setAtTop(window.scrollY <= 12)
 
     const onScroll = () => {
+      if (getBodyScrollLockCount() > 0) return
       if (rafRef.current != null) return
       rafRef.current = window.requestAnimationFrame(() => {
         rafRef.current = null

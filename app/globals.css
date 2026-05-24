@@ -612,6 +612,27 @@ html:not(.nexus-pwa-ready) body {
   html.nexus-scroll-locked body {
     overflow: hidden !important;
     overscroll-behavior: none;
+    touch-action: none;
+  }
+
+  html.nexus-scroll-locked #nexus-app-root {
+    touch-action: none;
+  }
+
+  .nexus-overlay-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .nexus-mobile-overlay-root {
+    touch-action: none;
+  }
+
+  .nexus-mobile-overlay-root [data-nexus-overlay-scroll] {
+    touch-action: pan-y;
   }
 
   .nexus-smart-header-shell {
