@@ -1,5 +1,5 @@
-/* Nexus Pro PWA shell — v20260525d (soft offline copy) */
-const CACHE = "nexus-shell-20260525d"
+/* Nexus Pro PWA shell — v20260526a (safe navigation; auth/network-first bypass) */
+const CACHE = "nexus-shell-20260526a"
 
 const SHELL_URLS = [
   "/offline",
@@ -9,7 +9,7 @@ const SHELL_URLS = [
   "/brand/icons/icon-512-maskable.png",
 ]
 
-/** Static fallback — must not use Response.error() (Chrome shows "This page couldn't load"). */
+/** Never use Response.error() — Chrome shows "This page couldn't load". */
 const OFFLINE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,20 +38,89 @@ const OFFLINE_HTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+const NETWORK_ONLY_PREFIXES = [
+  "/auth/",
+  "/onboarding/",
+  "/api/",
+  "/_next/",
+]
+
 function shellUrl(path) {
   return new URL(path, self.location.origin).href
 }
 
-async function offlineResponse() {
-  const cache = await caches.open(CACHE)
-  for (const path of ["/offline", "/"]) {
-    const hit = await cache.match(shellUrl(path))
-    if (hit) return hit
-  }
+function isNetworkOnlyPath(pathname) {
+  return NETWORK_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function isAppRouterRequest(req) {
+  return (
+    req.headers.get("RSC") === "1" ||
+    req.headers.get("Next-Router-Prefetch") === "1" ||
+    req.headers.get("Next-Action") != null ||
+    req.headers.get("Next-Router-State-Tree") != null
+  )
+}
+
+function offlineHtmlResponse() {
   return new Response(OFFLINE_HTML, {
     status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
   })
+}
+
+async function offlineResponse() {
+  try {
+    const cache = await caches.open(CACHE)
+    const offlinePage = await cache.match(shellUrl("/offline"))
+    if (offlinePage) return offlinePage
+  } catch {
+    /* fall through to inline shell */
+  }
+  return offlineHtmlResponse()
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchNavigationWithRetry(req, attempts) {
+  let lastError = null
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const res = await fetch(req)
+      if (res && (res.ok || res.type === "opaqueredirect" || res.status === 304)) {
+        return res
+      }
+      if (res && res.status >= 300 && res.status < 400) {
+        return res
+      }
+      if (res && res.status >= 400) {
+        return res
+      }
+    } catch (error) {
+      lastError = error
+      if (i < attempts - 1) {
+        await sleep(180 * (i + 1))
+      }
+    }
+  }
+  throw lastError || new Error("navigation_failed")
+}
+
+async function handleNavigation(req) {
+  try {
+    return await fetchNavigationWithRetry(req, 2)
+  } catch {
+    try {
+      return await offlineResponse()
+    } catch {
+      return offlineHtmlResponse()
+    }
+  }
 }
 
 self.addEventListener("install", (event) => {
@@ -87,14 +156,14 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
 
-  if (url.pathname.startsWith("/api/") || url.pathname.endsWith(".apk")) {
+  if (url.pathname.endsWith(".apk")) return
+
+  if (isNetworkOnlyPath(url.pathname) || isAppRouterRequest(req)) {
     return
   }
 
   if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req).catch(() => offlineResponse()),
-    )
+    event.respondWith(handleNavigation(req))
     return
   }
 
@@ -111,7 +180,7 @@ self.addEventListener("fetch", (event) => {
           if (res.ok) void cache.put(req, res.clone())
           return res
         } catch {
-          return cached || offlineResponse()
+          return cached || offlineHtmlResponse()
         }
       }),
     )
