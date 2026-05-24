@@ -32,8 +32,9 @@ export function PwaServiceWorkerRegister() {
 
     const onControllerChange = () => {
       if (reloadingRef.current) return
+      if (document.visibilityState !== "visible") return
       reloadingRef.current = true
-      window.location.reload()
+      window.setTimeout(() => window.location.reload(), 300)
     }
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange)
     return () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange)
