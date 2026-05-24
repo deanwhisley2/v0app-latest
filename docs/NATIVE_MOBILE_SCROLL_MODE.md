@@ -4,34 +4,31 @@
 
 **`NEXUS_NATIVE_MOBILE_SCROLL_LOCK = true`** in `lib/mobile/native-mobile-scroll.ts`
 
-Disables custom mobile scroll management to restore **browser-native** scrolling for isolation testing.
+Disables **heavy** scroll interception while keeping browser-native scrolling and lightweight chrome.
 
 ## Disabled on phones
 
 - `useBodyScrollLock` / `lockBodyScroll` (no `position:fixed` body, no `touchmove` preventDefault)
-- Smart header hide/show on scroll
-- Fixed smart-header shell + spacer
-- Dashboard keeps `nexus-mobile-stable` compositor overrides (flat surfaces, no glass/gradients)
-- `html.nexus-native-scroll` (from bootstrap) only undoes scroll interception CSS
 - `overscroll-behavior-y: contain` on `.nexus-app-shell`
 - `MobileOverlaySheet` for profile (simple anchored panel; no overlay scroll lock)
 - Touch-press scale transform on active
 
 ## Still active
 
+- **`nexus-mobile-stable`** compositor-safe flat rendering (no glittering)
+- **Smart header** — passive scroll listener, fixed shell, reveal on upward gesture
 - Browser-only safe mode (no PWA/SW)
 - Layout, tabs, bottom nav (native touch)
 - `ScrollLockSafety` + `NativeScrollBootstrap` force-clear any stale `overflow:hidden`
 
-## Re-enable custom scroll (one layer at a time)
+## Re-enable body lock (optional, after phone QA)
 
 1. Set `NEXUS_NATIVE_MOBILE_SCROLL_LOCK = false`
-2. Redeploy and test
-3. Re-enable individually: body lock → smart header → mobile-stable CSS
+2. Redeploy and test scroll + profile overlay carefully
 
 ## Test on phone
 
-1. Clear site data once
-2. Open dashboard — main page scroll should feel like normal mobile web
-3. Open profile — verify acceptable UX (no body lock in this mode)
-4. Close and scroll again
+1. Hard refresh or clear site data once
+2. Scroll dashboard down — header should hide
+3. Slight upward scroll — logo/search/notifications/profile should reappear immediately
+4. Verify no scroll freeze, no glittering, profile open/close still scrolls

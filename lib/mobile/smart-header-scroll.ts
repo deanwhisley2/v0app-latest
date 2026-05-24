@@ -15,7 +15,7 @@ export function computeSmartHeaderVisibility(
   scrollY: number,
   opts?: { threshold?: number; topZone?: number },
 ): HeaderVisibilityResult {
-  const threshold = opts?.threshold ?? 6
+  const threshold = opts?.threshold ?? 4
   const topZone = opts?.topZone ?? 12
   const delta = scrollY - state.lastY
   const atTop = scrollY <= topZone

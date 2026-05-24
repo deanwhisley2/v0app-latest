@@ -770,19 +770,8 @@ html:not(.nexus-pwa-ready) body {
     overscroll-behavior-y: auto;
   }
 
-  html.nexus-native-scroll .nexus-smart-header-shell,
-  html.nexus-native-scroll .nexus-smart-header-shell-native,
-  html.nexus-native-scroll .nexus-smart-header-shell-native .nexus-smart-header-inner {
-    position: static !important;
-    top: auto !important;
-    transform: none !important;
-    will-change: auto !important;
-    pointer-events: auto !important;
-  }
-
   html.nexus-native-scroll .nexus-smart-header-spacer {
-    display: none !important;
-    height: 0 !important;
+    pointer-events: none;
   }
 
   html.nexus-native-scroll html.nexus-scroll-locked body,

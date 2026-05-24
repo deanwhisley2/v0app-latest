@@ -2,7 +2,6 @@
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { useSmartMobileHeader } from "@/hooks/use-smart-mobile-header"
-import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
 import { cn } from "@/lib/utils"
 
 type SmartMobileHeaderShellProps = {
@@ -10,13 +9,11 @@ type SmartMobileHeaderShellProps = {
 }
 
 export function SmartMobileHeaderShell({ children }: SmartMobileHeaderShellProps) {
-  const nativeScroll = isNativeMobileScrollMode()
   const { enabled, visible, atTop } = useSmartMobileHeader()
   const innerRef = useRef<HTMLDivElement>(null)
   const [chromeHeight, setChromeHeight] = useState(56)
 
   useLayoutEffect(() => {
-    if (nativeScroll) return
     const el = innerRef.current
     if (!el) return
     const measure = () => setChromeHeight(el.offsetHeight)
@@ -28,11 +25,7 @@ export function SmartMobileHeaderShell({ children }: SmartMobileHeaderShellProps
       ro?.disconnect()
       window.removeEventListener("resize", measure)
     }
-  }, [nativeScroll])
-
-  if (nativeScroll) {
-    return <div className="nexus-smart-header-shell-native md:contents">{children}</div>
-  }
+  }, [])
 
   return (
     <>
