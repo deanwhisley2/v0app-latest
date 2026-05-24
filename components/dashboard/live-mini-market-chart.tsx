@@ -37,7 +37,7 @@ export function LiveMiniMarketChart({
   if (!path && loading) {
     return (
       <div
-        className={`h-9 w-full animate-pulse rounded-lg bg-muted/40 ${className ?? ""}`}
+        className={`h-9 w-full animate-pulse rounded-lg bg-muted/40 max-md:animate-none ${className ?? ""}`}
         aria-hidden
       />
     )

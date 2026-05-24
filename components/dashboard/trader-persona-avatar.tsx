@@ -54,17 +54,17 @@ export function TraderPersonaAvatar({
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 rounded-full bg-gradient-to-br p-[2px]",
+        "nexus-trader-avatar relative inline-flex shrink-0 rounded-full bg-gradient-to-br p-[2px] max-md:bg-card max-md:p-0 max-md:[background-image:none]",
         ring,
         SIZE[size],
-        className
+        className,
       )}
       title={name}
       role="img"
       aria-label={`${name} desk`}
     >
       <span
-        className="flex h-full w-full items-center justify-center rounded-full font-semibold tracking-tight text-slate-100 shadow-inner"
+        className="nexus-trader-avatar-inner flex h-full w-full items-center justify-center rounded-full bg-muted font-semibold tracking-tight text-foreground shadow-inner max-md:shadow-none md:text-slate-100"
         style={{
           background: `linear-gradient(160deg, hsl(${hue} 18% 28%) 0%, hsl(${hue} 22% 18%) 100%)`,
         }}

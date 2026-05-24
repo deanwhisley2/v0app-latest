@@ -61,7 +61,13 @@ import {
   fixEstimatedGrowthPct,
 } from "@/lib/container-desk-market-display"
 import { cn } from "@/lib/utils"
-import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION } from "@/lib/dashboard-mobile-render-policy"
+import { MOBILE_FLAT_SURFACE, MOBILE_STATIC_MOTION, MOBILE_TAB_ACTIVE } from "@/lib/dashboard-mobile-render-policy"
+import {
+  shouldAnimateFixEarnedDisplay,
+  workspaceCountdownIntervalMs,
+  workspaceEarnTickIntervalMs,
+  workspaceFixSyncIntervalMs,
+} from "@/lib/mobile/workspace-render-policy"
 import { NX_PROMO_CALLOUT, NX_TAB_ACTIVE, NX_TAB_INACTIVE } from "@/lib/nexus-ui-surfaces"
 import { useMarketPriceAuthority } from "@/hooks/use-market-price-authority"
 import { Card } from "@/components/ui/card"
@@ -270,7 +276,7 @@ function FixEarnedDisplay({
   useEffect(() => {
     const from = fromRef.current
     const to = amountUsd
-    if (Math.abs(to - from) < 0.005) {
+    if (!shouldAnimateFixEarnedDisplay() || Math.abs(to - from) < 0.005) {
       fromRef.current = to
       setDisplay(to)
       return
@@ -802,7 +808,7 @@ export function ContainerMode({
 
     if (!deskInView) return
     updateCountdowns()
-    const interval = setInterval(updateCountdowns, 1000)
+    const interval = setInterval(updateCountdowns, workspaceCountdownIntervalMs())
     return () => clearInterval(interval)
   }, [activeCopyTrades, activeFixTrades, deskInView])
 
@@ -1010,9 +1016,10 @@ export function ContainerMode({
   }, [formatUserMoney, notifyCopy, t])
 
   useEffect(() => {
-    const id = window.setInterval(() => setEarnDisplayTick((n) => n + 1), 10_000)
+    if (!deskInView || activeFixTrades.length === 0) return
+    const id = window.setInterval(() => setEarnDisplayTick((n) => n + 1), workspaceEarnTickIntervalMs())
     return () => window.clearInterval(id)
-  }, [])
+  }, [deskInView, activeFixTrades.length])
 
   // Fixed-trade: keep `earned` aligned with intra-day schedule accrual (bounded, ledger-style gross − withdrawals).
   useEffect(() => {
@@ -1027,7 +1034,7 @@ export function ContainerMode({
       )
     }
     sync()
-    const id = window.setInterval(sync, 15_000)
+    const id = window.setInterval(sync, workspaceFixSyncIntervalMs())
     return () => window.clearInterval(id)
   }, [activeFixTrades.length])
 
@@ -1643,7 +1650,7 @@ export function ContainerMode({
         summary={promoSummary}
         tone="promo"
         viewDetailsLabel={viewDetailsLabel}
-        className={NX_PROMO_CALLOUT}
+        className={cn(NX_PROMO_CALLOUT, MOBILE_FLAT_SURFACE)}
         icon={
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/15">
             <Trophy className="h-5 w-5 text-accent" />
@@ -1743,22 +1750,24 @@ export function ContainerMode({
       <div className="flex gap-2">
         <button
           onClick={() => setContainerTab("dashboard")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all max-md:transition-none",
             activeTab === "dashboard"
-              ? NX_TAB_ACTIVE
-              : NX_TAB_INACTIVE
-          }`}
+              ? cn(NX_TAB_ACTIVE, MOBILE_TAB_ACTIVE)
+              : NX_TAB_INACTIVE,
+          )}
         >
           <Eye className="h-4 w-4" />
           {t("container.tab.dashboard")}
         </button>
         <button
           onClick={() => setContainerTab("copy")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all max-md:transition-none",
             activeTab === "copy"
-              ? NX_TAB_ACTIVE
-              : NX_TAB_INACTIVE
-          }`}
+              ? cn(NX_TAB_ACTIVE, MOBILE_TAB_ACTIVE)
+              : NX_TAB_INACTIVE,
+          )}
         >
           <Copy className="h-4 w-4" />
           {t("container.tab.copy")}
@@ -1770,9 +1779,10 @@ export function ContainerMode({
         </button>
         <button
           onClick={() => setContainerTab("fix")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all ${
-            activeTab === "fix" ? NX_TAB_ACTIVE : NX_TAB_INACTIVE
-          }`}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all max-md:transition-none",
+            activeTab === "fix" ? cn(NX_TAB_ACTIVE, MOBILE_TAB_ACTIVE) : NX_TAB_INACTIVE,
+          )}
         >
           <Lock className="h-4 w-4" />
           {t("container.tab.fix")}
@@ -1871,10 +1881,10 @@ export function ContainerMode({
                               riskLevel={trader.riskLevel}
                             />
                             {trade.isTrading && (
-                              <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                                <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full bg-success">
-                                  <RefreshCw className="h-2 w-2 text-white animate-spin" />
+                              <span className="absolute -top-1 -right-1 flex h-4 w-4 max-md:static max-md:h-auto max-md:w-auto">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75 max-md:hidden" />
+                                <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full bg-success max-md:h-2 max-md:w-2">
+                                  <RefreshCw className="h-2 w-2 text-white animate-spin max-md:hidden" />
                                 </span>
                               </span>
                             )}
@@ -1966,7 +1976,7 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.serverSessionId ?? trade.traderId}
-                      className="relative isolate min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
+                      className="relative min-w-0 overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -2020,7 +2030,7 @@ export function ContainerMode({
                             <>
                               <div className="mt-2 h-1.5 w-full max-w-[220px] ml-auto overflow-hidden rounded-full bg-muted">
                                 <div
-                                  className="h-full rounded-full bg-success transition-[width] duration-1000 ease-out"
+                                  className="h-full rounded-full bg-success transition-[width] duration-1000 ease-out max-md:transition-none"
                                   style={{
                                     width: `${Math.min(
                                       100,

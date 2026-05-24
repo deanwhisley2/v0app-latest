@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MOBILE_FLAT_SURFACE } from "@/lib/dashboard-mobile-render-policy"
 import { NX_SURFACE_RAISED } from "@/lib/nexus-ui-surfaces"
 
 export type CollapsibleInfoTone = "neutral" | "info" | "promo" | "warning" | "risk"
@@ -81,6 +82,7 @@ export function CollapsibleInfoPanel({
       className={cn(
         "nexus-collapsible-info group border-border/30",
         NX_SURFACE_RAISED,
+        MOBILE_FLAT_SURFACE,
         toneClass[tone],
         className,
       )}
@@ -98,7 +100,7 @@ export function CollapsibleInfoPanel({
           <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary/90">
             {viewDetailsLabel}
             <ChevronDown
-              className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180"
+              className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180 max-md:transition-none"
               aria-hidden
             />
           </span>

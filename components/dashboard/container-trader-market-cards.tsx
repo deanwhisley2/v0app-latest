@@ -19,6 +19,7 @@ import {
   fixEstimatedGrowthPct,
 } from "@/lib/container-desk-market-display"
 import { cn } from "@/lib/utils"
+import { MOBILE_MARKET_CARD } from "@/lib/dashboard-mobile-render-policy"
 import { NX_BTN_ACCENT, NX_BTN_PRIMARY, NX_MARKET_CARD } from "@/lib/nexus-ui-surfaces"
 
 type RiskLevel = "Low" | "Medium" | "High"
@@ -191,8 +192,9 @@ export function CopyTraderMarketCard({
     <article
       className={cn(
         NX_MARKET_CARD,
+        MOBILE_MARKET_CARD,
         "p-[18px]",
-        (isActive || locked) && "ring-2 ring-primary/20",
+        (isActive || locked) && "ring-2 ring-primary/20 max-md:ring-1",
         locked && !isActive && "opacity-90",
       )}
     >
@@ -237,7 +239,7 @@ export function CopyTraderMarketCard({
         <MarketDirectionBadge chartSymbol={chartSymbol} live={live} t={t} />
       </div>
 
-      <div className="mt-2 rounded-xl bg-muted/25 px-2 py-1.5">
+      <div className="mt-2 max-md:hidden rounded-xl bg-muted/25 px-2 py-1.5">
         <LiveMiniMarketChart symbol={chartSymbol} refreshKey={live.authorityRevision} />
       </div>
 
@@ -325,7 +327,7 @@ export function FixDeskMarketCard({
   const slots = estimatedSlotsRemaining(trader)
 
   return (
-    <article className={cn(NX_MARKET_CARD, "p-[18px]", isActive && "ring-2 ring-warning/35")}>
+    <article className={cn(NX_MARKET_CARD, MOBILE_MARKET_CARD, "p-[18px]", isActive && "ring-2 ring-warning/35 max-md:ring-1")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <TraderPersonaAvatar name={trader.name} initials={trader.avatar} riskLevel={trader.riskLevel} size="lg" />
@@ -363,7 +365,7 @@ export function FixDeskMarketCard({
         <MarketDirectionBadge chartSymbol={chartSymbol} live={live} t={t} />
       </div>
 
-      <div className="mt-2 rounded-xl bg-muted/25 px-2 py-1.5">
+      <div className="mt-2 max-md:hidden rounded-xl bg-muted/25 px-2 py-1.5">
         <LiveMiniMarketChart symbol={chartSymbol} refreshKey={live.authorityRevision} />
       </div>
 

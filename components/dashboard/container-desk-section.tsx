@@ -62,7 +62,7 @@ export function ContainerDeskSection({
           </span>
           <ChevronDown
             className={cn(
-              "h-5 w-5 shrink-0 text-muted-foreground transition-transform",
+              "h-5 w-5 shrink-0 text-muted-foreground transition-transform max-md:transition-none",
               mobileOpen && "rotate-180",
             )}
             aria-hidden

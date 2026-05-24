@@ -740,6 +740,39 @@ html:not(.nexus-pwa-ready) body {
     isolation: auto !important;
   }
 
+  /* --- Trading workspace: localized compositor-safe mode --- */
+  .nexus-mobile-stable .nexus-container-mode .nexus-market-card,
+  .nexus-mobile-stable .nexus-container-mode .nexus-collapsible-info {
+    box-shadow: none !important;
+    contain: layout paint;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode [class*="animate-ping"],
+  .nexus-mobile-stable .nexus-container-mode [class*="animate-spin"] {
+    animation: none !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-workspace-live-dot {
+    animation: none !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode [class*="transition-[width]"],
+  .nexus-mobile-stable .nexus-container-mode [class*="duration-1000"] {
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-trader-avatar-inner {
+    background: var(--muted) !important;
+    background-image: none !important;
+    color: var(--foreground) !important;
+    box-shadow: none !important;
+  }
+
+  .nexus-mobile-stable .nexus-container-mode .nexus-flat-card {
+    contain: layout paint;
+  }
+
   /* --- Hidden QA overlays (FAB etc.) --- */
   .nexus-mobile-stable .nexus-mobile-hide-fab {
     display: none !important;
