@@ -972,6 +972,41 @@ html:not(.nexus-pwa-ready) body {
     opacity: 1 !important;
   }
 
+  /* --- CHROME_ANDROID_SAFE_MODE: no tab animation, flat overlays (Chrome-only) --- */
+  html.nexus-chrome-android-safe .nexus-tab-panel {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="backdrop-blur"],
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="backdrop-filter"],
+  html.nexus-chrome-android-safe [class*="backdrop-blur"],
+  html.nexus-chrome-android-safe [class*="backdrop-filter"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="animate-in"],
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="fade-in"],
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="slide-in-from"],
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="zoom-in"] {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="transition-all"],
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="transition-transform"],
+  html.nexus-chrome-android-safe .nexus-mobile-stable [class*="transition-[width]"] {
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  html.nexus-chrome-android-safe .nexus-notification-portal [class*="transition-"] {
+    animation: none !important;
+    transition: none !important;
+  }
+
   html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="filter"],
   html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="drop-shadow"],
   html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="shadow-["] {

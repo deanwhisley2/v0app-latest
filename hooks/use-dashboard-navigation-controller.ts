@@ -8,6 +8,7 @@ import {
   postLoginTab,
   type DashboardMainTab,
 } from "@/lib/dashboard-navigation-policy"
+import { shouldSkipDashboardTabRestore } from "@/lib/mobile/chrome-android-safe-mode"
 
 /**
  * Tracks user-initiated tab changes vs programmatic restores.
@@ -26,6 +27,10 @@ export function useDashboardNavigationController(operationalWorkspace: boolean) 
       if (consumeFreshLoginLanding()) {
         return postLoginTab(operationalWorkspace)
       }
+      /** Chrome Android: never restore cached tab — always land on Container/Home. */
+      if (shouldSkipDashboardTabRestore()) {
+        return postLoginTab(operationalWorkspace)
+      }
       if (sessionTab) {
         return normalizeDashboardTab(sessionTab, { operationalWorkspace })
       }
@@ -35,6 +40,7 @@ export function useDashboardNavigationController(operationalWorkspace: boolean) 
   )
 
   const shouldApplyServerWorkspace = useCallback((): boolean => {
+    if (shouldSkipDashboardTabRestore()) return false
     if (!hydratedRef.current) return false
     const sinceUser = Date.now() - lastUserNavAtRef.current
     if (sinceUser < 12_000) return false
@@ -45,7 +51,10 @@ export function useDashboardNavigationController(operationalWorkspace: boolean) 
     hydratedRef.current = true
   }, [])
 
-  const consumePendingNav = useCallback(() => consumeUserInitiatedPendingNav(), [])
+  const consumePendingNav = useCallback(() => {
+    if (shouldSkipDashboardTabRestore()) return null
+    return consumeUserInitiatedPendingNav()
+  }, [])
 
   return {
     markUserNav,

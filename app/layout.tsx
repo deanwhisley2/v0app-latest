@@ -29,6 +29,11 @@ import {
   LOW_GPU_ANDROID_MODE,
   MOBILE_LOW_GPU_BOOT_SCRIPT,
 } from '@/lib/mobile/mobile-low-gpu-mode'
+import {
+  CHROME_ANDROID_SAFE_MODE,
+  CHROME_ANDROID_SAFE_BOOT_SCRIPT,
+} from '@/lib/mobile/chrome-android-safe-mode'
+import { ChromeAndroidSafeBootstrap } from '@/components/mobile/chrome-android-safe-bootstrap'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
@@ -125,6 +130,9 @@ export default function RootLayout({
         {LOW_GPU_ANDROID_MODE ? (
           <script dangerouslySetInnerHTML={{ __html: MOBILE_LOW_GPU_BOOT_SCRIPT }} />
         ) : null}
+        {CHROME_ANDROID_SAFE_MODE ? (
+          <script dangerouslySetInnerHTML={{ __html: CHROME_ANDROID_SAFE_BOOT_SCRIPT }} />
+        ) : null}
       </head>
       <body
         className="font-sans antialiased bg-background text-foreground min-h-full"
@@ -176,6 +184,7 @@ export default function RootLayout({
         </Suspense>
         <ScrollLockSafety />
         <MobileLowGpuBootstrap />
+        <ChromeAndroidSafeBootstrap />
         <NativeScrollBootstrap />
         <PwaSafeModeBootstrap />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />

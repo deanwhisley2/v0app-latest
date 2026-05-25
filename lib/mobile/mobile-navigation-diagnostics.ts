@@ -26,6 +26,10 @@ export type ClientDiagnosticKind =
   | "notification_nav"
   | "server_workspace_skip"
   | "overlay_state"
+  | "chrome_safe_boot"
+  | "chrome_bfcache"
+  | "chrome_hydration"
+  | "chrome_route"
 
 export type ClientDiagnosticPayload = {
   kind: ClientDiagnosticKind | string

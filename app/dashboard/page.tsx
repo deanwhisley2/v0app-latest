@@ -82,6 +82,12 @@ import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
 import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnostics"
 import type { DashboardMainTab } from "@/lib/dashboard-navigation-policy"
+import { postLoginTab } from "@/lib/dashboard-navigation-policy"
+import {
+  CHROME_BFCACHE_RESET_EVENT,
+  purgeChromeUnsafeSessionState,
+  shouldSkipDashboardTabRestore,
+} from "@/lib/mobile/chrome-android-safe-mode"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -549,7 +555,10 @@ export default function DashboardPage() {
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return
-    const snap = readDashboardActivity(activityUserId)
+    if (shouldSkipDashboardTabRestore()) {
+      purgeChromeUnsafeSessionState()
+    }
+    const snap = shouldSkipDashboardTabRestore() ? null : readDashboardActivity(activityUserId)
     const tab = navCtrl.resolveInitialTab(
       snap
         ? snap.activeTab === "wallet"
@@ -580,6 +589,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!activityHydratedRef.current) return
+    if (shouldSkipDashboardTabRestore()) return
     const snap = buildActivitySnapshot(activityUserId, {
       activeTab,
       tradeView,
@@ -1546,7 +1556,27 @@ export default function DashboardPage() {
   }, [authLoading])
 
   useEffect(() => {
+    if (!shouldSkipDashboardTabRestore()) return
+    const onChromeReset = () => {
+      reportClientDiagnostic({
+        kind: "chrome_bfcache",
+        message: "dashboard forced clean tab after bfcache",
+        meta: { tab: postLoginTab(operationalWorkspace) },
+      })
+      setSettingsRequestedView(null)
+      setChatHubFocus(null)
+      setSupportThreadFocusId(null)
+      clearDashboardActivity()
+      purgeChromeUnsafeSessionState()
+      setTabProgrammatic(postLoginTab(operationalWorkspace), "chrome_bfcache_reset")
+    }
+    window.addEventListener(CHROME_BFCACHE_RESET_EVENT, onChromeReset)
+    return () => window.removeEventListener(CHROME_BFCACHE_RESET_EVENT, onChromeReset)
+  }, [operationalWorkspace, setTabProgrammatic])
+
+  useEffect(() => {
     if (authLoading) return
+    if (shouldSkipDashboardTabRestore()) return
     const tid = supportThreadFromUrlRef.current
     if (!tid) return
     if (op.isLoading && !op.snapshot?.profile && Boolean(roleHint?.isOperationalDesk)) return
