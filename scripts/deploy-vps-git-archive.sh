@@ -56,10 +56,20 @@ scp "${ARCHIVE}" "${REMOTE_USER}@${REMOTE_HOST}:/tmp/nexus-deploy.tgz"
 echo "==> extract + deploy on VPS"
 ssh "${REMOTE_USER}@${REMOTE_HOST}" bash -s <<EOF
 set -euo pipefail
-cd "${REMOTE_APP_DIR}"
-tar xzf /tmp/nexus-deploy.tgz
+APP_DIR="${REMOTE_APP_DIR}"
+STAGING="\$(mktemp -d /tmp/nexus-deploy-staging-XXXXXX)"
+trap 'rm -rf "\${STAGING}"' EXIT
+tar xzf /tmp/nexus-deploy.tgz -C "\${STAGING}"
 rm -f /tmp/nexus-deploy.tgz
-# Runtime proof of which tree was extracted (VPS has no .git here).
+mkdir -p "\${APP_DIR}"
+# Sync tree so deleted paths (e.g. removed APK modules) are purged on the server.
+rsync -a --delete \\
+  --exclude '.env.local' \\
+  --exclude 'node_modules/' \\
+  --exclude '.next/' \\
+  --exclude 'logs/' \\
+  "\${STAGING}/" "\${APP_DIR}/"
+cd "\${APP_DIR}"
 printf '%s\\n' "${COMMIT}" > .deploy-revision
 chmod +x scripts/deploy.sh
 export STRICT_BUILD="${STRICT_BUILD:-1}"
