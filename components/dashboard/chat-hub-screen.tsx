@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
 import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
+import { CHAT_REALTIME_DELAY_MS } from "@/lib/mobile/chat-mount-policy"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { NX_PANEL } from "@/lib/nexus-ui-surfaces"
@@ -94,6 +95,15 @@ export function ChatHubScreen({
   const scrollBehavior = isMobileLowGpuMode() ? "auto" : "smooth"
 
   const [route, setRoute] = useState<ChatRoute>({ screen: "list" })
+  const [realtimeReady, setRealtimeReady] = useState(false)
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setRealtimeReady(true), CHAT_REALTIME_DELAY_MS)
+    return () => {
+      window.clearTimeout(t)
+      setRealtimeReady(false)
+    }
+  }, [])
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim().toLowerCase())
 
@@ -169,7 +179,8 @@ export function ChatHubScreen({
   )
 
   useOperationalRealtime({
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && realtimeReady,
+    subscribeDelayMs: 0,
     role: "trading_user",
     userId: user?.id ?? null,
     onSupportThreads: () => setThreadTick((n) => n + 1),

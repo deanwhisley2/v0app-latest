@@ -7,6 +7,8 @@ type Role = "admin" | "retailer_desk" | "trading_user"
 
 export type OperationalRealtimeConfig = {
   enabled: boolean
+  /** Delay subscribe (ms) — avoids realtime + navigation race on Chrome Android chat mount. */
+  subscribeDelayMs?: number
   role: Role
   userId: string | null
   retailerProfileId?: string | null
@@ -36,8 +38,16 @@ export function useOperationalRealtime(config: OperationalRealtimeConfig): void 
     const c = cfgRef.current
     if (!c.enabled || !c.userId) return
 
+    let cancelled = false
+    let teardown: (() => void) | undefined
+    const delay = Math.max(0, c.subscribeDelayMs ?? 0)
+    const startTimer = window.setTimeout(() => {
+      if (cancelled) return
+      const uid = cfgRef.current.userId
+      if (!uid) return
+
     const gen = ++channelGen.current
-    const channelName = `operational_${c.role}_${c.userId.slice(0, 8)}_${gen}`
+    const channelName = `operational_${cfgRef.current.role}_${uid.slice(0, 8)}_${gen}`
     const ch = supabase.channel(channelName)
 
     const fireDebounced = (key: string, fn?: () => void) => {
@@ -90,9 +100,9 @@ export function useOperationalRealtime(config: OperationalRealtimeConfig): void 
       bind(
         "retailer_fund_requests",
         () => cfgRef.current.onRetailerFundRequests?.(),
-        `user_id=eq.${c.userId}`,
+        `user_id=eq.${uid}`,
       )
-      bind("withdrawal_requests", () => cfgRef.current.onWithdrawals?.(), `user_id=eq.${c.userId}`)
+      bind("withdrawal_requests", () => cfgRef.current.onWithdrawals?.(), `user_id=eq.${uid}`)
       bind("user_account_notifications", () => cfgRef.current.onAccountNotifications?.())
       bind("operational_support_threads", () => cfgRef.current.onSupportThreads?.())
       bind("operational_support_messages", () => cfgRef.current.onSupportMessages?.())
@@ -122,11 +132,18 @@ export function useOperationalRealtime(config: OperationalRealtimeConfig): void 
     }
     document.addEventListener("visibilitychange", onVisibility)
 
-    return () => {
+    teardown = () => {
       document.removeEventListener("visibilitychange", onVisibility)
       for (const t of debounceTimers.current.values()) clearTimeout(t)
       debounceTimers.current.clear()
       void supabase.removeChannel(ch)
     }
-  }, [config.enabled, config.role, config.userId, config.retailerProfileId])
+    }, delay)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(startTimer)
+      teardown?.()
+    }
+  }, [config.enabled, config.role, config.userId, config.retailerProfileId, config.subscribeDelayMs])
 }

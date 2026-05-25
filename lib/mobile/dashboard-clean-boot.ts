@@ -61,7 +61,14 @@ export const DASHBOARD_CLEAN_BOOT_SCRIPT = `
         }
       } catch(e) {}
     }
+    try {
+      if (localStorage.getItem("nexus_dashboard_activity_v2") !== null) {
+        localStorage.removeItem("nexus_dashboard_activity_v2");
+        cleared.push("localStorage:nexus_dashboard_activity_v2");
+      }
+    } catch(e) {}
     window.__NEXUS_CLEAN_BOOT_META__ = { pathname: location.pathname, clearedKeys: cleared };
+    window.__NEXUS_BOOT_TAB__ = "container";
     window.addEventListener("pageshow", function(e) {
       if (!e.persisted) return;
       var c = [];

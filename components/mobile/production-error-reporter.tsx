@@ -12,6 +12,16 @@ export function ProductionErrorReporter() {
 
     const onError = (event: ErrorEvent) => {
       const message = String(event.message ?? "unknown").slice(0, 500)
+      if (/hydration|did not match|Hydration failed/i.test(message)) {
+        reportClientDiagnostic({
+          kind: "hydration_mismatch",
+          message,
+          meta: {
+            source: event.filename,
+            line: event.lineno,
+          },
+        })
+      }
       gaEvent("client_error", {
         message: message.slice(0, 120),
         source: String(event.filename ?? "").slice(0, 80),
