@@ -31,5 +31,7 @@ export async function GET(request: Request) {
     selectedCountry: result.selectedCountry,
     detectedCountry: result.detectedCountry,
     bypassed: result.bypassed,
+    geoUncertain: result.geoUncertain ?? false,
+    warning: result.warning ?? null,
   })
 }

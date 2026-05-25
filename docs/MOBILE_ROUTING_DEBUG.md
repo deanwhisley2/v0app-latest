@@ -57,15 +57,10 @@ Look for:
 | Flag | Value | Purpose |
 |------|-------|---------|
 | `NEXUS_BROWSER_ONLY_LOCK` | `true` | No SW/manifest/runtime |
-| `NEXUS_LIGHTWEIGHT_ANDROID_INSTALL` | **`false`** | Install card off for clean baseline |
+| APK / install layer | **removed** | Browser-first only |
 | `NEXUS_MOBILE_NAV_DIAGNOSTICS` | `true` | Global failure capture |
 
 ## After root cause is found
 
 1. Fix the actual bug (routing, middleware, RSC, asset, etc.)
-2. Set `NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = true` again (APK + manual install UX)
-3. Set `NEXUS_MOBILE_NAV_DIAGNOSTICS = false` when noise is no longer needed
-
-## APK note
-
-Install UX is **temporarily disabled for debugging only**. It does not register SW or change routing — it will be re-enabled once navigation is proven stable.
+2. Set `NEXUS_MOBILE_NAV_DIAGNOSTICS = false` when noise is no longer needed

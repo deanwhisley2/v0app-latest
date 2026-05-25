@@ -97,7 +97,7 @@ const en: AuthMessages = {
     selfieAdded: "Face profile saved for secure recovery.",
     referralHint: "Paste a referral ID if someone invited you.",
     countryHint:
-      "Must match where you are signing up from. VPN or foreign IPs are blocked at verification.",
+      "Choose the country where you live and use mobile money. We may show a soft warning if network routing looks unusual — you can still continue after confirming.",
     countryRequired: "Select your operating country to continue.",
     countryMismatch:
       "Your connection does not match the selected country. Choose your actual country or sign in from that region.",
@@ -159,7 +159,7 @@ const overlays: Partial<Record<AppLanguage, DeepPartial<AuthMessages>>> = {
       selfieAdded: "Profil facial enregistré pour une récupération sécurisée.",
       referralHint: "Collez un code de parrainage si quelqu’un vous a invité.",
       countryHint:
-        "Doit correspondre à votre pays d’inscription. VPN ou IP étrangères sont bloquées à la vérification.",
+        "Choisissez le pays où vous vivez et utilisez l’argent mobile. Un avertissement peut s’afficher si le réseau semble atypique — vous pouvez continuer après confirmation.",
       countryRequired: "Sélectionnez votre pays d’opération pour continuer.",
       countryMismatch:
         "Votre connexion ne correspond pas au pays sélectionné. Choisissez votre pays réel ou connectez-vous depuis cette région.",

@@ -17,11 +17,6 @@ import {
   startupCapitalMarketingFr,
 } from "@/lib/i18n/startup-capital-marketing"
 import {
-  androidInstallMessagesEn,
-  androidInstallMessagesFr,
-  androidInstallMessagesSw,
-} from "@/lib/i18n/android-install-messages"
-import {
   mobileMessagesEn,
   mobileMessagesFr,
   mobileMessagesSw,
@@ -178,7 +173,6 @@ const en: Record<string, string> = {
   ...fundingWithdrawalEn,
   ...companyMessagesEn,
   ...startupCapitalMarketingEn,
-  ...androidInstallMessagesEn,
   ...mobileMessagesEn,
 }
 
@@ -211,7 +205,6 @@ const fr: Partial<Record<string, string>> = {
   ...(fundingWithdrawalOverlays.fr ?? {}),
   ...frNotificationsOverlay,
   ...startupCapitalMarketingFr,
-  ...androidInstallMessagesFr,
   ...mobileMessagesFr,
 }
 
@@ -242,7 +235,6 @@ const sw: Partial<Record<string, string>> = {
   "settings.regionApplySuggestion": "Tumia lugha na sarafu zilizopendekezwa",
   "settings.regionSaved": "Nchi imehifadhiwa kwa ulinganifu wa fedha.",
   ...(fundingWithdrawalOverlays.sw ?? {}),
-  ...androidInstallMessagesSw,
   ...mobileMessagesSw,
 }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { isLowEndMobileDevice } from "@/lib/mobile/low-end-mobile"
+import { isLowGpuAndroid } from "@/lib/mobile/mobile-low-gpu-mode"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -30,8 +30,8 @@ export function ContainerDeskSection({
   deskOpenNonce = 0,
 }: Props) {
   const isMobile = useIsMobile()
-  const lowEnd = isLowEndMobileDevice()
-  const [mobileOpen, setMobileOpen] = useState(() => !lowEnd)
+  const lowGpu = isLowGpuAndroid()
+  const [mobileOpen, setMobileOpen] = useState(() => !lowGpu)
 
   useEffect(() => {
     if (activeTradeCount > 0) setMobileOpen(true)

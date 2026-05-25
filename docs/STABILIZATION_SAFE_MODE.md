@@ -4,31 +4,23 @@
 
 **`NEXUS_BROWSER_ONLY_LOCK = true`** in `lib/mobile/pwa-safe-mode.ts`
 
-The entire PWA/APK runtime layer is disconnected. Nexus runs as a **pure browser application**.
+Nexus runs as a **pure browser application**. APK delivery, install banners, and PWA runtime are removed.
 
 ## Disabled globally
 
 - Service worker registration (`sw.js` self-unregisters if ever loaded)
 - All cache storage (cleared on load + repeated teardown for 20s)
 - Offline / reconnect banners and fetch patching
-- PWA manifest link in HTML metadata
+- PWA manifest link in HTML metadata (while lock is on)
 - `apple-mobile-web-app-capable` metadata
-- PWA runtime bootstrap
-- Native PWA install prompt (`beforeinstallprompt`)
-
-## Lightweight install UX (paused for debug)
-
-**`NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = false`** — install card **temporarily off** while routing is investigated.
-
-When re-enabled: APK download + manual Add to Home Screen only (no SW/manifest). See `docs/LIGHTWEIGHT_ANDROID_INSTALL.md`.
-
-**Active now:** `NEXUS_MOBILE_NAV_DIAGNOSTICS = true` — see `docs/MOBILE_ROUTING_DEBUG.md`.
+- Android APK download APIs and install UI
 
 ## Still active
 
 - Next.js App Router (normal client + server navigation)
 - Auth, dashboard, APIs via direct browser networking
 - Core trading / wallet UI
+- `LOW_GPU_ANDROID_MODE` for Samsung A0x-class compositor stability
 
 ## Clean-state test (required)
 
@@ -39,19 +31,6 @@ When re-enabled: APK download + manual Add to Home Screen only (no SW/manifest).
 
 If a controlling service worker still appears, close all tabs for the domain and reopen.
 
-## Diagnostic interpretation
+## Re-enable PWA later (not APK)
 
-| Result | Conclusion |
-|--------|------------|
-| Navigation works after clean state | Root cause was PWA/SW/runtime layer |
-| Still “This page couldn’t load” | Investigate nginx, proxy, RSC, SSR, PM2 — not PWA |
-
-## 501 / gateway
-
-Capture exact URL + method from Network tab. App APK endpoint returns **503** when no signed APK is published (not 501).
-
-## Re-enable PWA (later, one layer at a time)
-
-1. Set `NEXUS_BROWSER_ONLY_LOCK = false` in `lib/mobile/pwa-safe-mode.ts`
-2. Redeploy and test auth navigation only (no SW changes yet)
-3. Reintroduce SW, offline UI, install prompts in separate slices with device QA
+Set `NEXUS_BROWSER_ONLY_LOCK = false` in `lib/mobile/pwa-safe-mode.ts`, redeploy, and revalidate manifest + SW end-to-end before production.

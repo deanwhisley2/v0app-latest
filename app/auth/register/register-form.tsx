@@ -24,7 +24,6 @@ import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-test
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
-import { AndroidInstallStaticBanner } from "@/components/install/android-install-static-banner"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -55,11 +54,7 @@ const REGISTER_JOELIN_CHIPS = [
 
 const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
 
-export default function RegisterForm({
-  showAndroidInstallBanner = false,
-}: {
-  showAndroidInstallBanner?: boolean
-}) {
+export default function RegisterForm() {
   const router = useRouter()
   const { language: ctxLang, currency: ctxCur, setPreferences, formatUserMoney } = useUserPreferences()
   const testimonialNotif = useAuthTestimonialNotifs({
@@ -83,6 +78,7 @@ export default function RegisterForm({
   const [referralCode, setReferralCode] = useState("")
   const [operatingCountry, setOperatingCountry] = useState("UG")
   const [error, setError] = useState<string | null>(null)
+  const [corridorWarning, setCorridorWarning] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const authT = getAuthMessages(language)
@@ -148,12 +144,19 @@ export default function RegisterForm({
           `/api/auth/corridor-check?country=${encodeURIComponent(operatingCountry)}`,
           { credentials: "same-origin" },
         )
-        const json = (await res.json().catch(() => ({}))) as { allowed?: boolean; error?: string }
+        const json = (await res.json().catch(() => ({}))) as {
+          allowed?: boolean
+          error?: string
+          warning?: string | null
+        }
         if (!res.ok || json.allowed === false) {
+          setCorridorWarning(null)
           setError(json.error || authT.register.countryMismatch)
           return
         }
+        setCorridorWarning(json.warning?.trim() || null)
       } catch {
+        setCorridorWarning(null)
         setError("Could not verify your region. Try again.")
         return
       }
@@ -300,12 +303,6 @@ export default function RegisterForm({
 
         <RegisterStepIndicator steps={steps} current={step} />
 
-        {showAndroidInstallBanner ? (
-          <div className="mb-4">
-            <AndroidInstallStaticBanner variant="card" />
-          </div>
-        ) : null}
-
         <form
           className="space-y-4"
           onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}
@@ -422,6 +419,7 @@ export default function RegisterForm({
                   onValueChange={(v) => {
                     const code = v
                     setOperatingCountry(code)
+                    setCorridorWarning(null)
                     if (code) {
                       const hint = suggestPreferencesForCountry(code)
                       if (hint.language) setLanguage(hint.language)
@@ -449,6 +447,11 @@ export default function RegisterForm({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">{authT.register.countryHint}</p>
+                {corridorWarning ? (
+                  <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+                    {corridorWarning}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}

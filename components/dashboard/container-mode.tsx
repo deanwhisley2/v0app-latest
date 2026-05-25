@@ -1844,7 +1844,7 @@ export function ContainerMode({
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Container desk</p>
               <h3 className="mt-0.5 text-base font-semibold tracking-tight sm:text-lg">Balance overview</h3>
             </div>
-            <div className="grid nexus-desk-balance-grid gap-px bg-border/50 sm:grid-cols-3 max-md:gap-0 max-md:bg-transparent">
+            <div className="grid nexus-desk-balance-grid gap-px bg-border/50 sm:grid-cols-3">
               <div className="bg-card p-4 sm:p-5">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total allocation</p>
                 <p className="mt-2 font-mono text-2xl font-bold tabular-nums">{formatUserMoney(totalCryptoAllocationUsd)}</p>
@@ -1891,7 +1891,7 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.copySessionId ?? trade.traderId}
-                      className="nexus-desk-session-card rounded-lg border border-border bg-muted/30 p-4 max-md:border-border max-md:bg-card"
+                      className="nexus-desk-session-card rounded-lg border border-border bg-muted/30 p-4"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
@@ -1997,7 +1997,7 @@ export function ContainerMode({
                   return (
                     <div
                       key={trade.serverSessionId ?? trade.traderId}
-                      className="nexus-desk-session-card nexus-fixed-trade-card relative min-w-0 rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4 max-md:border-border max-md:bg-card max-md:overflow-visible"
+                      className="nexus-desk-session-card nexus-fixed-trade-card relative min-w-0 rounded-lg border border-warning/30 bg-warning/5 p-3 sm:p-4"
                     >
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">

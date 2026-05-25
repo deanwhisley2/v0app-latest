@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { isSupportedOperatingCountry, operatingCountryByCode } from "@/lib/operating-countries"
 import {
   detectCountryFromRequest,
+  getEdgeCountryCode,
   getRequestIpAddress,
   shouldBypassCountryCorridor,
 } from "@/lib/server/request-geo"
@@ -14,6 +15,8 @@ export type CountryCorridorResult =
       selectedCountry: string
       detectedCountry: string | null
       bypassed: boolean
+      geoUncertain?: boolean
+      warning?: string
     }
   | {
       ok: false
@@ -24,7 +27,7 @@ export type CountryCorridorResult =
     }
 
 export const COUNTRY_CORRIDOR_MISMATCH_MESSAGE =
-  "Your connection location does not match the country you selected. Choose your actual operating country or sign in from that region."
+  "Your connection location may not match the country you selected. Confirm your operating country is correct before continuing."
 
 export const COUNTRY_CORRIDOR_REQUIRED_MESSAGE =
   "Select your operating country before continuing."
@@ -33,7 +36,10 @@ export const COUNTRY_CORRIDOR_UNSUPPORTED_MESSAGE =
   "This country is not supported on Nexus Pro yet."
 
 export const COUNTRY_CORRIDOR_UNKNOWN_IP_MESSAGE =
-  "We could not verify your connection region. Disable VPN or try again on mobile data, then retry."
+  "We could not verify your connection region from IP alone. Confirm your operating country — mobile carrier networks sometimes route through other regions."
+
+export const COUNTRY_CORRIDOR_MISMATCH_SOFT_WARNING =
+  "Connection region lookup differs from your selected country. If you are signing up from your home country (e.g. on Safaricom or Airtel mobile data), you can continue after confirming your selection."
 
 export async function enforceCountryCorridor(
   request: Request,
@@ -55,25 +61,29 @@ export async function enforceCountryCorridor(
     return { ok: true, selectedCountry: selected, detectedCountry: null, bypassed: true }
   }
 
-  const detected = ip ? await detectCountryFromRequest(request) : null
+  const edgeCountry = getEdgeCountryCode(request)
+  const detected = edgeCountry ?? (ip ? await detectCountryFromRequest(request) : null)
+
   if (!detected) {
     return {
-      ok: false,
-      blocked: true,
+      ok: true,
       selectedCountry: selected,
       detectedCountry: null,
-      message: COUNTRY_CORRIDOR_UNKNOWN_IP_MESSAGE,
+      bypassed: true,
+      geoUncertain: true,
+      warning: COUNTRY_CORRIDOR_UNKNOWN_IP_MESSAGE,
     }
   }
 
   if (detected !== selected) {
     const label = operatingCountryByCode(selected)?.label ?? selected
     return {
-      ok: false,
-      blocked: true,
+      ok: true,
       selectedCountry: selected,
       detectedCountry: detected,
-      message: `${COUNTRY_CORRIDOR_MISMATCH_MESSAGE} (selected: ${label}, detected: ${detected}).`,
+      bypassed: false,
+      geoUncertain: true,
+      warning: `${COUNTRY_CORRIDOR_MISMATCH_SOFT_WARNING} (selected: ${label}, network hint: ${detected}).`,
     }
   }
 

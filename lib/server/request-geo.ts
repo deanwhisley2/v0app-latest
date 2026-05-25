@@ -11,6 +11,18 @@ export function getRequestIpAddress(request: Request): string | null {
   return request.headers.get("x-real-ip")?.trim() ?? null
 }
 
+/** Cloudflare / edge country hint — preferred over third-party IP APIs when present. */
+export function getEdgeCountryCode(request: Request): string | null {
+  const raw =
+    request.headers.get("cf-ipcountry")?.trim() ??
+    request.headers.get("x-vercel-ip-country")?.trim() ??
+    request.headers.get("cloudfront-viewer-country")?.trim() ??
+    ""
+  const cc = raw.toUpperCase().slice(0, 2)
+  if (cc.length !== 2 || cc === "XX" || cc === "T1") return null
+  return cc
+}
+
 function isPrivateOrLocalIp(ip: string): boolean {
   const n = ip.toLowerCase()
   if (n === "::1" || n.startsWith("::ffff:127.") || n === "127.0.0.1") return true
@@ -49,6 +61,9 @@ export async function resolveIpToCountryCode(ip: string): Promise<string | null>
 }
 
 export async function detectCountryFromRequest(request: Request): Promise<string | null> {
+  const edge = getEdgeCountryCode(request)
+  if (edge) return edge
+
   const ip = getRequestIpAddress(request)
   if (!ip || shouldBypassCountryCorridor(ip)) return null
   return resolveIpToCountryCode(ip)

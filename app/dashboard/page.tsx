@@ -8,7 +8,6 @@ import { useOperationalBootstrap } from "@/contexts/OperationalBootstrapContext"
 import { supabase } from "@/lib/supabaseClient"
 import { Header } from "@/components/dashboard/header"
 import { MobileAppBar } from "@/components/dashboard/mobile-app-bar"
-import { DashboardMobileNotices } from "@/components/dashboard/dashboard-mobile-notices"
 import { Ticker } from "@/components/dashboard/ticker"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { BottomNav } from "@/components/dashboard/bottom-nav"
@@ -78,9 +77,6 @@ import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
-import { AndroidInstallDashboardReminder } from "@/components/install/android-install-dashboard-reminder"
-import { AndroidAppUpdateBanner } from "@/components/install/android-app-update-banner"
-import { isPwaSafeMode } from "@/lib/mobile/pwa-safe-mode"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
@@ -2265,16 +2261,8 @@ export default function DashboardPage() {
         }
       />
 
-      <DashboardMobileNotices />
-
       <div className="hidden md:block">
         <LaunchStatusBanner />
-        {!isPwaSafeMode() ? (
-          <>
-            <AndroidInstallDashboardReminder />
-            <AndroidAppUpdateBanner />
-          </>
-        ) : null}
       </div>
       <StartupCapitalPromoModal />
 

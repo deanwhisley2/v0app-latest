@@ -20,7 +20,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
-import { AndroidInstallStaticBanner } from "@/components/install/android-install-static-banner"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 const REMEMBER_KEY = "nexus_auth_remember_id"
 
@@ -37,11 +36,7 @@ const LOGIN_JOELIN_CHIPS = [
 const inputClass =
   "min-h-12 text-base sm:text-sm touch-manipulation"
 
-export default function LoginForm({
-  showAndroidInstallBanner = false,
-}: {
-  showAndroidInstallBanner?: boolean
-}) {
+export default function LoginForm() {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
   const { language, formatUserMoney } = useUserPreferences()
@@ -204,12 +199,6 @@ export default function LoginForm({
           <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{t.login.welcomeBack}</h1>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t.login.subtitle}</p>
         </header>
-
-        {showAndroidInstallBanner ? (
-          <div className="mb-4">
-            <AndroidInstallStaticBanner variant="card" />
-          </div>
-        ) : null}
 
         {isDevLocalOnly() ? (
           <p className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2.5 text-xs text-cyan-100">

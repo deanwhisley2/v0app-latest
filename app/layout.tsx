@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Space_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { OperationalBootstrapProvider } from '@/contexts/OperationalBootstrapContext'
 import { NexusNotificationsProvider } from '@/contexts/NexusNotificationsContext'
@@ -27,26 +26,13 @@ import {
 } from '@/lib/mobile/mobile-navigation-diagnostics'
 import { isPwaSafeMode, PWA_SAFE_MODE_TEARDOWN_SCRIPT } from '@/lib/mobile/pwa-safe-mode'
 import {
+  LOW_GPU_ANDROID_MODE,
   MOBILE_LOW_GPU_BOOT_SCRIPT,
-  NEXUS_MOBILE_LOW_GPU_MODE,
 } from '@/lib/mobile/mobile-low-gpu-mode'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
 const browserOnly = isPwaSafeMode()
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const spaceMono = Space_Mono({
-  subsets: ['latin'],
-  weight: ['400', '700'],
-  variable: '--font-space-mono',
-  display: 'swap',
-});
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -136,12 +122,12 @@ export default function RootLayout({
         {isPwaSafeMode() ? (
           <script dangerouslySetInnerHTML={{ __html: PWA_SAFE_MODE_TEARDOWN_SCRIPT }} />
         ) : null}
-        {NEXUS_MOBILE_LOW_GPU_MODE ? (
+        {LOW_GPU_ANDROID_MODE ? (
           <script dangerouslySetInnerHTML={{ __html: MOBILE_LOW_GPU_BOOT_SCRIPT }} />
         ) : null}
       </head>
       <body
-        className={`${inter.variable} ${spaceMono.variable} font-sans antialiased bg-background text-foreground min-h-full`}
+        className="font-sans antialiased bg-background text-foreground min-h-full"
         suppressHydrationWarning
       >
         {/* Prevent browser extension errors from wallet injectors */}

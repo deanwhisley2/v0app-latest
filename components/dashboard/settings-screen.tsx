@@ -12,7 +12,6 @@ import {
   CreditCard,
   Lock,
   Info,
-  RefreshCw,
   ChevronRight,
   ChevronLeft,
   Banknote,
@@ -588,22 +587,6 @@ export function SettingsScreen({
               </button>
             ))}
           </div>
-        </Card>
-
-        {/* Check Updates */}
-        <Card className="border-border bg-card p-4">
-          <button className="flex w-full items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-muted">
-            <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <RefreshCw className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium">Check for Updates</p>
-                <p className="text-sm text-muted-foreground">Version 2.4.1 (Latest)</p>
-              </div>
-            </div>
-            <Check className="h-5 w-5 text-success" />
-          </button>
         </Card>
 
         {/* Logout Button */}

@@ -1,42 +1,13 @@
 /**
  * Browser-only stabilization lock.
  *
- * Hard-locked ON until routing is proven stable across desktop + Android.
- * To reintroduce PWA/APK: set NEXUS_BROWSER_ONLY_LOCK = false and redeploy.
+ * Keeps the app in normal browser mode: no service worker takeover, no install/APK layer.
+ * Set NEXUS_BROWSER_ONLY_LOCK = false only after PWA is revalidated end-to-end.
  */
 export const NEXUS_BROWSER_ONLY_LOCK = true
 
 export function isPwaSafeMode(): boolean {
   return NEXUS_BROWSER_ONLY_LOCK
-}
-
-/**
- * Lightweight install UX only — APK download + manual Add to Home Screen guidance.
- * No service worker, manifest, standalone runtime, or navigation changes.
- */
-export const NEXUS_LIGHTWEIGHT_ANDROID_INSTALL = false
-
-/**
- * Phase 1 install rebuild — static banner only (see android-install-static-banner.tsx).
- * Enable only after full install card is confirmed off and baseline is stable.
- */
-export const NEXUS_INSTALL_STATIC_BANNER = true
-
-export function isInstallStaticBannerEnabled(): boolean {
-  return (
-    NEXUS_BROWSER_ONLY_LOCK &&
-    NEXUS_INSTALL_STATIC_BANNER &&
-    !NEXUS_LIGHTWEIGHT_ANDROID_INSTALL
-  )
-}
-
-export function isLightweightAndroidInstallEnabled(): boolean {
-  return NEXUS_BROWSER_ONLY_LOCK && NEXUS_LIGHTWEIGHT_ANDROID_INSTALL
-}
-
-/** Full PWA layer (manifest/SW/runtime) — off until separately revalidated. */
-export function isPwaInstallEnabled(): boolean {
-  return !NEXUS_BROWSER_ONLY_LOCK
 }
 
 /** Runs before React hydration — unregister SW, clear caches, one-time reload if a controller was active. */

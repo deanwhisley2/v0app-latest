@@ -1,6 +1,6 @@
 # Mobile production QA checklist
 
-Use this before public Android/PWA announcement. Record PASS/FAIL per device.
+Use before mobile production sign-off. Record PASS/FAIL per device. Browser-first (no APK install layer).
 
 ## Devices (minimum matrix)
 
@@ -12,39 +12,32 @@ Use this before public Android/PWA announcement. Record PASS/FAIL per device.
 
 ## Test scenarios
 
-### 1. Fresh install
-- [ ] Visit login on Chrome Android → Install App prompt visible
-- [ ] PWA install completes → opens standalone as **Nexus Pro**
-- [ ] App icon correct on home screen
+### 1. Fresh session (browser)
+- [ ] Login / register complete without geo hard-block (Kenya mobile data OK with warning if needed)
 - [ ] First dashboard load < 5s on 3G throttled
+- [ ] No compositor corruption on A05-class (flat mode when `nexus-mobile-low-gpu` present)
 
 ### 2. Returning user
-- [ ] Standalone opens to last session (auth persisted)
+- [ ] Auth persists across refresh
 - [ ] Balances and notifications hydrate after reconnect
 - [ ] Smart header reveals on scroll-up
 
-### 3. Install / update
-- [ ] APK publish script validates corrupt files (reject)
-- [ ] Version endpoint returns `updateAvailable` when outdated
-- [ ] Update banner → download → Open Downloads flow works
-- [ ] No downgrade when installed > server version
-
-### 4. Long-session stability
+### 3. Long-session stability
 - [ ] 30+ min dashboard use without crash
 - [ ] Tab switches (Home / Search / Alerts / Profile) without layout shift
 - [ ] Memory stable (no runaway tab growth)
 
-### 5. Weak internet
+### 4. Weak internet
 - [ ] Offline banner appears within 2s of disconnect
 - [ ] Reconnected banner + bootstrap refetch
 - [ ] `/offline` shell loads when navigate fails
 - [ ] Auto-retry from offline page when online returns
 
-### 6. Multi-device
+### 5. Multi-device
 - [ ] Same account on two phones — no session corruption
 - [ ] Logout on one device does not silently break the other
 
-### 7. Memory / performance
+### 6. Memory / performance
 - [ ] Container, wallet, settings lazy-load without jank
 - [ ] No excessive polling when tab backgrounded
 - [ ] Low-end device: bottom nav + header responsive
@@ -59,16 +52,14 @@ Use this before public Android/PWA announcement. Record PASS/FAIL per device.
 - [ ] No white flash on resume (PWA shell)
 
 ### 10. Browser compatibility
-- [ ] Chrome Android — full install + update
-- [ ] Samsung Internet — install + manual fallback
-- [ ] Firefox Android — PWA or APK path
-- [ ] Opera — instant app / manual guidance
+- [ ] Chrome Android — auth, dashboard, scroll, no compositor corruption
+- [ ] Samsung Internet — same
+- [ ] Firefox Android — same
+- [ ] Opera — same
 
 ## Production verification URLs
 
 - Health: `GET https://www.nexuspro.it.com/api/health`
-- Release: `GET https://www.nexuspro.it.com/api/app/android-release`
-- Version: `GET https://www.nexuspro.it.com/api/app/android-release/version?installed=20260524`
 
 ## Rollback
 

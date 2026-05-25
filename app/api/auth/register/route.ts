@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       blocked: !corridor.ok,
       email,
       userAgent,
-      detail: corridor.ok ? null : corridor.message,
+      detail: corridor.ok ? corridor.warning ?? null : corridor.message,
     })
   } catch {
     /* audit best-effort */

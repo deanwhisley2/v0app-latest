@@ -1,4 +1,3 @@
-import { isLowEndMobileDevice } from "@/lib/mobile/low-end-mobile"
 import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
 
 function isMobileViewport(): boolean {
@@ -6,65 +5,65 @@ function isMobileViewport(): boolean {
   return window.matchMedia("(max-width: 767px)").matches
 }
 
-function mobileGpuTierSlow(): boolean {
-  return isMobileLowGpuMode() || isLowEndMobileDevice()
+function isLowGpuAndroidMobile(): boolean {
+  return isMobileLowGpuMode()
 }
 
-/** Countdown label refresh — slower on phones to avoid repaint storms. */
+/** Countdown label refresh — slower only on LOW_GPU Android. */
 export function workspaceCountdownIntervalMs(): number {
   if (!isMobileViewport()) return 1000
-  return mobileGpuTierSlow() ? 60_000 : 15_000
+  return isLowGpuAndroidMobile() ? 60_000 : 1000
 }
 
 /** Fixed-trade accrual display tick between server hydrates. */
 export function workspaceEarnTickIntervalMs(): number {
   if (!isMobileViewport()) return 10_000
-  return mobileGpuTierSlow() ? 120_000 : 30_000
+  return isLowGpuAndroidMobile() ? 120_000 : 10_000
 }
 
-/** rAF number tween on earned USD — desktop only. */
+/** rAF number tween on earned USD — disabled on budget Android only. */
 export function shouldAnimateFixEarnedDisplay(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
 
 /** Fixed-trade local earned sync between server polls. */
 export function workspaceFixSyncIntervalMs(): number {
   if (!isMobileViewport()) return 15_000
-  return mobileGpuTierSlow() ? 120_000 : 30_000
+  return isLowGpuAndroidMobile() ? 120_000 : 15_000
 }
 
-/** Active session API poll — was 8s everywhere; too heavy for desk cards on phones. */
+/** Active session API poll — tight on premium mobile; relaxed on A05-class. */
 export function workspaceSessionPollIntervalMs(): number {
   if (!isMobileViewport()) return 8_000
-  return mobileGpuTierSlow() ? 120_000 : 30_000
+  return isLowGpuAndroidMobile() ? 120_000 : 8_000
 }
 
-/** Live schedule accrual + progress bar — server/poll snapshots only on mobile. */
+/** Live schedule accrual + progress bar — budget Android uses poll snapshots only. */
 export function shouldUseLiveFixAccrualDisplay(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
 
-/** Hide sub-pixel progress bar repaints on phones. */
+/** Hide sub-pixel progress bar repaints on budget Android. */
 export function shouldShowFixSessionProgressBar(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
 
-/** BTC price blend animation — desktop-only. */
+/** BTC price blend animation — desktop and premium mobile. */
 export function shouldBlendMarketPriceDisplay(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
 
-/** BTC continuity micro-nudge — desktop-only visual polish. */
+/** BTC continuity micro-nudge — desktop and premium mobile. */
 export function shouldRunMarketContinuityNudge(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
 
-/** Skip earnDisplayTick-driven re-renders on phones. */
+/** Skip earnDisplayTick-driven re-renders on budget Android. */
 export function shouldRunDeskEarnDisplayTick(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
 
-/** Copy session countdown seconds — omitted on mobile to reduce churn. */
+/** Copy session countdown seconds — omitted on budget Android. */
 export function shouldShowSessionCountdownSeconds(): boolean {
-  return !isMobileViewport()
+  return !isLowGpuAndroidMobile()
 }
