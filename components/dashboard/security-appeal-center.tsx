@@ -10,7 +10,6 @@ import type { PublicSecurityProfile, SecurityAppealRow } from "@/lib/nexus-secur
 import {
   fetchSecurityProfilePassive,
   securityProfileDebug,
-  securityProfileDebugRender,
 } from "@/lib/nexus-security-profile-client"
 
 const APPEAL_FETCH_MS = 5_000
@@ -30,8 +29,6 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
   const [appealValue, setAppealValue] = useState("")
   const [appealMessage, setAppealMessage] = useState("")
   const loadedRef = useRef(false)
-
-  securityProfileDebugRender("appeal_center")
 
   const authHeaders = useCallback(async () => {
     const {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { Shield, ChevronRight } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,21 +11,19 @@ import type { PublicSecurityProfile } from "@/lib/nexus-security-profile-types"
 import {
   fetchSecurityProfilePassive,
   securityProfileDebug,
-  securityProfileDebugRender,
 } from "@/lib/nexus-security-profile-client"
 
 type Props = {
-  onOpenAppealCenter: () => void
+  /** Separate route — appeal center never mounts during dashboard render. */
+  appealCenterHref: string
 }
 
 /** Settings summary only — protected details, link to appeal center. */
-export function UserSecurityRecoverySummary({ onOpenAppealCenter }: Props) {
+export function UserSecurityRecoverySummary({ appealCenterHref }: Props) {
   const [profile, setProfile] = useState<PublicSecurityProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const loadedRef = useRef(false)
-
-  securityProfileDebugRender("recovery_summary")
 
   const reload = useCallback(async () => {
     const {
@@ -106,13 +105,11 @@ export function UserSecurityRecoverySummary({ onOpenAppealCenter }: Props) {
         <p className="mt-3 text-xs text-muted-foreground">
           Payout and security details cannot be edited directly. Submit a secure request for operations review.
         </p>
-        <Button
-          variant="outline"
-          className="mt-4 w-full touch-manipulation justify-between"
-          onClick={onOpenAppealCenter}
-        >
-          Open Security Appeal Center
-          <ChevronRight className="h-4 w-4" />
+        <Button variant="outline" className="mt-4 w-full touch-manipulation justify-between" asChild>
+          <Link href={appealCenterHref}>
+            Open Security Appeal Center
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </Button>
       </Card>
     </div>

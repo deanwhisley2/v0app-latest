@@ -77,7 +77,6 @@ import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { NexusPushAlertsBootstrap } from "@/components/push/nexus-push-alerts-bootstrap"
-import { NexusSecurityPassiveNotice } from "@/components/dashboard/nexus-security-passive-notice"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
@@ -1494,8 +1493,12 @@ export default function DashboardPage() {
           setTabProgrammatic("desk", "notification_nav_desk")
           break
         case "settings":
-          setSettingsRequestedView(nav.view as SettingsView)
-          setTabProgrammatic("settings", "notification_nav_settings")
+          if (nav.view === "security") {
+            router.push("/dashboard/security")
+          } else {
+            setSettingsRequestedView(nav.view as SettingsView)
+            setTabProgrammatic("settings", "notification_nav_settings")
+          }
           break
         case "orders":
           setSettingsRequestedView("exchanges")
@@ -1519,7 +1522,7 @@ export default function DashboardPage() {
           break
       }
     },
-    [operationalWorkspace, navCtrl, setTabProgrammatic],
+    [operationalWorkspace, navCtrl, setTabProgrammatic, router],
   )
 
   useEffect(() => {
@@ -2319,13 +2322,6 @@ export default function DashboardPage() {
     <div
       className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
     >
-      <NexusSecurityPassiveNotice
-        enabled={Boolean(user) && !isGuestSession}
-        onOpenSecuritySettings={() => {
-          setSettingsRequestedView("security")
-          setTabUser("settings", "security_passive_banner")
-        }}
-      />
       {/* Unified mobile app bar — single search/nav hierarchy */}
       <MobileAppBar
         header={

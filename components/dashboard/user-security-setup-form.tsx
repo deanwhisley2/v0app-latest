@@ -13,16 +13,15 @@ import {
   type NexusPayoutMethod,
 } from "@/lib/nexus-payout-methods"
 import { cn } from "@/lib/utils"
-import { fetchSecurityNeedsSetupPassive, securityProfileDebug } from "@/lib/nexus-security-profile-client"
 
 type Props = {
-  /** Gate blocks dashboard until continue; settings stays on security screen. */
-  variant?: "gate" | "settings"
+  /** Settings-only form — no dashboard gate variant. */
+  variant?: "settings"
   onComplete?: () => void
 }
 
-/** First-time mandatory setup only — no appeals, no support threads. */
-export function UserSecuritySetupForm({ variant = "gate", onComplete }: Props) {
+/** First-time setup — isolated page only, no global gating. */
+export function UserSecuritySetupForm({ variant = "settings", onComplete }: Props) {
   const [phase, setPhase] = useState<"form" | "success">("form")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -78,8 +77,6 @@ export function UserSecuritySetupForm({ variant = "gate", onComplete }: Props) {
       if (!res.ok) throw new Error(j.error ?? "Setup failed")
       setCode("")
       setCodeConfirm("")
-      await fetchSecurityNeedsSetupPassive(token)
-      securityProfileDebug("setup_complete")
       setPhase("success")
     } catch (e) {
       setError(e instanceof Error ? e.message : "Setup failed")
@@ -105,7 +102,7 @@ export function UserSecuritySetupForm({ variant = "gate", onComplete }: Props) {
               className="mt-4 w-full touch-manipulation sm:w-auto"
               onClick={() => onComplete?.()}
             >
-              {variant === "gate" ? "Continue to dashboard" : "Back to Security & Recovery"}
+              Back to Security & Recovery
             </Button>
           </div>
         </div>

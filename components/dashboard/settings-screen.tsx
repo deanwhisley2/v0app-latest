@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import {
   Shield,
@@ -24,14 +26,6 @@ import {
   MapPin,
 } from "lucide-react"
 import { ExchangeBinding } from "./exchange-binding"
-import { UserSecuritySetupForm } from "@/components/dashboard/user-security-setup-form"
-import { UserSecurityRecoverySummary } from "@/components/dashboard/user-security-recovery-summary"
-import { SecurityAppealCenter } from "@/components/dashboard/security-appeal-center"
-import {
-  fetchSecurityNeedsSetupPassive,
-  readCachedNeedsSetup,
-  securityProfileDebug,
-} from "@/lib/nexus-security-profile-client"
 import { DepositWithdraw } from "./deposit-withdraw"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -51,24 +45,9 @@ import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
 import { AboutCompanyPanel } from "@/components/dashboard/about-company-panel"
 
 type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
-type SessionItem = {
-  id: string
-  device_name: string
-  browser_name: string
-  status: string
-  device_trust?: string
-  ip_address?: string | null
-  first_seen_at: string
-  last_seen_at: string
-  revoked_at?: string | null
-  is_current: boolean
-  is_online: boolean
-}
 
 export type SettingsView =
   | "main"
-  | "security"
-  | "security-appeal"
   | "notifications"
   | "nexus-learner"
   | "currency"
@@ -83,7 +62,8 @@ export type SettingsView =
   | "deposit-withdraw"
 
 interface SettingItem {
-  key: SettingsView
+  key: SettingsView | "security"
+  href?: string
   icon: React.ReactNode
   label: string
   description?: string
@@ -109,6 +89,7 @@ export function SettingsScreen({
   tradingUserLevel = 1,
   retailerCreditDesk = false,
 }: SettingsScreenProps) {
+  const router = useRouter()
   const { t, language: appLanguage, currency: appCurrency, country: appCountry, setPreferences } = useUserPreferences()
   const { theme = "dark", setTheme } = useTheme()
   const themeChoice = (theme ?? "dark") as "dark" | "light" | "system"
@@ -140,162 +121,6 @@ export function SettingsScreen({
   ])
   const [learnerInput, setLearnerInput] = useState("")
   const [learnerTyping, setLearnerTyping] = useState(false)
-  const [securityNeedsSetup, setSecurityNeedsSetup] = useState(false)
-  const [securityProfileRefresh, setSecurityProfileRefresh] = useState(0)
-
-  const refreshSecurityProfileState = useCallback(async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) return
-      securityProfileDebug("settings_refresh_start")
-      const result = await fetchSecurityNeedsSetupPassive(token)
-      setSecurityNeedsSetup(result.needsSetup)
-      setSecurityProfileRefresh((n) => n + 1)
-      securityProfileDebug("settings_refresh_finish", { needsSetup: result.needsSetup })
-    } catch {
-      /* ignore */
-    }
-  }, [])
-  const [sessionItems, setSessionItems] = useState<SessionItem[]>([])
-  const [sessionsMessage, setSessionsMessage] = useState<string | null>(null)
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
-  const [antiPhishingCode, setAntiPhishingCode] = useState("")
-  const [antiPhishingSaved, setAntiPhishingSaved] = useState<string | null>(null)
-  const [antiPhishingMessage, setAntiPhishingMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void supabase.auth.getUser().then(({ data }) => {
-      if (cancelled) return
-      const code =
-        typeof data.user?.user_metadata?.anti_phishing_code === "string"
-          ? data.user.user_metadata.anti_phishing_code.trim()
-          : ""
-      setAntiPhishingSaved(code || null)
-      setAntiPhishingCode(code)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    const cached = readCachedNeedsSetup()
-    if (cached !== null) setSecurityNeedsSetup(cached)
-  }, [])
-
-  useEffect(() => {
-    if (currentView !== "security" && currentView !== "security-appeal") return
-    void refreshSecurityProfileState()
-  }, [currentView, refreshSecurityProfileState])
-
-  useEffect(() => {
-    let cancelled = false
-    const loadSessions = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) return
-        const ssRes = await fetch("/api/user/sessions", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const ssData = (await ssRes.json().catch(() => ({}))) as { items?: SessionItem[] }
-        if (!cancelled && ssRes.ok) setSessionItems(ssData.items ?? [])
-      } catch {
-        /* ignore transient failures */
-      }
-    }
-    void loadSessions()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  async function saveAntiPhishingCode() {
-    setAntiPhishingMessage(null)
-    const trimmed = antiPhishingCode.trim()
-    if (trimmed.length < 4 || trimmed.length > 32) {
-      setAntiPhishingMessage("Use 4–32 characters (letters and numbers).")
-      return
-    }
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: { anti_phishing_code: trimmed },
-      })
-      if (error) throw error
-      setAntiPhishingSaved(trimmed)
-      setAntiPhishingMessage("Anti-phishing code saved. It will appear in emails from us.")
-    } catch (e) {
-      setAntiPhishingMessage(e instanceof Error ? e.message : "Could not save code")
-    }
-  }
-
-  async function sessionAction(sessionId: string, action: "trust" | "block") {
-    setSessionsMessage(null)
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error("Session expired. Please sign in again.")
-      const res = await fetch("/api/user/sessions", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sessionId, action }),
-      })
-      const out = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(out.error || "Could not update session")
-      setSessionItems((prev) =>
-        prev.map((s) =>
-          s.id === sessionId
-            ? {
-                ...s,
-                device_trust: action === "trust" ? "trusted" : "blocked",
-                status: action === "block" ? "revoked" : s.status,
-                is_online: action === "block" ? false : s.is_online,
-              }
-            : s,
-        ),
-      )
-      setSessionsMessage(action === "trust" ? "Device marked as trusted." : "Device blocked and session revoked.")
-    } catch (e) {
-      setSessionsMessage(e instanceof Error ? e.message : "Could not update session")
-    }
-  }
-
-  async function changePassword() {
-    setPasswordMessage(null)
-    if (!currentPassword || !newPassword) {
-      setPasswordMessage("Current password and new password are required.")
-      return
-    }
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error("Session expired. Please sign in again.")
-      const res = await fetch("/api/user/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      })
-      const out = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
-      if (!res.ok) throw new Error(out.error || "Could not change password")
-      setCurrentPassword("")
-      setNewPassword("")
-      setPasswordMessage(out.message || "Password changed.")
-    } catch (e) {
-      setPasswordMessage(e instanceof Error ? e.message : "Could not change password")
-    }
-  }
 
   useEffect(() => {
     if (!requestedView) return
@@ -326,7 +151,7 @@ export function SettingsScreen({
 
   const settingsItems: SettingItem[] = [
     { key: "exchanges", icon: <Link2 className="h-5 w-5" />, label: t("settings.menu.exchanges"), description: t("settings.menu.exchangesDesc"), badge: "New" },
-    { key: "security", icon: <Shield className="h-5 w-5" />, label: t("settings.menu.security"), description: t("settings.menu.securityDesc").replace("{{level}}", String(securityLevel)), badge: securityLevel < 3 ? "Setup" : undefined },
+    { key: "security", href: "/dashboard/security", icon: <Shield className="h-5 w-5" />, label: t("settings.menu.security"), description: t("settings.menu.securityDesc").replace("{{level}}", String(securityLevel)) },
     { key: "deposit-withdraw", icon: <ArrowDownUp className="h-5 w-5" />, label: t("settings.menu.depositWithdraw"), description: t("settings.menu.depositWithdrawDesc") },
     { key: "notifications", icon: <Bell className="h-5 w-5" />, label: t("settings.menu.notifications"), description: t("settings.menu.notificationsDesc") },
     { key: "nexus-learner", icon: <MessageCircle className="h-5 w-5" />, label: t("settings.menu.learner"), description: t("settings.menu.learnerDesc") },
@@ -384,45 +209,53 @@ export function SettingsScreen({
             </ul>
           </Card>
         )}
-        {securityNeedsSetup && (
-          <Card className="border-warning/40 bg-warning/10 p-4">
-            <p className="text-sm font-semibold text-warning">Complete Security & Recovery</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Set your Nexus Security Code and payout numbers before funding or withdrawing.
-            </p>
-            <Button size="sm" className="mt-3" onClick={() => setCurrentView("security")}>
-              Open Security & Recovery
-            </Button>
-          </Card>
-        )}
         <Card className="border-border bg-card p-6">
           <h2 className="mb-6 text-xl font-semibold">Settings</h2>
           <div className="space-y-1">
-            {settingsItems.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setCurrentView(item.key)}
-                className="flex w-full items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-muted"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
-                    {item.icon}
-                  </div>
-                  <div className="text-left">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{item.label}</p>
-                      {item.badge && (
-                        <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
-                          {item.badge}
-                        </span>
-                      )}
+            {settingsItems.map((item) => {
+              const inner = (
+                <>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
+                      {item.icon}
                     </div>
-                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                    <div className="text-left">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{item.label}</p>
+                        {item.badge ? (
+                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
+                            {item.badge}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </button>
-            ))}
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </>
+              )
+              if (item.href) {
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    className="flex w-full items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-muted"
+                  >
+                    {inner}
+                  </Link>
+                )
+              }
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setCurrentView(item.key as SettingsView)}
+                  className="flex w-full items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-muted"
+                >
+                  {inner}
+                </button>
+              )
+            })}
           </div>
         </Card>
 
@@ -447,131 +280,6 @@ export function SettingsScreen({
             </button>
           </Card>
         )}
-      </div>
-    )
-  }
-
-  // Security View — setup OR summary only (appeals are a separate route)
-  if (currentView === "security") {
-    return (
-      <div className="space-y-4">
-        {renderBackButton()}
-        {securityNeedsSetup ? (
-          <UserSecuritySetupForm
-            variant="settings"
-            onComplete={() => void refreshSecurityProfileState()}
-          />
-        ) : (
-          <UserSecurityRecoverySummary
-            key={securityProfileRefresh}
-            onOpenAppealCenter={() => setCurrentView("security-appeal")}
-          />
-        )}
-        <Card className="border-border bg-card p-4 sm:p-6">
-          <h3 className="mb-3 text-lg font-semibold">Anti-Phishing Code</h3>
-          <p className="mb-3 text-xs text-muted-foreground">
-            A personal phrase you expect in genuine Nexus PRO emails.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={antiPhishingCode}
-              onChange={(e) => setAntiPhishingCode(e.target.value)}
-              placeholder="e.g. BlueRiver42"
-              maxLength={32}
-            />
-            <Button size="sm" className="shrink-0" onClick={() => void saveAntiPhishingCode()}>
-              {antiPhishingSaved ? "Update" : "Save"}
-            </Button>
-          </div>
-          {antiPhishingSaved ? (
-            <p className="mt-2 text-xs text-success">Active: {antiPhishingSaved}</p>
-          ) : null}
-          {antiPhishingMessage ? <p className="mt-2 text-xs text-muted-foreground">{antiPhishingMessage}</p> : null}
-        </Card>
-        <Card className="border-border bg-card p-6">
-          <h3 className="mb-2 text-lg font-semibold">{t("security.devices.title")}</h3>
-          <p className="mb-3 text-xs text-muted-foreground">{t("security.devices.hint")}</p>
-          <div className="max-h-[min(320px,45vh)] overflow-y-auto rounded-lg border border-border/80 bg-muted/20 p-2">
-            <div className="space-y-2 pr-1">
-              {sessionItems.length === 0 ? (
-                <p className="px-2 py-4 text-center text-xs text-muted-foreground">No devices recorded yet.</p>
-              ) : (
-                sessionItems.map((s) => (
-                  <div key={s.id} className="rounded-lg bg-background/80 px-3 py-2.5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {s.device_name} · {s.browser_name}
-                          {s.is_current ? (
-                            <span className="ml-2 text-[10px] font-semibold text-primary">(this device)</span>
-                          ) : null}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {s.is_online ? "Online" : "Offline"} · Last active{" "}
-                          {new Date(s.last_seen_at).toLocaleString()}
-                        </p>
-                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                          {t("security.devices.ip")}: {s.ip_address?.trim() || "—"}
-                        </p>
-                        {s.device_trust === "trusted" ? (
-                          <p className="mt-1 text-[10px] font-medium text-success">{t("security.devices.trusted")}</p>
-                        ) : s.device_trust === "blocked" || s.status === "revoked" ? (
-                          <p className="mt-1 text-[10px] font-medium text-destructive">{t("security.devices.blocked")}</p>
-                        ) : null}
-                      </div>
-                      {!s.is_current && s.status === "active" ? (
-                        <div className="flex shrink-0 flex-wrap gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => void sessionAction(s.id, "trust")}>
-                            {t("security.devices.trust")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                            onClick={() => void sessionAction(s.id, "block")}
-                          >
-                            {t("security.devices.block")}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          {sessionsMessage ? <p className="mt-2 text-xs text-muted-foreground">{sessionsMessage}</p> : null}
-        </Card>
-                <Card className="border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Change Password</h3>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Enter your current password first. If unknown, use account recovery with your Nexus Security Code.
-          </p>
-          <div className="grid gap-2 md:grid-cols-2">
-            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" />
-            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 8 chars)" />
-          </div>
-          <Button className="mt-3" size="sm" onClick={() => void changePassword()}>
-            Update password
-          </Button>
-          {passwordMessage ? <p className="mt-2 text-xs text-muted-foreground">{passwordMessage}</p> : null}
-        </Card>
-      </div>
-    )
-  }
-
-  if (currentView === "security-appeal") {
-    return (
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => setCurrentView("security")}
-          className="mb-1 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground touch-manipulation"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Security & Recovery
-        </button>
-        <SecurityAppealCenter />
       </div>
     )
   }
@@ -723,7 +431,7 @@ export function SettingsScreen({
           onTransaction={(type, amount, method) => {
             console.log(`[v0] ${type} ${amount} via ${method}`)
           }}
-          onRequireSecurityUpgrade={() => setCurrentView("security")}
+          onRequireSecurityUpgrade={() => router.push("/dashboard/security")}
         />
       </div>
     )
