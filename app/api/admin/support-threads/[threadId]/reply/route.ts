@@ -48,7 +48,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ threadId: 
         assigned_admin_id: actor.id,
         last_message_at: now,
         updated_at: now,
-        status: "answered",
+        status: "pending_user",
       })
       .eq("id", tid)
     if (ue) return NextResponse.json({ error: ue.message }, { status: 500 })

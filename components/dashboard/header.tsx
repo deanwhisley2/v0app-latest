@@ -285,7 +285,7 @@ export function Header({
                             <span className="text-sm font-medium">Settings</span>
                             <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                           </button>
-                          <button 
+                          <button
                             type="button"
                             onClick={() => {
                               void (async () => {
@@ -296,10 +296,20 @@ export function Header({
                                 }
                               })()
                             }}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-destructive transition-colors hover:bg-destructive/10"
+                            className="nexus-touch-press group flex w-full items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-gradient-to-r from-destructive/15 via-destructive/10 to-transparent px-3 py-3 text-left text-destructive shadow-sm transition-all hover:border-destructive/40 hover:from-destructive/20 active:scale-[0.99] touch-manipulation"
                           >
-                            <LogOut className="h-4 w-4" />
-                            <span className="text-sm font-medium">Log Out</span>
+                            <span className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/15 ring-1 ring-destructive/20 transition-colors group-hover:bg-destructive/20">
+                                <LogOut className="h-4 w-4" />
+                              </span>
+                              <span>
+                                <span className="block text-sm font-semibold">Sign out</span>
+                                <span className="block text-[10px] font-normal text-destructive/80">
+                                  End session securely
+                                </span>
+                              </span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 opacity-60" />
                           </button>
                         </div>
                       </>

@@ -24,7 +24,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ threadId: s
 
     let mq = admin
       .from("operational_support_messages")
-      .select("id,sender_user_id,sender_role,body,created_at")
+      .select("id,sender_user_id,sender_role,body,created_at,is_system,delivery_state")
       .eq("thread_id", tid)
       .order("created_at", { ascending: true })
       .limit(limit)

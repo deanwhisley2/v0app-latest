@@ -591,14 +591,22 @@ export function SettingsScreen({
 
         {/* Logout Button */}
         {onLogout && (
-          <Card className="border-destructive/30 bg-card p-4">
+          <Card className="overflow-hidden border-destructive/25 bg-card p-0 shadow-sm">
             <button
               type="button"
               onClick={() => void Promise.resolve(onLogout())}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 font-medium text-destructive transition-colors hover:bg-destructive/20"
+              className="nexus-touch-press flex w-full items-center justify-between gap-3 bg-gradient-to-r from-destructive/12 via-destructive/8 to-transparent px-4 py-4 text-left transition-colors hover:from-destructive/18 active:scale-[0.99] touch-manipulation"
             >
-              <LogOut className="h-5 w-5" />
-              Log Out
+              <span className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/15 ring-1 ring-destructive/25">
+                  <LogOut className="h-5 w-5 text-destructive" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-destructive">Sign out</span>
+                  <span className="block text-xs text-muted-foreground">End your session on this device</span>
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-destructive/60" />
             </button>
           </Card>
         )}

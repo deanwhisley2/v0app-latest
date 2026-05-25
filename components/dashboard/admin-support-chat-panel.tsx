@@ -1,16 +1,21 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Headphones, Loader2, Send } from "lucide-react"
+import { Headphones, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
+import { operationalThreadCategoryLabel } from "@/lib/operational-support-institutional"
 import {
-  operationalThreadCategoryLabel,
-  operationalThreadStatusLabel,
-} from "@/lib/operational-support-institutional"
+  SupportManualRefresh,
+  SupportMessageTimeline,
+  SupportReplyBar,
+  SupportStatusChip,
+  SupportThreadListItem,
+  type SupportMessageRow,
+} from "@/components/dashboard/support-conversation-ui"
 import { supabase } from "@/lib/supabaseClient"
 
 type ThreadRow = {
@@ -31,12 +36,7 @@ type ThreadRow = {
   created_at: string
 }
 
-type MsgRow = {
-  id: string
-  sender_role: string
-  body: string
-  created_at: string
-}
+type MsgRow = SupportMessageRow
 
 const CATEGORY_FILTERS = [
   { id: "", label: "All" },
@@ -272,7 +272,7 @@ export function AdminSupportChatPanel(props: {
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Headphones className="h-4 w-4 text-primary" />
-            <h4 className="font-semibold">Operational inbox</h4>
+            <h4 className="font-semibold">Support inbox</h4>
           </div>
           {unreadCount > 0 ? (
             <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
@@ -330,27 +330,16 @@ export function AdminSupportChatPanel(props: {
             ) : (
               threads.map((t) => (
                 <li key={t.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(t.id)}
-                    className={`w-full rounded-lg border px-2 py-2 text-left transition-colors ${
-                      selectedId === t.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs font-medium">
-                        {t.user_email ?? t.user_name ?? t.user_id.slice(0, 8)}
-                      </span>
-                      {t.unread_for_admin ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
-                    </div>
-                    <p className="truncate text-[10px] text-muted-foreground">
-                      {t.category_label ?? operationalThreadCategoryLabel(t.category)} ·{" "}
-                      {operationalThreadStatusLabel(t.status, t.escalated)}
-                    </p>
-                    {t.linked_summary ? (
-                      <p className="truncate font-mono text-[10px] text-muted-foreground">{t.linked_summary}</p>
-                    ) : null}
-                  </button>
+                  <SupportThreadListItem
+                    id={t.id}
+                    category={t.category}
+                    status={t.status}
+                    escalated={t.escalated}
+                    unread={t.unread_for_admin}
+                    selected={selectedId === t.id}
+                    subtitle={t.user_email ?? t.user_name ?? t.user_id.slice(0, 8)}
+                    onSelect={() => setSelectedId(t.id)}
+                  />
                 </li>
               ))
             )}
@@ -365,18 +354,24 @@ export function AdminSupportChatPanel(props: {
           <>
                         <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-border pb-2">
               <span className="break-all text-xs font-mono text-muted-foreground">{selectedId}</span>
-              {selected ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase">
-                  {operationalThreadStatusLabel(selected.status, selected.escalated)}
-                </span>
-              ) : null}
+              {selected ? <SupportStatusChip status={selected.status} escalated={selected.escalated} /> : null}
+              <SupportManualRefresh onRefresh={() => { setRtTick((n) => n + 1); void loadThreads() }} busy={loadingList} />
             </div>
             {selected?.linked_summary ? (
               <p className="mb-2 font-mono text-[11px] text-muted-foreground">{selected.linked_summary}</p>
             ) : null}
             <div className="mb-2 flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("assign")}>
-                Assign to me
+                Assign
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("under_review")}>
+                Review
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("pending_user")}>
+                Await user
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("escalate")}>
+                Escalate
               </Button>
               <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void manageThread("priority", { priority: "urgent" })}>
                 Urgent
@@ -397,52 +392,23 @@ export function AdminSupportChatPanel(props: {
               <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void manageThread("reopen")}>
                 Reopen
               </Button>
-            </div>
-            <div className="mb-4 max-h-[min(380px,50vh)] touch-pan-y overscroll-contain space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3">
-              {loadingThread ? (
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              ) : (
-                messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === "admin" ? "justify-end" : "justify-start"}`}>
-                                        <div
-                      className={`max-w-[92%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${
-                        m.sender_role === "admin"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card text-foreground ring-1 ring-border"
-                      }`}
-                    >
-                      <p className="mb-1 text-[10px] uppercase opacity-70">{m.sender_role}</p>
-                      <p className="mb-1 text-[9px] opacity-60">{new Date(m.created_at).toLocaleString()}</p>
-                      {m.body}
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={endRef} />
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                placeholder="Reply to customer…"
-                disabled={sending}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault()
-                    void sendReply()
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                size="icon"
-                onClick={() => void sendReply()}
-                disabled={sending || !reply.trim()}
-                aria-label="Send reply"
-              >
-                <Send className="h-4 w-4" />
+              <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void manageThread("close")}>
+                Close
               </Button>
             </div>
+            <SupportMessageTimeline
+              messages={messages}
+              loading={loadingThread}
+              endRef={endRef}
+              perspective="admin"
+            />
+            <SupportReplyBar
+              value={reply}
+              onChange={setReply}
+              onSend={() => void sendReply()}
+              sending={sending}
+              placeholder="Reply to customer…"
+            />
             {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
           </>
         )}

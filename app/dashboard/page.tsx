@@ -76,6 +76,7 @@ import {
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
+import { NexusPushAlertsBootstrap } from "@/components/push/nexus-push-alerts-bootstrap"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
@@ -2336,6 +2337,7 @@ export default function DashboardPage() {
       <div className="hidden md:block">
         <LaunchStatusBanner />
       </div>
+      <NexusPushAlertsBootstrap operationalWorkspace={operationalWorkspace} />
       <StartupCapitalPromoModal />
 
       {showRetailBalancePanels && (

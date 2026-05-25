@@ -68,7 +68,7 @@ export async function buildLaunchOperationsSnapshot(): Promise<LaunchOperationsS
     admin
       .from("operational_support_threads")
       .select("id", { count: "exact", head: true })
-      .in("status", ["open", "pending_admin", "awaiting_response", "processing"]),
+      .in("status", ["open", "pending_admin", "pending_user", "under_review"]),
     admin
       .from("operational_support_threads")
       .select("id", { count: "exact", head: true })

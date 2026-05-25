@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 import { localizeStoredNotificationTitle } from "@/lib/notifications/localize-stored-notification"
 import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
+import { notifyUserPushIfAllowed } from "@/lib/server/nexus-push-notify"
 
 /** Lightweight in-app inbox row for approvals (reuses NotificationRecord schema). */
 export async function notifyUserFundingDecision(
@@ -30,6 +31,19 @@ export async function notifyUserFundingDecision(
       createdAt: nowIso,
     })
     if (error) console.warn("[approval-inbox-notify]", error.message)
+
+    try {
+      await notifyUserPushIfAllowed(sb, {
+        userId: params.userId,
+        headline: params.headline,
+        title: localizedHeadline,
+        body: localizedHeadline,
+        tag: `funding:${params.relatedId}`,
+        url: "/dashboard",
+      })
+    } catch {
+      /* optional */
+    }
   } catch (e) {
     console.warn("[approval-inbox-notify]", e)
   }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
+import { notifyAdminsPush, sendWebPushToUser } from "@/lib/server/nexus-push-notify"
 
 function truncateBody(s: string, max: number) {
   const t = s.trim()
@@ -30,6 +31,18 @@ export async function notifyUserSupportReply(
     { onConflict: "user_id,source_kind,source_id" },
   )
   if (error) throw error
+
+  try {
+    await sendWebPushToUser(admin, {
+      userId: params.userId,
+      title: "Support replied",
+      body: truncateBody(params.preview, 120),
+      tag: `support:${params.threadId}`,
+      url: `/dashboard?supportThread=${params.threadId}`,
+    })
+  } catch {
+    /* optional */
+  }
 }
 
 /** Liquidity admins (L5): queue alert for a thread (new appeal or user message). Deduped per admin per thread. */
@@ -87,5 +100,16 @@ async function notifyLiquidityAdminsSupportQueueInternal(
       { onConflict: "user_id,source_kind,source_id" },
     )
     if (ie) throw ie
+  }
+
+  try {
+    await notifyAdminsPush(admin, {
+      title: params.title,
+      body: truncateBody(params.body, 120),
+      tag: `support-queue:${params.threadId}`,
+      url: `/dashboard?supportThread=${params.threadId}`,
+    })
+  } catch {
+    /* optional */
   }
 }

@@ -1,16 +1,19 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Headphones, Loader2, Plus, Send } from "lucide-react"
+import { Headphones, Loader2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
+import { operationalThreadCategoryLabel } from "@/lib/operational-support-institutional"
 import {
-  operationalThreadCategoryLabel,
-  operationalThreadStatusLabel,
-} from "@/lib/operational-support-institutional"
+  SupportManualRefresh,
+  SupportMessageTimeline,
+  SupportReplyBar,
+  SupportThreadListItem,
+  type SupportMessageRow,
+} from "@/components/dashboard/support-conversation-ui"
 import { supabase } from "@/lib/supabaseClient"
 
 type ThreadRow = {
@@ -20,13 +23,7 @@ type ThreadRow = {
   unread_for_user: boolean
   last_message_at: string
   created_at: string
-}
-
-type MsgRow = {
-  id: string
-  sender_role: string
-  body: string
-  created_at: string
+  escalated?: boolean
 }
 
 export function UserSupportDeskPanel(props: {
@@ -36,7 +33,7 @@ export function UserSupportDeskPanel(props: {
   const { user } = useAuth()
   const [threads, setThreads] = useState<ThreadRow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<MsgRow[]>([])
+  const [messages, setMessages] = useState<SupportMessageRow[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [loadingThread, setLoadingThread] = useState(false)
   const [reply, setReply] = useState("")
@@ -82,7 +79,7 @@ export function UserSupportDeskPanel(props: {
     setError(null)
     try {
       const res = await fetch(`/api/user/support-threads/${tid}`, { headers: h, cache: "no-store" })
-      const j = (await res.json()) as { messages?: MsgRow[]; error?: string }
+      const j = (await res.json()) as { messages?: SupportMessageRow[]; error?: string }
       if (!res.ok) {
         setError(j.error ?? "Failed to load thread")
         return
@@ -178,101 +175,91 @@ export function UserSupportDeskPanel(props: {
     }
   }
 
+  const selected = threads.find((t) => t.id === selectedId)
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,260px)_1fr]">
-      <Card className="border-border bg-card p-3">
-        <div className="mb-2 flex items-center gap-2">
-          <Headphones className="h-4 w-4 text-primary" />
-          <h4 className="font-semibold">Support</h4>
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_1fr]">
+      <Card className="border-border/80 bg-card/80 p-3 shadow-sm backdrop-blur-sm">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Headphones className="h-4 w-4 text-primary" />
+            <h4 className="font-semibold">Support Center</h4>
+          </div>
+          <SupportManualRefresh onRefresh={() => setTick((n) => n + 1)} busy={loadingList} />
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">Appeals and account disputes. Replies notify you in-app.</p>
-        <div className="mb-3 space-y-2">
+        <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+          My conversations — appeals, verification, funding, and humane assistance. Replies appear here and in
+          notifications.
+        </p>
+        <div className="mb-3 space-y-2 rounded-xl border border-dashed border-border/70 bg-muted/10 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Open new thread</p>
           <textarea
             value={compose}
             onChange={(e) => setCompose(e.target.value)}
             placeholder="Describe your issue…"
             rows={3}
-            className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm touch-manipulation"
           />
-          <Button type="button" size="sm" className="w-full gap-2" onClick={() => void createThread()} disabled={creating || !compose.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            className="w-full gap-2 touch-manipulation"
+            onClick={() => void createThread()}
+            disabled={creating || !compose.trim()}
+          >
             <Plus className="h-4 w-4" />
-            Open thread
+            Start conversation
           </Button>
         </div>
         {loadingList ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : threads.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No conversations yet.</p>
         ) : (
-          <ul className="max-h-[min(280px,40vh)] space-y-1 overflow-y-auto text-sm">
+          <ul className="max-h-[min(300px,42vh)] space-y-2 overflow-y-auto touch-pan-y">
             {threads.map((t) => (
               <li key={t.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(t.id)}
-                  className={`w-full rounded-lg border px-2 py-2 text-left transition-colors ${
-                    selectedId === t.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted/40"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-mono text-[10px] text-muted-foreground">{t.id.slice(0, 8)}…</span>
-                    {t.unread_for_user ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
-                  </div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {operationalThreadCategoryLabel(t.category)} ·{" "}
-                    {operationalThreadStatusLabel(t.status, (t as { escalated?: boolean }).escalated)}
-                  </p>
-                </button>
+                <SupportThreadListItem
+                  id={t.id}
+                  category={t.category}
+                  status={t.status}
+                  escalated={t.escalated}
+                  unread={t.unread_for_user}
+                  selected={selectedId === t.id}
+                  onSelect={() => setSelectedId(t.id)}
+                />
               </li>
             ))}
           </ul>
         )}
       </Card>
 
-      <Card className="border-border bg-card p-4">
+      <Card className="flex min-h-[360px] flex-col border-border/80 bg-card/80 p-0 shadow-sm backdrop-blur-sm">
         {!selectedId ? (
-          <p className="text-sm text-muted-foreground">Select a thread or open a new one.</p>
+          <p className="p-6 text-sm text-muted-foreground">Select a conversation or start a new thread.</p>
         ) : (
           <>
-            <div className="mb-3 border-b border-border pb-2 font-mono text-[10px] text-muted-foreground break-all">{selectedId}</div>
-            <div className="mb-4 max-h-[min(320px,45vh)] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/15 p-3 touch-pan-y overscroll-contain">
-              {loadingThread ? (
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              ) : (
-                messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[92%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${
-                        m.sender_role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card text-foreground ring-1 ring-border"
-                      }`}
-                    >
-                      <p className="mb-1 text-[10px] uppercase opacity-70">{m.sender_role}</p>
-                      <p className="mb-1 text-[9px] opacity-60">{new Date(m.created_at).toLocaleString()}</p>
-                      {m.body}
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={endRef} />
+            <div className="border-b border-border/60 px-4 py-3">
+              <p className="text-sm font-semibold">{operationalThreadCategoryLabel(selected?.category ?? "general")}</p>
+              <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{selectedId}</p>
             </div>
-            <div className="flex gap-2">
-              <Input
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                placeholder="Reply…"
-                disabled={sending}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault()
-                    void sendReply()
-                  }
-                }}
+            <div className="flex flex-1 flex-col p-3">
+              <SupportMessageTimeline
+                messages={messages}
+                loading={loadingThread}
+                endRef={endRef}
+                perspective="user"
               />
-              <Button type="button" size="icon" onClick={() => void sendReply()} disabled={sending || !reply.trim()} aria-label="Send">
-                <Send className="h-4 w-4" />
-              </Button>
+              <SupportReplyBar
+                value={reply}
+                onChange={setReply}
+                onSend={() => void sendReply()}
+                sending={sending}
+                disabled={selected?.status === "closed"}
+                placeholder="Write your reply…"
+              />
             </div>
-            {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="px-4 pb-3 text-sm text-destructive">{error}</p> : null}
           </>
         )}
       </Card>

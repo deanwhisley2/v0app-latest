@@ -132,6 +132,7 @@ export async function appendOperationalMessage(
     bumpUnreadForAdmin?: boolean
     bumpUnreadForUser?: boolean
     attachmentMeta?: Record<string, unknown>
+    isSystem?: boolean
   },
 ): Promise<string> {
   const body = params.body.trim()
@@ -156,6 +157,8 @@ export async function appendOperationalMessage(
       sender_role: params.senderRole,
       body,
       attachment_meta: params.attachmentMeta ?? {},
+      is_system: params.isSystem ?? params.senderRole === "system",
+      delivery_state: "delivered",
     })
     .select("id")
     .single()
@@ -167,9 +170,11 @@ export async function appendOperationalMessage(
     updated_at: now,
   }
   if (params.senderRole === "admin") {
-    patch.status = "answered"
+    patch.status = "pending_user"
     patch.unread_for_admin = false
     if (params.bumpUnreadForUser) patch.unread_for_user = true
+  } else if (params.senderRole === "system") {
+    /* status set by caller */
   } else {
     patch.status = "pending_admin"
     if (params.bumpUnreadForAdmin) patch.unread_for_admin = true
