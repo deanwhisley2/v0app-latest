@@ -78,6 +78,9 @@ import { OperationalContinuityHud } from "@/components/dashboard/operational-con
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
+import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
+import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnostics"
+import type { DashboardMainTab } from "@/lib/dashboard-navigation-policy"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -263,7 +266,42 @@ export default function DashboardPage() {
     userId: user?.id,
     formatUserMoney,
   })
-  const [activeTab, setActiveTab] = useState("container")
+  const navCtrl = useDashboardNavigationController(operationalWorkspace)
+  const activeTabRef = useRef("container")
+  const [activeTab, setActiveTab] = useState<DashboardMainTab | string>("container")
+
+  const setTabProgrammatic = useCallback(
+    (tab: string, source: string) => {
+      const next = navCtrl.normalizeTab(tab)
+      if (next === activeTabRef.current) return
+      reportClientDiagnostic({
+        kind: "tab_change",
+        message: source,
+        meta: { from: activeTabRef.current, to: next, userInitiated: false },
+      })
+      setActiveTab(next)
+    },
+    [navCtrl],
+  )
+
+  const setTabUser = useCallback(
+    (tab: string, source: string) => {
+      navCtrl.markUserNav()
+      const next = navCtrl.normalizeTab(tab)
+      reportClientDiagnostic({
+        kind: "tab_change",
+        message: source,
+        meta: { from: activeTabRef.current, to: next, userInitiated: true },
+      })
+      setActiveTab(next)
+    },
+    [navCtrl],
+  )
+
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
+
   const [containerActiveTradeCount, setContainerActiveTradeCount] = useState(0)
   const [containerDeskOpenNonce, setContainerDeskOpenNonce] = useState(0)
   const handleContainerSessionCounts = useCallback((counts: { copy: number; fix: number }) => {
@@ -304,13 +342,13 @@ export default function DashboardPage() {
   }, [authLoading, user, isGuestSession, activeTab, operationalWorkspace])
   useEffect(() => {
     if (activeTab !== "wallet") return
-    setActiveTab(operationalWorkspace ? "desk" : "notifications")
-  }, [activeTab, operationalWorkspace])
+    setTabProgrammatic(operationalWorkspace ? "desk" : "notifications", "legacy_wallet_tab")
+  }, [activeTab, operationalWorkspace, setTabProgrammatic])
 
   useEffect(() => {
     if (activeTab !== "desk" || operationalWorkspace) return
-    setActiveTab("container")
-  }, [activeTab, operationalWorkspace])
+    setTabProgrammatic("container", "legacy_desk_tab_trader")
+  }, [activeTab, operationalWorkspace, setTabProgrammatic])
 
   const tradeView: DashboardTradeView = "overview"
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
@@ -511,15 +549,22 @@ export default function DashboardPage() {
   useLayoutEffect(() => {
     if (typeof window === "undefined") return
     const snap = readDashboardActivity(activityUserId)
+    const tab = navCtrl.resolveInitialTab(
+      snap
+        ? snap.activeTab === "wallet"
+          ? "notifications"
+          : snap.activeTab === "wallstreet"
+            ? "chat"
+            : snap.activeTab
+        : undefined,
+    )
+    setActiveTab(tab)
     if (snap) {
-      let tab = snap.activeTab
-      if (tab === "wallet") tab = "notifications"
-      if (tab === "wallstreet") tab = "chat"
-      setActiveTab(tab)
       setSelectedCoinSymbol(snap.selectedCoinSymbol)
       setShowBalance(snap.showBalance)
     }
     activityHydratedRef.current = true
+    navCtrl.markHydrated()
     activityLastSerializedRef.current = JSON.stringify(
       buildActivitySnapshot(activityUserId, {
         activeTab: snap?.activeTab ?? "container",
@@ -568,7 +613,19 @@ export default function DashboardPage() {
     }
     const tab = coerceTab(parsed.activeTab)
 
-    setActiveTab(tab)
+    if (!navCtrl.shouldApplyServerWorkspace()) {
+      reportClientDiagnostic({
+        kind: "server_workspace_skip",
+        message: "recent_user_navigation",
+        meta: { requestedTab: tab, currentTab: activeTabRef.current },
+      })
+      setSelectedCoinSymbol(parsed.selectedCoinSymbol)
+      setShowBalance(parsed.showBalance)
+      lastServerWorkspaceAppliedRef.current = ser
+      return
+    }
+
+    setTabProgrammatic(tab, "server_workspace_snapshot")
     setSelectedCoinSymbol(parsed.selectedCoinSymbol)
     setShowBalance(parsed.showBalance)
     const nextSnap = buildActivitySnapshot(activityUserId, {
@@ -588,6 +645,8 @@ export default function DashboardPage() {
     op.isLoading,
     activityUserId,
     marketFeed.catalog,
+    navCtrl,
+    setTabProgrammatic,
   ])
 
   // Debounced server persistence for USER_WORKSPACE_STATE (see lib/operational-state-scope.ts).
@@ -675,9 +734,11 @@ export default function DashboardPage() {
     if (authLoading || !user || isGuestSession || !operationalWorkspace) return
     if (!opsWorkspaceBootedRef.current) {
       opsWorkspaceBootedRef.current = true
-      setActiveTab("desk")
+      if (navCtrl.normalizeTab(activeTabRef.current) !== "desk") {
+        setTabProgrammatic("desk", "ops_workspace_boot")
+      }
     }
-  }, [authLoading, user, isGuestSession, operationalWorkspace])
+  }, [authLoading, user, isGuestSession, operationalWorkspace, navCtrl, setTabProgrammatic])
 
   const applyRetailerProfileFromApi = useCallback(
     (payload: {
@@ -1382,12 +1443,12 @@ export default function DashboardPage() {
         return
       }
       if (tab === "wallstreet") {
-        setActiveTab("chat")
+        setTabUser("chat", "header_wallstreet")
         setChatHubFocus(null)
         setSettingsRequestedView(null)
         return
       }
-      setActiveTab(tab)
+      setTabUser(tab, "header_tab")
       setChatHubFocus(null)
       setSettingsRequestedView(null)
       if (typeof window !== "undefined") {
@@ -1395,7 +1456,7 @@ export default function DashboardPage() {
         revealMobileHeader()
       }
     },
-    [operationalWorkspace, showToast],
+    [operationalWorkspace, showToast, setTabUser],
   )
 
   const handleSettingsRequestConsumed = useCallback(() => {
@@ -1404,53 +1465,59 @@ export default function DashboardPage() {
 
   const handleNotificationNav = useCallback(
     (nav: NexusNotificationNav) => {
+      navCtrl.markUserNav()
+      reportClientDiagnostic({
+        kind: "notification_nav",
+        message: nav.kind,
+        meta: { nav },
+      })
       switch (nav.kind) {
         case "trade":
           setSelectedCoinSymbol(nav.symbol ?? "BTC")
-          setActiveTab("container")
+          setTabProgrammatic("container", "notification_nav_trade")
           setContainerDeskOpenNonce((n) => n + 1)
           break
         case "wallet":
           if (operationalWorkspace) {
-            setActiveTab("desk")
+            setTabProgrammatic("desk", "notification_nav_wallet")
           } else {
             setSettingsRequestedView("deposit-withdraw")
-            setActiveTab("settings")
+            setTabProgrammatic("settings", "notification_nav_wallet")
           }
           break
         case "notifications":
-          setActiveTab("notifications")
+          setTabProgrammatic("notifications", "notification_nav_inbox")
           break
         case "desk":
-          setActiveTab("desk")
+          setTabProgrammatic("desk", "notification_nav_desk")
           break
         case "settings":
           setSettingsRequestedView(nav.view as SettingsView)
-          setActiveTab("settings")
+          setTabProgrammatic("settings", "notification_nav_settings")
           break
         case "orders":
           setSettingsRequestedView("exchanges")
-          setActiveTab("settings")
+          setTabProgrammatic("settings", "notification_nav_orders")
           break
         case "support_thread":
           if (operationalWorkspace) {
             setSupportThreadFocusId(nav.threadId)
-            setActiveTab("desk")
+            setTabProgrammatic("desk", "notification_nav_support")
           } else {
             setSupportThreadFocusId(nav.threadId)
             setChatHubFocus("support")
-            setActiveTab("chat")
+            setTabProgrammatic("chat", "notification_nav_support")
           }
           break
         case "expert-analysis":
           setChatHubFocus("ai")
-          setActiveTab("chat")
+          setTabProgrammatic("chat", "notification_nav_expert")
           break
         default:
           break
       }
     },
-    [operationalWorkspace, showToast],
+    [operationalWorkspace, navCtrl, setTabProgrammatic],
   )
 
   useEffect(() => {
@@ -1483,7 +1550,7 @@ export default function DashboardPage() {
     if (!tid) return
     if (op.isLoading && !op.snapshot?.profile && Boolean(roleHint?.isOperationalDesk)) return
     setSupportThreadFocusId(tid)
-    setActiveTab(operationalWorkspace ? "desk" : "chat")
+    setTabProgrammatic(operationalWorkspace ? "desk" : "chat", "support_thread_url")
     if (!operationalWorkspace) setChatHubFocus("support")
     supportThreadFromUrlRef.current = null
   }, [
@@ -1492,21 +1559,26 @@ export default function DashboardPage() {
     op.isLoading,
     op.snapshot?.profile,
     roleHint?.isOperationalDesk,
+    setTabProgrammatic,
   ])
 
+  const handleNotificationNavRef = useRef(handleNotificationNav)
+  handleNotificationNavRef.current = handleNotificationNav
+  const consumePendingNavRef = useRef(navCtrl.consumePendingNav)
+  consumePendingNavRef.current = navCtrl.consumePendingNav
+
   useEffect(() => {
-    registerAppNavigator(handleNotificationNav)
+    registerAppNavigator((nav) => handleNotificationNavRef.current(nav))
     try {
-      const pending = sessionStorage.getItem("nexus_pending_nav")
-      if (pending) {
-        sessionStorage.removeItem("nexus_pending_nav")
-        handleNotificationNav(JSON.parse(pending) as NexusNotificationNav)
+      const pending = consumePendingNavRef.current()
+      if (pending && typeof pending === "object" && pending !== null && "kind" in pending) {
+        handleNotificationNavRef.current(pending as NexusNotificationNav)
       }
     } catch {
       /* ignore */
     }
     return () => registerAppNavigator(null)
-  }, [registerAppNavigator, handleNotificationNav])
+  }, [registerAppNavigator])
 
   const handleRetailerIncomingAction = useCallback(
     async (requestId: string, action: "approve" | "reject") => {
@@ -3452,10 +3524,10 @@ export default function DashboardPage() {
               supportThreadFocusId={supportThreadFocusId}
               onSupportThreadFocusConsumed={() => setSupportThreadFocusId(null)}
               showOperationalInboxHint={level5Operational}
-              onGoToOperationalInbox={() => setActiveTab("desk")}
+              onGoToOperationalInbox={() => setTabUser("desk", "retailer_inbox_cta")}
               onOpenFullNotifications={() => {
                 setChatHubFocus(null)
-                setActiveTab("notifications")
+                setTabUser("notifications", "retailer_notifications_cta")
               }}
             />
           </main>

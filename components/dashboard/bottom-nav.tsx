@@ -14,6 +14,7 @@ import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { isDashboardMobileFabEnabled } from "@/lib/dashboard-mobile-render-policy"
+import { createIntentionalTapHandler } from "@/lib/mobile/intentional-tap"
 
 interface BottomNavProps {
   activeTab: string
@@ -150,11 +151,13 @@ export function BottomNav({
         <div className="flex items-stretch justify-around px-2 pt-2 pb-1 safe-area-pb">
           {navItems.map((item) => {
             const isActive = resolvedActiveTab === item.id
+            const tap = createIntentionalTapHandler(`bottom_nav:${item.id}`, () => onTabChange(item.id))
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => onTabChange(item.id)}
+                onTouchEnd={tap.onTouchEnd}
+                onClick={tap.onClick}
                 className={`nexus-touch-press flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.125rem] px-1 py-1 transition-all touch-manipulation ${
                   isActive ? "bg-[var(--primary-green)]/12" : "active:bg-muted/60"
                 }`}

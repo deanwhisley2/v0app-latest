@@ -16,6 +16,7 @@ import { markFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordField } from "@/components/auth/password-field"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
@@ -227,22 +228,17 @@ export default function LoginForm() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="login-password" className="text-sm font-medium">
-              {t.login.password}
-            </Label>
-            <Input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isSubmitting}
-              className={inputClass}
-              aria-invalid={!!error}
-            />
-          </div>
+          <PasswordField
+            id="login-password"
+            label={t.login.password}
+            autoComplete="current-password"
+            value={password}
+            onChange={setPassword}
+            required
+            disabled={isSubmitting}
+            inputClassName={inputClass}
+            aria-invalid={!!error}
+          />
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">

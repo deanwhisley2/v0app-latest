@@ -19,6 +19,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter"
+import { PasswordField } from "@/components/auth/password-field"
 import { RegisterStepIndicator } from "@/components/auth/register-step-indicator"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
@@ -458,36 +459,34 @@ export default function RegisterForm() {
 
           {step === 3 ? (
             <div className="space-y-4 animate-in fade-in duration-200" key="step3">
-              <div className="space-y-2">
-                <Label htmlFor="register-password">{reg.password}</Label>
-                <Input
-                  id="register-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  disabled={isSubmitting}
-                  className={inputClass}
-                />
-                <PasswordStrengthMeter password={password} language={language} />
-                <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-confirm-password">{authT.register.confirmPassword}</Label>
-                <Input
-                  id="register-confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  disabled={isSubmitting}
-                  className={inputClass}
-                />
-              </div>
+              <PasswordField
+                id="register-password"
+                label={reg.password}
+                autoComplete="new-password"
+                value={password}
+                onChange={setPassword}
+                required
+                minLength={6}
+                disabled={isSubmitting}
+                inputClassName={inputClass}
+                hint={
+                  <>
+                    <PasswordStrengthMeter password={password} language={language} />
+                    <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
+                  </>
+                }
+              />
+              <PasswordField
+                id="register-confirm-password"
+                label={authT.register.confirmPassword}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                required
+                minLength={6}
+                disabled={isSubmitting}
+                inputClassName={inputClass}
+              />
               <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/20 p-3">
                 <Label htmlFor="register-selfie">{authT.register.selfieLabel}</Label>
                 <Input

@@ -20,6 +20,12 @@ export type ClientDiagnosticKind =
   | "sw_teardown_reload"
   | "history_navigation"
   | "link_click"
+  | "tab_change"
+  | "touch_tap"
+  | "tap_suppressed"
+  | "notification_nav"
+  | "server_workspace_skip"
+  | "overlay_state"
 
 export type ClientDiagnosticPayload = {
   kind: ClientDiagnosticKind | string

@@ -1,6 +1,20 @@
 "use client"
 
-import { ChevronRight, ExternalLink, Linkedin, Mail } from "lucide-react"
+import {
+  ChevronRight,
+  ExternalLink,
+  Linkedin,
+  Mail,
+  Brain,
+  Zap,
+  Shield,
+  Headphones,
+  BarChart3,
+  Globe2,
+  Activity,
+  Lock,
+  BadgeCheck,
+} from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { COMPANY_CONTACT, companyMessagesEn } from "@/lib/i18n/company-messages"
@@ -12,6 +26,22 @@ const MARKETS = [
   "about.market.indices",
   "about.market.stocks",
   "about.market.digital",
+] as const
+
+const PILLARS = [
+  { titleKey: "about.pillar.intelligence.title", bodyKey: "about.pillar.intelligence.body", icon: Brain },
+  { titleKey: "about.pillar.friction.title", bodyKey: "about.pillar.friction.body", icon: Zap },
+  { titleKey: "about.pillar.security.title", bodyKey: "about.pillar.security.body", icon: Shield },
+  { titleKey: "about.pillar.support.title", bodyKey: "about.pillar.support.body", icon: Headphones },
+] as const
+
+const METRICS = [
+  { labelKey: "about.metrics.traders.label", valueKey: "about.metrics.traders.value", icon: BarChart3 },
+  { labelKey: "about.metrics.markets.label", valueKey: "about.metrics.markets.value", icon: Globe2 },
+  { labelKey: "about.metrics.volume.label", valueKey: "about.metrics.volume.value", icon: Activity },
+  { labelKey: "about.metrics.uptime.label", valueKey: "about.metrics.uptime.value", icon: Zap },
+  { labelKey: "about.metrics.security.label", valueKey: "about.metrics.security.value", icon: Lock },
+  { labelKey: "about.metrics.verification.label", valueKey: "about.metrics.verification.value", icon: BadgeCheck },
 ] as const
 
 function t(key: string): string {
@@ -51,6 +81,40 @@ export function AboutCompanyPanel({ className }: { className?: string }) {
         </ul>
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{t("about.infrastructure")}</p>
       </div>
+
+      <section className="border-b border-border/50 px-5 py-5 sm:px-6">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{t("about.trust.title")}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {PILLARS.map(({ titleKey, bodyKey, icon: Icon }) => (
+            <div
+              key={titleKey}
+              className="rounded-xl border border-border/50 bg-muted/10 p-4"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon className="h-4 w-4" aria-hidden />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-foreground">{t(titleKey)}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{t(bodyKey)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-b border-border/50 px-5 py-5 sm:px-6">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{t("about.metrics.title")}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {METRICS.map(({ labelKey, valueKey, icon: Icon }) => (
+            <div
+              key={labelKey}
+              className="rounded-xl border border-border/50 bg-background/40 px-3 py-3"
+            >
+              <Icon className="h-3.5 w-3.5 text-primary/80" aria-hidden />
+              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{t(labelKey)}</p>
+              <p className="mt-0.5 text-xs font-semibold leading-snug text-foreground">{t(valueKey)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="border-b border-border/50 px-5 py-4 sm:px-6">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{t("about.executiveTitle")}</p>

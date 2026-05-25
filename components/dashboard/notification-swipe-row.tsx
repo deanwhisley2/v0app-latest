@@ -68,14 +68,14 @@ export function NotificationSwipeRow({
       onTouchCancel={reset}
     >
       <div
-        className="absolute inset-y-0 left-0 flex w-[4.5rem] items-center justify-center bg-muted/50 text-[10px] font-medium text-muted-foreground"
+        className="pointer-events-none absolute inset-y-0 left-0 flex w-[4.5rem] items-center justify-center bg-muted/50 text-[10px] font-medium text-muted-foreground"
         style={{ opacity: dx > 10 ? Math.min(1, dx / threshold) : 0 }}
         aria-hidden
       >
         {deleteLabel}
       </div>
       <div
-        className="absolute inset-y-0 right-0 flex w-[4.5rem] items-center justify-center bg-muted/50 text-[10px] font-medium text-muted-foreground"
+        className="pointer-events-none absolute inset-y-0 right-0 flex w-[4.5rem] items-center justify-center bg-muted/50 text-[10px] font-medium text-muted-foreground"
         style={{ opacity: dx < -10 ? Math.min(1, -dx / threshold) : 0 }}
         aria-hidden
       >
