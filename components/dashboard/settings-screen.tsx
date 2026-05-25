@@ -27,6 +27,11 @@ import { ExchangeBinding } from "./exchange-binding"
 import { UserSecuritySetupForm } from "@/components/dashboard/user-security-setup-form"
 import { UserSecurityRecoverySummary } from "@/components/dashboard/user-security-recovery-summary"
 import { SecurityAppealCenter } from "@/components/dashboard/security-appeal-center"
+import {
+  fetchSecurityNeedsSetupPassive,
+  readCachedNeedsSetup,
+  securityProfileDebug,
+} from "@/lib/nexus-security-profile-client"
 import { DepositWithdraw } from "./deposit-withdraw"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -145,13 +150,11 @@ export function SettingsScreen({
       } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) return
-      const res = await fetch("/api/user/security-profile", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      })
-      const profData = (await res.json()) as { profile?: { needsSetup?: boolean } }
-      if (res.ok) setSecurityNeedsSetup(Boolean(profData.profile?.needsSetup))
+      securityProfileDebug("settings_refresh_start")
+      const result = await fetchSecurityNeedsSetupPassive(token)
+      setSecurityNeedsSetup(result.needsSetup)
       setSecurityProfileRefresh((n) => n + 1)
+      securityProfileDebug("settings_refresh_finish", { needsSetup: result.needsSetup })
     } catch {
       /* ignore */
     }
@@ -182,29 +185,34 @@ export function SettingsScreen({
   }, [])
 
   useEffect(() => {
+    const cached = readCachedNeedsSetup()
+    if (cached !== null) setSecurityNeedsSetup(cached)
+  }, [])
+
+  useEffect(() => {
+    if (currentView !== "security" && currentView !== "security-appeal") return
+    void refreshSecurityProfileState()
+  }, [currentView, refreshSecurityProfileState])
+
+  useEffect(() => {
     let cancelled = false
-    const loadSecurityData = async () => {
+    const loadSessions = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token) return
-        const [profRes, ssRes] = await Promise.all([
-          fetch("/api/user/security-profile", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/user/sessions", { headers: { Authorization: `Bearer ${token}` } }),
-        ])
-        const profData = (await profRes.json().catch(() => ({}))) as { profile?: { needsSetup?: boolean } }
+        const ssRes = await fetch("/api/user/sessions", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         const ssData = (await ssRes.json().catch(() => ({}))) as { items?: SessionItem[] }
-        if (!cancelled) {
-          if (profRes.ok) setSecurityNeedsSetup(Boolean(profData.profile?.needsSetup))
-          if (ssRes.ok) setSessionItems(ssData.items ?? [])
-        }
+        if (!cancelled && ssRes.ok) setSessionItems(ssData.items ?? [])
       } catch {
         /* ignore transient failures */
       }
     }
-    void loadSecurityData()
+    void loadSessions()
     return () => {
       cancelled = true
     }

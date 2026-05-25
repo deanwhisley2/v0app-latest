@@ -1,12 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { MessageCircle, Loader2 } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { MessageCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
 import type { PublicSecurityProfile, SecurityAppealRow } from "@/lib/nexus-security-profile-types"
+import {
+  fetchSecurityProfilePassive,
+  securityProfileDebug,
+  securityProfileDebugRender,
+} from "@/lib/nexus-security-profile-client"
+
+const APPEAL_FETCH_MS = 5_000
 
 type Props = {
   onOpenSupportThread?: (threadId: string) => void
@@ -22,6 +29,9 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
   const [appealType, setAppealType] = useState("withdrawal_number")
   const [appealValue, setAppealValue] = useState("")
   const [appealMessage, setAppealMessage] = useState("")
+  const loadedRef = useRef(false)
+
+  securityProfileDebugRender("appeal_center")
 
   const authHeaders = useCallback(async () => {
     const {
@@ -34,19 +44,38 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
 
   const reload = useCallback(async () => {
     const h = await authHeaders()
-    if (!h) return
+    if (!h) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      const [pRes, aRes] = await Promise.all([
-        fetch("/api/user/security-profile", { headers: h, cache: "no-store" }),
-        fetch("/api/user/security-change-request", { headers: h, cache: "no-store" }),
-      ])
-      const pj = (await pRes.json()) as { profile?: PublicSecurityProfile; error?: string }
-      const aj = (await aRes.json()) as { requests?: SecurityAppealRow[] }
-      if (!pRes.ok) throw new Error(pj.error ?? "Failed to load security profile")
-      setProfile(pj.profile ?? null)
-      setAppeals(aj.requests ?? [])
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ""
+      const profileResult = token
+        ? await fetchSecurityProfilePassive(token)
+        : { profile: null, error: "Session expired" }
+      setProfile(profileResult.profile)
+      if (profileResult.error) setError(profileResult.error)
+
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), APPEAL_FETCH_MS)
+      try {
+        const aRes = await fetch("/api/user/security-change-request", {
+          headers: h,
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        const aj = (await aRes.json()) as { requests?: SecurityAppealRow[]; error?: string }
+        if (aRes.ok) setAppeals(aj.requests ?? [])
+      } catch {
+        /* appeals list optional */
+      } finally {
+        window.clearTimeout(timer)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed")
     } finally {
@@ -55,6 +84,9 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
   }, [authHeaders])
 
   useEffect(() => {
+    if (loadedRef.current) return
+    loadedRef.current = true
+    securityProfileDebug("appeal_center_mount")
     void reload()
   }, [reload])
 
@@ -86,19 +118,11 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (profile?.needsSetup) {
+  if (profile?.needsSetup && !loading) {
     return (
       <Card className="border-warning/40 bg-warning/10 p-4">
         <p className="text-sm text-foreground">
-          Complete security setup before submitting change requests.
+          Complete security setup in Settings → Security & Recovery before submitting change requests.
         </p>
       </Card>
     )
@@ -114,82 +138,87 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           Request payout or security detail updates. Operations reviews every change in a secure thread.
         </p>
+        {loading ? <p className="mt-2 text-xs text-muted-foreground">Loading appeal center…</p> : null}
       </Card>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Card className="border-border/80 bg-card p-4">
-        <h4 className="mb-3 text-sm font-semibold">New change request</h4>
-        <div className="grid gap-2">
-          <label className="text-xs text-muted-foreground">Request type</label>
-          <select
-            value={appealType}
-            onChange={(e) => setAppealType(e.target.value)}
-            className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
-            disabled={!profile?.canChangeSensitive}
-          >
-            <option value="withdrawal_number">Withdrawal number</option>
-            <option value="deposit_number">Deposit number</option>
-            <option value="crypto_wallet">Crypto wallet</option>
-            <option value="payout_method">Payout method</option>
-            <option value="security_code">Security code</option>
-          </select>
-          <Input
-            placeholder="New value"
-            value={appealValue}
-            onChange={(e) => setAppealValue(e.target.value)}
-            disabled={!profile?.canChangeSensitive}
-          />
-          <textarea
-            rows={4}
-            placeholder="Explain why this change is needed…"
-            value={appealMessage}
-            onChange={(e) => setAppealMessage(e.target.value)}
-            disabled={!profile?.canChangeSensitive}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          />
-          <Button
-            size="sm"
-            className="touch-manipulation"
-            onClick={() => void submitAppeal()}
-            disabled={busy || !profile?.canChangeSensitive || !appealValue.trim() || !appealMessage.trim()}
-          >
-            Submit secure appeal
-          </Button>
-        </div>
-        {!profile?.canChangeSensitive && profile?.inCooldown ? (
-          <p className="mt-3 text-xs text-amber-800 dark:text-amber-100">
-            Changes are paused during review cooldown until {profile.cooldownUntil?.slice(0, 10)}.
-          </p>
-        ) : null}
-      </Card>
-
-      {appeals.length > 0 ? (
-        <Card className="border-border/80 bg-muted/10 p-4">
-          <h4 className="mb-3 text-sm font-semibold">Your appeals</h4>
-          <ul className="space-y-2">
-            {appeals.map((a) => (
-              <li
-                key={a.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/80 px-3 py-2 text-xs"
+      {!loading ? (
+        <>
+          <Card className="border-border/80 bg-card p-4">
+            <h4 className="mb-3 text-sm font-semibold">New change request</h4>
+            <div className="grid gap-2">
+              <label className="text-xs text-muted-foreground">Request type</label>
+              <select
+                value={appealType}
+                onChange={(e) => setAppealType(e.target.value)}
+                className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
+                disabled={!profile?.canChangeSensitive}
               >
-                <span>
-                  <span className="font-medium capitalize">{a.request_type.replace(/_/g, " ")}</span>
-                  <span className="text-muted-foreground"> · {a.status}</span>
-                </span>
-                {a.thread_id ? (
-                  <button
-                    type="button"
-                    className="font-semibold text-primary underline-offset-2 hover:underline touch-manipulation"
-                    onClick={() => onOpenSupportThread?.(a.thread_id!)}
+                <option value="withdrawal_number">Withdrawal number</option>
+                <option value="deposit_number">Deposit number</option>
+                <option value="crypto_wallet">Crypto wallet</option>
+                <option value="payout_method">Payout method</option>
+                <option value="security_code">Security code</option>
+              </select>
+              <Input
+                placeholder="New value"
+                value={appealValue}
+                onChange={(e) => setAppealValue(e.target.value)}
+                disabled={!profile?.canChangeSensitive}
+              />
+              <textarea
+                rows={4}
+                placeholder="Explain why this change is needed…"
+                value={appealMessage}
+                onChange={(e) => setAppealMessage(e.target.value)}
+                disabled={!profile?.canChangeSensitive}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              />
+              <Button
+                size="sm"
+                className="touch-manipulation"
+                onClick={() => void submitAppeal()}
+                disabled={busy || !profile?.canChangeSensitive || !appealValue.trim() || !appealMessage.trim()}
+              >
+                Submit secure appeal
+              </Button>
+            </div>
+            {!profile?.canChangeSensitive && profile?.inCooldown ? (
+              <p className="mt-3 text-xs text-amber-800 dark:text-amber-100">
+                Changes are paused during review cooldown until {profile.cooldownUntil?.slice(0, 10)}.
+              </p>
+            ) : null}
+          </Card>
+
+          {appeals.length > 0 ? (
+            <Card className="border-border/80 bg-muted/10 p-4">
+              <h4 className="mb-3 text-sm font-semibold">Your appeals</h4>
+              <ul className="space-y-2">
+                {appeals.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/80 px-3 py-2 text-xs"
                   >
-                    Open conversation
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </Card>
+                    <span>
+                      <span className="font-medium capitalize">{a.request_type.replace(/_/g, " ")}</span>
+                      <span className="text-muted-foreground"> · {a.status}</span>
+                    </span>
+                    {a.thread_id ? (
+                      <button
+                        type="button"
+                        className="font-semibold text-primary underline-offset-2 hover:underline touch-manipulation"
+                        onClick={() => onOpenSupportThread?.(a.thread_id!)}
+                      >
+                        Open conversation
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+        </>
       ) : null}
     </div>
   )

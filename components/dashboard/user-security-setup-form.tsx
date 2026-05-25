@@ -13,6 +13,7 @@ import {
   type NexusPayoutMethod,
 } from "@/lib/nexus-payout-methods"
 import { cn } from "@/lib/utils"
+import { fetchSecurityNeedsSetupPassive, securityProfileDebug } from "@/lib/nexus-security-profile-client"
 
 type Props = {
   /** Gate blocks dashboard until continue; settings stays on security screen. */
@@ -77,6 +78,8 @@ export function UserSecuritySetupForm({ variant = "gate", onComplete }: Props) {
       if (!res.ok) throw new Error(j.error ?? "Setup failed")
       setCode("")
       setCodeConfirm("")
+      await fetchSecurityNeedsSetupPassive(token)
+      securityProfileDebug("setup_complete")
       setPhase("success")
     } catch (e) {
       setError(e instanceof Error ? e.message : "Setup failed")
