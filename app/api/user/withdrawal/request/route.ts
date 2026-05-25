@@ -32,7 +32,8 @@ export async function POST(request: Request) {
       /** Exact local units the user typed (approval intent; ledger uses `amount` USD). */
       amountInputLocal?: number
       inputCurrency?: string
-      /** Shown on L5 withdrawal desk (payout rail / destination hint — no PII required). */
+      /** Registered payout from security profile — no manual entry. */
+      payoutOptionId?: "deposit_line" | "withdrawal_line" | "crypto"
       payoutRail?: string
       destinationHint?: string
     }
@@ -169,20 +170,58 @@ export async function POST(request: Request) {
       )
     }
 
-    const rail =
-      secRow.payout_method === "crypto_trc20"
-        ? "USDT_TRC20"
-        : typeof body.payoutRail === "string"
-          ? body.payoutRail.trim().slice(0, 64) || "mobile_money"
-          : "mobile_money"
+    if (!secRow.deposit_number?.trim() && !secRow.withdrawal_number?.trim()) {
+      return NextResponse.json(
+        { error: "Register at least one mobile money number in Security & Recovery before withdrawing." },
+        { status: 403 },
+      )
+    }
+
+    const optionId = body.payoutOptionId
+    let rail = "mobile_money"
+    let destPlain: string | null = null
+    let accountNames: string | null = null
+    if (optionId === "crypto") {
+      if (!secRow.crypto_wallet) {
+        return NextResponse.json({ error: "No crypto wallet on file." }, { status: 400 })
+      }
+      rail = "USDT_TRC20"
+      destPlain = secRow.crypto_wallet
+    } else if (optionId === "deposit_line") {
+      if (!secRow.deposit_number) {
+        return NextResponse.json({ error: "Deposit line not registered." }, { status: 400 })
+      }
+      rail = "mobile_money_deposit"
+      destPlain = secRow.deposit_number
+      accountNames = secRow.deposit_account_names
+    } else if (optionId === "withdrawal_line") {
+      if (!secRow.withdrawal_number) {
+        return NextResponse.json({ error: "Withdrawal line not registered." }, { status: 400 })
+      }
+      rail = "mobile_money_withdrawal"
+      destPlain = secRow.withdrawal_number
+      accountNames = secRow.withdrawal_account_names
+    } else if (secRow.payout_method === "crypto_trc20" && secRow.crypto_wallet) {
+      rail = "USDT_TRC20"
+      destPlain = secRow.crypto_wallet
+    } else if (secRow.withdrawal_number) {
+      rail = "mobile_money_withdrawal"
+      destPlain = secRow.withdrawal_number
+      accountNames = secRow.withdrawal_account_names
+    } else if (secRow.deposit_number) {
+      rail = "mobile_money_deposit"
+      destPlain = secRow.deposit_number
+      accountNames = secRow.deposit_account_names
+    } else {
+      return NextResponse.json({ error: "Select a registered payout method." }, { status: 400 })
+    }
+
     const destHint =
-      secRow.payout_method === "crypto_trc20" && secRow.crypto_wallet
-        ? maskSensitiveValue(secRow.crypto_wallet, "wallet")
-        : secRow.withdrawal_number
-          ? maskSensitiveValue(secRow.withdrawal_number, "phone")
-          : typeof body.destinationHint === "string"
-            ? body.destinationHint.trim().slice(0, 200) || null
-            : null
+      destPlain && rail === "USDT_TRC20"
+        ? maskSensitiveValue(destPlain, "wallet")
+        : destPlain
+          ? maskSensitiveValue(destPlain, "phone")
+          : null
 
     const rawLocal = body.amountInputLocal != null ? Number(body.amountInputLocal) : NaN
     const inputCurRaw =
@@ -232,11 +271,16 @@ export async function POST(request: Request) {
               }
             : {}),
           payout_method: secRow.payout_method,
+          payout_option_id: optionId ?? null,
           ...(rail ? { payout_rail: rail } : {}),
           ...(destHint ? { destination_hint: destHint } : {}),
+          ...(accountNames ? { registered_account_names: accountNames } : {}),
           security_profile_snapshot: {
             payout_method: secRow.payout_method,
+            payout_option_id: optionId ?? null,
             destination_masked: destHint,
+            registered_account_names: accountNames,
+            payout_rail: rail,
           },
         },
       })

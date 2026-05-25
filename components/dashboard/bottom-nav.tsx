@@ -4,7 +4,7 @@ import { useMemo, useState, useCallback } from "react"
 import {
   Home,
   MessageCircle,
-  Bell,
+  History,
   Settings,
   Zap,
   Briefcase,
@@ -27,7 +27,7 @@ interface BottomNavProps {
 const navDefs = [
   { id: "container", icon: Home, labelKey: "nav.container", color: "from-blue-500 to-cyan-500" },
   { id: "chat", icon: MessageCircle, labelKey: "nav.chat", color: "from-primary/80 to-accent/80" },
-  { id: "notifications", icon: Bell, labelKey: "nav.notifications", color: "from-green-500 to-emerald-500" },
+  { id: "history", icon: History, labelKey: "nav.history", color: "from-green-500 to-emerald-500" },
   { id: "settings", icon: Settings, labelKey: "nav.profile", color: "from-orange-500 to-amber-500" },
   { id: "desk", icon: Briefcase, labelKey: "nav.desk", color: "from-green-500 to-emerald-500" },
 ] as const
@@ -81,7 +81,11 @@ export function BottomNav({
   }, [t, operationalWorkspace])
 
   const resolvedActiveTab =
-    activeTab === "wallet" ? (operationalWorkspace ? "desk" : "notifications") : activeTab
+    activeTab === "wallet" || activeTab === "notifications"
+      ? operationalWorkspace
+        ? "desk"
+        : "history"
+      : activeTab
 
   return (
     <>

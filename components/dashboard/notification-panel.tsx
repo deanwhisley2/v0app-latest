@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button"
 import { useNexusNotifications, type NexusNotificationItem, type NexusNotificationType } from "@/contexts/NexusNotificationsContext"
 import { NotificationSwipeRow } from "./notification-swipe-row"
 import { formatNotificationTimeAgo, presentNotification } from "@/lib/notifications/notification-inbox-presenter"
+import { filterOperationalAlerts } from "@/lib/notifications/inbox-routing"
 import { NotificationInboxEmpty, NotificationInboxRow } from "@/components/dashboard/notification-inbox-ui"
 import { cn } from "@/lib/utils"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -194,6 +195,17 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<NexusNotificationItem | null>(null)
 
+  const alertInbox = useMemo(
+    () =>
+      filterOperationalAlerts(
+        inbox,
+        new Map(inbox.map((n) => [n.id, n.accountNotificationType ?? ""])),
+      ),
+    [inbox],
+  )
+
+  const alertUnreadCount = useMemo(() => alertInbox.filter((n) => !n.read).length, [alertInbox])
+
   useBodyScrollLock(isOpen)
 
   useEffect(() => {
@@ -238,7 +250,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
   const recomputeWindow = useCallback(() => {
     const el = listRef.current
-    const n = inbox.length
+    const n = alertInbox.length
     if (!el || n < INBOX_VIRTUAL_MIN) {
       setVWindow((w) => (w.start !== 0 || w.end !== n ? { start: 0, end: n } : w))
       return
@@ -248,12 +260,12 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     const start = Math.max(0, Math.floor(top / INBOX_ROW_EST) - INBOX_WINDOW_OVERSCAN)
     const end = Math.min(n, Math.ceil((top + vh) / INBOX_ROW_EST) + INBOX_WINDOW_OVERSCAN)
     setVWindow((w) => (w.start !== start || w.end !== end ? { start, end } : w))
-  }, [inbox.length])
+  }, [alertInbox.length])
 
   useLayoutEffect(() => {
     if (!isOpen || showSettings) return
     recomputeWindow()
-  }, [isOpen, showSettings, inbox.length, recomputeWindow])
+  }, [isOpen, showSettings, alertInbox.length, recomputeWindow])
 
   useEffect(() => {
     const el = listRef.current
@@ -272,15 +284,15 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     }
   }, [isOpen, showSettings, recomputeWindow])
 
-  const useVirtualInbox = inbox.length >= INBOX_VIRTUAL_MIN && !isMobileLowGpuMode()
+  const useVirtualInbox = alertInbox.length >= INBOX_VIRTUAL_MIN && !isMobileLowGpuMode()
 
   const visibleInbox = useMemo(
-    () => (useVirtualInbox ? inbox.slice(vWindow.start, vWindow.end) : inbox),
-    [inbox, useVirtualInbox, vWindow.end, vWindow.start]
+    () => (useVirtualInbox ? alertInbox.slice(vWindow.start, vWindow.end) : alertInbox),
+    [alertInbox, useVirtualInbox, vWindow.end, vWindow.start]
   )
 
   const topPad = useVirtualInbox ? vWindow.start * INBOX_ROW_EST : 0
-  const bottomPad = useVirtualInbox ? Math.max(0, inbox.length - vWindow.end) * INBOX_ROW_EST : 0
+  const bottomPad = useVirtualInbox ? Math.max(0, alertInbox.length - vWindow.end) * INBOX_ROW_EST : 0
 
   if (!isOpen || !mounted) return null
 
@@ -301,11 +313,13 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
             <Bell className="h-5 w-5 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
               <h3 className="truncate font-semibold leading-tight">{t("nav.notifications")}</h3>
-              <p className="truncate text-[10px] text-muted-foreground">{t("notifications.inbox.panelSubtitle")}</p>
+              <p className="truncate text-[10px] text-muted-foreground">
+                {t("notifications.inbox.panelSubtitleAlerts")}
+              </p>
             </div>
-            {unreadCount > 0 ? (
+            {alertUnreadCount > 0 ? (
               <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold tabular-nums text-primary">
-                {unreadCount > 99 ? "99+" : unreadCount}
+                {alertUnreadCount > 99 ? "99+" : alertUnreadCount}
               </span>
             ) : null}
           </div>
@@ -319,7 +333,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
           </div>
         </div>
 
-        {!showSettings && inbox.length > 0 && (
+        {!showSettings && alertInbox.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -474,10 +488,10 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
                     <div key={i} className="h-[72px] animate-pulse rounded-xl bg-muted/30" />
                   ))}
                 </div>
-              ) : inbox.length === 0 ? (
+              ) : alertInbox.length === 0 ? (
                 <NotificationInboxEmpty
-                  message={t("notifications.inbox.panelEmpty")}
-                  hint={t("notifications.inbox.panelEmptyHint")}
+                  message={t("notifications.inbox.panelEmptyAlerts")}
+                  hint={t("notifications.inbox.panelEmptyAlertsHint")}
                   className="py-10"
                 />
               ) : (
@@ -497,18 +511,20 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               )}
             </div>
           </div>
-          {!showSettings && inbox.length > 0 && (
+          {!showSettings && alertInbox.length > 0 && (
             <div className="shrink-0 border-t border-border bg-muted/20 px-2 py-2">
-              <Link
-                href="/dashboard/notifications"
-                onClick={onClose}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-muted/40"
+              <button
+                type="button"
+                onClick={() => {
+                  runAppNavigation({ kind: "history" })
+                  onClose()
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-muted/40 touch-manipulation"
               >
                 <History className="h-3.5 w-3.5 shrink-0" />
-                View all notifications
+                {t("history.center.openFromBell")}
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />
-              </Link>
-              <p className="mt-0.5 text-center text-[10px] text-muted-foreground/80">Scroll the list above for older items in your inbox</p>
+              </button>
             </div>
           )}
         </>

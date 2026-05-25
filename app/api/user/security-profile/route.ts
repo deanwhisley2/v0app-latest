@@ -29,6 +29,8 @@ export async function POST(request: Request) {
       security_code?: string
       deposit_number?: string
       withdrawal_number?: string
+      deposit_account_names?: string
+      withdrawal_account_names?: string
       payout_method?: string
       crypto_wallet?: string
     }
@@ -52,6 +54,10 @@ export async function POST(request: Request) {
       securityCode: code,
       depositNumber: deposit,
       withdrawalNumber: withdrawal,
+      depositAccountNames:
+        typeof body.deposit_account_names === "string" ? body.deposit_account_names : undefined,
+      withdrawalAccountNames:
+        typeof body.withdrawal_account_names === "string" ? body.withdrawal_account_names : undefined,
       payoutMethod,
       cryptoWallet: body.crypto_wallet,
     })

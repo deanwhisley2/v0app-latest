@@ -121,6 +121,7 @@ function mapServerAccountRow(r: {
     detailText,
     nav,
     customerAmountUsd,
+    accountNotificationType: r.notification_type ?? undefined,
   }
 }
 

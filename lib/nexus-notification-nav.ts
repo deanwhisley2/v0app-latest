@@ -4,6 +4,7 @@ export type NexusNotificationNav =
   /** @deprecated DB rows may still emit `wallet`; dashboard maps to money settings or desk. */
   | { kind: "wallet" }
   | { kind: "notifications" }
+  | { kind: "history" }
   /** Operational liquidity desk (formerly Wallet tab). */
   | { kind: "desk" }
   | { kind: "settings"; view: "security" | "about" | "notifications" | "deposit-withdraw" }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
 import {
   fingerprintValue,
   hashSecurityCode,
@@ -21,32 +22,56 @@ export type UserSecurityProfileRow = {
   security_code_set_at: string | null
   deposit_number: string | null
   withdrawal_number: string | null
+  deposit_account_names: string | null
+  withdrawal_account_names: string | null
   crypto_wallet: string | null
   payout_method: NexusPayoutMethod
   last_sensitive_change_at: string | null
   cooldown_until: string | null
 }
 
-export type PublicSecurityProfile = {
-  hasSecurityCode: boolean
-  needsSetup: boolean
-  payoutMethod: NexusPayoutMethod
-  depositNumberMasked: string | null
-  withdrawalNumberMasked: string | null
-  cryptoWalletMasked: string | null
-  cooldownUntil: string | null
-  inCooldown: boolean
-  canChangeSensitive: boolean
-  cryptoNotice: string
+function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayoutOption[] {
+  if (!row) return []
+  const opts: RegisteredPayoutOption[] = []
+  if (row.deposit_number) {
+    opts.push({
+      id: "deposit_line",
+      label: "Mobile money (deposit line)",
+      rail: "mobile_money_deposit",
+      numberMasked: maskSensitiveValue(row.deposit_number, "phone"),
+      accountNames: row.deposit_account_names?.trim() || null,
+    })
+  }
+  if (row.withdrawal_number) {
+    opts.push({
+      id: "withdrawal_line",
+      label: "Mobile money (withdrawal line)",
+      rail: "mobile_money_withdrawal",
+      numberMasked: maskSensitiveValue(row.withdrawal_number, "phone"),
+      accountNames: row.withdrawal_account_names?.trim() || null,
+    })
+  }
+  if (row.crypto_wallet && isValidTrc20UsdtAddress(row.crypto_wallet)) {
+    opts.push({
+      id: "crypto",
+      label: "USDT TRC20",
+      rail: "USDT_TRC20",
+      numberMasked: maskSensitiveValue(row.crypto_wallet, "wallet"),
+      accountNames: null,
+    })
+  }
+  return opts
 }
 
 function rowToPublic(row: UserSecurityProfileRow | null): PublicSecurityProfile {
   const hasSecurityCode = Boolean(row?.security_code_hash)
+  const hasTransactionNumber = Boolean(row?.deposit_number?.trim() || row?.withdrawal_number?.trim())
   const cooldownUntil = row?.cooldown_until ?? null
   const inCooldown = cooldownUntil ? new Date(cooldownUntil).getTime() > Date.now() : false
   return {
     hasSecurityCode,
-    needsSetup: !hasSecurityCode,
+    hasTransactionNumber,
+    needsSetup: !hasSecurityCode || !hasTransactionNumber,
     payoutMethod: (row?.payout_method as NexusPayoutMethod) ?? "mobile_money",
     depositNumberMasked: row?.deposit_number
       ? maskSensitiveValue(row.deposit_number, "phone")
@@ -54,7 +79,10 @@ function rowToPublic(row: UserSecurityProfileRow | null): PublicSecurityProfile 
     withdrawalNumberMasked: row?.withdrawal_number
       ? maskSensitiveValue(row.withdrawal_number, "phone")
       : null,
+    depositAccountNames: row?.deposit_account_names?.trim() || null,
+    withdrawalAccountNames: row?.withdrawal_account_names?.trim() || null,
     cryptoWalletMasked: row?.crypto_wallet ? maskSensitiveValue(row.crypto_wallet, "wallet") : null,
+    payoutOptions: buildPayoutOptions(row),
     cooldownUntil,
     inCooldown,
     canChangeSensitive: hasSecurityCode && !inCooldown,
@@ -107,6 +135,8 @@ export async function setupSecurityProfile(
     securityCode: string
     depositNumber: string
     withdrawalNumber: string
+    depositAccountNames?: string
+    withdrawalAccountNames?: string
     payoutMethod: NexusPayoutMethod
     cryptoWallet?: string | null
   },
@@ -120,15 +150,28 @@ export async function setupSecurityProfile(
   }
   const deposit = normalizeDepositNumber(params.depositNumber)
   const withdrawal = normalizeWithdrawalNumber(params.withdrawalNumber)
-  if (!deposit || deposit.length < 8) throw new Error("Deposit number is required.")
-  if (!withdrawal || withdrawal.length < 8) throw new Error("Withdrawal number is required.")
+  const depositOk = deposit.length >= 8
+  const withdrawalOk = withdrawal.length >= 8
+  if (!depositOk && !withdrawalOk) {
+    throw new Error("Enter at least one valid mobile money number (8+ digits).")
+  }
+  const depositNames = params.depositAccountNames?.trim() || null
+  const withdrawalNames = params.withdrawalAccountNames?.trim() || null
+  if (depositOk && !depositNames) {
+    throw new Error("Registered account names are required for the deposit number.")
+  }
+  if (withdrawalOk && !withdrawalNames) {
+    throw new Error("Registered account names are required for the withdrawal number.")
+  }
 
-  let crypto: string | null = null
+  let crypto: string | null = row.crypto_wallet
   if (params.payoutMethod === "crypto_trc20") {
     crypto = params.cryptoWallet?.trim() ?? ""
     if (!isValidTrc20UsdtAddress(crypto)) {
       throw new Error("Invalid USDT TRC20 wallet address.")
     }
+  } else if (!params.cryptoWallet) {
+    crypto = null
   }
 
   const now = new Date().toISOString()
@@ -137,8 +180,10 @@ export async function setupSecurityProfile(
     .update({
       security_code_hash: hashSecurityCode(params.securityCode),
       security_code_set_at: now,
-      deposit_number: deposit,
-      withdrawal_number: withdrawal,
+      deposit_number: depositOk ? deposit : null,
+      withdrawal_number: withdrawalOk ? withdrawal : null,
+      deposit_account_names: depositOk ? depositNames : null,
+      withdrawal_account_names: withdrawalOk ? withdrawalNames : null,
       crypto_wallet: crypto,
       payout_method: params.payoutMethod,
       last_sensitive_change_at: now,

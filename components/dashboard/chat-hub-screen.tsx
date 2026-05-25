@@ -3,7 +3,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
-  Bell,
   Bot,
   Headphones,
   Loader2,
@@ -14,10 +13,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
-import { useNexusNotifications, type NexusNotificationItem } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
-import { usePresentedNotifications } from "@/hooks/use-presented-notifications"
+import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
 import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { NX_PANEL } from "@/lib/nexus-ui-surfaces"
@@ -25,14 +23,10 @@ import {
   operationalThreadCategoryLabel,
   operationalThreadStatusLabel,
 } from "@/lib/operational-support-institutional"
-import {
-  formatNotificationTimeAgo,
-  presentNotification,
-} from "@/lib/notifications/notification-inbox-presenter"
+import { formatNotificationTimeAgo } from "@/lib/notifications/notification-inbox-presenter"
 import { supabase } from "@/lib/supabaseClient"
 import { TRADING_USER_LEVEL } from "@/lib/trading-user-level"
 import { cn } from "@/lib/utils"
-import { NotificationDetailSheet, NotificationInboxRow } from "@/components/dashboard/notification-inbox-ui"
 
 type ThreadRow = {
   id: string
@@ -53,10 +47,9 @@ type MsgRow = {
 type ChatRoute =
   | { screen: "list" }
   | { screen: "ai" }
-  | { screen: "notifications" }
   | { screen: "support"; threadId: string | null }
 
-type ConversationKind = "ai" | "support_hub" | "notifications" | "support_thread"
+type ConversationKind = "ai" | "support_hub" | "support_thread"
 
 type ConversationRow = {
   id: string
@@ -87,21 +80,18 @@ export function ChatHubScreen({
   onSupportThreadFocusConsumed,
   showOperationalInboxHint = false,
   onGoToOperationalInbox,
-  onOpenFullNotifications,
 }: {
   isGuestSession?: boolean
-  initialFocus?: "ai" | "support" | "notifications" | null
+  initialFocus?: "ai" | "support" | null
   supportThreadFocusId?: string | null
   onSupportThreadFocusConsumed?: () => void
   /** Level-5 desk: customer Chat is not the operational inbox. */
   showOperationalInboxHint?: boolean
   onGoToOperationalInbox?: () => void
-  onOpenFullNotifications?: () => void
 }) {
-  const { t, language, country, currency, locale } = useUserPreferences()
+  const { t, language, country } = useUserPreferences()
   const { user } = useAuth()
-  const { inbox, unreadCount, markRead, runAppNavigation, archiveFromInbox, deleteFromInbox } =
-    useNexusNotifications()
+  const scrollBehavior = isMobileLowGpuMode() ? "auto" : "smooth"
 
   const [route, setRoute] = useState<ChatRoute>({ screen: "list" })
   const [search, setSearch] = useState("")
@@ -130,15 +120,6 @@ export function ChatHubScreen({
   const [aiInput, setAiInput] = useState("")
   const [aiBusy, setAiBusy] = useState(false)
   const aiEndRef = useRef<HTMLDivElement>(null)
-
-  const [selectedNotification, setSelectedNotification] = useState<NexusNotificationItem | null>(null)
-
-  const sortedInbox = useMemo(
-    () => [...inbox].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-    [inbox],
-  )
-  const presentedMap = usePresentedNotifications(sortedInbox, t)
-  const latestNotification = sortedInbox[0]
 
   const authHeaders = useCallback(async () => {
     const {
@@ -201,7 +182,6 @@ export function ChatHubScreen({
 
   useEffect(() => {
     if (initialFocus === "ai") setRoute({ screen: "ai" })
-    else if (initialFocus === "notifications") setRoute({ screen: "notifications" })
     else if (initialFocus === "support") setRoute({ screen: "support", threadId: null })
   }, [initialFocus])
 
@@ -219,12 +199,12 @@ export function ChatHubScreen({
   }, [route, loadMessages, threadTick])
 
   useEffect(() => {
-    supportEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    supportEndRef.current?.scrollIntoView({ behavior: scrollBehavior })
+  }, [messages, scrollBehavior])
 
   useEffect(() => {
-    aiEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [aiMessages, aiBusy])
+    aiEndRef.current?.scrollIntoView({ behavior: scrollBehavior })
+  }, [aiMessages, aiBusy, scrollBehavior])
 
   const supportUnread = useMemo(() => threads.filter((th) => th.unread_for_user).length, [threads])
 
@@ -251,17 +231,6 @@ export function ChatHubScreen({
         unread: supportUnread,
         pinned: true,
       },
-      {
-        id: "notifications",
-        kind: "notifications",
-        title: t("chat.conversation.notificationsTitle"),
-        preview: latestNotification
-          ? presentedMap.get(latestNotification.id)?.summary ?? latestNotification.message
-          : t("chat.conversation.notificationsEmpty"),
-        timeLabel: latestNotification ? rowTime(latestNotification.timestamp, t) : "",
-        unread: unreadCount,
-        pinned: true,
-      },
     ]
 
     for (const th of [...threads].sort(
@@ -280,7 +249,7 @@ export function ChatHubScreen({
     }
 
     return rows
-  }, [threads, latestNotification, presentedMap, supportUnread, unreadCount, t])
+  }, [threads, supportUnread, t])
 
   const filteredConversations = useMemo(() => {
     if (!deferredSearch) return conversations
@@ -295,7 +264,6 @@ export function ChatHubScreen({
 
   const openConversation = (row: ConversationRow) => {
     if (row.kind === "ai") setRoute({ screen: "ai" })
-    else if (row.kind === "notifications") setRoute({ screen: "notifications" })
     else if (row.kind === "support_hub") setRoute({ screen: "support", threadId: null })
     else if (row.kind === "support_thread" && row.threadId)
       setRoute({ screen: "support", threadId: row.threadId })
@@ -384,9 +352,9 @@ export function ChatHubScreen({
           <MessageCircle className="h-5 w-5 text-primary" aria-hidden />
           <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("chat.title")}</h2>
         </div>
-        {unreadCount > 0 ? (
+        {supportUnread > 0 ? (
           <span className="rounded-full bg-primary/12 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-primary">
-            {unreadCount > 99 ? "99+" : unreadCount}
+            {supportUnread > 99 ? "99+" : supportUnread}
           </span>
         ) : null}
       </div>
@@ -417,14 +385,7 @@ export function ChatHubScreen({
   )
 
   const renderRow = (row: ConversationRow) => {
-    const Icon =
-      row.kind === "ai"
-        ? Bot
-        : row.kind === "notifications"
-          ? Bell
-          : row.kind === "support_thread"
-            ? Headphones
-            : Headphones
+    const Icon = row.kind === "ai" ? Bot : Headphones
     return (
       <button
         key={row.id}
@@ -549,79 +510,6 @@ export function ChatHubScreen({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-      </>,
-    )
-  }
-
-  if (route.screen === "notifications") {
-    return detailShell(
-      t("chat.conversation.notificationsTitle"),
-      t("chat.conversation.notificationsSubtitle"),
-      <>
-        <div className="nexus-scroll-isolated min-h-0 flex-1 overflow-y-auto px-2 py-2">
-          {sortedInbox.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("chat.conversation.notificationsEmpty")}</p>
-          ) : (
-            sortedInbox.slice(0, 40).map((n) => {
-              const presented =
-                presentedMap.get(n.id) ??
-                presentNotification(n, t, {
-                  fundingCountryCode: country ?? null,
-                  displayCurrency: currency,
-                  locale,
-                })
-              return (
-                <NotificationInboxRow
-                  key={n.id}
-                  item={n}
-                  presented={presented}
-                  onOpen={() => {
-                    setSelectedNotification(n)
-                    markRead(n.id)
-                  }}
-                />
-              )
-            })
-          )}
-        </div>
-        {onOpenFullNotifications ? (
-          <div className="border-t border-border/80 p-3">
-            <Button type="button" variant="outline" className="w-full" onClick={onOpenFullNotifications}>
-              {t("chat.openFullInbox")}
-            </Button>
-          </div>
-        ) : null}
-        {selectedNotification ? (
-          <NotificationDetailSheet
-            item={selectedNotification}
-            presented={
-              presentedMap.get(selectedNotification.id) ??
-              presentNotification(selectedNotification, t, {
-                fundingCountryCode: country ?? null,
-                displayCurrency: currency,
-                locale,
-              })
-            }
-            t={t}
-            onClose={() => setSelectedNotification(null)}
-            onArchive={() => {
-              archiveFromInbox(selectedNotification.id)
-              setSelectedNotification(null)
-            }}
-            onDelete={() => {
-              deleteFromInbox(selectedNotification.id)
-              setSelectedNotification(null)
-            }}
-            onOpenLinked={
-              selectedNotification.nav && selectedNotification.nav.kind !== "detail"
-                ? () => {
-                    runAppNavigation(selectedNotification.nav!)
-                    setSelectedNotification(null)
-                  }
-                : undefined
-            }
-          />
-        ) : null}
       </>,
     )
   }

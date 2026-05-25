@@ -10,7 +10,7 @@ import { DASHBOARD_TRADE_VIEWS } from "@/lib/dashboard-trade-view"
 const STORAGE_KEY = "nexus_dashboard_activity_v2"
 
 /** `desk` = operational command center (formerly Wallet). `notifications` replaced Wallet for retail users. */
-const MAIN_TABS = new Set(["container", "chat", "notifications", "settings", "desk"])
+const MAIN_TABS = new Set(["container", "chat", "history", "notifications", "settings", "desk"])
 const TRADE_VIEW_SET = new Set<string>(DASHBOARD_TRADE_VIEWS)
 
 export type DashboardActivitySnapshot = {
@@ -49,8 +49,8 @@ function parseSnapshot(raw: string): DashboardActivitySnapshot | null {
     const activeTab =
       rawTab === "trade" || rawTab === "markets"
         ? "container"
-        : rawTab === "wallet"
-          ? "notifications"
+        : rawTab === "wallet" || rawTab === "notifications"
+          ? "history"
           : rawTab === "wallstreet"
             ? "chat"
             : MAIN_TABS.has(rawTab)

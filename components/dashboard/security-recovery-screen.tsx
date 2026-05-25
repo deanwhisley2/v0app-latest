@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Shield } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -200,21 +199,6 @@ export function SecurityRecoveryScreen() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-border/80 bg-card/90 p-4 shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-            <Shield className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold">Security & Recovery</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Manage your Nexus Security Code, payout details, devices, and password. This page loads only when you
-              open it — it never blocks the dashboard.
-            </p>
-          </div>
-        </div>
-      </Card>
-
       {needsSetup === null ? null : needsSetup ? (
         <UserSecuritySetupForm variant="settings" onComplete={() => void refreshSetupState()} />
       ) : (

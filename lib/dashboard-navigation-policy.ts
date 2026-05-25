@@ -6,10 +6,13 @@
 export const DASHBOARD_MAIN_TABS = [
   "container",
   "chat",
-  "notifications",
+  "history",
   "settings",
   "desk",
 ] as const
+
+/** @deprecated Use `history` — kept for session migration only. */
+export const LEGACY_NOTIFICATIONS_TAB = "notifications"
 
 export type DashboardMainTab = (typeof DASHBOARD_MAIN_TABS)[number]
 
@@ -52,9 +55,10 @@ export function normalizeDashboardTab(
   opts: { operationalWorkspace: boolean },
 ): DashboardMainTab {
   let t = raw === "wallet" || raw === "trade" || raw === "markets" ? "container" : raw
+  if (t === "notifications" || t === "wallet") t = "history"
   if (!TAB_SET.has(t)) t = "container"
   if (opts.operationalWorkspace) {
-    if (t === "notifications" || t === "container" || t === "wallstreet") return "desk"
+    if (t === "history" || t === "container" || t === "wallstreet") return "desk"
   } else {
     if (t === "desk") return "container"
   }

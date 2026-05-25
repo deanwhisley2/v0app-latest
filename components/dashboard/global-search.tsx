@@ -51,9 +51,9 @@ const settingsItems: Omit<SearchResult, "id">[] = [
 const walletItems: Omit<SearchResult, "id">[] = [
   { title: "Send Crypto", description: "Move funds to an external address", category: "wallet", icon: <ArrowRight className="h-4 w-4" />, path: "settings" },
   { title: "Receive Crypto", description: "Get your deposit details", category: "wallet", icon: <Wallet className="h-4 w-4" />, path: "settings" },
-  { title: "Transaction History", description: "See recent money movements", category: "wallet", icon: <History className="h-4 w-4" />, path: "notifications" },
+  { title: "Transaction History", description: "See recent money movements", category: "wallet", icon: <History className="h-4 w-4" />, path: "history" },
   { title: "Portfolio Overview", description: "See balances at a glance", category: "wallet", icon: <TrendingUp className="h-4 w-4" />, path: "settings" },
-  { title: "Earn Rewards", description: "Rewards and promos", category: "wallet", icon: <Sparkles className="h-4 w-4" />, path: "notifications" },
+  { title: "Earn Rewards", description: "Rewards and promos", category: "wallet", icon: <Sparkles className="h-4 w-4" />, path: "history" },
 ]
 
 const helpItems: Omit<SearchResult, "id">[] = [
@@ -65,7 +65,7 @@ const helpItems: Omit<SearchResult, "id">[] = [
 
 
 const appNavItems: Omit<SearchResult, "id">[] = [
-  { title: "Notifications", description: "Funding, withdrawals, and alerts", category: "wallet", icon: <Bell className="h-4 w-4" />, path: "notifications" },
+  { title: "History", description: "Deposits, withdrawals, and activity", category: "wallet", icon: <History className="h-4 w-4" />, path: "history" },
   { title: "Deposit funds", description: "Add money to your account", category: "wallet", icon: <Wallet className="h-4 w-4" />, path: "settings" },
   { title: "Withdraw", description: "Cash out to your pocket", category: "wallet", icon: <ArrowUpDown className="h-4 w-4" />, path: "settings" },
   { title: "Container desk", description: "Copy and fixed trades", category: "action", icon: <TrendingUp className="h-4 w-4" />, path: "container" },
@@ -80,13 +80,13 @@ const quickActions: Omit<SearchResult, "id">[] = [
 ]
 
 const mockOrders: Omit<SearchResult, "id">[] = [
-  { title: "ORD-001 - Buy BTC", description: "$500 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
-  { title: "ORD-002 - Sell ETH", description: "$250 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
-  { title: "ORD-003 - Buy SOL", description: "$100 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "notifications" },
-  { title: "ORD-004 - Buy BTC", description: "$1,200 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
-  { title: "ORD-005 - Sell ADA", description: "$350 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "notifications" },
-  { title: "ORD-006 - Buy ETH", description: "$800 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "notifications" },
-  { title: "ORD-007 - Sell DOGE", description: "$50 - Cancelled", category: "order", icon: <X className="h-4 w-4 text-destructive" />, path: "notifications" },
+  { title: "ORD-001 - Buy BTC", description: "$500 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "history" },
+  { title: "ORD-002 - Sell ETH", description: "$250 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "history" },
+  { title: "ORD-003 - Buy SOL", description: "$100 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "history" },
+  { title: "ORD-004 - Buy BTC", description: "$1,200 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "history" },
+  { title: "ORD-005 - Sell ADA", description: "$350 - Completed", category: "order", icon: <CheckCircle2 className="h-4 w-4 text-success" />, path: "history" },
+  { title: "ORD-006 - Buy ETH", description: "$800 - Pending", category: "order", icon: <Clock className="h-4 w-4 text-warning" />, path: "history" },
+  { title: "ORD-007 - Sell DOGE", description: "$50 - Cancelled", category: "order", icon: <X className="h-4 w-4 text-destructive" />, path: "history" },
 ]
 
 export function GlobalSearch({ isOpen, onClose, onNavigate, coins }: GlobalSearchProps) {

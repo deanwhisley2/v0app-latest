@@ -78,12 +78,24 @@ export function UserSecurityRecoverySummary({ appealCenterHref }: Props) {
               </div>
               <div className="flex justify-between gap-2 border-b border-border/40 pb-2">
                 <dt className="text-muted-foreground">Deposit number</dt>
-                <dd className="font-mono">{profile?.depositNumberMasked ?? "—"}</dd>
+                <dd className="font-mono text-right">{profile?.depositNumberMasked ?? "—"}</dd>
               </div>
+              {profile?.depositAccountNames ? (
+                <div className="flex justify-between gap-2 border-b border-border/40 pb-2">
+                  <dt className="text-muted-foreground">Deposit names</dt>
+                  <dd className="text-right">{profile.depositAccountNames}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-2 border-b border-border/40 pb-2">
                 <dt className="text-muted-foreground">Withdrawal number</dt>
-                <dd className="font-mono">{profile?.withdrawalNumberMasked ?? "—"}</dd>
+                <dd className="font-mono text-right">{profile?.withdrawalNumberMasked ?? "—"}</dd>
               </div>
+              {profile?.withdrawalAccountNames ? (
+                <div className="flex justify-between gap-2 border-b border-border/40 pb-2">
+                  <dt className="text-muted-foreground">Withdrawal names</dt>
+                  <dd className="text-right">{profile.withdrawalAccountNames}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Payout method</dt>
                 <dd>{profile?.payoutMethod === "crypto_trc20" ? "USDT TRC20" : "Mobile Money"}</dd>

@@ -170,7 +170,7 @@ export function Header({
   const mainTabsAll = [
     { id: "container", labelKey: "nav.container" },
     { id: "chat", labelKey: "nav.chat" },
-    { id: "notifications", labelKey: "nav.notifications" },
+    { id: "history", labelKey: "nav.history" },
     { id: "settings", labelKey: "nav.settings" },
   ] as const
   const mainTabs = operationalWorkspace
@@ -181,7 +181,11 @@ export function Header({
     : mainTabsAll
 
   const resolvedHeaderActive =
-    activeTab === "wallet" ? (operationalWorkspace ? "desk" : "notifications") : activeTab
+    activeTab === "wallet" || activeTab === "notifications"
+      ? operationalWorkspace
+        ? "desk"
+        : "history"
+      : activeTab
 
 
   const renderProfilePanelBody = () => (
@@ -605,7 +609,7 @@ export function Header({
               onClick={() => {
                 setShowProfileMenu(false)
                 if (window.matchMedia("(min-width: 768px)").matches) {
-                  onTabChange(operationalWorkspace ? "desk" : "notifications")
+                  onTabChange(operationalWorkspace ? "desk" : "history")
                   setShowArchivedNotifications(false)
                   return
                 }

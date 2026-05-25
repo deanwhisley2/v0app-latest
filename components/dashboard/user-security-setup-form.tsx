@@ -29,7 +29,9 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
   const [code, setCode] = useState("")
   const [codeConfirm, setCodeConfirm] = useState("")
   const [deposit, setDeposit] = useState("")
+  const [depositNames, setDepositNames] = useState("")
   const [withdrawal, setWithdrawal] = useState("")
+  const [withdrawalNames, setWithdrawalNames] = useState("")
   const [payoutMethod, setPayoutMethod] = useState<NexusPayoutMethod>("mobile_money")
   const [cryptoWallet, setCryptoWallet] = useState("")
 
@@ -38,8 +40,20 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
       setError("Enter matching 6-digit security codes.")
       return
     }
-    if (!deposit.trim() || !withdrawal.trim()) {
-      setError("Deposit and withdrawal numbers are required.")
+    const depositTrim = deposit.trim()
+    const withdrawalTrim = withdrawal.trim()
+    const depositOk = depositTrim.replace(/\s+/g, "").length >= 8
+    const withdrawalOk = withdrawalTrim.replace(/\s+/g, "").length >= 8
+    if (!depositOk && !withdrawalOk) {
+      setError("Enter at least one mobile money number (8+ digits). You may add the second number later.")
+      return
+    }
+    if (depositOk && !depositNames.trim()) {
+      setError("Registered account names are required for the deposit number.")
+      return
+    }
+    if (withdrawalOk && !withdrawalNames.trim()) {
+      setError("Registered account names are required for the withdrawal number.")
       return
     }
     if (payoutMethod === "crypto_trc20" && !isValidTrc20UsdtAddress(cryptoWallet)) {
@@ -67,8 +81,10 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
         },
         body: JSON.stringify({
           security_code: code,
-          deposit_number: deposit,
-          withdrawal_number: withdrawal,
+          deposit_number: depositOk ? depositTrim : "",
+          withdrawal_number: withdrawalOk ? withdrawalTrim : "",
+          deposit_account_names: depositOk ? depositNames.trim() : "",
+          withdrawal_account_names: withdrawalOk ? withdrawalNames.trim() : "",
           payout_method: payoutMethod,
           crypto_wallet: payoutMethod === "crypto_trc20" ? cryptoWallet : undefined,
         }),
@@ -95,8 +111,8 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
           <div className="min-w-0 flex-1">
             <h4 className="text-sm font-semibold text-foreground">Security setup completed</h4>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Your Nexus Security Code and payout details are saved. You can request changes later through
-              Security Appeal Center.
+              Your Nexus Security PIN and payout details are saved and locked. Verify carefully — changes require
+              Security Appeal review.
             </p>
             <Button
               className="mt-4 w-full touch-manipulation sm:w-auto"
@@ -114,15 +130,16 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
     <Card className="border-primary/30 bg-card p-4 shadow-sm">
       <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold">
         <Lock className="h-4 w-4" />
-        Security setup
+        Security setup (required for Add Funds & Withdraw)
       </h4>
       <p className="mb-4 text-xs text-muted-foreground">
-        Required before trading, funding, or withdrawals. Your code is stored securely and never shown again.
+        Set your 6-digit PIN and at least one mobile money number. You may use the same number for deposit and
+        withdrawal. Optional TRC20 wallet can be added now or later via appeal.
       </p>
       {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label className="text-xs">6-digit security code</Label>
+          <Label className="text-xs">6-digit Nexus Security PIN</Label>
           <Input
             type="password"
             inputMode="numeric"
@@ -134,7 +151,7 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
           />
         </div>
         <div>
-          <Label className="text-xs">Confirm code</Label>
+          <Label className="text-xs">Confirm PIN</Label>
           <Input
             type="password"
             inputMode="numeric"
@@ -146,16 +163,28 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
           />
         </div>
         <div className="sm:col-span-2">
-          <Label className="text-xs">Deposit number (MTN/Airtel for adding funds)</Label>
+          <Label className="text-xs">MTN / Airtel number (deposits)</Label>
           <Input value={deposit} onChange={(e) => setDeposit(e.target.value)} className="mt-1" placeholder="+256…" />
+          <Input
+            value={depositNames}
+            onChange={(e) => setDepositNames(e.target.value)}
+            className="mt-2"
+            placeholder="Registered account names (e.g. RICHARD KATO)"
+          />
         </div>
         <div className="sm:col-span-2">
-          <Label className="text-xs">Withdrawal number (receives payouts)</Label>
+          <Label className="text-xs">MTN / Airtel number (withdrawals)</Label>
           <Input
             value={withdrawal}
             onChange={(e) => setWithdrawal(e.target.value)}
             className="mt-1"
-            placeholder="+256…"
+            placeholder="+256… (optional if same as deposit)"
+          />
+          <Input
+            value={withdrawalNames}
+            onChange={(e) => setWithdrawalNames(e.target.value)}
+            className="mt-2"
+            placeholder="Registered account names"
           />
         </div>
         <div className="sm:col-span-2">
@@ -181,13 +210,13 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
               )}
             >
               <Wallet className="mr-1 inline h-3.5 w-3.5" />
-              USDT TRC20
+              USDT TRC20 (optional)
             </button>
           </div>
         </div>
         {payoutMethod === "crypto_trc20" ? (
           <div className="space-y-2 sm:col-span-2">
-            <Label className="text-xs">TRON TRC20 USDT wallet</Label>
+            <Label className="text-xs">TRON TRC20 USDT wallet (optional)</Label>
             <Input
               value={cryptoWallet}
               onChange={(e) => setCryptoWallet(e.target.value.trim())}
@@ -202,6 +231,7 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
       <Button className="mt-4 w-full touch-manipulation" onClick={() => void submitSetup()} disabled={busy}>
         {busy ? "Saving…" : "Save security setup"}
       </Button>
+      {variant === "settings" ? null : null}
     </Card>
   )
 }

@@ -92,7 +92,13 @@ import {
   CHROME_BFCACHE_RESET_EVENT,
   purgeChromeUnsafeSessionState,
 } from "@/lib/mobile/chrome-android-safe-mode"
-import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
+import { HistoryCenterScreen } from "@/components/dashboard/history-center-screen"
+import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
+import {
+  fetchSecurityNeedsSetupPassive,
+  fetchSecurityProfilePassive,
+} from "@/lib/nexus-security-profile-client"
+import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
   corridorFiatForCountryIso2,
@@ -353,7 +359,7 @@ export default function DashboardPage() {
   }, [authLoading, user, isGuestSession, activeTab, operationalWorkspace])
   useEffect(() => {
     if (activeTab !== "wallet") return
-    setTabProgrammatic(operationalWorkspace ? "desk" : "notifications", "legacy_wallet_tab")
+    setTabProgrammatic(operationalWorkspace ? "desk" : "history", "legacy_wallet_tab")
   }, [activeTab, operationalWorkspace, setTabProgrammatic])
 
   useEffect(() => {
@@ -367,7 +373,10 @@ export default function DashboardPage() {
   const [supportThreadFocusId, setSupportThreadFocusId] = useState<string | null>(null)
   const supportThreadFromUrlRef = useRef<string | null>(null)
   const supportThreadUrlParsedRef = useRef(false)
-  const [chatHubFocus, setChatHubFocus] = useState<"ai" | "support" | "notifications" | null>(null)
+  const [chatHubFocus, setChatHubFocus] = useState<"ai" | "support" | null>(null)
+  const [securityGateOpen, setSecurityGateOpen] = useState(false)
+  const [withdrawPayoutProfile, setWithdrawPayoutProfile] = useState<PublicSecurityProfile | null>(null)
+  const [selectedWithdrawPayoutId, setSelectedWithdrawPayoutId] = useState<string | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
   const [mainBalance, setMainBalance] = useState(0)
@@ -567,7 +576,7 @@ export default function DashboardPage() {
     const tab = navCtrl.resolveInitialTab(
       snap
         ? snap.activeTab === "wallet"
-          ? "notifications"
+          ? "history"
           : snap.activeTab === "wallstreet"
             ? "chat"
             : snap.activeTab
@@ -621,9 +630,9 @@ export default function DashboardPage() {
     lastWorkspacePostedRef.current = ser
 
     const coerceTab = (tab: string) => {
-      let t = tab === "wallet" ? "notifications" : tab
+      let t = tab === "wallet" || tab === "notifications" ? "history" : tab
       if (operationalWorkspace) {
-        if (t === "notifications" || t === "container" || t === "wallstreet") t = "desk"
+        if (t === "history" || t === "container" || t === "wallstreet") t = "desk"
       }
       return t
     }
@@ -1502,7 +1511,8 @@ export default function DashboardPage() {
           }
           break
         case "notifications":
-          setTabProgrammatic("notifications", "notification_nav_inbox")
+        case "history":
+          setTabProgrammatic("history", "notification_nav_history")
           break
         case "desk":
           setTabProgrammatic("desk", "notification_nav_desk")
@@ -1994,6 +2004,48 @@ export default function DashboardPage() {
     if (showFundModal === "withdraw") void loadWithdrawalEligibility()
   }, [showFundModal, loadWithdrawalEligibility])
 
+  const tryOpenFundModal = useCallback(
+    async (mode: "add" | "withdraw") => {
+      if (isGuestSession) return
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const { needsSetup } = await fetchSecurityNeedsSetupPassive(token)
+      if (needsSetup) {
+        setSecurityGateOpen(true)
+        return
+      }
+      if (mode === "withdraw") {
+        const { profile } = await fetchSecurityProfilePassive(token)
+        if (!profile?.payoutOptions?.length) {
+          setSecurityGateOpen(true)
+          return
+        }
+        setWithdrawPayoutProfile(profile)
+        setSelectedWithdrawPayoutId(profile.payoutOptions[0]?.id ?? null)
+      } else {
+        setWithdrawPayoutProfile(null)
+        setSelectedWithdrawPayoutId(null)
+      }
+      setShowFundModal(mode)
+      setFundAmount("")
+      if (mode === "add") {
+        setL1FundSource("crypto")
+        setQualifiedRetailers([])
+        setSelectedRetailerId("")
+        setFundTxReference("")
+        setFundNote("")
+        setFundMobileNetwork("")
+        setCryptoFundingMeta(null)
+        setFundPaymentProofDataUrl(null)
+        setFundPaymentProofPreview(null)
+      }
+    },
+    [isGuestSession],
+  )
+
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseCustomerLocalAmountInput(fundAmount)
     /** Withdraw & local mobile-money funding: user types preferred fiat → ledger uses USD-normalized units. */
@@ -2077,6 +2129,9 @@ export default function DashboardPage() {
           if (retailerCreditDesk && retailerOpsBlocked) {
             throw new Error(t("withdrawal.error.retailerPendingBlocksWithdraw"))
           }
+          if (!selectedWithdrawPayoutId) {
+            throw new Error("Select a registered payout method.")
+          }
           const res = await fetch("/api/user/withdrawal/request", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2085,6 +2140,7 @@ export default function DashboardPage() {
               currencyContext: currency,
               amountInputLocal: amountRaw,
               inputCurrency: currency,
+              payoutOptionId: selectedWithdrawPayoutId,
             }),
           })
           const out = (await res.json().catch(() => ({}))) as {
@@ -2488,19 +2544,7 @@ export default function DashboardPage() {
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowFundModal("add")
-                      setFundAmount("")
-                      setL1FundSource("crypto")
-                      setQualifiedRetailers([])
-                      setSelectedRetailerId("")
-                      setFundTxReference("")
-                      setFundNote("")
-                      setFundMobileNetwork("")
-                      setCryptoFundingMeta(null)
-                      setFundPaymentProofDataUrl(null)
-                      setFundPaymentProofPreview(null)
-                    }}
+                    onClick={() => void tryOpenFundModal("add")}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90 sm:flex-none"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2510,10 +2554,7 @@ export default function DashboardPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowFundModal("withdraw")
-                      setFundAmount("")
-                    }}
+                    onClick={() => void tryOpenFundModal("withdraw")}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 sm:flex-none"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3351,6 +3392,43 @@ export default function DashboardPage() {
                     {showBalance ? formatUserMoney(mainBalance) : "••••"}
                   </p>
                 )}
+                {showFundModal === "withdraw" && withdrawPayoutProfile?.payoutOptions?.length ? (
+                  <div className="mt-3 space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
+                    <p className="text-xs font-medium text-foreground">Registered payout method</p>
+                    <div className="space-y-2">
+                      {withdrawPayoutProfile.payoutOptions.map((opt: RegisteredPayoutOption) => (
+                        <label
+                          key={opt.id}
+                          className={`flex cursor-pointer gap-2 rounded-lg border px-3 py-2 touch-manipulation ${
+                            selectedWithdrawPayoutId === opt.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="withdraw-payout"
+                            className="mt-1"
+                            checked={selectedWithdrawPayoutId === opt.id}
+                            onChange={() => setSelectedWithdrawPayoutId(opt.id)}
+                          />
+                          <span className="min-w-0 flex-1 text-xs">
+                            <span className="font-semibold text-foreground">{opt.label}</span>
+                            <span className="mt-0.5 block font-mono text-muted-foreground">{opt.numberMasked}</span>
+                            {opt.accountNames ? (
+                              <span className="mt-0.5 block text-muted-foreground">
+                                Registered names: {opt.accountNames}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Payout details are locked. Change them only via Security Appeal.
+                    </p>
+                  </div>
+                ) : null}
                 {showFundModal === "withdraw" && withdrawalEligibility ? (
                   <div className="mt-2 rounded-lg border border-border/80 bg-muted/30 p-2 text-[11px] leading-snug text-muted-foreground">
                     <p>
@@ -3560,11 +3638,7 @@ export default function DashboardPage() {
                 supportThreadFocusId={supportThreadFocusId}
                 onSupportThreadFocusConsumed={() => setSupportThreadFocusId(null)}
                 showOperationalInboxHint={level5Operational}
-                onGoToOperationalInbox={() => setTabUser("desk", "retailer_inbox_cta")}
-                onOpenFullNotifications={() => {
-                  setChatHubFocus(null)
-                  setTabUser("notifications", "retailer_notifications_cta")
-                }}
+              onGoToOperationalInbox={() => setTabUser("desk", "retailer_inbox_cta")}
               />
             </DeferredMount>
           </main>
@@ -3589,9 +3663,7 @@ export default function DashboardPage() {
           </div>
         ) : null}
 
-        {!operationalWorkspace && activeTab === "notifications" ? (
-          <NotificationCenterScreen />
-        ) : null}
+        {!operationalWorkspace && activeTab === "history" ? <HistoryCenterScreen /> : null}
 
         {activeTab === "settings" && (
           <SettingsScreen
@@ -3626,6 +3698,8 @@ export default function DashboardPage() {
         isVisible={toast.isVisible}
         onClose={hideToast}
       />
+
+      <SecuritySetupGateDialog open={securityGateOpen} onClose={() => setSecurityGateOpen(false)} />
 
     </div>
   )

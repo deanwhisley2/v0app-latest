@@ -32,4 +32,6 @@ export type NexusNotificationItem = {
   analysis?: AnalysisNotificationPayload
   /** USD ledger hint for corridor-safe amount rewrite in the inbox (never show foreign corridor tickers). */
   customerAmountUsd?: number
+  /** Raw server notification_type for inbox routing (alerts vs history). */
+  accountNotificationType?: string
 }
