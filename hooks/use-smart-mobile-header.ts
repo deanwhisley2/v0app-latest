@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react"
 import { getBodyScrollLockCount } from "@/lib/mobile/body-scroll-lock"
-import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
-import { computeSmartHeaderVisibility } from "@/lib/mobile/smart-header-scroll"
 import { NEXUS_HEADER_REVEAL } from "@/lib/mobile/mobile-chrome-events"
+import {
+  computeSmartHeaderVisibility,
+  shouldRevealSmartHeaderInstantly,
+  SMART_HEADER_TOP_ZONE_PX,
+} from "@/lib/mobile/smart-header-scroll"
 
 const MOBILE_MQ = "(max-width: 767px)"
 
@@ -14,7 +17,10 @@ export type SmartMobileHeaderState = {
   atTop: boolean
 }
 
-/** Passive window scroll listener — reveal header on any upward gesture; no touch interception. */
+/**
+ * Passive window scroll + rAF — hide on scroll down, instant reveal on any upward delta.
+ * No touchmove preventDefault, body lock, or nested scroll owners.
+ */
 export function useSmartMobileHeader(): SmartMobileHeaderState {
   const [enabled, setEnabled] = useState(false)
   const [visible, setVisible] = useState(true)
@@ -25,7 +31,7 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
   useEffect(() => {
     if (typeof window === "undefined") return
     const mq = window.matchMedia(MOBILE_MQ)
-    const syncEnabled = () => setEnabled(mq.matches && !isMobileLowGpuMode())
+    const syncEnabled = () => setEnabled(mq.matches)
     syncEnabled()
     mq.addEventListener("change", syncEnabled)
     return () => mq.removeEventListener("change", syncEnabled)
@@ -39,21 +45,38 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
       return
     }
 
-    scrollRef.current.lastY = window.scrollY
-    scrollRef.current.hidden = false
-    setVisible(true)
-    setAtTop(window.scrollY <= 12)
+    const syncFromWindow = () => {
+      const y = window.scrollY
+      scrollRef.current.lastY = y
+      scrollRef.current.hidden = false
+      setVisible(true)
+      setAtTop(y <= SMART_HEADER_TOP_ZONE_PX)
+    }
+    syncFromWindow()
+
+    const applyVisibility = (y: number) => {
+      const next = computeSmartHeaderVisibility(scrollRef.current, y)
+      scrollRef.current = { lastY: next.nextLastY, hidden: next.hidden }
+      setAtTop(next.atTop)
+      setVisible(!next.hidden)
+    }
 
     const onScroll = () => {
       if (getBodyScrollLockCount() > 0) return
+      const y = window.scrollY
+
+      if (shouldRevealSmartHeaderInstantly(scrollRef.current, y)) {
+        scrollRef.current.hidden = false
+        scrollRef.current.lastY = y
+        setVisible(true)
+        setAtTop(y <= SMART_HEADER_TOP_ZONE_PX)
+        return
+      }
+
       if (rafRef.current != null) return
       rafRef.current = window.requestAnimationFrame(() => {
         rafRef.current = null
-        const y = window.scrollY
-        const next = computeSmartHeaderVisibility(scrollRef.current, y)
-        scrollRef.current = { lastY: next.nextLastY, hidden: next.hidden }
-        setAtTop(next.atTop)
-        setVisible(!next.hidden)
+        applyVisibility(window.scrollY)
       })
     }
 
@@ -61,8 +84,9 @@ export function useSmartMobileHeader(): SmartMobileHeaderState {
 
     const onReveal = () => {
       scrollRef.current.hidden = false
+      scrollRef.current.lastY = window.scrollY
       setVisible(true)
-      setAtTop(window.scrollY <= 12)
+      setAtTop(window.scrollY <= SMART_HEADER_TOP_ZONE_PX)
     }
     window.addEventListener(NEXUS_HEADER_REVEAL, onReveal)
 

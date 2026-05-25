@@ -1,0 +1,50 @@
+---
+description: Master evolution direction — institutional polish without breaking routing/scroll baseline
+alwaysApply: true
+---
+
+# Nexus master evolution
+
+Read **`docs/NEXUS_MASTER_EVOLUTION.md`** before large UI, motion, PWA, or install work.
+
+## Protected core (never break)
+
+- Browser-first routing; no auth route interception
+- Native mobile scroll; no dashboard body lock / touchmove preventDefault
+- `LOW_GPU_ANDROID_MODE` for A05 only — **never** global UI flattening
+- `NEXUS_BROWSER_ONLY_LOCK` — no aggressive SW / offline takeover / mount fetch chains
+- Financial slices separate from UI slices (see `supabase-financial-integrity.mdc`)
+
+## Priority
+
+1. Stability + routing + scroll + A05 compositor  
+2. Institutional polish (brand, glass, motion gated by low GPU)  
+3. PWA/APK runtime (incremental; A05 QA each deploy)
+
+## Brand
+
+- Keep original Nexus “N” identity — refine, do not replace  
+- No gaming neon / cloned crypto branding  
+
+## Smart header
+
+- Passive scroll + instant reveal on upward delta  
+- `translateY` only; no body lock  
+
+## Motion (when added)
+
+- Framer Motion or GSAP on premium paths only  
+- Auto-disable under `html.nexus-mobile-low-gpu`  
+
+## APK / PWA
+
+- **Current:** APK layer removed; browser-only lock on  
+- **Future:** tap-triggered APK and lightweight manifest only in dedicated slices — never mixed with routing fixes  
+
+## Kenya registration
+
+- Soft geo warnings; no hard block on imperfect IP / carrier NAT  
+
+## Slices
+
+One phase per PR → deploy → A05 QA. See phase table in master doc.

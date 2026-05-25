@@ -541,7 +541,7 @@ export function Header({
 
   return (
     <>
-      <header className="nexus-smart-header-inner nexus-mobile-header-chrome sticky top-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-md max-md:border-b max-md:border-border">
+      <header className="nexus-smart-header-inner nexus-mobile-header-chrome sticky top-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-md max-md:static max-md:border-b max-md:border-border max-md:bg-background max-md:backdrop-blur-none md:backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 sm:h-16">
           {/* Brand Name */}
           <div className="flex items-center">
