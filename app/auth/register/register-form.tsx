@@ -36,18 +36,12 @@ import {
 } from "@/lib/operating-countries"
 import type { FiatCurrencyCode } from "@/lib/currency-display"
 import { cn } from "@/lib/utils"
-import {
-  imageDataUrlToFaceTemplate,
-  imageDataUrlToHash,
-  optimizeSelfieUpload,
-  validateSelfieQuality,
-} from "@/lib/selfie-hash"
 
 const REGISTER_JOELIN_CHIPS = [
   { label: "Registration steps", prompt: "What happens step by step after I submit this registration form?" },
   { label: "Email verification", prompt: "Why do I need to verify my email and how long does it take?" },
   { label: "Referral field", prompt: "How does the referral id or signup link help me or my inviter?" },
-  { label: "Security selfie", prompt: "What is the optional security selfie for and should I add it now?" },
+  { label: "Security code", prompt: "What is the Nexus Security Code and why is it required at signup?" },
   { label: "Currency choice", prompt: "How should I choose my display currency on Nexus Pro?" },
   { label: "Wallet basics", prompt: "Explain Nexus Main wallet vs Container mode at a simple level for a new user." },
   { label: "Trust & fees", prompt: "What should a new member know about deposits and Container Mode fees?" },
@@ -70,10 +64,10 @@ export default function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
-  const [selfieDataUrl, setSelfieDataUrl] = useState("")
-  const [selfiePreview, setSelfiePreview] = useState("")
-  const [selfieHash, setSelfieHash] = useState("")
-  const [selfieTemplate, setSelfieTemplate] = useState("")
+  const [securityCode, setSecurityCode] = useState("")
+  const [securityCodeConfirm, setSecurityCodeConfirm] = useState("")
+  const [depositNumber, setDepositNumber] = useState("")
+  const [withdrawalNumber, setWithdrawalNumber] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
   const [referralCode, setReferralCode] = useState("")
@@ -128,6 +122,12 @@ export default function RegisterForm() {
     if (s === 3) {
       if (password.length < 6) return reg.passwordHint
       if (password !== confirmPassword) return "Passwords do not match."
+      if (securityCode.length !== 6) return "Enter a 6-digit Nexus Security Code."
+      if (securityCode !== securityCodeConfirm) return "Security codes do not match."
+      if (!depositNumber.trim() || depositNumber.trim().length < 8) return "Enter your deposit mobile money number."
+      if (!withdrawalNumber.trim() || withdrawalNumber.trim().length < 8) {
+        return "Enter your withdrawal payout number."
+      }
       return null
     }
     return null
@@ -171,26 +171,6 @@ export default function RegisterForm() {
     setStep((s) => Math.max(1, s - 1))
   }
 
-  async function handleSelfieFile(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setError("Selfie must be an image file.")
-      return
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      setError("Selfie image is too large. Please take a new clear photo.")
-      return
-    }
-    const result = await optimizeSelfieUpload(file)
-    await validateSelfieQuality(result)
-    const hash = await imageDataUrlToHash(result)
-    const template = await imageDataUrlToFaceTemplate(result)
-    setSelfieDataUrl(result)
-    setSelfiePreview(result)
-    setSelfieHash(hash)
-    setSelfieTemplate(template)
-    setError(null)
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const err = validateStep(3)
@@ -224,13 +204,9 @@ export default function RegisterForm() {
           preferred_currency: currency,
           ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
           ...(referralCode.trim() ? { referral_code: referralCode.trim() } : {}),
-          ...(selfieDataUrl && selfieTemplate && selfieHash
-            ? {
-                selfie_image: selfieDataUrl,
-                selfie_template: selfieTemplate,
-                selfie_hash: selfieHash,
-              }
-            : {}),
+          security_code: securityCode,
+          deposit_number: depositNumber,
+          withdrawal_number: withdrawalNumber,
         }),
       })
 
@@ -487,38 +463,45 @@ export default function RegisterForm() {
                 disabled={isSubmitting}
                 inputClassName={inputClass}
               />
-              <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/20 p-3">
-                <Label htmlFor="register-selfie">{authT.register.selfieLabel}</Label>
-                <Input
-                  id="register-selfie"
-                  type="file"
-                  accept="image/*"
-                  capture="user"
-                  disabled={isSubmitting}
-                  className="min-h-11 text-sm"
-                  onChange={async (e) => {
-                    setError(null)
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    try {
-                      await handleSelfieFile(file)
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Could not process selfie.")
-                    }
-                  }}
-                />
-                {selfiePreview ? (
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={selfiePreview}
-                      alt=""
-                      className="h-16 w-16 rounded-xl border border-border object-cover"
+              <div className="space-y-3 rounded-xl border border-dashed border-border bg-muted/20 p-3">
+                <p className="text-xs font-semibold text-foreground">Nexus Security Code (required)</p>
+                <p className="text-xs text-muted-foreground">
+                  6-digit code for recovery and payout protection. Never share it. It is not shown again after setup.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Security code</Label>
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={securityCode}
+                      onChange={(e) => setSecurityCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className={inputClass}
+                      autoComplete="off"
                     />
-                    <p className="text-xs text-emerald-500">{authT.register.selfieAdded}</p>
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">{authT.register.selfieHint}</p>
-                )}
+                  <div>
+                    <Label className="text-xs">Confirm code</Label>
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={securityCodeConfirm}
+                      onChange={(e) => setSecurityCodeConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className={inputClass}
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Deposit number (add funds)</Label>
+                  <Input value={depositNumber} onChange={(e) => setDepositNumber(e.target.value)} className={inputClass} placeholder="+256…" />
+                </div>
+                <div>
+                  <Label className="text-xs">Withdrawal number (receive payouts)</Label>
+                  <Input value={withdrawalNumber} onChange={(e) => setWithdrawalNumber(e.target.value)} className={inputClass} placeholder="+256…" />
+                </div>
               </div>
             </div>
           ) : null}
@@ -583,7 +566,7 @@ export default function RegisterForm() {
         initialMessages={[
           {
             role: "assistant",
-            text: "Hi — I’m the Nexus assistant. Ask me about verification, referrals, the optional selfie, currency & language, or what to expect after you create your account.",
+            text: "Hi — I’m the Nexus assistant. Ask me about verification, your Nexus Security Code, referrals, currency & language, or what to expect after you create your account.",
           },
         ]}
         chips={REGISTER_JOELIN_CHIPS}

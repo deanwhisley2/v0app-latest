@@ -24,18 +24,12 @@ import {
   MapPin,
 } from "lucide-react"
 import { ExchangeBinding } from "./exchange-binding"
-import { SecurityCenter } from "./security-center"
+import { UserSecuritySettingsPanel } from "@/components/dashboard/user-security-settings-panel"
 import { DepositWithdraw } from "./deposit-withdraw"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
-import {
-  imageDataUrlToFaceTemplate,
-  imageDataUrlToHash,
-  optimizeSelfieUpload,
-  validateSelfieQuality,
-} from "@/lib/selfie-hash"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, type AppLanguage } from "@/lib/user-preferences"
 import { OPERATING_COUNTRY_OPTIONS, suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -50,14 +44,6 @@ import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
 import { AboutCompanyPanel } from "@/components/dashboard/about-company-panel"
 
 type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
-type WhitelistItem = {
-  id: string
-  kind: "mobile_number" | "crypto_address"
-  holder_name: string
-  value: string
-  label?: string | null
-  created_at: string
-}
 type SessionItem = {
   id: string
   device_name: string
@@ -146,17 +132,7 @@ export function SettingsScreen({
   ])
   const [learnerInput, setLearnerInput] = useState("")
   const [learnerTyping, setLearnerTyping] = useState(false)
-  /** HTTP(S) preview URL only; enrolled-but-data-URL-stored uses selfieEnrolled without a giant src. */
-  const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
-  const [selfieEnrolled, setSelfieEnrolled] = useState(false)
-  const [selfieLoading, setSelfieLoading] = useState(false)
-  const [selfieError, setSelfieError] = useState<string | null>(null)
-  const [selfieCompareInfo, setSelfieCompareInfo] = useState<string | null>(null)
-  const [whitelistItems, setWhitelistItems] = useState<WhitelistItem[]>([])
-  const [whitelistKind, setWhitelistKind] = useState<"mobile_number" | "crypto_address">("mobile_number")
-  const [whitelistHolderName, setWhitelistHolderName] = useState("")
-  const [whitelistValue, setWhitelistValue] = useState("")
-  const [whitelistMessage, setWhitelistMessage] = useState<string | null>(null)
+  const [securityNeedsSetup, setSecurityNeedsSetup] = useState(false)
   const [sessionItems, setSessionItems] = useState<SessionItem[]>([])
   const [sessionsMessage, setSessionsMessage] = useState<string | null>(null)
   const [currentPassword, setCurrentPassword] = useState("")
@@ -184,40 +160,6 @@ export function SettingsScreen({
 
   useEffect(() => {
     let cancelled = false
-    const loadSelfie = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) return
-        const res = await fetch("/api/user/security-selfie", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) return
-        const data = (await res.json().catch(() => ({}))) as {
-          hasSelfie?: boolean
-        }
-        if (!cancelled) {
-          const hasSelfie = Boolean(data.hasSelfie)
-          setSelfieEnrolled(hasSelfie)
-          setSelfieUrl(null)
-          if (hasSelfie) {
-            setSelfieCompareInfo("Face added. Recovery selfie security is active.")
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    void loadSelfie()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
     const loadSecurityData = async () => {
       try {
         const {
@@ -225,14 +167,14 @@ export function SettingsScreen({
         } = await supabase.auth.getSession()
         const token = session?.access_token
         if (!token) return
-        const [wlRes, ssRes] = await Promise.all([
-          fetch("/api/user/withdraw-whitelist", { headers: { Authorization: `Bearer ${token}` } }),
+        const [profRes, ssRes] = await Promise.all([
+          fetch("/api/user/security-profile", { headers: { Authorization: `Bearer ${token}` } }),
           fetch("/api/user/sessions", { headers: { Authorization: `Bearer ${token}` } }),
         ])
-        const wlData = (await wlRes.json().catch(() => ({}))) as { items?: WhitelistItem[]; error?: string }
-        const ssData = (await ssRes.json().catch(() => ({}))) as { items?: SessionItem[]; error?: string }
+        const profData = (await profRes.json().catch(() => ({}))) as { profile?: { needsSetup?: boolean } }
+        const ssData = (await ssRes.json().catch(() => ({}))) as { items?: SessionItem[] }
         if (!cancelled) {
-          if (wlRes.ok) setWhitelistItems(wlData.items ?? [])
+          if (profRes.ok) setSecurityNeedsSetup(Boolean(profData.profile?.needsSetup))
           if (ssRes.ok) setSessionItems(ssData.items ?? [])
         }
       } catch {
@@ -244,110 +186,6 @@ export function SettingsScreen({
       cancelled = true
     }
   }, [])
-
-  async function uploadSelfie(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setSelfieError("Please choose an image file.")
-      return
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      setSelfieError("Selfie image is too large. Please take a new clear photo.")
-      return
-    }
-    setSelfieError(null)
-    setSelfieLoading(true)
-    try {
-      const dataUrl = await optimizeSelfieUpload(file)
-      await validateSelfieQuality(dataUrl)
-      const selfieHash = await imageDataUrlToHash(dataUrl)
-      const selfieTemplate = await imageDataUrlToFaceTemplate(dataUrl)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) {
-        throw new Error("Session expired. Please sign in again, then upload selfie.")
-      }
-      if (selfieEnrolled) {
-        const cmpRes = await fetch("/api/user/security-selfie", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ selfie_hash: selfieHash, selfie_template: selfieTemplate }),
-        })
-        const cmpData = (await cmpRes.json().catch(() => ({}))) as {
-          matched?: boolean
-          distance?: number
-          threshold?: number
-          error?: string
-        }
-        if (!cmpRes.ok) {
-          if (cmpRes.status === 401) {
-            throw new Error("Session expired. Please sign in again, then retry selfie verification.")
-          }
-          throw new Error(cmpData.error || "Could not compare selfie")
-        }
-        if (!cmpData.matched) {
-          throw new Error("Selfie does not match enrolled identity. Use clear face, no hats/covering.")
-        }
-        setSelfieCompareInfo(
-          `Selfie match passed (distance ${cmpData.distance}/${cmpData.threshold}).`
-        )
-      } else {
-        setSelfieCompareInfo("Initial selfie enrolled for account security.")
-      }
-      const res = await fetch("/api/user/security-selfie", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          selfie_image: dataUrl,
-          selfie_hash: selfieHash,
-          selfie_template: selfieTemplate,
-        }),
-      })
-      const out = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("Session expired. Please sign in again, then upload selfie.")
-        }
-        throw new Error(out.error || "Could not save selfie")
-      }
-      setSelfieEnrolled(true)
-      setSelfieUrl(null)
-      setSelfieCompareInfo(out.message || "Face added. Recovery selfie security is active.")
-    } catch (e) {
-      setSelfieError(e instanceof Error ? e.message : "Could not upload selfie")
-    } finally {
-      setSelfieLoading(false)
-    }
-  }
-
-  async function removeWhitelistEntry(id: string) {
-    setWhitelistMessage(null)
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error("Session expired. Please sign in again.")
-      const res = await fetch("/api/user/withdraw-whitelist", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id }),
-      })
-      const out = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(out.error || "Could not remove entry")
-      setWhitelistItems((prev) => prev.filter((w) => w.id !== id))
-      setWhitelistMessage("Entry removed.")
-    } catch (e) {
-      setWhitelistMessage(e instanceof Error ? e.message : "Could not remove entry")
-    }
-  }
 
   async function saveAntiPhishingCode() {
     setAntiPhishingMessage(null)
@@ -365,38 +203,6 @@ export function SettingsScreen({
       setAntiPhishingMessage("Anti-phishing code saved. It will appear in emails from us.")
     } catch (e) {
       setAntiPhishingMessage(e instanceof Error ? e.message : "Could not save code")
-    }
-  }
-
-  async function addWhitelistEntry() {
-    setWhitelistMessage(null)
-    if (!whitelistHolderName.trim() || !whitelistValue.trim()) {
-      setWhitelistMessage("Holder name and address/number are required.")
-      return
-    }
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error("Session expired. Please sign in again.")
-      const res = await fetch("/api/user/withdraw-whitelist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          kind: whitelistKind,
-          holder_name: whitelistHolderName,
-          value: whitelistValue,
-        }),
-      })
-      const out = (await res.json().catch(() => ({}))) as { item?: WhitelistItem; error?: string }
-      if (!res.ok) throw new Error(out.error || "Could not add whitelist entry")
-      setWhitelistItems((prev) => [out.item as WhitelistItem, ...prev])
-      setWhitelistHolderName("")
-      setWhitelistValue("")
-      setWhitelistMessage("Whitelist entry added.")
-    } catch (e) {
-      setWhitelistMessage(e instanceof Error ? e.message : "Could not add whitelist entry")
     }
   }
 
@@ -547,14 +353,14 @@ export function SettingsScreen({
             </ul>
           </Card>
         )}
-        {!selfieEnrolled && (
+        {securityNeedsSetup && (
           <Card className="border-warning/40 bg-warning/10 p-4">
-            <p className="text-sm font-semibold text-warning">Security required: add your selfie now</p>
+            <p className="text-sm font-semibold text-warning">Complete Security & Recovery</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Without a registered selfie, recovery and fund-protection checks are weaker. Open Security Center and enroll your selfie.
+              Set your Nexus Security Code and payout numbers before funding or withdrawing.
             </p>
             <Button size="sm" className="mt-3" onClick={() => setCurrentView("security")}>
-              Go to Security Center
+              Open Security & Recovery
             </Button>
           </Card>
         )}
@@ -619,32 +425,7 @@ export function SettingsScreen({
     return (
       <div className="space-y-4">
         {renderBackButton()}
-        <Card className={`p-3 sm:p-4 ${selfieEnrolled ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/10"}`}>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-semibold">
-                {selfieEnrolled ? "Recovery selfie on file" : "Add a recovery selfie"}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">Protects face-based account recovery.</p>
-            </div>
-            {selfieEnrolled ? <Check className="h-5 w-5 shrink-0 text-success" aria-hidden /> : null}
-          </div>
-          <Input
-            className="mt-3 text-xs"
-            type="file"
-            accept="image/*"
-            capture="user"
-            disabled={selfieLoading}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              void uploadSelfie(file)
-            }}
-          />
-          {selfieError ? <p className="mt-2 text-xs text-destructive">{selfieError}</p> : null}
-          {selfieCompareInfo ? <p className="mt-2 text-xs text-success">{selfieCompareInfo}</p> : null}
-          {selfieLoading ? <p className="mt-2 text-xs text-muted-foreground">Uploading…</p> : null}
-        </Card>
+        <UserSecuritySettingsPanel />
         <Card className="border-border bg-card p-4 sm:p-6">
           <h3 className="mb-3 text-lg font-semibold">Anti-Phishing Code</h3>
           <p className="mb-3 text-xs text-muted-foreground">
@@ -665,39 +446,6 @@ export function SettingsScreen({
             <p className="mt-2 text-xs text-success">Active: {antiPhishingSaved}</p>
           ) : null}
           {antiPhishingMessage ? <p className="mt-2 text-xs text-muted-foreground">{antiPhishingMessage}</p> : null}
-        </Card>
-        <Card className="border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Withdrawal Whitelist</h3>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Up to 3 payout destinations. Remove entries you no longer use.
-          </p>
-          <div className="mb-4 grid gap-2 md:grid-cols-3">
-            <select
-              value={whitelistKind}
-              onChange={(e) => setWhitelistKind(e.target.value as "mobile_number" | "crypto_address")}
-              className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
-            >
-              <option value="mobile_number">Mobile number</option>
-              <option value="crypto_address">Crypto address</option>
-            </select>
-            <Input value={whitelistHolderName} onChange={(e) => setWhitelistHolderName(e.target.value)} placeholder="Holder name" />
-            <Input value={whitelistValue} onChange={(e) => setWhitelistValue(e.target.value)} placeholder={whitelistKind === "mobile_number" ? "+2567..." : "0x..."} />
-          </div>
-          <Button size="sm" onClick={() => void addWhitelistEntry()} disabled={whitelistItems.length >= 3}>
-            Add whitelist entry
-          </Button>
-          {whitelistMessage ? <p className="mt-2 text-xs text-muted-foreground">{whitelistMessage}</p> : null}
-          <div className="mt-4 space-y-2">
-            {whitelistItems.map((w) => (
-              <div key={w.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <p className="font-medium">{w.holder_name} - {w.kind === "mobile_number" ? "Mobile" : "Crypto"}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">{w.value}</p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => void removeWhitelistEntry(w.id)}>Remove</Button>
-              </div>
-            ))}
-          </div>
         </Card>
         <Card className="border-border bg-card p-6">
           <h3 className="mb-2 text-lg font-semibold">{t("security.devices.title")}</h3>
@@ -756,7 +504,7 @@ export function SettingsScreen({
                 <Card className="border-border bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold">Change Password</h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            Enter your current password first. If unknown, use the face recovery fallback path from login.
+            Enter your current password first. If unknown, use account recovery with your Nexus Security Code.
           </p>
           <div className="grid gap-2 md:grid-cols-2">
             <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" />

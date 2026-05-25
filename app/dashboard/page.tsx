@@ -77,6 +77,7 @@ import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { NexusPushAlertsBootstrap } from "@/components/push/nexus-push-alerts-bootstrap"
+import { NexusSecuritySetupGate } from "@/components/dashboard/nexus-security-setup-gate"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
@@ -2315,6 +2316,7 @@ export default function DashboardPage() {
     )
 
   return (
+    <NexusSecuritySetupGate>
     <div
       className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
     >
@@ -3593,5 +3595,6 @@ export default function DashboardPage() {
       />
 
     </div>
+    </NexusSecuritySetupGate>
   )
 }

@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       "settlement_failure",
       "locked_balance",
       "verification_complaint",
+      "security_update",
     ] as const
     const category = (allowed as readonly string[]).includes(catRaw) ? catRaw : "general"
 

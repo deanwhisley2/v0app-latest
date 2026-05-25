@@ -708,6 +708,44 @@ type OperationsDeskApiRow = {
   withdrawal_amount_input_local?: number | null
   withdrawal_input_currency?: string | null
   withdrawal_metadata?: Record<string, unknown> | null
+  payout_method_label?: string | null
+  payout_destination?: string | null
+  payout_route?: string | null
+  payout_security_age?: string | null
+  payout_in_cooldown?: boolean
+  deposit_number_masked?: string | null
+}
+
+function AdminWithdrawalPayoutSummary({ row }: { row: OperationsDeskApiRow }) {
+  if (row.kind !== "user_withdrawal") return null
+  const method = row.payout_method_label ?? "—"
+  const dest = row.payout_destination ?? row.mobile_network ?? "—"
+  const age = row.payout_security_age ?? "—"
+  return (
+    <div className="mt-2 space-y-1 rounded border border-border/80 bg-background/60 px-2.5 py-2 text-[11px]">
+      <p>
+        <span className="text-muted-foreground">Payout method</span>{" "}
+        <span className="font-semibold text-foreground">{method}</span>
+      </p>
+      <p className="font-mono break-all">
+        <span className="text-muted-foreground">
+          {row.payout_route === "crypto_trc20" ? "Wallet" : "Withdrawal number"}
+        </span>{" "}
+        {dest}
+      </p>
+      {row.deposit_number_masked ? (
+        <p className="font-mono">
+          <span className="text-muted-foreground">Deposit number</span> {row.deposit_number_masked}
+        </p>
+      ) : null}
+      <p>
+        <span className="text-muted-foreground">Security age</span> {age}
+        {row.payout_in_cooldown ? (
+          <span className="ml-2 font-semibold text-amber-700 dark:text-amber-300">· Review cooldown</span>
+        ) : null}
+      </p>
+    </div>
+  )
 }
 
 function withdrawalApprovalAmountInput(row: OperationsDeskApiRow): WithdrawalAmountDisplayInput {
@@ -1928,7 +1966,18 @@ export function AdminOperationalAssets({
                           : row.kind === "user_add_funds"
                             ? row.fund_channel ?? "—"
                             : "crypto_ref"}
-                        {row.mobile_network ? (
+                        {row.kind === "user_withdrawal" && row.payout_method_label ? (
+                          <>
+                            <br />
+                            <span className="text-foreground">{row.payout_method_label}</span>
+                            {row.payout_destination ? (
+                              <>
+                                <br />
+                                {row.payout_destination}
+                              </>
+                            ) : null}
+                          </>
+                        ) : row.mobile_network ? (
                           <>
                             <br />
                             {row.mobile_network}
@@ -2059,7 +2108,8 @@ export function AdminOperationalAssets({
                           input={withdrawalApprovalAmountInput(reviewRow)}
                           size="md"
                         />
-                        {reviewRow.mobile_network ? (
+                        <AdminWithdrawalPayoutSummary row={reviewRow} />
+                        {reviewRow.mobile_network && !reviewRow.payout_method_label ? (
                           <p className="mt-2 text-[11px] text-muted-foreground">
                             Payout rail · {reviewRow.mobile_network}
                           </p>
