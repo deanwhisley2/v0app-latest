@@ -2316,7 +2316,7 @@ export default function DashboardPage() {
     )
 
   return (
-    <NexusSecuritySetupGate>
+    <NexusSecuritySetupGate bypass={isGuestSession}>
     <div
       className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
     >
