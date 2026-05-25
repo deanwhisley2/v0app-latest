@@ -37,16 +37,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ threadId: s
     const { data: messages, error: me } = await mq
     if (me) return NextResponse.json({ error: me.message }, { status: 500 })
 
-    const { maskSecurityThreadMessagesForUser } = await import(
-      "@/lib/server/mask-security-thread-messages"
-    )
-    const masked = maskSecurityThreadMessagesForUser(
-      (messages ?? []) as Array<{ body: string; sender_role: string; is_system?: boolean }>,
-      String((thread as { category?: string }).category ?? ""),
-      String((thread as { status?: string }).status ?? ""),
-    )
-
-    return NextResponse.json({ thread, messages: masked })
+    return NextResponse.json({ thread, messages: messages ?? [] })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
   }

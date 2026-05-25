@@ -149,40 +149,10 @@ export async function POST(request: Request) {
 
     const txRef = crypto.randomUUID()
 
-    const { getOrCreateSecurityProfile, assertNotInCooldown } = await import(
-      "@/lib/server/user-security-profile-service"
-    )
-    const { maskSensitiveValue } = await import("@/lib/nexus-security-code")
-    const secRow = await getOrCreateSecurityProfile(admin, user.id)
-    if (!secRow.security_code_hash) {
-      return NextResponse.json(
-        { error: "Set your Nexus Security Code in Settings before withdrawing." },
-        { status: 403 },
-      )
-    }
-    try {
-      assertNotInCooldown(secRow)
-    } catch (coolErr) {
-      return NextResponse.json(
-        { error: coolErr instanceof Error ? coolErr.message : "Payout details in review." },
-        { status: 409 },
-      )
-    }
-
     const rail =
-      secRow.payout_method === "crypto_trc20"
-        ? "USDT_TRC20"
-        : typeof body.payoutRail === "string"
-          ? body.payoutRail.trim().slice(0, 64) || "mobile_money"
-          : "mobile_money"
+      typeof body.payoutRail === "string" ? body.payoutRail.trim().slice(0, 64) || null : null
     const destHint =
-      secRow.payout_method === "crypto_trc20" && secRow.crypto_wallet
-        ? maskSensitiveValue(secRow.crypto_wallet, "wallet")
-        : secRow.withdrawal_number
-          ? maskSensitiveValue(secRow.withdrawal_number, "phone")
-          : typeof body.destinationHint === "string"
-            ? body.destinationHint.trim().slice(0, 200) || null
-            : null
+      typeof body.destinationHint === "string" ? body.destinationHint.trim().slice(0, 200) || null : null
 
     const rawLocal = body.amountInputLocal != null ? Number(body.amountInputLocal) : NaN
     const inputCurRaw =
@@ -231,13 +201,8 @@ export async function POST(request: Request) {
                 ...(localCashPayout ? { local_cash_payout: localCashPayout } : {}),
               }
             : {}),
-          payout_method: secRow.payout_method,
           ...(rail ? { payout_rail: rail } : {}),
           ...(destHint ? { destination_hint: destHint } : {}),
-          security_profile_snapshot: {
-            payout_method: secRow.payout_method,
-            destination_masked: destHint,
-          },
         },
       })
       .select("id,created_at,transaction_ref")

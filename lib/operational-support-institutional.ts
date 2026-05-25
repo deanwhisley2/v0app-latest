@@ -75,7 +75,6 @@ export const OPERATIONAL_THREAD_CATEGORY_LABEL: Record<string, string> = {
   withdrawal_dispute: "Withdrawal",
   appeal: "Appeal",
   security: "Security",
-  security_update: "Security appeal",
   retailer: "Retailer",
   crypto_dispute: "Crypto deposit",
   assistant_escalation: "Escalated",

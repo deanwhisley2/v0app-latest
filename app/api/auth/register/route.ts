@@ -4,7 +4,7 @@ import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { setupSecurityProfile } from "@/lib/server/user-security-profile-service"
+import { comprefaceEnrollFace, isCompreFaceConfigured } from "@/lib/server/compreface"
 import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
@@ -43,9 +43,9 @@ type RegisterBody = {
   /** ISO 3166-1 alpha-2 — persisted to profiles.funding_country_code when valid */
   funding_country_code?: string
   referral_code?: string
-  security_code?: string
-  deposit_number?: string
-  withdrawal_number?: string
+  selfie_image?: string
+  selfie_template?: string
+  selfie_hash?: string
 }
 
 /**
@@ -81,10 +81,12 @@ export async function POST(request: Request) {
   const referralInvite = normalizeReferralCodeInput(
     typeof body.referral_code === "string" ? body.referral_code : ""
   )
-  const security_code = typeof body.security_code === "string" ? body.security_code.trim() : ""
-  const deposit_number = typeof body.deposit_number === "string" ? body.deposit_number.trim() : ""
-  const withdrawal_number =
-    typeof body.withdrawal_number === "string" ? body.withdrawal_number.trim() : ""
+  const selfie_image =
+    typeof body.selfie_image === "string" ? body.selfie_image.trim() : ""
+  const selfie_template =
+    typeof body.selfie_template === "string" ? body.selfie_template.trim() : ""
+  const selfie_hash =
+    typeof body.selfie_hash === "string" ? body.selfie_hash.trim().toLowerCase() : ""
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 })
@@ -117,14 +119,22 @@ export async function POST(request: Request) {
   if (!corridor.ok) {
     return NextResponse.json({ error: corridor.message }, { status: 403 })
   }
-  if (!/^\d{6}$/.test(security_code)) {
-    return NextResponse.json({ error: "Nexus Security Code must be exactly 6 digits." }, { status: 400 })
+  const hasSelfiePayload = Boolean(selfie_image || selfie_template || selfie_hash)
+  const hasCompleteSelfiePayload = Boolean(selfie_image && selfie_template && selfie_hash)
+  if (hasSelfiePayload && !hasCompleteSelfiePayload) {
+    return NextResponse.json(
+      { error: "Incomplete selfie payload. Provide image, template, and hash together." },
+      { status: 400 }
+    )
   }
-  if (!deposit_number || deposit_number.length < 8) {
-    return NextResponse.json({ error: "Deposit number is required." }, { status: 400 })
+  if (selfie_image && selfie_image.length > 6_000_000) {
+    return NextResponse.json({ error: "Selfie image payload is too large." }, { status: 413 })
   }
-  if (!withdrawal_number || withdrawal_number.length < 8) {
-    return NextResponse.json({ error: "Withdrawal number is required." }, { status: 400 })
+  if (selfie_template && !/^[A-Za-z0-9_-]{120,600}$/.test(selfie_template)) {
+    return NextResponse.json({ error: "Invalid selfie template." }, { status: 400 })
+  }
+  if (selfie_hash && !/^[0-9a-f]{16,}$/.test(selfie_hash)) {
+    return NextResponse.json({ error: "Invalid selfie identity hash." }, { status: 400 })
   }
 
   const supabase = await createRouteHandlerSupabaseClient()
@@ -140,7 +150,17 @@ export async function POST(request: Request) {
       data: {
         full_name,
         phone,
-        security_profile_required: true,
+        ...(hasCompleteSelfiePayload
+          ? {
+              selfie_hash,
+              selfie_template_v1: selfie_template,
+              selfie_template_version: "v1",
+              selfie_enrolled_at: nowIso,
+              security_selfie_enrolled: true,
+            }
+          : {
+              security_selfie_enrolled: false,
+            }),
         ...(preferred_language ? { preferred_language } : {}),
         ...(preferred_currency ? { preferred_currency } : {}),
       },
@@ -241,26 +261,29 @@ export async function POST(request: Request) {
       }
       void notifyLaunchWelcome(admin, newUserId, countryForProfile)
 
-      try {
-        await setupSecurityProfile(admin, {
-          userId: newUserId,
-          securityCode: security_code,
-          depositNumber: deposit_number,
-          withdrawalNumber: withdrawal_number,
-          payoutMethod: "mobile_money",
-        })
-      } catch (secErr) {
-        console.warn(
-          "[register] security profile setup:",
-          secErr instanceof Error ? secErr.message : String(secErr),
-        )
+      if (hasCompleteSelfiePayload) {
+        const { error: profileAvatarErr } = await admin
+          .from("profiles")
+          .update({ avatar_url: null, updated_at: nowIso })
+          .eq("id", newUserId)
+        if (profileAvatarErr) {
+          console.warn("[register] profiles.avatar_url update:", profileAvatarErr.message)
+        }
       }
-
       const meta = (signUpData.user?.user_metadata ?? {}) as Record<string, unknown>
       const { error: metaStripErr } = await admin.auth.admin.updateUserById(newUserId, {
         user_metadata: mergeSafeUserMetadata(meta, {
-          security_profile_required: true,
-          security_selfie_enrolled: false,
+          ...(hasCompleteSelfiePayload
+            ? {
+                selfie_hash,
+                selfie_template_v1: selfie_template,
+                selfie_template_version: "v1",
+                selfie_enrolled_at: nowIso,
+                security_selfie_enrolled: true,
+              }
+            : {
+                security_selfie_enrolled: false,
+              }),
         }),
       })
       if (metaStripErr) {
@@ -268,6 +291,15 @@ export async function POST(request: Request) {
       }
     } catch (e) {
       console.warn("[register] post-signup profile/metadata:", e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // Best-effort enrollment into CompreFace identity store.
+  if (newUserId && hasCompleteSelfiePayload && isCompreFaceConfigured()) {
+    try {
+      await comprefaceEnrollFace(newUserId, selfie_image)
+    } catch (e) {
+      console.warn("[register] CompreFace enroll warning:", e instanceof Error ? e.message : String(e))
     }
   }
 

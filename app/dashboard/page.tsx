@@ -1493,12 +1493,8 @@ export default function DashboardPage() {
           setTabProgrammatic("desk", "notification_nav_desk")
           break
         case "settings":
-          if (nav.view === "security") {
-            router.push("/dashboard/security")
-          } else {
-            setSettingsRequestedView(nav.view as SettingsView)
-            setTabProgrammatic("settings", "notification_nav_settings")
-          }
+          setSettingsRequestedView(nav.view as SettingsView)
+          setTabProgrammatic("settings", "notification_nav_settings")
           break
         case "orders":
           setSettingsRequestedView("exchanges")
@@ -1522,7 +1518,7 @@ export default function DashboardPage() {
           break
       }
     },
-    [operationalWorkspace, navCtrl, setTabProgrammatic, router],
+    [operationalWorkspace, navCtrl, setTabProgrammatic],
   )
 
   useEffect(() => {

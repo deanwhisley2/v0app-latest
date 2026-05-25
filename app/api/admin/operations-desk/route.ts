@@ -12,10 +12,6 @@ import {
 } from "@/lib/server/funding-reference-admin-hints"
 import { normalizeFundingPaymentReference } from "@/lib/server/funding-reference-normalize"
 import { resolveWithdrawalSettlementFromRow } from "@/lib/server/withdrawal-processing-fee"
-import {
-  buildAdminPayoutSummary,
-  type UserSecurityProfileRow,
-} from "@/lib/server/user-security-profile-service"
 
 type ProfileLite = {
   id: string
@@ -77,13 +73,6 @@ export type OperationsDeskRow = {
   withdrawal_amount_input_local?: number | null
   withdrawal_input_currency?: string | null
   withdrawal_metadata?: Record<string, unknown> | null
-  /** From user_security_profiles — L5 payout visibility. */
-  payout_method_label?: string | null
-  payout_destination?: string | null
-  payout_route?: string | null
-  payout_security_age?: string | null
-  payout_in_cooldown?: boolean
-  deposit_number_masked?: string | null
 }
 
 function msSince(iso: string): number | null {
@@ -179,23 +168,6 @@ export async function GET(request: Request) {
     for (const p of profilesRes.data ?? []) {
       const row = p as ProfileLite
       profMap.set(row.id, row)
-    }
-
-    const secMap = new Map<string, UserSecurityProfileRow>()
-    if (userIds.size > 0) {
-      const secRes = await admin
-        .from("user_security_profiles")
-        .select(
-          "user_id,security_code_hash,security_code_set_at,deposit_number,withdrawal_number,crypto_wallet,payout_method,last_sensitive_change_at,cooldown_until",
-        )
-        .in("user_id", [...userIds])
-      if (secRes.error) {
-        return NextResponse.json({ error: secRes.error.message }, { status: 500 })
-      }
-      for (const s of secRes.data ?? []) {
-        const row = s as UserSecurityProfileRow
-        secMap.set(row.user_id, row)
-      }
     }
 
     const deskByRetailProfileId = new Map<string, (typeof desks)[0]>()
@@ -435,8 +407,6 @@ export async function GET(request: Request) {
             : ""
       const networkParts = [rail || null, dest || null].filter(Boolean) as string[]
       const payoutRailLine = networkParts.length ? networkParts.join(" · ") : null
-      const secRow = secMap.get(uid) ?? null
-      const payoutSummary = buildAdminPayoutSummary(secRow)
       const cc = String(raw.currency_context ?? "").trim() || null
       const created_at = String(raw.created_at ?? "")
       const status = String(raw.status ?? "")
@@ -481,12 +451,6 @@ export async function GET(request: Request) {
           Number.isFinite(wdInputLocal) && wdInputLocal > 0 ? wdInputLocal : null,
         withdrawal_input_currency: wdInputCur.length >= 3 ? wdInputCur : null,
         withdrawal_metadata: meta,
-        payout_method_label: payoutSummary.payoutMethod,
-        payout_destination: payoutSummary.destination,
-        payout_route: payoutSummary.route,
-        payout_security_age: payoutSummary.securityAge,
-        payout_in_cooldown: payoutSummary.inCooldown === "yes",
-        deposit_number_masked: payoutSummary.depositMasked,
       }
     }
 
