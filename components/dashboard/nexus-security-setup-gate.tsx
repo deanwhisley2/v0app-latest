@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Shield, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
-import { UserSecuritySettingsPanel } from "@/components/dashboard/user-security-settings-panel"
+import { UserSecuritySetupForm } from "@/components/dashboard/user-security-setup-form"
 
 /** Blocks dashboard until Nexus Security Code profile is configured. */
 export function NexusSecuritySetupGate({ children }: { children: React.ReactNode }) {
@@ -58,7 +58,7 @@ export function NexusSecuritySetupGate({ children }: { children: React.ReactNode
             </p>
           </div>
         </div>
-        <UserSecuritySettingsPanel />
+        <UserSecuritySetupForm variant="gate" onComplete={() => setNeedsSetup(false)} />
       </div>
     )
   }

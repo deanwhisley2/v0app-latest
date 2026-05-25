@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useTheme } from "next-themes"
 import {
   Shield,
@@ -24,7 +24,9 @@ import {
   MapPin,
 } from "lucide-react"
 import { ExchangeBinding } from "./exchange-binding"
-import { UserSecuritySettingsPanel } from "@/components/dashboard/user-security-settings-panel"
+import { UserSecuritySetupForm } from "@/components/dashboard/user-security-setup-form"
+import { UserSecurityRecoverySummary } from "@/components/dashboard/user-security-recovery-summary"
+import { SecurityAppealCenter } from "@/components/dashboard/security-appeal-center"
 import { DepositWithdraw } from "./deposit-withdraw"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -61,6 +63,7 @@ type SessionItem = {
 export type SettingsView =
   | "main"
   | "security"
+  | "security-appeal"
   | "notifications"
   | "nexus-learner"
   | "currency"
@@ -133,6 +136,26 @@ export function SettingsScreen({
   const [learnerInput, setLearnerInput] = useState("")
   const [learnerTyping, setLearnerTyping] = useState(false)
   const [securityNeedsSetup, setSecurityNeedsSetup] = useState(false)
+  const [securityProfileRefresh, setSecurityProfileRefresh] = useState(0)
+
+  const refreshSecurityProfileState = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/security-profile", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      const profData = (await res.json()) as { profile?: { needsSetup?: boolean } }
+      if (res.ok) setSecurityNeedsSetup(Boolean(profData.profile?.needsSetup))
+      setSecurityProfileRefresh((n) => n + 1)
+    } catch {
+      /* ignore */
+    }
+  }, [])
   const [sessionItems, setSessionItems] = useState<SessionItem[]>([])
   const [sessionsMessage, setSessionsMessage] = useState<string | null>(null)
   const [currentPassword, setCurrentPassword] = useState("")
@@ -420,12 +443,22 @@ export function SettingsScreen({
     )
   }
 
-  // Security View
+  // Security View — setup OR summary only (appeals are a separate route)
   if (currentView === "security") {
     return (
       <div className="space-y-4">
         {renderBackButton()}
-        <UserSecuritySettingsPanel />
+        {securityNeedsSetup ? (
+          <UserSecuritySetupForm
+            variant="settings"
+            onComplete={() => void refreshSecurityProfileState()}
+          />
+        ) : (
+          <UserSecurityRecoverySummary
+            key={securityProfileRefresh}
+            onOpenAppealCenter={() => setCurrentView("security-appeal")}
+          />
+        )}
         <Card className="border-border bg-card p-4 sm:p-6">
           <h3 className="mb-3 text-lg font-semibold">Anti-Phishing Code</h3>
           <p className="mb-3 text-xs text-muted-foreground">
@@ -515,6 +548,22 @@ export function SettingsScreen({
           </Button>
           {passwordMessage ? <p className="mt-2 text-xs text-muted-foreground">{passwordMessage}</p> : null}
         </Card>
+      </div>
+    )
+  }
+
+  if (currentView === "security-appeal") {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setCurrentView("security")}
+          className="mb-1 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground touch-manipulation"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back to Security & Recovery
+        </button>
+        <SecurityAppealCenter />
       </div>
     )
   }
