@@ -8,7 +8,7 @@ import {
   postLoginTab,
   type DashboardMainTab,
 } from "@/lib/dashboard-navigation-policy"
-import { shouldSkipDashboardTabRestore } from "@/lib/mobile/chrome-android-safe-mode"
+import { shouldSkipDashboardTabRestore } from "@/lib/mobile/dashboard-clean-boot"
 
 /**
  * Tracks user-initiated tab changes vs programmatic restores.

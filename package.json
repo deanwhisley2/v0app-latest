@@ -43,8 +43,7 @@
     "supabase:push": "bash scripts/ops-supabase.sh push",
     "supabase:schema-probe": "bash scripts/ops-supabase.sh schema-probe",
     "trade-secret:gen": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
-    "auth:strip-bulky-metadata": "npx tsx scripts/strip-bulky-auth-metadata.ts",
-    "auth:delete-selfie": "npx tsx scripts/delete-user-security-selfie.ts"
+    "auth:strip-bulky-metadata": "npx tsx scripts/strip-bulky-auth-metadata.ts"
   },
   "dependencies": {
     "@faker-js/faker": "^10.4.0",

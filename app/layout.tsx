@@ -30,6 +30,10 @@ import {
   MOBILE_LOW_GPU_BOOT_SCRIPT,
 } from '@/lib/mobile/mobile-low-gpu-mode'
 import {
+  DASHBOARD_CLEAN_BOOT,
+  DASHBOARD_CLEAN_BOOT_SCRIPT,
+} from '@/lib/mobile/dashboard-clean-boot'
+import {
   CHROME_ANDROID_SAFE_MODE,
   CHROME_ANDROID_SAFE_BOOT_SCRIPT,
 } from '@/lib/mobile/chrome-android-safe-mode'
@@ -129,6 +133,9 @@ export default function RootLayout({
         ) : null}
         {LOW_GPU_ANDROID_MODE ? (
           <script dangerouslySetInnerHTML={{ __html: MOBILE_LOW_GPU_BOOT_SCRIPT }} />
+        ) : null}
+        {DASHBOARD_CLEAN_BOOT ? (
+          <script dangerouslySetInnerHTML={{ __html: DASHBOARD_CLEAN_BOOT_SCRIPT }} />
         ) : null}
         {CHROME_ANDROID_SAFE_MODE ? (
           <script dangerouslySetInnerHTML={{ __html: CHROME_ANDROID_SAFE_BOOT_SCRIPT }} />

@@ -10,6 +10,7 @@ export type OperationalLinkedKind =
   | "crypto_deposit_request"
   | "trade_session"
   | "copy_trade_session"
+  | "security_change_request"
 
 export type OperationalThreadCategory =
   | "general"
@@ -17,6 +18,7 @@ export type OperationalThreadCategory =
   | "withdrawal_dispute"
   | "appeal"
   | "security"
+  | "security_update"
   | "retailer"
   | "crypto_dispute"
   | "assistant_escalation"

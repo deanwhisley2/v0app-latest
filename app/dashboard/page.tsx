@@ -84,9 +84,13 @@ import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnosti
 import type { DashboardMainTab } from "@/lib/dashboard-navigation-policy"
 import { postLoginTab } from "@/lib/dashboard-navigation-policy"
 import {
+  DASHBOARD_CLEAN_BOOT_RESET_EVENT,
+  purgeDashboardUnsafeSessionState,
+  shouldSkipDashboardTabRestore,
+} from "@/lib/mobile/dashboard-clean-boot"
+import {
   CHROME_BFCACHE_RESET_EVENT,
   purgeChromeUnsafeSessionState,
-  shouldSkipDashboardTabRestore,
 } from "@/lib/mobile/chrome-android-safe-mode"
 import { NotificationCenterScreen } from "@/components/dashboard/notification-center-screen"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
@@ -556,6 +560,7 @@ export default function DashboardPage() {
   useLayoutEffect(() => {
     if (typeof window === "undefined") return
     if (shouldSkipDashboardTabRestore()) {
+      purgeDashboardUnsafeSessionState()
       purgeChromeUnsafeSessionState()
     }
     const snap = shouldSkipDashboardTabRestore() ? null : readDashboardActivity(activityUserId)
@@ -1503,8 +1508,12 @@ export default function DashboardPage() {
           setTabProgrammatic("desk", "notification_nav_desk")
           break
         case "settings":
-          setSettingsRequestedView(nav.view as SettingsView)
-          setTabProgrammatic("settings", "notification_nav_settings")
+          if (nav.view === "security") {
+            router.push("/dashboard/security")
+          } else {
+            setSettingsRequestedView(nav.view as SettingsView)
+            setTabProgrammatic("settings", "notification_nav_settings")
+          }
           break
         case "orders":
           setSettingsRequestedView("exchanges")
@@ -1528,7 +1537,7 @@ export default function DashboardPage() {
           break
       }
     },
-    [operationalWorkspace, navCtrl, setTabProgrammatic],
+    [operationalWorkspace, navCtrl, setTabProgrammatic, router],
   )
 
   useEffect(() => {
@@ -1556,10 +1565,9 @@ export default function DashboardPage() {
   }, [authLoading])
 
   useEffect(() => {
-    if (!shouldSkipDashboardTabRestore()) return
-    const onChromeReset = () => {
+    const forceCleanTab = () => {
       reportClientDiagnostic({
-        kind: "chrome_bfcache",
+        kind: "clean_boot_bfcache",
         message: "dashboard forced clean tab after bfcache",
         meta: { tab: postLoginTab(operationalWorkspace) },
       })
@@ -1567,11 +1575,16 @@ export default function DashboardPage() {
       setChatHubFocus(null)
       setSupportThreadFocusId(null)
       clearDashboardActivity()
+      purgeDashboardUnsafeSessionState()
       purgeChromeUnsafeSessionState()
-      setTabProgrammatic(postLoginTab(operationalWorkspace), "chrome_bfcache_reset")
+      setTabProgrammatic(postLoginTab(operationalWorkspace), "clean_boot_bfcache_reset")
     }
-    window.addEventListener(CHROME_BFCACHE_RESET_EVENT, onChromeReset)
-    return () => window.removeEventListener(CHROME_BFCACHE_RESET_EVENT, onChromeReset)
+    window.addEventListener(DASHBOARD_CLEAN_BOOT_RESET_EVENT, forceCleanTab)
+    window.addEventListener(CHROME_BFCACHE_RESET_EVENT, forceCleanTab)
+    return () => {
+      window.removeEventListener(DASHBOARD_CLEAN_BOOT_RESET_EVENT, forceCleanTab)
+      window.removeEventListener(CHROME_BFCACHE_RESET_EVENT, forceCleanTab)
+    }
   }, [operationalWorkspace, setTabProgrammatic])
 
   useEffect(() => {
@@ -1595,19 +1608,9 @@ export default function DashboardPage() {
 
   const handleNotificationNavRef = useRef(handleNotificationNav)
   handleNotificationNavRef.current = handleNotificationNav
-  const consumePendingNavRef = useRef(navCtrl.consumePendingNav)
-  consumePendingNavRef.current = navCtrl.consumePendingNav
 
   useEffect(() => {
     registerAppNavigator((nav) => handleNotificationNavRef.current(nav))
-    try {
-      const pending = consumePendingNavRef.current()
-      if (pending && typeof pending === "object" && pending !== null && "kind" in pending) {
-        handleNotificationNavRef.current(pending as NexusNotificationNav)
-      }
-    } catch {
-      /* ignore */
-    }
     return () => registerAppNavigator(null)
   }, [registerAppNavigator])
 
@@ -3550,18 +3553,20 @@ export default function DashboardPage() {
 
         {activeTab === "chat" && (
           <main className="relative min-w-0">
-            <ChatHubScreen
-              isGuestSession={isGuestSession}
-              initialFocus={chatHubFocus}
-              supportThreadFocusId={supportThreadFocusId}
-              onSupportThreadFocusConsumed={() => setSupportThreadFocusId(null)}
-              showOperationalInboxHint={level5Operational}
-              onGoToOperationalInbox={() => setTabUser("desk", "retailer_inbox_cta")}
-              onOpenFullNotifications={() => {
-                setChatHubFocus(null)
-                setTabUser("notifications", "retailer_notifications_cta")
-              }}
-            />
+            <DeferredMount idleMs={80} placeholder={<PanelLoader label="Loading chat…" />}>
+              <ChatHubScreen
+                isGuestSession={isGuestSession}
+                initialFocus={chatHubFocus}
+                supportThreadFocusId={supportThreadFocusId}
+                onSupportThreadFocusConsumed={() => setSupportThreadFocusId(null)}
+                showOperationalInboxHint={level5Operational}
+                onGoToOperationalInbox={() => setTabUser("desk", "retailer_inbox_cta")}
+                onOpenFullNotifications={() => {
+                  setChatHubFocus(null)
+                  setTabUser("notifications", "retailer_notifications_cta")
+                }}
+              />
+            </DeferredMount>
           </main>
         )}
 

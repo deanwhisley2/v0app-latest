@@ -20,7 +20,7 @@ export default function PrivacyPage() {
       <h2 className="mt-6 text-lg font-semibold text-foreground">What we collect</h2>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         <li>Account details (email, profile, preferences)</li>
-        <li>Security data you provide (e.g. recovery selfie, device sessions)</li>
+        <li>Security data you provide (e.g. Nexus Security Code, payout details, device sessions)</li>
         <li>Funding and balance activity needed to operate the product</li>
         <li>Exchange API credentials you choose to connect (stored encrypted)</li>
       </ul>

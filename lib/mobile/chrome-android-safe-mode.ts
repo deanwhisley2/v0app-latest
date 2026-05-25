@@ -74,7 +74,7 @@ export function purgeChromeUnsafeSessionState(): string[] {
   return cleared
 }
 
-/** Chrome Android must never restore dashboard tabs from session or server workspace. */
+/** Chrome Android must never restore dashboard tabs — delegates to global clean boot. */
 export function shouldSkipDashboardTabRestore(): boolean {
   return isChromeAndroidSafeModeActive()
 }
