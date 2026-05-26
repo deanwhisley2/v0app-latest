@@ -118,3 +118,17 @@ export function consumeFreshLoginLanding(): boolean {
     return false
   }
 }
+
+/** Non-destructive check — dashboard auth guard uses this before redirecting to login. */
+export function hasRecentFreshLogin(maxAgeMs = 120_000): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    const raw = sessionStorage.getItem(SESSION_FRESH_LOGIN_KEY)
+    if (!raw) return false
+    const ts = Number(raw)
+    if (!Number.isFinite(ts)) return true
+    return Date.now() - ts < maxAgeMs
+  } catch {
+    return false
+  }
+}

@@ -143,12 +143,28 @@ export default function LoginForm() {
         emailForAuth = resolveData.email
       }
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: emailForAuth.trim(),
-        password,
+      const loginRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: emailForAuth.trim(), password }),
       })
-      if (signInError) {
-        const msg = signInError.message
+      const loginJson = (await loginRes.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        code?: string
+        email?: string
+      }
+
+      if (!loginRes.ok) {
+        if (loginJson.code === "EMAIL_NOT_VERIFIED") {
+          setError("Verify your email before signing in.")
+          router.replace(
+            `/auth/verify?email=${encodeURIComponent(loginJson.email ?? emailForAuth.trim())}`,
+          )
+          return
+        }
+        const msg = loginJson.error ?? `Sign-in failed (${loginRes.status})`
         if (msg.toLowerCase().includes("invalid login credentials")) {
           setError(
             "Wrong email or password. Use your full email (e.g. name@gmail.com), check caps lock, or tap Forgot password.",
@@ -158,7 +174,8 @@ export default function LoginForm() {
         }
         return
       }
-      if (!data.session || !data.user) {
+
+      if (!loginJson.ok) {
         setError("No session returned. Check your email or confirm your account.")
         return
       }
@@ -170,25 +187,9 @@ export default function LoginForm() {
         /* ignore */
       }
 
-      const { data: profile, error: profileErr } = await supabase
-        .from("profiles")
-        .select("is_verified")
-        .eq("id", data.user.id)
-        .maybeSingle()
-
-      if (profileErr) {
-        console.warn("profiles check:", profileErr.message)
-      } else if (profile && profile.is_verified === false) {
-        await supabase.auth.signOut()
-        setError("Verify your email before signing in.")
-        router.replace(`/auth/verify?email=${encodeURIComponent(emailForAuth.trim())}`)
-        router.refresh()
-        return
-      }
-
       markFreshLoginLanding()
-      router.refresh()
-      router.replace("/dashboard")
+      // Full navigation so middleware + AuthProvider read server-set auth cookies on a new device.
+      window.location.assign("/dashboard")
     } catch (err) {
       if (
         isGuestLoginEnabled() &&
@@ -283,8 +284,8 @@ export default function LoginForm() {
           ) : null}
           {sessionRequired ? (
             <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100" role="status">
-              Your session could not be restored on this device. Sign in with your full email and password. Use{" "}
-              <span className="font-medium">www.nexuspro.it.com</span> (not a saved apex bookmark) if sign-in keeps failing.
+              You were signed out on this device. Enter your full email and password to sign in again. Use{" "}
+              <span className="font-medium">www.nexuspro.it.com</span> if the page keeps reloading.
             </p>
           ) : null}
           {resetSuccess ? (

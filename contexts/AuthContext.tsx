@@ -23,6 +23,8 @@ type AuthContextValue = {
   /** True when using synthetic guest (no Supabase session). */
   isGuestSession: boolean
   isLoading: boolean
+  /** False until the first getSession / auth event completes (avoids false login redirects). */
+  authReady: boolean
   signOut: () => Promise<{ error: Error | null }>
   refreshSession: () => Promise<void>
   /** After leaving guest mode, call this to browse as guest again (free entry only). */
@@ -38,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(() => !isDevLocalOnly())
+  const [authReady, setAuthReady] = useState(() => isDevLocalOnly())
   /** When true, do not synthesize guest (user chose “real login only” after sign-out). */
   const [guestDeclined, setGuestDeclined] = useState(false)
   const bootDoneRef = useRef(isDevLocalOnly())
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .finally(() => {
           if (bootDoneRef.current) return
           bootDoneRef.current = true
+          setAuthReady(true)
           setIsLoading(false)
         })
     }, AUTH_BOOT_MS)
@@ -80,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isDevLocalOnly()) {
       setSession(null)
       setIsLoading(false)
+      setAuthReady(true)
       bootDoneRef.current = true
       return
     }
@@ -97,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(data.session)
         }
         bootDoneRef.current = true
+        setAuthReady(true)
         setIsLoading(false)
       })
       .catch((e: unknown) => {
@@ -104,10 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("Auth getSession failed:", e)
           setSession(null)
           bootDoneRef.current = true
+          setAuthReady(true)
           setIsLoading(false)
         }
       })
 
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
@@ -115,15 +123,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(nextSession)
         if (nextSession?.user) setGuestDeclined(false)
         bootDoneRef.current = true
+        setAuthReady(true)
         setIsLoading(false)
-        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "SIGNED_OUT") {
-          router.refresh()
+        // Avoid refresh on SIGNED_IN — races with post-login navigation and drops cookies on new devices.
+        if (event === "TOKEN_REFRESHED") {
+          if (refreshTimer) clearTimeout(refreshTimer)
+          refreshTimer = setTimeout(() => router.refresh(), 400)
         }
       }
     })
 
     return () => {
       cancelled = true
+      if (refreshTimer) clearTimeout(refreshTimer)
       subscription.unsubscribe()
     }
   }, [router])
@@ -176,11 +188,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       isGuestSession,
       isLoading,
+      authReady,
       signOut,
       refreshSession,
       reenterGuestMode,
     }),
-    [resolvedUser, session, isGuestSession, isLoading, signOut, refreshSession, reenterGuestMode]
+    [resolvedUser, session, isGuestSession, isLoading, authReady, signOut, refreshSession, reenterGuestMode]
   )
 
   return (

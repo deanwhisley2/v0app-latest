@@ -84,7 +84,7 @@ import { DashboardWorkspaceRefresh } from "@/components/dashboard/dashboard-work
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
 import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnostics"
 import type { DashboardMainTab } from "@/lib/dashboard-navigation-policy"
-import { postLoginTab } from "@/lib/dashboard-navigation-policy"
+import { hasRecentFreshLogin, postLoginTab } from "@/lib/dashboard-navigation-policy"
 import {
   DASHBOARD_CLEAN_BOOT_RESET_EVENT,
   purgeDashboardUnsafeSessionState,
@@ -263,7 +263,7 @@ function normalizeSymbol(value: string): string {
 export function DashboardPageInner() {
   const router = useRouter()
   const { registerAppNavigator } = useNexusNotifications()
-  const { user, isLoading: authLoading, signOut, isGuestSession } = useAuth()
+  const { user, isLoading: authLoading, authReady, signOut, isGuestSession } = useAuth()
   const op = useOperationalBootstrap()
   const roleHint = useMemo(() => getOperationalRoleHint(user, op.snapshot), [user, op.snapshot])
   /** Level-5 liquidity admin or designated Level-2 retailer credit desk — Assets-only operational workspace (no trading Wallstreet/Container). */
@@ -999,11 +999,22 @@ export function DashboardPageInner() {
   }, [localMmSelectedDesk, fundMobileNetwork, localMmMpesaKenya, localMmFundingCountry])
 
   useEffect(() => {
-    if (isGuestSession) return
-    if (!authLoading && !user) {
+    if (isGuestSession || !authReady || authLoading) return
+    if (user) return
+    if (hasRecentFreshLogin()) return
+
+    let cancelled = false
+    void (async () => {
+      const { data } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (data.session?.user) return
       router.replace("/auth/login?reason=session_required")
+    })()
+
+    return () => {
+      cancelled = true
     }
-  }, [authLoading, user, isGuestSession, router])
+  }, [authReady, authLoading, user, isGuestSession, router])
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession) return
