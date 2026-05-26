@@ -8,6 +8,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { filterOperationalAlerts } from "@/lib/notifications/inbox-routing"
 import { detectLowEndDevice } from "@/lib/mobile/detect-low-end-device"
 import {
+  INBOX_CARD,
   NotificationDetailSheet,
   NotificationInboxEmpty,
   NotificationInboxFilters,
@@ -26,7 +27,8 @@ type Props = {
 }
 
 /**
- * Lightweight notifications panel — solid surfaces on low-end Android (no backdrop blur / heavy shadows).
+ * Mobile notifications sheet — scrim and panel are siblings (not one portal root)
+ * so low-GPU CSS does not paint the entire viewport as a solid card.
  */
 export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
   const { t, currency, country, locale } = useUserPreferences()
@@ -69,18 +71,12 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
   if (!mounted || !isOpen || typeof document === "undefined") return null
 
   return createPortal(
-    <div
-      className={cn(
-        "nexus-notification-portal fixed inset-0 z-[200] md:hidden",
-        lowEnd && "nexus-notification-portal--low-gpu",
-      )}
-      role="presentation"
-    >
+    <>
       <button
         type="button"
         className={cn(
-          "absolute inset-0 touch-manipulation",
-          lowEnd ? "bg-background/95" : "bg-black/55",
+          "nexus-notification-scrim fixed inset-0 z-[200] touch-manipulation md:hidden",
+          lowEnd ? "bg-black/50" : "bg-black/55",
         )}
         aria-label="Close"
         onClick={onClose}
@@ -90,36 +86,36 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
         aria-modal="true"
         aria-labelledby="notifications-panel-title"
         className={cn(
-          "notifications-panel absolute inset-x-0 bottom-0 flex max-h-[min(92dvh,820px)] flex-col rounded-t-2xl border border-border bg-card",
-          lowEnd && "low-gpu-mode shadow-none",
+          "nexus-notification-panel fixed inset-x-0 bottom-0 z-[201] flex max-h-[min(85dvh,640px)] flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-lg md:hidden",
+          lowEnd && "shadow-none",
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card p-4">
+        <div className="shrink-0 border-b border-border bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
-                <Bell className="h-5 w-5 text-primary" aria-hidden />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12">
+                <Bell className="h-4 w-4 text-primary" aria-hidden />
               </div>
               <div className="min-w-0">
-                <h2 id="notifications-panel-title" className="text-base font-semibold text-foreground">
+                <h2 id="notifications-panel-title" className="text-sm font-semibold text-foreground">
                   {t("notifications.center.title")}
                 </h2>
-                <p className="text-xs text-muted-foreground">{t("notifications.inbox.panelSubtitleAlerts")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("notifications.inbox.panelSubtitleAlerts")}</p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={() => markAllRead()}
-                className="text-xs font-medium text-primary touch-manipulation"
+                className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-primary touch-manipulation"
               >
                 {t("notifications.center.markAllRead")}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="nexus-touch-press rounded-lg p-2 text-muted-foreground touch-manipulation hover:text-foreground"
+                className="nexus-touch-press rounded-lg p-2 text-muted-foreground touch-manipulation"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -136,7 +132,7 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
             onSearchChange={setSearch}
             searchPending={false}
             t={t}
-            className="mb-3"
+            className="mb-2"
           />
           {filtered.length === 0 ? (
             <NotificationInboxEmpty
@@ -144,21 +140,15 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
               hint={search.trim() ? t("notifications.inbox.searchEmptyHint") : undefined}
             />
           ) : (
-            <ul className="space-y-2 pb-2">
+            <ul className="space-y-2 pb-3">
               {filtered.map((n) => {
                 const p = presentedMap.get(n.id)!
                 return (
-                  <li key={n.id} className="[content-visibility:auto]">
-                    <div
-                      className={cn(
-                        "notification-card rounded-2xl border border-border/80 bg-card p-3 active:scale-[0.985] transition-transform",
-                        lowEnd && "border-white/10 bg-[#141C34] shadow-none backdrop-blur-none",
-                      )}
-                    >
+                  <li key={n.id}>
+                    <div className={cn(INBOX_CARD, "overflow-hidden")}>
                       <NotificationInboxRow
                         item={n}
                         presented={p}
-                        className="rounded-xl border-0 bg-transparent p-0 active:bg-transparent"
                         onOpen={() => {
                           setSelected(n)
                           markRead(n.id)
@@ -193,7 +183,7 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
           }
         />
       ) : null}
-    </div>,
+    </>,
     document.body,
   )
 }

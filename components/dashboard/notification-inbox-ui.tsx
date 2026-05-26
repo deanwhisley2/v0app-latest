@@ -248,7 +248,7 @@ export function NotificationDetailSheet({
 
   return (
     <div
-      className="nexus-overlay-scrim nexus-notification-portal fixed inset-0 z-[120] flex flex-col bg-foreground/20 backdrop-blur-[2px] dark:bg-black/45 sm:items-center sm:justify-center sm:p-4"
+      className="nexus-notification-detail-scrim fixed inset-0 z-[210] flex flex-col bg-black/50 sm:items-center sm:justify-center sm:bg-black/45 sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}

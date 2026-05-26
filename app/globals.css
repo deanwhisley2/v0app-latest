@@ -1028,12 +1028,20 @@ html:not(.nexus-pwa-ready) body {
   }
 
   html.nexus-mobile-low-gpu .nexus-overlay-scrim,
-  html.nexus-mobile-low-gpu .nexus-notification-portal {
+  html.nexus-mobile-low-gpu .nexus-notification-scrim,
+  html.nexus-mobile-low-gpu .nexus-notification-detail-scrim {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     filter: none !important;
-    background-color: var(--background) !important;
+    background-color: rgba(0, 0, 0, 0.52) !important;
     opacity: 1 !important;
+  }
+
+  /* Legacy full-portal wrapper — do not paint viewport as solid card */
+  html.nexus-mobile-low-gpu .nexus-notification-portal:not(.nexus-notification-panel) {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
   }
 
   html.nexus-mobile-low-gpu .nexus-notification-panel,
@@ -1044,12 +1052,22 @@ html:not(.nexus-pwa-ready) body {
     filter: none !important;
   }
 
-  html.nexus-mobile-low-gpu .nexus-notification-portal .nexus-notification-panel,
+  html.nexus-mobile-low-gpu .nexus-notification-panel {
+    contain: layout paint;
+    backface-visibility: hidden;
+    transform: none !important;
+    will-change: auto !important;
+    background-color: var(--card) !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-portal.nexus-notification-panel,
   html.nexus-mobile-low-gpu .nexus-notification-portal > .rounded-none,
   html.nexus-mobile-low-gpu .nexus-notification-portal > .rounded-2xl {
     contain: layout paint;
     backface-visibility: hidden;
-    transform: translateZ(0);
+    transform: none !important;
     will-change: auto !important;
     background-color: var(--card) !important;
     opacity: 1 !important;
@@ -1142,27 +1160,11 @@ html:not(.nexus-pwa-ready) body {
   }
 }
 
-/* Notifications panel — scroll containment + low-GPU card surfaces */
+/* Notifications panel — scroll only (no paint containment on list — avoids full-panel repaint) */
 .notification-list {
-  contain: layout paint;
-  will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
 }
 
-.notification-card {
-  transition: transform 0.1s ease;
-}
-
-.low-gpu-mode .notification-card,
-html.nexus-mobile-low-gpu .notifications-panel .notification-card {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background: #141c34 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: none !important;
-}
-
-html.nexus-mobile-low-gpu .notifications-panel,
-html.nexus-mobile-low-gpu .nexus-notification-portal--low-gpu .notifications-panel {
-  box-shadow: none !important;
+html.nexus-mobile-low-gpu .nexus-notification-panel .notification-list {
+  will-change: auto;
 }
