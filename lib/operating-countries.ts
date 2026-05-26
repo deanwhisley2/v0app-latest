@@ -94,6 +94,10 @@ export function isUgandaAdminAirtelEligible(countryCode: string | null | undefin
   return (countryCode ?? "").trim().toUpperCase().slice(0, 2) === "UG"
 }
 
+export function isKenyaAdminMpesaEligible(countryCode: string | null | undefined): boolean {
+  return (countryCode ?? "").trim().toUpperCase().slice(0, 2) === "KE"
+}
+
 /** Mobile-money network choices for Add Funds local step — corridor-scoped. */
 export function mobileNetworksForFundingCountry(code: string | null | undefined): readonly string[] {
   const cc = (code ?? "").trim().toUpperCase().slice(0, 2)

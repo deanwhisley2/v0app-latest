@@ -14,6 +14,23 @@ export function isInternalNotificationCopy(text: string): boolean {
   return INTERNAL_PHRASE.test(t) || CONVERSATIONAL_PHRASE.test(t) || RAW_LOGIN_BODY.test(t) || IP_UA_BLOB.test(t)
 }
 
+/** Skip re-localization when mapper already produced final customer copy. */
+export function isAlreadyCustomerFriendlyNotificationCopy(text: string): boolean {
+  const t = text.trim()
+  if (!t || isInternalNotificationCopy(t)) return false
+  return (
+    /^your (deposit|withdrawal|copy trade)/i.test(t) ||
+    /^trading earnings/i.test(t) ||
+    /^a promotional bonus/i.test(t) ||
+    /^we received your/i.test(t) ||
+    /^a new sign-in/i.test(t) ||
+    /^your crypto deposit/i.test(t) ||
+    /^your account (is active|was updated)/i.test(t) ||
+    /^your fixed trade/i.test(t) ||
+    /^your trade is active/i.test(t)
+  )
+}
+
 const CONVERSATIONAL_PHRASE =
   /\b(we|we're|we've|our team|our system|we set aside|we took|we will|we are|we received|we kept|we verify|we credit|we'd|you can|you may|let us|please wait while|something went wrong while|we could not|i'm here|get started with)\b/i
 

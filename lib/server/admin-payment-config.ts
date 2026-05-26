@@ -46,6 +46,11 @@ export const ESKNEXUSPRO_KE_MPESA_LINES: ReadonlyArray<{ payeeName: string; msis
   { payeeName: "Oscar Maloba Odhiambo", msisdn: "0115831794" },
 ]
 
+/** Kenya Buy Goods till — L5 direct receive (payment panel sticker). */
+export const KENYA_MPESA_BUY_GOODS_TILL = "9232682"
+export const KENYA_MPESA_BUY_GOODS_BUSINESS = "SIMON AFRICANOS"
+export const KENYA_MPESA_BUY_GOODS_USSD = "*126#"
+
 export const MAX_RETAILERS_ON_PAYMENT_PAGE = 2
 
 export const CRYPTO_MIN_CONFIRMATIONS = Math.max(
@@ -53,11 +58,11 @@ export const CRYPTO_MIN_CONFIRMATIONS = Math.max(
   Math.min(64, Number(process.env.CRYPTO_MIN_CONFIRMATIONS ?? 19) || 19),
 )
 
-export const ADMIN_DIRECT_FUND_CHANNELS = ["admin_crypto", "admin_airtel_ug"] as const
+export const ADMIN_DIRECT_FUND_CHANNELS = ["admin_crypto", "admin_airtel_ug", "admin_mpesa_ke"] as const
 export type AdminDirectFundChannel = (typeof ADMIN_DIRECT_FUND_CHANNELS)[number]
 
 export function isAdminDirectFundChannel(ch: string): ch is AdminDirectFundChannel {
-  return ch === "admin_crypto" || ch === "admin_airtel_ug"
+  return ch === "admin_crypto" || ch === "admin_airtel_ug" || ch === "admin_mpesa_ke"
 }
 
-export { isUgandaAdminAirtelEligible } from "@/lib/operating-countries"
+export { isUgandaAdminAirtelEligible, isKenyaAdminMpesaEligible } from "@/lib/operating-countries"

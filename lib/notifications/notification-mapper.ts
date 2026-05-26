@@ -59,6 +59,16 @@ export function mapCustomerNotification(params: {
 
   const viewer = params.viewer
 
+  if (isInternalNotificationCopy(rawTitle) || isInternalNotificationCopy(rawBody)) {
+    const mapped = mapInternalOpsNotification(combined, {
+      amountUsd,
+      amountInputLocal,
+      inputCurrency,
+      viewer,
+    })
+    if (mapped) return mapped
+  }
+
   // --- Security / login ---
   if (
     t.includes("security") ||
@@ -219,13 +229,26 @@ export function mapCustomerNotification(params: {
         body: "Your fixed trade session is active. View schedule and releases on the Container screen.",
       }
     }
+    if (/insurance.*reserved|carved from gross|reserved from allocation/i.test(combined)) {
+      return {
+        title: "Trade opened",
+        body: "Your trade is active. Fees and insurance are shown on the Container screen before you confirm.",
+      }
+    }
+    if (/stake reserved|copy[- ]?trade stake/i.test(combined)) {
+      return {
+        title: "Copy trade started",
+        body: usdFmt
+          ? `Your copy trade session has started with ${usdFmt} allocated.`
+          : "Your copy trade session has started.",
+      }
+    }
     if (/container liquid|transferred into|earnings transferred|release|added to your balance/i.test(combined)) {
-      const copy = buildFundsCreditedCustomerCopy(usdFmt || "your earnings")
       return {
         title: "Earnings credited",
         body: usdFmt
           ? `Trading earnings of ${usdFmt} have been added to your balance.`
-          : clean(copy.body),
+          : "Trading earnings have been added to your balance.",
       }
     }
     if (usdFmt) {
@@ -260,61 +283,81 @@ export function mapCustomerNotification(params: {
     }
   }
 
-  // --- Legacy rows: internal copy in DB title/body ---
-  if (isInternalNotificationCopy(rawTitle) || isInternalNotificationCopy(rawBody)) {
-    if (/approved|credited|settled/i.test(combined)) {
-      const copy = buildFundingApprovedCustomerCopy({
-        amountUsd: Number.isFinite(amountUsd) ? amountUsd : null,
-        amountInputLocal: Number.isFinite(amountInputLocal) ? amountInputLocal : null,
-        inputCurrency,
-        fundingCountryCode: viewer?.fundingCountryCode ?? null,
-        preferredCurrency: viewer?.preferredCurrency ?? null,
-        locale: viewer?.locale,
-        language: viewer?.language,
-      })
-      return { title: clean(copy.title), body: clean(copy.body) }
+  return null
+}
+
+function mapInternalOpsNotification(
+  combined: string,
+  ctx: {
+    amountUsd: number
+    amountInputLocal: number
+    inputCurrency: string | null
+    viewer?: {
+      fundingCountryCode?: string | null
+      preferredCurrency?: string | null
+      locale?: string
+      language?: AppLanguage
     }
-    if (/under review|awaiting|pending review/i.test(combined)) {
-      const copy = buildFundingHeldCustomerCopy(null)
-      return { title: clean(copy.title), body: clean(copy.body) }
-    }
-    if (/withdraw/i.test(combined) && /approved/i.test(combined)) {
-      return {
-        title: "Withdrawal approved",
-        body: "Your withdrawal request has been approved.",
-      }
-    }
-    if (/withdraw/i.test(combined)) {
-      return {
-        title: "Withdrawal received",
-        body: "We received your withdrawal request.",
-      }
-    }
-    if (/copy[- ]?trade|settlement/i.test(combined)) {
-      return {
-        title: "Copy trade completed",
-        body: "Your copy trade session has been settled successfully.",
-      }
-    }
-    if (/earnings|container|liquid/i.test(combined)) {
-      return {
-        title: "Earnings credited",
-        body: usdFmt
-          ? `Trading earnings of ${usdFmt} have been added to your balance.`
-          : "Trading earnings have been added to your balance.",
-      }
-    }
-    if (/login|sign[- ]?in/i.test(combined)) {
-      return {
-        title: "New login detected",
-        body: "A new sign-in was recorded on your account.",
-      }
-    }
+  },
+): MappedCustomerNotification | null {
+  const { amountUsd, amountInputLocal, inputCurrency, viewer } = ctx
+  const usdFmt = Number.isFinite(amountUsd) && amountUsd > 0 ? formatUsd(amountUsd) : ""
+
+  if (/launch promotion|first.deposit bonus|referral reward/i.test(combined)) {
     return {
-      title: "Account update",
-      body: "Your account was updated. Open Wallet or Notifications for details.",
+      title: "Bonus credited",
+      body: usdFmt
+        ? `A promotional bonus of ${usdFmt} has been credited to your account.`
+        : "A promotional bonus has been credited to your account.",
     }
   }
-
-  return null
+  if (/approved|credited|settled|retailer approved/i.test(combined)) {
+    const copy = buildFundingApprovedCustomerCopy({
+      amountUsd: Number.isFinite(amountUsd) ? amountUsd : null,
+      amountInputLocal: Number.isFinite(amountInputLocal) ? amountInputLocal : null,
+      inputCurrency,
+      fundingCountryCode: viewer?.fundingCountryCode ?? null,
+      preferredCurrency: viewer?.preferredCurrency ?? null,
+      locale: viewer?.locale,
+      language: viewer?.language,
+    })
+    return { title: clean(copy.title), body: clean(copy.body) }
+  }
+  if (/under review|awaiting|pending review|submitted/i.test(combined)) {
+    const copy = buildFundingSubmittedCustomerCopy()
+    return { title: clean(copy.title), body: clean(copy.body) }
+  }
+  if (/withdraw/i.test(combined) && /approved/i.test(combined)) {
+    return { title: "Withdrawal approved", body: "Your withdrawal request has been approved." }
+  }
+  if (/withdraw/i.test(combined)) {
+    return { title: "Withdrawal received", body: "We received your withdrawal request." }
+  }
+  if (/copy[- ]?trade|settlement|stake reserved/i.test(combined)) {
+    return {
+      title: /started|reserved|stake/i.test(combined) ? "Copy trade started" : "Copy trade completed",
+      body:
+        /started|reserved|stake/i.test(combined)
+          ? "Your copy trade session is active."
+          : "Your copy trade session has been settled successfully.",
+    }
+  }
+  if (/insurance|gross commit|principal locked|fixed session/i.test(combined)) {
+    return {
+      title: /locked|reserved|open/i.test(combined) ? "Fixed trade active" : "Fixed trade completed",
+      body: "Your fixed trade session was updated. See Container for details.",
+    }
+  }
+  if (/container liquid|earnings transferred|internal_transfer/i.test(combined)) {
+    return {
+      title: "Earnings credited",
+      body: usdFmt
+        ? `Trading earnings of ${usdFmt} have been added to your balance.`
+        : "Trading earnings have been added to your balance.",
+    }
+  }
+  if (/login|sign[- ]?in/i.test(combined)) {
+    return { title: "New login detected", body: "A new sign-in was recorded on your account." }
+  }
+  return { title: "Account update", body: "Your account was updated." }
 }

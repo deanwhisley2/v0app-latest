@@ -33,7 +33,11 @@ import { getOrCreateSecurityProfile } from "@/lib/server/user-security-profile-s
 import { corridorFiatForCountryIso2, isSupportedFiat } from "@/lib/currency-display"
 import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } from "@/lib/server/daily-fx-rate"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
-import { isAdminDirectFundChannel, isUgandaAdminAirtelEligible } from "@/lib/server/admin-payment-config"
+import {
+  isAdminDirectFundChannel,
+  isKenyaAdminMpesaEligible,
+  isUgandaAdminAirtelEligible,
+} from "@/lib/server/admin-payment-config"
 import { uploadFundingProof } from "@/lib/server/funding-proof-storage"
 import {
   inferFundingFxRoutingLane,
@@ -114,7 +118,7 @@ export async function POST(request: Request) {
       txReference?: string
       note?: string
       mobileNetwork?: string
-      fundChannel?: "local_mobile" | "legacy_admin" | "admin_crypto" | "admin_airtel_ug"
+      fundChannel?: "local_mobile" | "legacy_admin" | "admin_crypto" | "admin_airtel_ug" | "admin_mpesa_ke"
       fundingCountryCode?: string
       payerDisplayName?: string
       payerPhone?: string
@@ -340,14 +344,19 @@ export async function POST(request: Request) {
     } else if (fundChannel === "legacy_admin") {
       insertRetailerId = retailerId || null
       insertOfficialRouteId = null
-    } else if (fundChannel === "admin_airtel_ug") {
+    } else if (fundChannel === "admin_airtel_ug" || fundChannel === "admin_mpesa_ke") {
       insertRetailerId = null
       insertOfficialRouteId = null
       retailerResponseDeadlineAt = null
 
       if (!payerDisplayName || !payerPhone) {
         return NextResponse.json(
-          { error: "payerDisplayName and payerPhone are required for Uganda Airtel funding." },
+          {
+            error:
+              fundChannel === "admin_mpesa_ke"
+                ? "payerDisplayName and payerPhone are required for Kenya M-PESA funding."
+                : "payerDisplayName and payerPhone are required for Uganda Airtel funding.",
+          },
           { status: 400 },
         )
       }
@@ -359,7 +368,7 @@ export async function POST(request: Request) {
           .trim()
           .toUpperCase()
       const cc2 = userCountry.slice(0, 2)
-      if (!isUgandaAdminAirtelEligible(cc2)) {
+      if (fundChannel === "admin_airtel_ug" && !isUgandaAdminAirtelEligible(cc2)) {
         return NextResponse.json(
           {
             error: "Uganda Airtel admin funding is only available for Uganda corridor accounts.",
@@ -368,7 +377,16 @@ export async function POST(request: Request) {
           { status: 403 },
         )
       }
-      const corridorFiat = corridorFiatForCountryIso2(cc2) ?? "UGX"
+      if (fundChannel === "admin_mpesa_ke" && !isKenyaAdminMpesaEligible(cc2)) {
+        return NextResponse.json(
+          {
+            error: "Kenya M-PESA till funding is only available for Kenya corridor accounts.",
+            code: "CORRIDOR_RAIL_MISMATCH",
+          },
+          { status: 403 },
+        )
+      }
+      const corridorFiat = corridorFiatForCountryIso2(cc2) ?? (fundChannel === "admin_mpesa_ke" ? "KES" : "UGX")
       const explicitLocal = body.amountInputLocal
       const explicitCur = typeof body.inputCurrency === "string" ? body.inputCurrency.trim().toUpperCase() : ""
       const hasExplicitFx =
@@ -419,7 +437,13 @@ export async function POST(request: Request) {
     }
 
     const adminDirectNetwork =
-      fundChannel === "admin_crypto" ? "USDT-TRC20" : fundChannel === "admin_airtel_ug" ? "Airtel" : mobileNetwork
+      fundChannel === "admin_crypto"
+        ? "USDT-TRC20"
+        : fundChannel === "admin_airtel_ug"
+          ? "Airtel"
+          : fundChannel === "admin_mpesa_ke"
+            ? "MPesa"
+            : mobileNetwork
 
     if (await isFundingReferenceCooldownActive(admin, user.id)) {
       return NextResponse.json(
@@ -768,14 +792,16 @@ export async function POST(request: Request) {
       transactionRef: txReference,
       summary:
         fundChannel === "admin_crypto"
-          ? "USDT TRC20 funding submitted — Level 5 admin will verify on-chain proof."
+          ? "Crypto deposit received — processing."
           : fundChannel === "admin_airtel_ug"
-            ? "Uganda Airtel Money funding submitted — Level 5 admin will verify merchant payment."
-            : fundChannel === "local_mobile"
-              ? insertOfficialRouteId
-                ? "Local funding submitted — official company corridor (Level 5 operations will verify)."
-                : "Local mobile-money funding submitted; awaiting retailer verification."
-              : "Retailer funding request submitted (legacy admin channel).",
+            ? "Deposit received — under review."
+            : fundChannel === "admin_mpesa_ke"
+              ? "M-PESA deposit received — under review."
+              : fundChannel === "local_mobile"
+                ? insertOfficialRouteId
+                  ? "Deposit received — under review."
+                  : "Deposit received — under review."
+                : "Deposit received — under review.",
       metadata: {
         retailerId: insertRetailerId,
         officialCorridorRouteId: insertOfficialRouteId,

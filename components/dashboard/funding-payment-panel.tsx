@@ -4,13 +4,18 @@ import { useCallback, useEffect, useState } from "react"
 import QRCode from "qrcode"
 import { Check, ChevronDown, Copy, Smartphone, Wallet } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
-import { AirtelPaymentSteps, PaymentReferenceFields } from "@/components/dashboard/mobile-money-payment-instructions"
+import {
+  AirtelPaymentSteps,
+  MpesaTillPaymentSteps,
+  PaymentReferenceFields,
+} from "@/components/dashboard/mobile-money-payment-instructions"
+import { KenyaMpesaTillCard } from "@/components/dashboard/kenya-mpesa-till-card"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
 type PaymentConfig = {
-  rails?: { globalCrypto?: boolean; ugandaAirtel?: boolean; localMobile?: boolean }
+  rails?: { globalCrypto?: boolean; ugandaAirtel?: boolean; kenyaMpesaTill?: boolean; localMobile?: boolean }
   globalCrypto: {
     network: string
     walletAddress: string
@@ -27,9 +32,15 @@ type PaymentConfig = {
     ussdPrefix: string
     referenceHint: string
   } | null
+  kenyaMpesaTill: {
+    tillNumber: string
+    businessName: string
+    ussdPrefix: string
+    referenceHint: string
+  } | null
 }
 
-export type L1FundSource = "pick" | "crypto" | "airtel" | "local"
+export type L1FundSource = "pick" | "crypto" | "airtel" | "mpesa_ke" | "local"
 
 type Props = {
   activeSource: L1FundSource
@@ -90,12 +101,17 @@ export function FundingPaymentPanel({
   const corridorCc = customerFundingCountry.trim().toUpperCase().slice(0, 2)
   const showUgandaAirtel =
     corridorCc === "UG" || (config?.rails?.ugandaAirtel ?? Boolean(config?.ugandaAirtel))
+  const showKenyaMpesa =
+    corridorCc === "KE" || (config?.rails?.kenyaMpesaTill ?? Boolean(config?.kenyaMpesaTill))
 
   useEffect(() => {
     if (!showUgandaAirtel && activeSource === "airtel") {
       onSourceChange("crypto")
     }
-  }, [showUgandaAirtel, activeSource, onSourceChange])
+    if (!showKenyaMpesa && activeSource === "mpesa_ke") {
+      onSourceChange("crypto")
+    }
+  }, [showUgandaAirtel, showKenyaMpesa, activeSource, onSourceChange])
 
   useEffect(() => {
     let cancelled = false
@@ -248,6 +264,33 @@ export function FundingPaymentPanel({
           <ChevronDown
             aria-hidden
             className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${activeSource === "airtel" ? "rotate-180" : ""}`}
+          />
+        </button>
+      ) : null}
+
+      {showKenyaMpesa ? (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSource === "mpesa_ke"}
+          id="fund-method-mpesa-ke"
+          onClick={() => onSourceChange("mpesa_ke")}
+          className={`${CARD_TRIGGER} ${activeSource === "mpesa_ke" ? "border-[#39B54A]/50 bg-[#39B54A]/10 ring-1 ring-[#39B54A]/30" : CARD_INACTIVE}`}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#39B54A]/20 text-[#39B54A]">
+            <Smartphone className="h-5 w-5" aria-hidden />
+          </span>
+          <div className={LABEL_ROW}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-bold text-foreground">{t("funding.payment.kenyaMpesaTitle")}</span>
+              <span className="hidden text-[10px] text-muted-foreground sm:inline">
+                {t("funding.payment.kenyaMpesaSubtitle")}
+              </span>
+            </span>
+          </div>
+          <ChevronDown
+            aria-hidden
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${activeSource === "mpesa_ke" ? "rotate-180" : ""}`}
           />
         </button>
       ) : null}
@@ -411,6 +454,36 @@ export function FundingPaymentPanel({
     </div>
   )
 
+  const mpesaKeExpanded = showKenyaMpesa && activeSource === "mpesa_ke" && config?.kenyaMpesaTill && (
+    <div
+      role="tabpanel"
+      aria-labelledby="fund-method-mpesa-ke"
+      className="max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#39B54A]/35 bg-[#39B54A]/5 p-2.5 sm:p-3"
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {t("funding.payment.instructionPanelTitle")}
+      </p>
+      <KenyaMpesaTillCard
+        tillNumber={config.kenyaMpesaTill.tillNumber}
+        businessName={config.kenyaMpesaTill.businessName}
+      />
+      <MpesaTillPaymentSteps
+        ussdPrefix={config.kenyaMpesaTill.ussdPrefix}
+        tillNumber={config.kenyaMpesaTill.tillNumber}
+        t={t}
+      />
+      <PaymentReferenceFields
+        fundTxReference={fundTxReference}
+        onTxReferenceChange={onTxReferenceChange}
+        onTxReferenceBlur={onTxReferenceBlur}
+        txReferenceError={txReferenceError}
+        hint={t("funding.payment.mpesaTillRefHint")}
+        t={t}
+      />
+      {payerFields}
+    </div>
+  )
+
   const localExpanded =
     activeSource === "local" && (
       <p className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-2.5 py-2 text-[10px] leading-snug text-muted-foreground">
@@ -445,8 +518,12 @@ export function FundingPaymentPanel({
           {changeMethod}
           {cryptoExpanded}
           {airtelExpanded}
+          {mpesaKeExpanded}
           {showUgandaAirtel && activeSource === "airtel" && !config?.ugandaAirtel ? (
             <p className="text-[11px] text-muted-foreground">Loading Uganda payment corridor…</p>
+          ) : null}
+          {showKenyaMpesa && activeSource === "mpesa_ke" && !config?.kenyaMpesaTill ? (
+            <p className="text-[11px] text-muted-foreground">Loading Kenya payment corridor…</p>
           ) : null}
           {localExpanded}
         </>

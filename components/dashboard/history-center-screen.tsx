@@ -6,8 +6,8 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { supabase } from "@/lib/supabaseClient"
 import { filterTransactionHistoryFromInbox } from "@/lib/notifications/inbox-routing"
-import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
-import { formatNotificationTimeAgo } from "@/lib/notifications/notification-inbox-presenter"
+import { presentNotification, formatNotificationTimeAgo } from "@/lib/notifications/notification-inbox-presenter"
+import { presentFinancialEventForCustomer } from "@/lib/notifications/financial-event-presenter"
 import { INBOX_CARD } from "@/components/dashboard/notification-inbox-ui"
 
 type FinancialEvent = {
@@ -179,20 +179,18 @@ export function HistoryCenterScreen() {
                 </p>
               </div>
               <ul className="divide-y divide-border/50">
-                {events.map((e) => (
+                {events.map((e) => {
+                  const presented = presentFinancialEventForCustomer(e)
+                  return (
                   <li key={e.id} className="px-4 py-3">
-                    <p className="text-sm font-medium text-foreground">
-                      {e.summary || e.event_type.replace(/_/g, " ")}
-                    </p>
-                    <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                      {e.category} · {e.status}
-                      {e.gross_amount != null ? ` · $${Number(e.gross_amount).toFixed(2)}` : ""}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{presented.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{presented.detailLine}</p>
                     <p className="mt-1 text-[10px] text-muted-foreground">
                       {formatNotificationTimeAgo(e.created_at, t)}
                     </p>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             </section>
           ) : null}

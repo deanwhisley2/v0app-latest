@@ -46,6 +46,29 @@ type MpesaStepsProps = {
   t: (key: string) => string
 }
 
+type MpesaTillStepsProps = {
+  ussdPrefix: string
+  tillNumber: string
+  t: (key: string) => string
+}
+
+export function MpesaTillPaymentSteps({ ussdPrefix, tillNumber, t }: MpesaTillStepsProps) {
+  return (
+    <details className="rounded-md border border-border/60 bg-muted/20" open>
+      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold text-foreground">
+        {t("funding.payment.mpesaTillStepsToggle")}
+      </summary>
+      <ol className="list-decimal space-y-1 border-t border-border/50 px-2.5 py-2 pl-5 text-[11px] leading-snug text-foreground break-words">
+        <li>{t("funding.payment.mpesaTillStep1").replace("{{ussd}}", ussdPrefix)}</li>
+        <li>{t("funding.payment.mpesaTillStep2")}</li>
+        <li>{t("funding.payment.mpesaTillStep3").replace("{{till}}", tillNumber)}</li>
+        <li>{t("funding.payment.mpesaTillStep4")}</li>
+        <li>{t("funding.payment.mpesaTillStep5")}</li>
+      </ol>
+    </details>
+  )
+}
+
 export function MpesaPaymentSteps({ mpesa, t }: MpesaStepsProps) {
   return (
     <details className="rounded-md border border-border/60 bg-muted/20" open>

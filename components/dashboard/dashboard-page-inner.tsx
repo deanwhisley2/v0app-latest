@@ -116,7 +116,11 @@ import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balanc
 import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
-import { isUgandaAdminAirtelEligible, mobileNetworksForFundingCountry } from "@/lib/operating-countries"
+import {
+  isKenyaAdminMpesaEligible,
+  isUgandaAdminAirtelEligible,
+  mobileNetworksForFundingCountry,
+} from "@/lib/operating-countries"
 import {
   PaymentReferenceFields,
   RetailerPaymentInstructionPanel,
@@ -868,6 +872,7 @@ export function DashboardPageInner() {
   }, [profileFundingCountry, fundingCountryCodeInput])
 
   const ugandaAdminAirtelEligible = isUgandaAdminAirtelEligible(addFundsCorridorCountry)
+  const kenyaAdminMpesaEligible = isKenyaAdminMpesaEligible(addFundsCorridorCountry)
   const fundingCountryLocked = profileFundingCountry.length === 2
 
   const localMmNetworkOptions = useMemo(
@@ -884,7 +889,7 @@ export function DashboardPageInner() {
   const fundingAmountLabelCurrency =
     l1FundSource === "local" && localMmCorridorFiat
       ? localMmCorridorFiat
-      : l1FundSource === "airtel"
+      : l1FundSource === "airtel" || l1FundSource === "mpesa_ke"
         ? localMmCorridorFiat ?? currency
         : currency
 
@@ -893,7 +898,7 @@ export function DashboardPageInner() {
   const smartAmountCurrencyForFund = useMemo(() => {
     if (showFundModal === "withdraw") return currency
     if (showFundModal === "add" && l1FundSource === "crypto") return "USD"
-    if (showFundModal === "add" && (l1FundSource === "local" || l1FundSource === "airtel")) {
+    if (showFundModal === "add" && (l1FundSource === "local" || l1FundSource === "airtel" || l1FundSource === "mpesa_ke")) {
       return fundingAmountLabelCurrency
     }
     return currency
@@ -917,7 +922,7 @@ export function DashboardPageInner() {
         ? currency
         : l1FundSource === "local" && localMmCorridorFiat
           ? localMmCorridorFiat
-          : l1FundSource === "airtel"
+          : l1FundSource === "airtel" || l1FundSource === "mpesa_ke"
             ? fundingAmountLabelCurrency
             : l1FundSource === "crypto"
               ? "USD"
@@ -1221,7 +1226,10 @@ export function DashboardPageInner() {
     if (!ugandaAdminAirtelEligible && l1FundSource === "airtel") {
       setL1FundSource("crypto")
     }
-  }, [ugandaAdminAirtelEligible, l1FundSource])
+    if (!kenyaAdminMpesaEligible && l1FundSource === "mpesa_ke") {
+      setL1FundSource("crypto")
+    }
+  }, [ugandaAdminAirtelEligible, kenyaAdminMpesaEligible, l1FundSource])
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession) return
@@ -2106,6 +2114,13 @@ export function DashboardPageInner() {
       }
       const airtelFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "UGX"
       ledgerUsd = usdFromCustomerLocalInput(fundAmount, airtelFiat)
+    } else if (showFundModal === "add" && l1FundSource === "mpesa_ke") {
+      if (!kenyaAdminMpesaEligible) {
+        showToast(t("funding.error.corridorRailMismatch"), "error")
+        return
+      }
+      const kesFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "KES"
+      ledgerUsd = usdFromCustomerLocalInput(fundAmount, kesFiat)
     }
     const amount = ledgerUsd
     const level = currentUser?.level ?? 1
@@ -2264,6 +2279,48 @@ export function DashboardPageInner() {
                 inputCurrency: airtelFiat,
                 txReference: fundTxReference.trim(),
                 fundChannel: "admin_airtel_ug",
+                ...(fundPayerSource === "manual"
+                  ? { payerDisplayName: fundPayerName.trim(), payerPhone: fundPayerPhone.trim() }
+                  : { payerSource: fundPayerSource }),
+                fundingCountryCode: addFundsCorridorCountry,
+                note: fundNote.trim() || null,
+              }),
+            })
+            const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
+            if (!res.ok) {
+              throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
+            }
+            setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
+            showToast(t("funding.toast.adminAirtelQueued"), "success")
+            setFundTxReference("")
+            setFundNote("")
+            setFundPayerName("")
+            setFundPayerPhone("")
+            setL1FundSource("crypto")
+            setShowFundModal(null)
+            setFundAmount("")
+            return
+          }
+
+          if (l1FundSource === "mpesa_ke") {
+            if (!kenyaAdminMpesaEligible) {
+              throw new Error(t("funding.error.corridorRailMismatch"))
+            }
+            if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
+            if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
+            if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
+              throw new Error(t("funding.error.senderIdentity"))
+            }
+            const kesFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "KES"
+            const res = await fetch("/api/user/retailer-funding", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                amount,
+                amountInputLocal: amountRaw,
+                inputCurrency: kesFiat,
+                txReference: fundTxReference.trim(),
+                fundChannel: "admin_mpesa_ke",
                 ...(fundPayerSource === "manual"
                   ? { payerDisplayName: fundPayerName.trim(), payerPhone: fundPayerPhone.trim() }
                   : { payerSource: fundPayerSource }),

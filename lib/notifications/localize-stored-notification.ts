@@ -3,9 +3,18 @@
  * Used at read/present time with the viewer's active `t()`.
  */
 
+import { isAlreadyCustomerFriendlyNotificationCopy } from "@/lib/notifications/customer-notification-language"
+
 const EXACT_TITLE_KEY: Record<string, string> = {
   "Funding approved": "notifications.customer.fundingApprovedTitle",
   "Deposit credited": "notifications.customer.fundingApprovedTitle",
+  "Earnings credited": "notifications.customer.fundsCreditedTitle",
+  "Copy trade completed": "notifications.trade.copyCycleTitle",
+  "Withdrawal approved": "notifications.withdrawal.approvedTitle",
+  "New login detected": "notifications.inbox.securitySignInTitle",
+  "Fixed trade completed": "notifications.trade.fixedFinishedTitle",
+  "Fixed trade active": "notifications.trade.scheduleActiveTitle",
+  "Trading update": "notifications.inbox.accountUpdateTitle",
   "Funding declined": "notifications.customer.fundingDeclinedTitle",
   "Deposit declined": "notifications.customer.fundingDeclinedTitle",
   "Funding request declined": "notifications.customer.fundingRejectedTitle",
@@ -86,10 +95,13 @@ const BODY_REFEREE_BONUS_SHORT_RE = /^(.+) bonus credited\.$/
 const BODY_REFERRER_BONUS_LONG_RE =
   /^You earned (.+) from a referral's first deposit during the current promotional cycle\.$/
 const BODY_REFERRER_BONUS_SHORT_RE = /^(.+) referral reward\.$/
-const BODY_FUNDS_CREDITED_LONG_RE = /^(.+) has been added to your Nexus Main(?: balance)?\./
-const BODY_FUNDS_CREDITED_SHORT_RE = /^(.+) credited\.$/
+const BODY_FUNDS_CREDITED_LONG_RE = /^(.+) has been added to your (?:Nexus Main|balance)(?: balance)?\./
+const BODY_FUNDS_CREDITED_SHORT_RE =
+  /^(?:UGX|KES|CDF|USD|\$)\s*[\d,.\s]+(?:\s*(?:UGX|KES|CDF|USD))?\s+credited\.?$/i
 const BODY_LOCAL_APPROVED_LONG_RE = /^Approved · (.+)\. Credited\.$/
-const BODY_LOCAL_APPROVED_SHORT_RE = /^(.+) credited\.$/
+/** Legacy short ledger lines only — not full sentences ending in "credited." */
+const BODY_LOCAL_APPROVED_SHORT_RE =
+  /^(?:UGX|KES|CDF|USD|\$)\s*[\d,.\s]+(?:\s*(?:UGX|KES|CDF|USD))?\s+credited\.?$/i
 const BODY_WITHDRAWAL_RE = /^(.+) (?:withdrawal is )?pending\.$/
 const BODY_CRYPTO_VERIFY_RE = /^(.+) processing\.$/
 const BODY_CRYPTO_VERIFY_LEGACY_RE = /^USDT deposit verifying \(declared .+\)\./
@@ -120,6 +132,7 @@ export function localizeStoredNotificationTitle(title: string, t: (key: string) 
 
 export function localizeStoredNotificationBody(body: string, t: (key: string) => string): string {
   const trimmed = body.trim()
+  if (isAlreadyCustomerFriendlyNotificationCopy(trimmed)) return trimmed
   const exact = EXACT_BODY_KEY[trimmed]
   if (exact) return t(exact)
 

@@ -11,7 +11,12 @@ import {
   UGANDA_AIRTEL_LEGAL_PAYEE,
   UGANDA_AIRTEL_USSD_PREFIX,
 } from "@/lib/server/admin-payment-config"
-import { isUgandaAdminAirtelEligible } from "@/lib/operating-countries"
+import { isKenyaAdminMpesaEligible, isUgandaAdminAirtelEligible } from "@/lib/operating-countries"
+import {
+  KENYA_MPESA_BUY_GOODS_BUSINESS,
+  KENYA_MPESA_BUY_GOODS_TILL,
+  KENYA_MPESA_BUY_GOODS_USSD,
+} from "@/lib/server/admin-payment-config"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 
 /** Public payment rails for Add Funds (Level-5 admin receive). */
@@ -31,12 +36,14 @@ export async function GET(request: Request) {
       .toUpperCase()
       .slice(0, 2)
     const ugandaAirtelEligible = isUgandaAdminAirtelEligible(fundingCountry)
+    const kenyaMpesaTillEligible = isKenyaAdminMpesaEligible(fundingCountry)
 
     return NextResponse.json({
       fundingCountryCode: fundingCountry.length === 2 ? fundingCountry : null,
       rails: {
         globalCrypto: true,
         ugandaAirtel: ugandaAirtelEligible,
+        kenyaMpesaTill: kenyaMpesaTillEligible,
         localMobile: true,
       },
       globalCrypto: {
@@ -57,6 +64,14 @@ export async function GET(request: Request) {
             ussdPrefix: UGANDA_AIRTEL_USSD_PREFIX,
             referenceHint: "Use your login email as the payment reference.",
             routedTo: "level_5_admin",
+          }
+        : null,
+      kenyaMpesaTill: kenyaMpesaTillEligible
+        ? {
+            tillNumber: KENYA_MPESA_BUY_GOODS_TILL,
+            businessName: KENYA_MPESA_BUY_GOODS_BUSINESS,
+            ussdPrefix: KENYA_MPESA_BUY_GOODS_USSD,
+            referenceHint: "Paste your M-PESA transaction code after payment.",
           }
         : null,
       maxRetailersOnPage: MAX_RETAILERS_ON_PAYMENT_PAGE,
