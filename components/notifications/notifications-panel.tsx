@@ -91,8 +91,8 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
+        <div className="shrink-0 border-b border-border bg-card">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12">
                 <Bell className="h-4 w-4 text-primary" aria-hidden />
@@ -122,33 +122,35 @@ export function NotificationsPanel({ isOpen, onClose, onNavigate }: Props) {
               </button>
             </div>
           </div>
+          <div className="border-t border-border/60 px-3 pb-3 pt-2">
+            <NotificationInboxFilters
+              filter={filter}
+              onFilterChange={setFilter}
+              search={search}
+              onSearchChange={setSearch}
+              searchPending={false}
+              t={t}
+            />
+          </div>
         </div>
 
         <div className="notification-list min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-3 py-2">
-          <NotificationInboxFilters
-            filter={filter}
-            onFilterChange={setFilter}
-            search={search}
-            onSearchChange={setSearch}
-            searchPending={false}
-            t={t}
-            className="mb-2"
-          />
           {filtered.length === 0 ? (
             <NotificationInboxEmpty
               message={t("notifications.center.empty")}
               hint={search.trim() ? t("notifications.inbox.searchEmptyHint") : undefined}
             />
           ) : (
-            <ul className="space-y-2 pb-3">
+            <ul className="space-y-2 pb-3 pt-1">
               {filtered.map((n) => {
                 const p = presentedMap.get(n.id)!
                 return (
-                  <li key={n.id}>
-                    <div className={cn(INBOX_CARD, "overflow-hidden")}>
+                  <li key={n.id} className="isolate">
+                    <div className={cn(INBOX_CARD, "overflow-hidden shadow-none")}>
                       <NotificationInboxRow
                         item={n}
                         presented={p}
+                        density="panel"
                         onOpen={() => {
                           setSelected(n)
                           markRead(n.id)

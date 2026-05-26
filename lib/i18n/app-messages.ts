@@ -86,6 +86,7 @@ const en: Record<string, string> = {
   "header.archivedEmpty": "Nothing saved for later.",
   "header.archivedEmptyHint": "Use Save for later on any message to keep it here.",
 
+  "notifications.center.title": "Alerts",
   "notifications.center.subtitle": "Account activity inbox",
   "notifications.inbox.filterAll": "All",
   "notifications.inbox.filterUnread": "Unread",
@@ -178,7 +179,7 @@ const en: Record<string, string> = {
   "settings.regionHint": "Local funding routes and regional defaults.",
   "settings.regionApplySuggestion": "Apply suggested language & display currency",
   "settings.regionSaved": "Country saved for funding match.",
-  "common.missingTranslation": "Translation unavailable.",
+  "common.missingTranslation": "",
   ...customerNotificationMessageEn,
   ...financialStatusEn,
   ...fundingWithdrawalEn,

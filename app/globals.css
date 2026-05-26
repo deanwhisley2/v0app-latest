@@ -1053,13 +1053,17 @@ html:not(.nexus-pwa-ready) body {
   }
 
   html.nexus-mobile-low-gpu .nexus-notification-panel {
-    contain: layout paint;
     backface-visibility: hidden;
     transform: none !important;
     will-change: auto !important;
     background-color: var(--card) !important;
     opacity: 1 !important;
     box-shadow: none !important;
+  }
+
+  html.nexus-mobile-low-gpu .nexus-notification-panel .notification-inbox-row {
+    transition: none !important;
+    transform: none !important;
   }
 
   html.nexus-mobile-low-gpu .nexus-notification-portal.nexus-notification-panel,

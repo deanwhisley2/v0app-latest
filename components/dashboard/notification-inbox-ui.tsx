@@ -152,22 +152,35 @@ export const NotificationInboxRow = memo(function NotificationInboxRow({
   presented,
   onOpen,
   className,
+  density = "default",
 }: {
   item: NexusNotificationItem
   presented: PresentedNotification
   onOpen: () => void
   className?: string
+  /** Panel sheet: flat rows without inset rings (fewer compositor layers on low-GPU Android). */
+  density?: "default" | "panel"
 }) {
   const style = CATEGORY_STYLE[presented.category]
+  const isPanel = density === "panel"
 
   return (
     <button
       type="button"
       onClick={onOpen}
       className={cn(
-        "flex w-full gap-2.5 px-3 py-3 text-start transition-[background,box-shadow,opacity] duration-200 active:bg-muted/30",
-        !item.read && "bg-card ring-1 ring-inset ring-border/80",
-        item.read && "bg-transparent opacity-[0.82] hover:bg-muted/15 hover:opacity-95",
+        "notification-inbox-row flex w-full gap-2.5 px-3 py-3 text-start",
+        isPanel
+          ? cn(
+              "touch-manipulation active:bg-muted/25",
+              !item.read && "bg-muted/20",
+              item.read && "bg-transparent opacity-90",
+            )
+          : cn(
+              "transition-[background,box-shadow,opacity] duration-200 active:bg-muted/30",
+              !item.read && "bg-card ring-1 ring-inset ring-border/80",
+              item.read && "bg-transparent opacity-[0.82] hover:bg-muted/15 hover:opacity-95",
+            ),
         className
       )}
     >

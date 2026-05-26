@@ -1,6 +1,7 @@
 /** French UI overlay — notifications, status, home overview, container copy. */
 export const frNotificationsOverlay: Record<string, string> = {
   "nav.notifications": "Notifications",
+  "notifications.center.title": "Alertes",
   "nav.desk": "Guichet",
 
   "notifications.center.subtitle": "Boîte de réception du compte",

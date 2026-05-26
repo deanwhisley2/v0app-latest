@@ -23,11 +23,6 @@ export function resolveUiString(
     return fromEn
   }
 
-  const pending = canonical["common.missingTranslation"]
-  if (pending != null && String(pending).trim() !== "") {
-    return pending
-  }
-
   return humanizeKeyFallback(trimmedKey)
 }
 
