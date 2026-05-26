@@ -96,10 +96,8 @@ import {
 } from "@/lib/mobile/chrome-android-safe-mode"
 import { HistoryCenterScreen } from "@/components/dashboard/history-center-screen"
 import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
-import {
-  fetchSecurityNeedsSetupPassive,
-  fetchSecurityProfilePassive,
-} from "@/lib/nexus-security-profile-client"
+import { fetchSecurityProfileForAction, fetchSecurityProfilePassive } from "@/lib/nexus-security-profile-client"
+import { loadWithdrawReadiness } from "@/lib/client/withdraw-readiness"
 import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -381,6 +379,8 @@ export function DashboardPageInner() {
   const supportThreadUrlParsedRef = useRef(false)
   const [chatHubFocus, setChatHubFocus] = useState<"ai" | "support" | null>(null)
   const [securityGateOpen, setSecurityGateOpen] = useState(false)
+  const [securityGateDetail, setSecurityGateDetail] = useState<string | null>(null)
+  const [fundModalError, setFundModalError] = useState<string | null>(null)
   const [withdrawPayoutProfile, setWithdrawPayoutProfile] = useState<PublicSecurityProfile | null>(null)
   const [selectedWithdrawPayoutId, setSelectedWithdrawPayoutId] = useState<string | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
@@ -2060,37 +2060,49 @@ export function DashboardPageInner() {
   const tryOpenFundModal = useCallback(
     async (mode: "add" | "withdraw") => {
       if (isGuestSession) return
+      setFundModalError(null)
       const {
         data: { session },
       } = await supabase.auth.getSession()
       const token = session?.access_token
-      if (!token) return
-      const { needsSetup } = await fetchSecurityNeedsSetupPassive(token)
-      if (needsSetup) {
-        setSecurityGateOpen(true)
+      if (!token) {
+        showToast(t("withdrawal.error.sessionExpired"), "error")
         return
       }
       if (mode === "withdraw") {
-        const { profile } = await fetchSecurityProfilePassive(token)
-        if (!profile?.payoutOptions?.length) {
-          setSecurityGateOpen(true)
+        const readiness = await loadWithdrawReadiness(token)
+        if (!readiness.ok) {
+          setSecurityGateDetail(readiness.message)
+          if (readiness.showSecurityGate) setSecurityGateOpen(true)
+          setFundModalError(readiness.message)
+          showToast(readiness.message, "error")
           return
         }
-        setWithdrawPayoutProfile(profile)
-        setSelectedWithdrawPayoutId(profile.payoutOptions[0]?.id ?? null)
+        setWithdrawPayoutProfile(readiness.profile)
+        setSelectedWithdrawPayoutId(readiness.profile.payoutOptions[0]?.id ?? null)
       } else {
+        const { profile, error } = await fetchSecurityProfileForAction(token)
+        if (!profile || profile.needsSetup) {
+          const msg =
+            error ??
+            "Set your Nexus Security PIN and at least one mobile money number before adding funds."
+          setSecurityGateDetail(msg)
+          setSecurityGateOpen(true)
+          showToast(msg, "error")
+          return
+        }
         setWithdrawPayoutProfile(null)
         setSelectedWithdrawPayoutId(null)
-        const { profile } = await fetchSecurityProfilePassive(token)
-        setFundPayerProfile(profile ?? null)
-        const hasDeposit = Boolean(profile?.depositNumberMasked)
-        const hasWithdrawal = Boolean(profile?.withdrawalNumberMasked)
+        setFundPayerProfile(profile)
+        const hasDeposit = Boolean(profile.depositNumberMasked)
+        const hasWithdrawal = Boolean(profile.withdrawalNumberMasked)
         setFundPayerSource(hasDeposit ? "deposit_line" : hasWithdrawal ? "withdrawal_line" : "manual")
         setFundPayerName("")
         setFundPayerPhone("")
       }
       setShowFundModal(mode)
       setFundAmount("")
+      setFundModalError(null)
       if (mode === "add") {
         setL1FundSource("crypto")
         setQualifiedRetailers([])
@@ -2105,8 +2117,42 @@ export function DashboardPageInner() {
         setFundPaymentProofPreview(null)
       }
     },
-    [isGuestSession],
+    [isGuestSession, showToast, t],
   )
+
+  const withdrawSubmitBlockedReason = useMemo(() => {
+    if (showFundModal !== "withdraw" || isFundProcessing) return null
+    if (!fundAmount.trim() || parseCustomerLocalAmountInput(fundAmount) <= 0) {
+      return t("withdrawal.error.enterAmount")
+    }
+    if (!withdrawPayoutProfile?.payoutOptions?.length) {
+      return "Add deposit & withdrawal details in Settings before you can withdraw."
+    }
+    if (!selectedWithdrawPayoutId) {
+      return "Select a registered payout method below."
+    }
+    if (withdrawalEligibility?.cooldownActive) {
+      return t("withdrawal.error.cooldownActive").replace(
+        "{{hours}}",
+        String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
+      )
+    }
+    if (
+      withdrawalEligibility &&
+      withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd
+    ) {
+      return t("withdrawal.error.nothingWithdrawable")
+    }
+    return null
+  }, [
+    showFundModal,
+    isFundProcessing,
+    fundAmount,
+    withdrawPayoutProfile,
+    selectedWithdrawPayoutId,
+    withdrawalEligibility,
+    t,
+  ])
 
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseCustomerLocalAmountInput(fundAmount)
@@ -2147,12 +2193,40 @@ export function DashboardPageInner() {
       return
     }
 
+    if (showFundModal === "withdraw" && withdrawSubmitBlockedReason) {
+      setFundModalError(withdrawSubmitBlockedReason)
+      if (
+        !withdrawPayoutProfile?.payoutOptions?.length ||
+        !withdrawPayoutProfile?.hasSecurityCode ||
+        !withdrawPayoutProfile?.hasTransactionNumber
+      ) {
+        setSecurityGateDetail(withdrawSubmitBlockedReason)
+        setSecurityGateOpen(true)
+      }
+      showToast(withdrawSubmitBlockedReason, "error")
+      return
+    }
+
     setIsFundProcessing(true)
+    setFundModalError(null)
     ;(async () => {
       try {
         const refreshed = await refreshLiveBalanceBeforeAction()
         if (!refreshed.ok) throw new Error(refreshed.error)
         const token = refreshed.token
+
+        if (showFundModal === "withdraw") {
+          const readiness = await loadWithdrawReadiness(token)
+          if (!readiness.ok) {
+            setSecurityGateDetail(readiness.message)
+            if (readiness.showSecurityGate) setSecurityGateOpen(true)
+            throw new Error(readiness.message)
+          }
+          setWithdrawPayoutProfile(readiness.profile)
+          if (!selectedWithdrawPayoutId && readiness.profile.payoutOptions[0]?.id) {
+            setSelectedWithdrawPayoutId(readiness.profile.payoutOptions[0].id)
+          }
+        }
         const liveMain = refreshed.balance.available_balance
         const liveRetail = refreshed.balance.retail_balance ?? retailBalance
         const liveWithdrawPending =
@@ -2427,7 +2501,16 @@ export function DashboardPageInner() {
 
         throw new Error(t("funding.error.unsupportedAction"))
       } catch (e) {
-        showToast(e instanceof Error ? e.message : t("funding.error.fundActionFailed"), "error")
+        const msg = e instanceof Error ? e.message : t("funding.error.fundActionFailed")
+        setFundModalError(msg)
+        showToast(msg, "error")
+        if (
+          showFundModal === "withdraw" &&
+          /security|payout|mobile money|settings/i.test(msg)
+        ) {
+          setSecurityGateDetail(msg)
+          setSecurityGateOpen(true)
+        }
       } finally {
         setIsFundProcessing(false)
       }
@@ -2455,6 +2538,9 @@ export function DashboardPageInner() {
     formatUserMoney,
     withdrawalPendingBalance,
     withdrawalEligibility,
+    withdrawPayoutProfile,
+    withdrawSubmitBlockedReason,
+    selectedWithdrawPayoutId,
     containerLockedUsd,
     currency,
     localMmWizardStep,
@@ -2720,7 +2806,10 @@ export function DashboardPageInner() {
               </h2>
               <button
                 type="button"
-                onClick={() => setShowFundModal(null)}
+                onClick={() => {
+                  setShowFundModal(null)
+                  setFundModalError(null)
+                }}
                 aria-label={t("funding.button.close")}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 max-sm:h-11 max-sm:w-11 max-sm:bg-muted/90"
               >
@@ -3619,6 +3708,47 @@ export function DashboardPageInner() {
             )}
 
             <div className="flex flex-col gap-1.5 sm:gap-2">
+              {showFundModal === "withdraw" &&
+              !withdrawPayoutProfile?.payoutOptions?.length &&
+              !isFundProcessing ? (
+                <div
+                  className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100"
+                  role="status"
+                >
+                  <p className="font-medium">Withdrawal details required</p>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-100/90">
+                    Add your Nexus Security PIN and at least one mobile money number in Settings before withdrawing.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-2 flex min-h-11 w-full touch-manipulation items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground"
+                    onClick={() => {
+                      setSecurityGateDetail(
+                        "Set your 6-digit Nexus Security PIN and register a mobile money number to withdraw.",
+                      )
+                      setSecurityGateOpen(true)
+                    }}
+                  >
+                    Update details now
+                  </button>
+                </div>
+              ) : null}
+              {fundModalError ? (
+                <p
+                  className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                  role="alert"
+                >
+                  {fundModalError}
+                </p>
+              ) : null}
+              {showFundModal === "withdraw" &&
+              withdrawSubmitBlockedReason &&
+              !fundModalError &&
+              !isFundProcessing ? (
+                <p className="text-xs leading-relaxed text-muted-foreground" role="status">
+                  {withdrawSubmitBlockedReason}
+                </p>
+              ) : null}
               {showFundModal === "add" &&
               customerRetailFunding &&
               l1FundSource === "local" &&
@@ -3865,9 +3995,14 @@ export function DashboardPageInner() {
 
       <SecuritySetupGateDialog
         open={securityGateOpen}
-        onClose={() => setSecurityGateOpen(false)}
+        detail={securityGateDetail}
+        onClose={() => {
+          setSecurityGateOpen(false)
+          setSecurityGateDetail(null)
+        }}
         onUpdateDetailsNow={() => {
           setSecurityGateOpen(false)
+          setSecurityGateDetail(null)
           setChatHubFocus(null)
           setSupportThreadFocusId(null)
           router.push("/settings/deposit-withdraw")

@@ -8,10 +8,12 @@ type Props = {
   open: boolean
   onClose: () => void
   onUpdateDetailsNow: () => void
+  /** Shown when withdraw/deposit was blocked for a specific reason. */
+  detail?: string | null
 }
 
 /** Lightweight funding gate — no fullscreen blockers or route loops. */
-export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow }: Props) {
+export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow, detail }: Props) {
   if (!open) return null
   return (
     <div
@@ -31,6 +33,11 @@ export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow }: P
         <h2 id="security-gate-title" className="text-base font-semibold text-foreground">
           Transaction details required
         </h2>
+        {detail ? (
+          <p className="mt-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm leading-relaxed text-amber-100">
+            {detail}
+          </p>
+        ) : null}
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Please update your deposit & withdrawal details to continue. You need your 6-digit Nexus Security PIN and at
           least one registered mobile money number.

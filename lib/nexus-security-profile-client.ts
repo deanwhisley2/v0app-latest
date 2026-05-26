@@ -99,7 +99,8 @@ export async function fetchSecurityNeedsSetupPassive(
     if (!result.ok) {
       const cached = readCachedNeedsSetup()
       return {
-        needsSetup: cached ?? false,
+        // Fail closed for funding/withdraw — stale "false" cache blocked users with no feedback.
+        needsSetup: cached ?? true,
         error: result.error,
       }
     }
@@ -113,10 +114,15 @@ export async function fetchSecurityNeedsSetupPassive(
   return inflightStatus
 }
 
+export type SecurityProfileFetchResult = {
+  profile: PublicSecurityProfile | null
+  error: string | null
+}
+
 /** Full profile for Settings security screens only. */
 export async function fetchSecurityProfilePassive(
   token: string,
-): Promise<{ profile: PublicSecurityProfile | null; error: string | null }> {
+): Promise<SecurityProfileFetchResult> {
   if (inflightProfile) return inflightProfile
 
   inflightProfile = (async () => {
@@ -132,4 +138,17 @@ export async function fetchSecurityProfilePassive(
   })
 
   return inflightProfile
+}
+
+/** Funding / withdraw gates — always fresh (no session cache for needsSetup). */
+export async function fetchSecurityProfileForAction(
+  token: string,
+): Promise<SecurityProfileFetchResult> {
+  const result = await fetchJson<{ profile?: PublicSecurityProfile }>(token, "profile_action")
+  if (!result.ok) {
+    return { profile: null, error: result.error }
+  }
+  const profile = result.data.profile ?? null
+  if (profile) writeCachedNeedsSetup(profile.needsSetup)
+  return { profile, error: null }
 }

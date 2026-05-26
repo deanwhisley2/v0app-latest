@@ -22,7 +22,7 @@ export function ToastNotification({ message, type, isVisible, onClose }: ToastPr
   if (!isVisible) return null
 
   return (
-    <div className="nexus-toast-stable fixed bottom-20 left-1/2 z-50 max-md:left-4 max-md:right-4 max-md:translate-x-0 md:bottom-6 md:-translate-x-1/2">
+    <div className="nexus-toast-stable fixed bottom-20 left-1/2 z-[130] max-md:left-4 max-md:right-4 max-md:translate-x-0 md:bottom-6 md:-translate-x-1/2">
       <div
         className={`flex items-center gap-3 rounded-xl border border-border px-5 py-3 font-semibold max-md:shadow-none md:rounded-full md:shadow-lg ${
           type === "success"
