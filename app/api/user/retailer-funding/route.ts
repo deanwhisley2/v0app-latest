@@ -29,6 +29,7 @@ import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
 import { buildFundingSubmittedCustomerCopy } from "@/lib/notifications/customer-notification-language"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { customerNotifyForUser } from "@/lib/server/customer-ui-language"
+import { getOrCreateSecurityProfile } from "@/lib/server/user-security-profile-service"
 import { corridorFiatForCountryIso2, isSupportedFiat } from "@/lib/currency-display"
 import { dailyFxQuoteExpiresAt, getDailyLocalPerUsd, localToUsdWithDailyRate } from "@/lib/server/daily-fx-rate"
 import { auditFundingConversion, persistFundingAudit } from "@/lib/server/funding-math-audit"
@@ -117,6 +118,7 @@ export async function POST(request: Request) {
       fundingCountryCode?: string
       payerDisplayName?: string
       payerPhone?: string
+      payerSource?: "deposit_line" | "withdrawal_line"
       paymentProofPath?: string
       paymentProofDataUrl?: string
       paymentRotationLineId?: string
@@ -132,6 +134,7 @@ export async function POST(request: Request) {
     const payerDisplayName =
       typeof body.payerDisplayName === "string" ? body.payerDisplayName.trim().slice(0, 120) || null : null
     const payerPhone = typeof body.payerPhone === "string" ? body.payerPhone.trim().slice(0, 32) || null : null
+    const payerSource = body.payerSource === "deposit_line" || body.payerSource === "withdrawal_line" ? body.payerSource : null
     const fundChannelRaw = typeof body.fundChannel === "string" ? body.fundChannel.trim() : "local_mobile"
     const fundChannel = isAdminDirectFundChannel(fundChannelRaw)
       ? fundChannelRaw
@@ -178,14 +181,27 @@ export async function POST(request: Request) {
         )
       }
     }
-    if (fundChannel === "local_mobile" && (!payerDisplayName || !payerPhone)) {
+    const admin = createAdminClient()
+
+    const resolvePayer = async (): Promise<{ name: string | null; phone: string | null }> => {
+      if (payerDisplayName && payerPhone) return { name: payerDisplayName, phone: payerPhone }
+      if (!payerSource) return { name: payerDisplayName, phone: payerPhone }
+      const sec = await getOrCreateSecurityProfile(admin, user.id)
+      if (payerSource === "deposit_line") {
+        return { name: sec.deposit_account_names?.trim() || null, phone: sec.deposit_number?.trim() || null }
+      }
+      return { name: sec.withdrawal_account_names?.trim() || null, phone: sec.withdrawal_number?.trim() || null }
+    }
+
+    const payerResolved = fundChannel === "local_mobile" ? await resolvePayer() : { name: payerDisplayName, phone: payerPhone }
+    const payerNameFinal = payerResolved.name
+    const payerPhoneFinal = payerResolved.phone
+    if (fundChannel === "local_mobile" && (!payerNameFinal || !payerPhoneFinal)) {
       return NextResponse.json(
         { error: "payerDisplayName and payerPhone are required for local mobile funding." },
         { status: 400 }
       )
     }
-
-    const admin = createAdminClient()
 
     if (countryUpdate.length === 2) {
       await admin.from("profiles").update({ funding_country_code: countryUpdate }).eq("id", user.id)
@@ -473,8 +489,8 @@ export async function POST(request: Request) {
         p_note: note ?? "",
         p_fund_channel: "local_mobile",
         p_mobile_network: mobileNetwork ?? "",
-        p_payer_display_name: payerDisplayName ?? "",
-        p_payer_phone: payerPhone ?? "",
+        p_payer_display_name: payerNameFinal ?? "",
+        p_payer_phone: payerPhoneFinal ?? "",
         p_retailer_response_deadline_at: retailerResponseDeadlineAt,
         p_escalated_to_admin: false,
         p_fx_quote_expires_at: fxQuoteExpiresAt,
@@ -576,8 +592,8 @@ export async function POST(request: Request) {
           status: "pending",
           fund_channel: fundChannel,
           mobile_network: isAdminDirectFundChannel(fundChannel) ? adminDirectNetwork : mobileNetwork,
-          payer_display_name: payerDisplayName,
-          payer_phone: payerPhone,
+          payer_display_name: payerNameFinal,
+          payer_phone: payerPhoneFinal,
           payment_proof_path: paymentProofPath,
           retailer_response_deadline_at: retailerResponseDeadlineAt,
           escalated_to_admin: Boolean(

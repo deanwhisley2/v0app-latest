@@ -415,6 +415,8 @@ export function DashboardPageInner() {
   const [fundNote, setFundNote] = useState("")
   const [fundPayerName, setFundPayerName] = useState("")
   const [fundPayerPhone, setFundPayerPhone] = useState("")
+  const [fundPayerSource, setFundPayerSource] = useState<"manual" | "deposit_line" | "withdrawal_line">("manual")
+  const [fundPayerProfile, setFundPayerProfile] = useState<PublicSecurityProfile | null>(null)
   const [selectedRetailerId, setSelectedRetailerId] = useState("")
   const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
@@ -1582,6 +1584,29 @@ export function DashboardPageInner() {
   }, [authLoading])
 
   useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return
+    try {
+      const u = new URL(window.location.href)
+      const rawView = (u.searchParams.get("view") ?? "").trim()
+      if (!rawView) return
+      if (
+        rawView === "deposit-withdraw" ||
+        rawView === "notifications" ||
+        rawView === "exchanges" ||
+        rawView === "about"
+      ) {
+        setSettingsRequestedView(rawView as SettingsView)
+        setTabProgrammatic("settings", "settings_view_url")
+      }
+      u.searchParams.delete("view")
+      const qs = u.searchParams.toString()
+      window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
+    } catch {
+      /* ignore */
+    }
+  }, [authLoading, setTabProgrammatic])
+
+  useEffect(() => {
     const forceCleanTab = () => {
       reportClientDiagnostic({
         kind: "clean_boot_bfcache",
@@ -1833,7 +1858,7 @@ export function DashboardPageInner() {
       showToast("Choose your payment network first (MTN, Airtel, M-Pesa, …).", "error")
       return
     }
-    if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
+    if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
       showToast("Enter sender name and sending mobile number.", "error")
       return
     }
@@ -2035,6 +2060,13 @@ export function DashboardPageInner() {
       } else {
         setWithdrawPayoutProfile(null)
         setSelectedWithdrawPayoutId(null)
+        const { profile } = await fetchSecurityProfilePassive(token)
+        setFundPayerProfile(profile ?? null)
+        const hasDeposit = Boolean(profile?.depositNumberMasked)
+        const hasWithdrawal = Boolean(profile?.withdrawalNumberMasked)
+        setFundPayerSource(hasDeposit ? "deposit_line" : hasWithdrawal ? "withdrawal_line" : "manual")
+        setFundPayerName("")
+        setFundPayerPhone("")
       }
       setShowFundModal(mode)
       setFundAmount("")
@@ -2045,6 +2077,8 @@ export function DashboardPageInner() {
         setFundTxReference("")
         setFundNote("")
         setFundMobileNetwork("")
+        setFundPayerName("")
+        setFundPayerPhone("")
         setCryptoFundingMeta(null)
         setFundPaymentProofDataUrl(null)
         setFundPaymentProofPreview(null)
@@ -2215,7 +2249,7 @@ export function DashboardPageInner() {
             }
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
-            if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
+            if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
               throw new Error(t("funding.error.senderIdentity"))
             }
             const airtelFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "UGX"
@@ -2228,8 +2262,9 @@ export function DashboardPageInner() {
                 inputCurrency: airtelFiat,
                 txReference: fundTxReference.trim(),
                 fundChannel: "admin_airtel_ug",
-                payerDisplayName: fundPayerName.trim(),
-                payerPhone: fundPayerPhone.trim(),
+                ...(fundPayerSource === "manual"
+                  ? { payerDisplayName: fundPayerName.trim(), payerPhone: fundPayerPhone.trim() }
+                  : { payerSource: fundPayerSource }),
                 fundingCountryCode: addFundsCorridorCountry,
                 note: fundNote.trim() || null,
               }),
@@ -2260,7 +2295,7 @@ export function DashboardPageInner() {
           if ((!localMmSelectedDesk && !selectedOfficialRouteId) || !fundTxReference.trim()) {
             throw new Error(t("funding.error.pickDeskAndTxRef"))
           }
-          if (!fundPayerName.trim() || !fundPayerPhone.trim()) {
+          if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
             throw new Error(t("funding.error.senderIdentity"))
           }
           const ccSave = addFundsCorridorCountry
@@ -2286,8 +2321,9 @@ export function DashboardPageInner() {
               mobileNetwork: fundMobileNetwork || null,
               fundChannel: "local_mobile",
               fundingCountryCode: ccSave.length === 2 ? ccSave : undefined,
-              payerDisplayName: fundPayerName.trim(),
-              payerPhone: fundPayerPhone.trim(),
+              ...(fundPayerSource === "manual"
+                ? { payerDisplayName: fundPayerName.trim(), payerPhone: fundPayerPhone.trim() }
+                : { payerSource: fundPayerSource }),
               ...(localMmSelectedDesk?.payment_rotation_line_id && localMmSelectedDesk?.payment_rotation_pool_id
                 ? {
                     paymentRotationLineId: localMmSelectedDesk.payment_rotation_line_id,
@@ -2679,6 +2715,42 @@ export function DashboardPageInner() {
                       </span>
                     </div>
                     <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.local.step1Body")}</p>
+                    {fundPayerProfile?.depositNumberMasked || fundPayerProfile?.withdrawalNumberMasked ? (
+                      <div className="rounded-lg border border-border/70 bg-background/60 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          Your registered sender
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          <label className="flex cursor-pointer items-start gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="payerSource"
+                              checked={fundPayerSource !== "manual"}
+                              onChange={() =>
+                                setFundPayerSource(
+                                  fundPayerProfile?.depositNumberMasked ? "deposit_line" : "withdrawal_line",
+                                )
+                              }
+                            />
+                            <span className="text-xs">
+                              Use registered number{" "}
+                              <span className="font-medium text-foreground">
+                                {fundPayerProfile?.depositNumberMasked ?? fundPayerProfile?.withdrawalNumberMasked}
+                              </span>
+                            </span>
+                          </label>
+                          <label className="flex cursor-pointer items-start gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="payerSource"
+                              checked={fundPayerSource === "manual"}
+                              onChange={() => setFundPayerSource("manual")}
+                            />
+                            <span className="text-xs text-muted-foreground">Use another number (one-time)</span>
+                          </label>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="space-y-2.5">
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
@@ -2752,6 +2824,7 @@ export function DashboardPageInner() {
                           onChange={(e) => setFundPayerPhone(e.target.value)}
                           placeholder={t("funding.placeholder.phoneExample")}
                           autoComplete="tel"
+                          disabled={fundPayerSource !== "manual"}
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         />
                       </div>
@@ -2765,6 +2838,7 @@ export function DashboardPageInner() {
                           onChange={(e) => setFundPayerName(e.target.value)}
                           placeholder={t("funding.placeholder.fullName")}
                           autoComplete="name"
+                          disabled={fundPayerSource !== "manual"}
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         />
                       </div>
@@ -3719,7 +3793,17 @@ export function DashboardPageInner() {
         onClose={hideToast}
       />
 
-      <SecuritySetupGateDialog open={securityGateOpen} onClose={() => setSecurityGateOpen(false)} />
+      <SecuritySetupGateDialog
+        open={securityGateOpen}
+        onClose={() => setSecurityGateOpen(false)}
+        onUpdateDetailsNow={() => {
+          setSecurityGateOpen(false)
+          setChatHubFocus(null)
+          setSupportThreadFocusId(null)
+          setSettingsRequestedView("deposit-withdraw")
+          setTabProgrammatic("settings", "security_gate_update_details")
+        }}
+      />
 
     </div>
   )

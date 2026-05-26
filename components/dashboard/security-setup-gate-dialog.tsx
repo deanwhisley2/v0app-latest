@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 type Props = {
   open: boolean
   onClose: () => void
+  onUpdateDetailsNow: () => void
 }
 
 /** Lightweight funding gate — no fullscreen blockers or route loops. */
-export function SecuritySetupGateDialog({ open, onClose }: Props) {
+export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow }: Props) {
   if (!open) return null
   return (
     <div
@@ -31,14 +32,12 @@ export function SecuritySetupGateDialog({ open, onClose }: Props) {
           Transaction details required
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Please update your transaction details in Security to access funding features. You need your 6-digit Nexus
-          Security PIN and at least one registered mobile money number.
+          Please update your deposit & withdrawal details to continue. You need your 6-digit Nexus Security PIN and at
+          least one registered mobile money number.
         </p>
         <div className="mt-5 flex flex-col gap-2">
-          <Button asChild className="w-full touch-manipulation">
-            <Link href="/dashboard/security" onClick={onClose}>
-              Open Security & Recovery
-            </Link>
+          <Button type="button" className="w-full touch-manipulation" onClick={() => onUpdateDetailsNow()}>
+            Update Details Now
           </Button>
           <Button type="button" variant="outline" className="w-full touch-manipulation" onClick={onClose}>
             Not now

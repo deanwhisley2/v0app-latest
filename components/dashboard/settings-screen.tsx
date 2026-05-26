@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { ExchangeBinding } from "./exchange-binding"
 import { DepositWithdraw } from "./deposit-withdraw"
+import { DepositWithdrawDetailsPanel } from "@/components/dashboard/deposit-withdraw-details-panel"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -424,15 +425,7 @@ export function SettingsScreen({
       <div className="space-y-4">
         {renderBackButton()}
         <h2 className="text-lg font-semibold">Deposit & Withdraw</h2>
-        <DepositWithdraw
-          securityLevel={securityLevel}
-          balance={mainBalance}
-          showBalanceBanner={false}
-          onTransaction={(type, amount, method) => {
-            console.log(`[v0] ${type} ${amount} via ${method}`)
-          }}
-          onRequireSecurityUpgrade={() => router.push("/dashboard/security")}
-        />
+        <DepositWithdrawDetailsPanel />
       </div>
     )
   }

@@ -23,6 +23,7 @@ import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-mo
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 const REMEMBER_KEY = "nexus_auth_remember_id"
+const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? ""
 
 const LOGIN_JOELIN_CHIPS = [
   { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
@@ -56,6 +57,7 @@ export default function LoginForm() {
 
   const [resetSuccess, setResetSuccess] = useState(false)
   const [sessionCleared, setSessionCleared] = useState(false)
+  const [android, setAndroid] = useState(false)
 
   useEffect(() => {
     try {
@@ -64,6 +66,14 @@ export default function LoginForm() {
       setSessionCleared(params.get("reason") === "session_cleared")
     } catch {
       /* ignore */
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      setAndroid(/android/i.test(navigator.userAgent))
+    } catch {
+      setAndroid(false)
     }
   }, [])
 
@@ -306,6 +316,20 @@ export default function LoginForm() {
             <Fingerprint className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
             {t.login.biometricSoon}
           </Button>
+
+          {android && APK_URL ? (
+            <div className="rounded-2xl border border-border bg-muted/15 p-4">
+              <p className="text-sm font-semibold text-foreground">Android app</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Prefer the app experience? Download the Nexus Pro Android package after you sign in.
+              </p>
+              <Button asChild className="mt-3 w-full min-h-11 touch-manipulation">
+                <a href={APK_URL} target="_blank" rel="noreferrer">
+                  Download Android App
+                </a>
+              </Button>
+            </div>
+          ) : null}
         </form>
 
         {isGuestLoginEnabled() ? (
