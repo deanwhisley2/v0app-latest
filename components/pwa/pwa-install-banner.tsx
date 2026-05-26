@@ -56,7 +56,7 @@ export function PwaInstallBanner() {
       return
     }
     let cancelled = false
-    const delay = isAndroidChromeBrowser() ? 800 : 400
+    const delay = isAndroidChromeBrowser() ? 1200 : 600
     const t = window.setTimeout(() => {
       if (!cancelled) {
         setReady(true)

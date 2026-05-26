@@ -20,6 +20,7 @@ import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import type { OperationalPreferencesV1 } from "@/lib/operational-preferences-types"
 import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
+import { mapCustomerNotification } from "@/lib/notifications/notification-mapper"
 import { supabase } from "@/lib/supabaseClient"
 import {
   isServerNotificationId,
@@ -110,11 +111,17 @@ function mapServerAccountRow(r: {
     ? sanitizeCustomerNotificationText(rawDetail, fallbackDetail)
     : undefined
   const fallbackMsg = "Your account was updated."
+  const mapped = mapCustomerNotification({
+    notificationType: r.notification_type,
+    title: r.title,
+    body: r.body,
+    metadata: r.metadata,
+  })
   return {
     id: r.id,
     type,
-    title: sanitizeCustomerNotificationText(r.title, fallbackMsg),
-    message: sanitizeCustomerNotificationText(r.body, fallbackMsg),
+    title: sanitizeCustomerNotificationText(mapped?.title ?? r.title, fallbackMsg),
+    message: sanitizeCustomerNotificationText(mapped?.body ?? r.body, fallbackMsg),
     timestamp: r.created_at,
     read: !!r.read_at,
     archived: !!r.user_archived_at,

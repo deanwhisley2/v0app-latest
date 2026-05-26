@@ -2429,9 +2429,11 @@ export function DashboardPageInner() {
           />
         }
       />
-      <div className="fixed right-2 top-2 z-[60] md:right-4 md:top-4">
-        <DashboardWorkspaceRefresh />
-      </div>
+      {operationalWorkspace ? (
+        <div className="fixed right-2 top-2 z-[60] md:right-4 md:top-4">
+          <DashboardWorkspaceRefresh />
+        </div>
+      ) : null}
 
       <div className="hidden md:block">
         <LaunchStatusBanner />
