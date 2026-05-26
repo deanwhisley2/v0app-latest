@@ -2,10 +2,11 @@
 
 import dynamic from "next/dynamic"
 import { DashboardBootShell } from "@/components/dashboard/dashboard-boot-shell"
+import { ClientOnly } from "@/components/mobile/client-only"
 
 /**
  * Dashboard is client-only (ssr: false) to prevent Chrome Android hydration hard-failures.
- * The shell matches server HTML; heavy logic loads after mount in dashboard-page-inner.
+ * ClientOnly ensures the first client paint matches the server shell before heavy logic mounts.
  */
 const DashboardPageInner = dynamic(
   () =>
@@ -19,5 +20,9 @@ const DashboardPageInner = dynamic(
 )
 
 export default function DashboardPage() {
-  return <DashboardPageInner />
+  return (
+    <ClientOnly fallback={<DashboardBootShell />} chromeAndroidDelayMs={48}>
+      <DashboardPageInner />
+    </ClientOnly>
+  )
 }

@@ -53,6 +53,19 @@ export function ChromeAndroidSafeBootstrap() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+    reportClientDiagnostic({
+      kind: "chrome_route",
+      message: "route paint",
+      path: pathname ?? window.location.pathname,
+      meta: {
+        readyState: document.readyState,
+        href: window.location.pathname,
+      },
+    })
+  }, [pathname])
+
+  useEffect(() => {
     if (!isChromeAndroidSafeModeActive()) return
     renderCountRef.current += 1
     if (!hydratedRef.current) {
@@ -63,6 +76,7 @@ export function ChromeAndroidSafeBootstrap() {
         meta: {
           pathname,
           renderCount: renderCountRef.current,
+          readyState: typeof document !== "undefined" ? document.readyState : null,
         },
       })
       return

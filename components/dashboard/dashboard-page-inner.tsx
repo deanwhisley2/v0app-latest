@@ -65,7 +65,7 @@ import { useDashboardTestimonialNotifs } from "@/hooks/use-dashboard-testimonial
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { DeferredMount } from "@/components/mobile/deferred-mount"
 import { DashboardPanelErrorBoundary } from "@/components/dashboard/dashboard-panel-error-boundary"
-import { CHAT_CHUNK_MOUNT_DELAY_MS } from "@/lib/mobile/chat-mount-policy"
+import { getChatChunkMountDelayMs } from "@/lib/mobile/chat-mount-policy"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
 import {
   buildActivitySnapshot,
@@ -599,7 +599,7 @@ export function DashboardPageInner() {
       setSupportThreadFocusId(null)
       return
     }
-    const t0 = window.setTimeout(() => setChatChunkReady(true), CHAT_CHUNK_MOUNT_DELAY_MS)
+    const t0 = window.setTimeout(() => setChatChunkReady(true), getChatChunkMountDelayMs())
     return () => {
       window.clearTimeout(t0)
       setChatChunkReady(false)
@@ -3641,7 +3641,7 @@ export function DashboardPageInner() {
               panel="Chat"
               onReset={() => {
                 setChatChunkReady(false)
-                window.setTimeout(() => setChatChunkReady(true), CHAT_CHUNK_MOUNT_DELAY_MS)
+                window.setTimeout(() => setChatChunkReady(true), getChatChunkMountDelayMs())
               }}
             >
               <DeferredMount idleMs={80} placeholder={<PanelLoader label="Loading chat…" />}>

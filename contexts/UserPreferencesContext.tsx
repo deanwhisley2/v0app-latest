@@ -44,19 +44,20 @@ const UserPreferencesContext = createContext<UserPreferencesContextValue | undef
 
 export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const [prefs, setPrefs] = useState<UserPreferences>(() => {
-    const stored = typeof window !== "undefined" ? readPreferencesFromStorage() : null
-    return stored ?? { ...DEFAULT_PREFERENCES }
-  })
+  /** Never read localStorage in useState — server and client first paint must match. */
+  const [prefs, setPrefs] = useState<UserPreferences>(() => ({ ...DEFAULT_PREFERENCES }))
+
+  /** Guest / logged-out: hydrate from localStorage after mount only. */
+  useEffect(() => {
+    if (user?.id) return
+    const stored = readPreferencesFromStorage()
+    const base = parsePreferences({ ...DEFAULT_PREFERENCES, ...stored })
+    setPrefs(mergeCustomerPreferencesWithCorridor(base, null))
+  }, [user?.id])
 
   /** Hydrate language/currency/country: profile funding_country_code is authoritative over stale localStorage. */
   useEffect(() => {
-    if (!user?.id) {
-      const stored = readPreferencesFromStorage()
-      const base = parsePreferences({ ...DEFAULT_PREFERENCES, ...stored })
-      setPrefs(mergeCustomerPreferencesWithCorridor(base, null))
-      return
-    }
+    if (!user?.id) return
 
     let cancelled = false
     const fromMeta = preferencesFromUserMetadata(user.user_metadata as Record<string, unknown>)

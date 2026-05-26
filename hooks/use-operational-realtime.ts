@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { isAndroidChromeBrowser } from "@/lib/mobile/chrome-android-safe-mode"
 import { supabase } from "@/lib/supabaseClient"
 
 type Role = "admin" | "retailer_desk" | "trading_user"
@@ -40,7 +41,7 @@ export function useOperationalRealtime(config: OperationalRealtimeConfig): void 
 
     let cancelled = false
     let teardown: (() => void) | undefined
-    const delay = Math.max(0, c.subscribeDelayMs ?? 0)
+    const delay = Math.max(0, c.subscribeDelayMs ?? (isAndroidChromeBrowser() ? 300 : 0))
     const startTimer = window.setTimeout(() => {
       if (cancelled) return
       const uid = cfgRef.current.userId

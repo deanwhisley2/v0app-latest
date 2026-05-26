@@ -54,11 +54,18 @@ export default function LoginForm() {
   const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const resetSuccess =
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("reset") === "success"
+  const [resetSuccess, setResetSuccess] = useState(false)
+  const [sessionCleared, setSessionCleared] = useState(false)
 
-  const sessionCleared =
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("reason") === "session_cleared"
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      setResetSuccess(params.get("reset") === "success")
+      setSessionCleared(params.get("reason") === "session_cleared")
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   useEffect(() => {
     try {

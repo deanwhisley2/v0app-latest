@@ -20,6 +20,7 @@ export const DASHBOARD_UNSAFE_SESSION_KEYS = [
   "nexus_settings_requested_view",
   "nexus_chat_restore_v1",
   "nexus_support_thread_focus",
+  "nexus_recent_searches",
 ] as const
 
 export const DASHBOARD_CLEAN_BOOT_RESET_EVENT = "nexus-dashboard-clean-boot-reset"

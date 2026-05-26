@@ -44,6 +44,7 @@ export default function DashboardSecurityPage() {
       <div className="mx-auto w-full max-w-lg px-4 py-6 md:max-w-2xl">
         <Link
           href="/dashboard"
+          prefetch={false}
           className="mb-5 inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />

@@ -10,6 +10,19 @@ export function ProductionErrorReporter() {
   useEffect(() => {
     if (typeof window === "undefined" || isDevLocalOnly()) return
 
+    const originalConsoleError = console.error.bind(console)
+    console.error = (...args: unknown[]) => {
+      const first = typeof args[0] === "string" ? args[0] : String(args[0] ?? "")
+      if (/hydration|did not match|Hydration failed/i.test(first)) {
+        reportClientDiagnostic({
+          kind: "hydration_mismatch",
+          message: first.slice(0, 500),
+          meta: { via: "console.error", detail: args.slice(1, 3) },
+        })
+      }
+      originalConsoleError(...args)
+    }
+
     const onError = (event: ErrorEvent) => {
       const message = String(event.message ?? "unknown").slice(0, 500)
       if (/hydration|did not match|Hydration failed/i.test(message)) {
@@ -53,6 +66,7 @@ export function ProductionErrorReporter() {
     window.addEventListener("error", onError)
     window.addEventListener("unhandledrejection", onRejection)
     return () => {
+      console.error = originalConsoleError
       window.removeEventListener("error", onError)
       window.removeEventListener("unhandledrejection", onRejection)
     }
