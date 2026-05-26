@@ -13,7 +13,7 @@ export function DashboardBootShell() {
       <div className="h-14 border-b border-border/60 bg-card/80" />
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
         <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-        <p className="text-sm text-muted-foreground">Loading workspace…</p>
+        <span className="sr-only">Loading workspace</span>
       </div>
     </div>
   )

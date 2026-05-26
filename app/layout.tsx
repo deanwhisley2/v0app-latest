@@ -20,6 +20,7 @@ import { ScrollLockSafety } from '@/components/mobile/scroll-lock-safety'
 import { BrowserNotificationAlerts } from '@/components/mobile/browser-notification-alerts'
 import { Suspense } from 'react'
 import { MobileNavigationDiagnostics } from '@/components/mobile/mobile-navigation-diagnostics'
+import { PwaInstallBanner } from '@/components/pwa/pwa-install-banner'
 import {
   isMobileNavDiagnosticsEnabled,
   MOBILE_NAV_DIAGNOSTICS_BOOT_SCRIPT,
@@ -194,6 +195,7 @@ export default function RootLayout({
         <ChromeAndroidSafeBootstrap />
         <NativeScrollBootstrap />
         <PwaSafeModeBootstrap />
+        <PwaInstallBanner />
         <Toaster position="top-center" toastOptions={{ duration: 4500 }} />
       </body>
     </html>

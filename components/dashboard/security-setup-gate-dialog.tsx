@@ -28,11 +28,11 @@ export function SecuritySetupGateDialog({ open, onClose }: Props) {
           <Shield className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <h2 id="security-gate-title" className="text-base font-semibold text-foreground">
-          Security setup required
+          Transaction details required
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Complete Security & Recovery setup to continue. You need your 6-digit Nexus Security PIN and at least one
-          registered mobile money number.
+          Please update your transaction details in Security to access funding features. You need your 6-digit Nexus
+          Security PIN and at least one registered mobile money number.
         </p>
         <div className="mt-5 flex flex-col gap-2">
           <Button asChild className="w-full touch-manipulation">

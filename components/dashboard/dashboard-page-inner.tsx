@@ -80,6 +80,7 @@ import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { NexusPushAlertsBootstrap } from "@/components/push/nexus-push-alerts-bootstrap"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
+import { DashboardWorkspaceRefresh } from "@/components/dashboard/dashboard-workspace-refresh"
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
 import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnostics"
 import type { DashboardMainTab } from "@/lib/dashboard-navigation-policy"
@@ -2428,6 +2429,9 @@ export function DashboardPageInner() {
           />
         }
       />
+      <div className="fixed right-2 top-2 z-[60] md:right-4 md:top-4">
+        <DashboardWorkspaceRefresh />
+      </div>
 
       <div className="hidden md:block">
         <LaunchStatusBanner />

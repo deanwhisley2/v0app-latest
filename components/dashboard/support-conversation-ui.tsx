@@ -12,6 +12,7 @@ import {
   type StatusChipTone,
 } from "@/lib/operational-support-institutional"
 import { cn } from "@/lib/utils"
+import { VirtualMessageList } from "@/components/dashboard/virtual-message-list"
 
 export type SupportMessageRow = {
   id: string
@@ -103,50 +104,44 @@ export function SupportMessageTimeline({
 }) {
   return (
     <div className="flex min-h-[200px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/10">
-      <div className="flex-1 space-y-3 overflow-y-auto p-3 touch-pan-y overscroll-contain max-h-[min(420px,52vh)]">
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : messages.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No messages yet.</p>
-        ) : (
-          messages.map((m) => {
-            const isSystem = m.is_system || m.sender_role === "system"
-            const isMine =
-              perspective === "user" ? m.sender_role === "user" : m.sender_role === "admin"
-            return (
+      <VirtualMessageList
+        messages={messages}
+        loading={loading}
+        endRef={endRef}
+        emptyLabel="No messages yet."
+        className="max-h-[min(420px,52vh)]"
+        renderMessage={(m) => {
+          const isSystem = m.is_system || m.sender_role === "system"
+          const isMine = perspective === "user" ? m.sender_role === "user" : m.sender_role === "admin"
+          return (
+            <div
+              className={cn(
+                "flex",
+                isSystem ? "justify-center" : isMine ? "justify-end" : "justify-start",
+              )}
+            >
               <div
-                key={m.id}
                 className={cn(
-                  "flex",
-                  isSystem ? "justify-center" : isMine ? "justify-end" : "justify-start",
+                  "max-w-[92%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+                  isSystem
+                    ? "border border-dashed border-border/70 bg-muted/20 text-center text-xs text-muted-foreground"
+                    : isMine
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-card text-foreground ring-1 ring-border/80",
                 )}
               >
-                <div
-                  className={cn(
-                    "max-w-[92%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                    isSystem
-                      ? "border border-dashed border-border/70 bg-muted/20 text-center text-xs text-muted-foreground"
-                      : isMine
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-card text-foreground ring-1 ring-border/80",
-                  )}
-                >
-                  {!isSystem ? (
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
-                      {senderRoleLabel(m.sender_role)}
-                    </p>
-                  ) : null}
-                  <p className="mb-1 text-[9px] opacity-60">{new Date(m.created_at).toLocaleString()}</p>
-                  {m.body}
-                </div>
+                {!isSystem ? (
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                    {senderRoleLabel(m.sender_role)}
+                  </p>
+                ) : null}
+                <p className="mb-1 text-[9px] opacity-60">{new Date(m.created_at).toLocaleString()}</p>
+                {m.body}
               </div>
-            )
-          })
-        )}
-        {endRef ? <div ref={endRef} /> : null}
-      </div>
+            </div>
+          )
+        }}
+      />
     </div>
   )
 }

@@ -22,10 +22,10 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ArchivedNotificationsSheet } from "./archived-notifications-sheet"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { GlobalSearch } from "./global-search"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { OperationalAlertsSheet } from "@/components/dashboard/operational-alerts-sheet"
 import {
   NEXUS_OPEN_PROFILE,
   NEXUS_OPEN_SEARCH,
@@ -34,6 +34,7 @@ import { getTierBadgeLabel } from "@/lib/nexus-tier-matrix"
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock"
 import { MobileOverlaySheet } from "@/components/mobile/mobile-overlay-sheet"
 import { isNativeMobileScrollMode } from "@/lib/mobile/native-mobile-scroll"
+import { filterOperationalAlerts } from "@/lib/notifications/inbox-routing"
 
 interface HeaderProps {
   activeTab: string
@@ -60,7 +61,7 @@ export function Header({
   operationalWorkspace = false,
 }: HeaderProps) {
   const { t } = useUserPreferences()
-  const { unreadCount } = useNexusNotifications()
+  const { unreadCount, inbox } = useNexusNotifications()
   const [showArchivedNotifications, setShowArchivedNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -80,6 +81,7 @@ export function Header({
   useBodyScrollLock(showProfileMenu)
 
   const userInitials = currentUser ? currentUser.fullName.slice(0, 2).toUpperCase() : "U"
+  const alertCount = filterOperationalAlerts(inbox).filter((n) => !n.read).length
   
   // Sync edit fields when user changes
   useEffect(() => {
@@ -617,9 +619,9 @@ export function Header({
               }}
             >
               <Bell className="h-5 w-5 text-muted-foreground" />
-              {unreadCount > 0 && (
+              {alertCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold text-destructive-foreground">
-                  {unreadCount > 9 ? "9+" : unreadCount}
+                  {alertCount > 9 ? "9+" : alertCount}
                 </span>
               )}
             </Button>
@@ -669,8 +671,8 @@ export function Header({
         </div>
       </header>
 
-      {/* Notification Panel */}
-      <ArchivedNotificationsSheet
+      {/* Notification panel: operational alerts only. */}
+      <OperationalAlertsSheet
         isOpen={showArchivedNotifications}
         onClose={() => setShowArchivedNotifications(false)}
       />
