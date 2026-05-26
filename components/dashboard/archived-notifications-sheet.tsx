@@ -20,6 +20,8 @@ import {
 } from "@/components/dashboard/notification-inbox-ui"
 import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
 import { usePresentedNotifications } from "@/hooks/use-presented-notifications"
+import { mapCustomerNotification } from "@/lib/notifications/notification-mapper"
+import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 
 const KNOWN: NexusNotificationType[] = [
   "price",
@@ -31,15 +33,23 @@ const KNOWN: NexusNotificationType[] = [
   "financial",
 ]
 
-function mapRow(r: {
-  id: string
-  notification_type: string | null
-  title: string
-  body: string
-  nav: unknown
-  read_at: string | null
-  created_at: string
-}): NexusNotificationItem {
+function mapRow(
+  r: {
+    id: string
+    notification_type: string | null
+    title: string
+    body: string
+    nav: unknown
+    read_at: string | null
+    created_at: string
+    metadata?: unknown
+  },
+  viewer?: {
+    fundingCountryCode?: string | null
+    preferredCurrency?: string | null
+    locale?: string
+  },
+): NexusNotificationItem {
   const raw = (r.notification_type ?? "system").toLowerCase()
   const notifType: NexusNotificationType = KNOWN.includes(raw as NexusNotificationType)
     ? (raw as NexusNotificationType)
@@ -48,11 +58,19 @@ function mapRow(r: {
     r.nav && typeof r.nav === "object" && r.nav !== null && "kind" in (r.nav as object)
       ? (r.nav as NexusNotificationNav)
       : ({ kind: "notifications" } as NexusNotificationNav)
+  const fallback = "Your account was updated."
+  const mapped = mapCustomerNotification({
+    notificationType: r.notification_type,
+    title: r.title,
+    body: r.body,
+    metadata: r.metadata,
+    viewer,
+  })
   return {
     id: r.id,
     type: notifType,
-    title: r.title,
-    message: r.body,
+    title: sanitizeCustomerNotificationText(mapped?.title ?? r.title, fallback),
+    message: sanitizeCustomerNotificationText(mapped?.body ?? r.body, fallback),
     timestamp: r.created_at,
     read: !!r.read_at,
     archived: true,
@@ -104,11 +122,26 @@ export function ArchivedNotificationsSheet({ isOpen, onClose }: ArchivedNotifica
           created_at: string
         }>
       }
-      setServerArchived((out.items ?? []).map(mapRow))
+      const viewer = {
+        fundingCountryCode: country ?? null,
+        preferredCurrency: currency,
+        locale,
+      }
+      setServerArchived(
+        (out.items ?? []).map((row) =>
+          mapRow(
+            {
+              ...row,
+              metadata: (row as { metadata?: unknown }).metadata,
+            },
+            viewer,
+          ),
+        ),
+      )
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [country, currency, locale])
 
   useEffect(() => {
     if (!isOpen) return

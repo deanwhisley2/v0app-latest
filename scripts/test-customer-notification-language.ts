@@ -30,6 +30,18 @@ assert.ok(!/UGX/i.test(approvedCd.body))
 assert.match(approvedCd.body, /CDF|FC|\d/)
 assert.ok(approvedCd.body.length < 80, "notification body stays short")
 assert.ok(!/normalized|treasury|MAIN_TREASURY/i.test(approvedCd.body))
-assert.match(approvedCd.body, /Credited/)
+assert.match(approvedCd.body, /credited/i)
+
+import { mapCustomerNotification } from "../lib/notifications/notification-mapper"
+
+const internal = mapCustomerNotification({
+  notificationType: "financial",
+  title: "L5 approved add-funds on behalf of retailer desk",
+  body: "Retail Balance debited; customer Nexus Main credited",
+  metadata: { amount_input_local: 30000, input_currency: "UGX", amount_usd: 8 },
+})
+assert.ok(internal)
+assert.ok(!/retailer|nexus main|debited/i.test(internal!.body))
+assert.match(internal!.body, /deposit|credited/i)
 
 console.log("customer-notification-language: PASS")

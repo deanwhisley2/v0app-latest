@@ -13,6 +13,8 @@ import {
   NEXUS_UI_WHERE_TO_GO,
   nexusPlatformOverviewForAssistant,
   NEXUS_ASSISTANT_EXPLANATION_RULES,
+  NEXUS_ASSISTANT_BEHAVIOR_GUIDELINES,
+  NEXUS_ASSISTANT_OFF_TOPIC_REPLY,
   NEXUS_BULLISH_TRADES_EXPLAINER,
   NEXUS_SESSIONS_EXPLAINER,
   NEXUS_FEES_EXPLAINER,
@@ -38,6 +40,62 @@ function hasAny(hay: string, words: string[]) {
 function hasToken(hay: string, token: string) {
   const re = new RegExp(`(^|[^a-z0-9])${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`)
   return re.test(hay)
+}
+
+const PLATFORM_TOPIC_HINTS = [
+  "nexus",
+  "wallet",
+  "deposit",
+  "withdraw",
+  "trade",
+  "trading",
+  "container",
+  "security",
+  "account",
+  "fund",
+  "funding",
+  "copy",
+  "referral",
+  "password",
+  "login",
+  "sign in",
+  "balance",
+  "earn",
+  "earning",
+  "bullish",
+  "fixed",
+  "appeal",
+  "recover",
+  "pin",
+  "2fa",
+  "usdt",
+  "crypto",
+  "mobile money",
+  "mpesa",
+  "session",
+  "fee",
+  "insurance",
+  "verify",
+  "joelin",
+  "help",
+  "how do",
+  "how to",
+  "safe",
+  "trust",
+  "payout",
+  "notification",
+  "settings",
+]
+
+function isPlatformRelated(q: string): boolean {
+  return PLATFORM_TOPIC_HINTS.some((hint) => q.includes(hint))
+}
+
+function isLikelyOffTopic(q: string): boolean {
+  if (q.length < 10) return false
+  if (isPlatformRelated(q)) return false
+  if (isGreeting(q)) return false
+  return true
 }
 
 function isGreeting(q: string) {
@@ -252,6 +310,10 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   }
 
   if (isGreeting(q)) return greetingReply(surface, isGuest)
+
+  if (isLikelyOffTopic(q)) {
+    return NEXUS_ASSISTANT_OFF_TOPIC_REPLY
+  }
 
   if (
     hasAny(q, [

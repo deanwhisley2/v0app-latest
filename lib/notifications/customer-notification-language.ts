@@ -6,7 +6,13 @@
 import { formatFundingApprovedAmountForCustomer } from "@/lib/customer-corridor-money"
 
 const INTERNAL_PHRASE =
-  /normalized settlement|MAIN_TREASURY|OPERATIONAL(?:\s+pool)?|admin_airtel(?:_ug)?|admin[\s_-]*direct|admin_crypto|L5\s+approved|treasury[\s_-]*pool|credited to treasury|treasury at open|retailer_retail_balance|fx[\s_-]*(snapshot|normalization|middleware)|funding_request_admin|legacy_admin|official[\s_-]*corridor|book entry|nexus_main_pending|→|debited|credited account|liquidity reservation|settlement trace|middleware_version|usd_native_v1|internal_daily_fx|internal unit|standard dollar|we convert|at today.?s rate|≈\s*USD|USD equivalent|operational reserves|internally converted|promotional[- ]cycle|USDT deposit verifying|declared \d|fee compensation|settlement|normalization|ledger|middleware|lifecycle|processor|routing|rpc\b/i
+  /normalized settlement|MAIN_TREASURY|OPERATIONAL(?:\s+pool)?|admin_airtel(?:_ug)?|admin[\s_-]*direct|admin_crypto|L5\s+approved|on behalf of|retailer desk|retail balance debited|customer nexus main credited|local mobile[- ]?money funding submitted|awaiting retailer verification|container liquid earnings|transferred into nexus main|net principal locked|gross commit|insurance carved|copy[- ]?trade settlement|nexus main attribution|retailer approved local funding|treasury[\s_-]*pool|credited to treasury|treasury at open|retailer_retail_balance|fx[\s_-]*(snapshot|normalization|middleware)|funding_request_admin|legacy_admin|official[\s_-]*corridor|book entry|nexus_main_pending|→|debited;|credited account|liquidity reservation|settlement trace|middleware_version|usd_native_v1|internal_daily_fx|internal unit|standard dollar|we convert|at today.?s rate|≈\s*USD|USD equivalent|operational reserves|internally converted|promotional[- ]cycle|USDT deposit verifying|declared \d|fee compensation|settlement|normalization|ledger|middleware|lifecycle|processor|routing|rpc\b|nexus main\b|container liquid|attribution/i
+
+export function isInternalNotificationCopy(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  return INTERNAL_PHRASE.test(t) || CONVERSATIONAL_PHRASE.test(t) || RAW_LOGIN_BODY.test(t) || IP_UA_BLOB.test(t)
+}
 
 const CONVERSATIONAL_PHRASE =
   /\b(we|we're|we've|our team|our system|we set aside|we took|we will|we are|we received|we kept|we verify|we credit|we'd|you can|you may|let us|please wait while|something went wrong while|we could not|i'm here|get started with)\b/i
@@ -44,8 +50,8 @@ export function buildFundsCreditedCustomerCopy(
     t ??
     ((key: string) => {
       const en: Record<string, string> = {
-        "notifications.customer.fundsCreditedTitle": "Funds credited to your balance",
-        "notifications.customer.fundsCreditedBody": "{{amount}} has been added to your Nexus Main balance.",
+        "notifications.customer.fundsCreditedTitle": "Earnings credited",
+        "notifications.customer.fundsCreditedBody": "Trading earnings of {{amount}} have been added to your balance.",
       }
       return en[key] ?? key
     })
@@ -71,10 +77,10 @@ export function buildFundingApprovedCustomerCopy(
     t ??
     ((key: string) => {
       const en: Record<string, string> = {
-        "notifications.customer.fundingApprovedTitle": "Funding approved",
-        "notifications.customer.fundingApprovedBody": "Approved. Credited.",
-        "notifications.customer.fundingApprovedBodyLocal": "Approved · {{amount}}. Credited.",
-        "notifications.customer.fundingApprovedHint": "Credited.",
+        "notifications.customer.fundingApprovedTitle": "Deposit credited",
+        "notifications.customer.fundingApprovedBody": "Your deposit has been successfully credited.",
+        "notifications.customer.fundingApprovedBodyLocal": "Your deposit of {{amount}} has been successfully credited.",
+        "notifications.customer.fundingApprovedHint": "Credited to your balance.",
       }
       return en[key] ?? key
     })
@@ -110,10 +116,10 @@ export function buildFundingRejectedCustomerCopy(
     t ??
     ((key: string) =>
       ({
-        "notifications.customer.fundingDeclinedTitle": "Funding declined",
-        "notifications.customer.fundingDeclinedBody": "Funding declined. {{note}}",
-        "notifications.customer.fundingRejectedTitle": "Funding request declined",
-        "notifications.customer.fundingRejectedBody": "Rejected.",
+        "notifications.customer.fundingDeclinedTitle": "Deposit declined",
+        "notifications.customer.fundingDeclinedBody": "Your deposit could not be completed. {{note}}",
+        "notifications.customer.fundingRejectedTitle": "Deposit declined",
+        "notifications.customer.fundingRejectedBody": "Your deposit request was declined.",
       })[key] ?? key)
 
   const cleanNote = note?.trim()
@@ -137,9 +143,9 @@ export function buildFundingHeldCustomerCopy(
     t ??
     ((key: string) =>
       ({
-        "notifications.customer.fundingHeldTitle": "Funding under review",
-        "notifications.customer.fundingHeldBody": "Under review.",
-        "notifications.customer.fundingHeldBodyNote": "Request under review. {{note}}",
+        "notifications.customer.fundingHeldTitle": "Deposit under review",
+        "notifications.customer.fundingHeldBody": "Your deposit request is under review.",
+        "notifications.customer.fundingHeldBodyNote": "Your deposit request is under review. {{note}}",
       })[key] ?? key)
 
   const cleanNote = note?.trim()
@@ -160,8 +166,8 @@ export function buildFundingResolvedCustomerCopy(t?: NotifyCopyFn): { title: str
     t ??
     ((key: string) =>
       ({
-        "notifications.customer.fundingResolvedTitle": "Funding request closed",
-        "notifications.customer.fundingResolvedBody": "Funding request closed.",
+        "notifications.customer.fundingResolvedTitle": "Deposit request closed",
+        "notifications.customer.fundingResolvedBody": "Your deposit request has been closed.",
       })[key] ?? key)
   return {
     title: tr("notifications.customer.fundingResolvedTitle"),
@@ -174,8 +180,8 @@ export function buildFundingSubmittedCustomerCopy(t?: NotifyCopyFn): { title: st
     t ??
     ((key: string) =>
       ({
-        "notifications.customer.fundingSubmittedTitle": "Funding submitted",
-        "notifications.customer.fundingSubmittedBody": "Submitted.",
+        "notifications.customer.fundingSubmittedTitle": "Deposit received",
+        "notifications.customer.fundingSubmittedBody": "We received your deposit request and will notify you when it is confirmed.",
       })[key] ?? key)
   return {
     title: tr("notifications.customer.fundingSubmittedTitle"),

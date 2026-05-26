@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
+import { mapCustomerNotification } from "@/lib/notifications/notification-mapper"
 
 /** Inserts a durable notification row (idempotent on user_id + source_kind + source_id). */
 export async function appendUserAccountNotification(
@@ -16,8 +17,14 @@ export async function appendUserAccountNotification(
   }
 ): Promise<void> {
   const fallback = "Your account was updated."
-  const title = sanitizeCustomerNotificationText(row.title, fallback)
-  const body = sanitizeCustomerNotificationText(row.body, fallback)
+  const mapped = mapCustomerNotification({
+    notificationType: row.notificationType,
+    title: row.title,
+    body: row.body,
+    metadata: row.metadata,
+  })
+  const title = sanitizeCustomerNotificationText(mapped?.title ?? row.title, fallback)
+  const body = sanitizeCustomerNotificationText(mapped?.body ?? row.body, fallback)
   const metaRaw = row.metadata ?? {}
   const { friendly_detail: _stripFriendly, ...metaRest } = metaRaw as {
     friendly_detail?: unknown

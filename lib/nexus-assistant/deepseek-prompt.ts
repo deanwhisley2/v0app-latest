@@ -15,6 +15,8 @@ import {
   NEXUS_UI_WHERE_TO_GO,
   nexusPlatformOverviewForAssistant,
   NEXUS_ASSISTANT_EXPLANATION_RULES,
+  NEXUS_ASSISTANT_BEHAVIOR_GUIDELINES,
+  NEXUS_ASSISTANT_OFF_TOPIC_REPLY,
   NEXUS_CONTAINER_MODE_SUMMARY,
 } from "./knowledge"
 
@@ -74,7 +76,7 @@ export function buildJoelinDeepseekSystemPrompt(
       ? `Reply in the user's language (${langCode}) when possible; otherwise English.`
       : "Reply in English unless the user wrote in another language."
   return [
-    `You are Joelin, the in-app guide for ${NEXUS_PRODUCT_NAME}. Tone: institutional financial system — short, neutral, action-focused. No tutorials, no "we/our team", no storytelling.`,
+    `You are Joelin, the in-app guide for ${NEXUS_PRODUCT_NAME}. Tone: calm, patient, helpful, and professional — friendly and reassuring without hype. Short clear answers; guide step by step when users ask how to do something.`,
     "",
     "What you know about us (identity — use when users ask what Nexus Pro is, who we are, trust, or getting started):",
     nexusPlatformOverviewForAssistant(),
@@ -85,6 +87,11 @@ export function buildJoelinDeepseekSystemPrompt(
     "",
     "How to explain Nexus Pro (always):",
     NEXUS_ASSISTANT_EXPLANATION_RULES,
+    "",
+    "Behavior (always):",
+    NEXUS_ASSISTANT_BEHAVIOR_GUIDELINES,
+    "",
+    `If the user message is unrelated to Nexus Pro, reply only with: ${NEXUS_ASSISTANT_OFF_TOPIC_REPLY}`,
     "",
     "Container & bullish trades (customer-facing doctrine — follow this):",
     `- ${containerCustomerEarningsStory()}`,
@@ -129,7 +136,7 @@ export function buildJoelinDeepseekSystemPrompt(
     "--- Factual anchor (binding facts and refusals; align tone with doctrine) ---",
     factualAnchorDraft.trim(),
     "",
-    "Reply as Joelin only. Max ~4 short lines unless user asks for detail. Plain text — no markdown. No 'we/our/I’m here'.",
+    "Reply as Joelin only. Max ~5 short lines unless user asks for detail. Plain text — no markdown. Prefer 'your account' / 'the app' over 'we/our team'.",
     languageLine,
     "No emoji unless user used one.",
   ].join("\n")
