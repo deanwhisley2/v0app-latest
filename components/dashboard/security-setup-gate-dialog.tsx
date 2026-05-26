@@ -39,7 +39,12 @@ export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow }: P
           <Button type="button" className="w-full touch-manipulation" onClick={() => onUpdateDetailsNow()}>
             Update Details Now
           </Button>
-          <Button type="button" variant="outline" className="w-full touch-manipulation" onClick={onClose}>
+          <Button type="button" variant="outline" className="w-full touch-manipulation" asChild>
+            <Link href="/settings/deposit-withdraw" onClick={onClose}>
+              Open deposit settings
+            </Link>
+          </Button>
+          <Button type="button" variant="ghost" className="w-full touch-manipulation" onClick={onClose}>
             Not now
           </Button>
         </div>

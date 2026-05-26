@@ -7,13 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
-import Link from "next/link"
-
-const UserSecuritySetupForm = dynamic(
-  () => import("@/components/dashboard/user-security-setup-form").then((m) => m.UserSecuritySetupForm),
-  { ssr: false },
-)
-
 const UserSecurityRecoverySummary = dynamic(
   () =>
     import("@/components/dashboard/user-security-recovery-summary").then((m) => m.UserSecurityRecoverySummary),
@@ -200,18 +193,6 @@ export function SecurityRecoveryScreen() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-border bg-card p-4 sm:p-6">
-        <h3 className="text-lg font-semibold text-foreground">Deposit & withdrawal details</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Manage your payout details from Settings → Deposit & Withdraw. These details are required for Add Funds and Withdraw.
-        </p>
-        <div className="mt-4">
-          <Button asChild className="touch-manipulation">
-            <Link href="/dashboard?view=deposit-withdraw">Open Deposit & Withdraw</Link>
-          </Button>
-        </div>
-      </Card>
-
       {needsSetup === null ? null : needsSetup ? null : (
         <UserSecurityRecoverySummary key={profileKey} appealCenterHref="/dashboard/security/appeals" />
       )}

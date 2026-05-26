@@ -1529,6 +1529,8 @@ export function DashboardPageInner() {
         case "settings":
           if (nav.view === "security") {
             router.push("/dashboard/security")
+          } else if (nav.view === "deposit-withdraw") {
+            router.push("/settings/deposit-withdraw")
           } else {
             setSettingsRequestedView(nav.view as SettingsView)
             setTabProgrammatic("settings", "notification_nav_settings")
@@ -3800,8 +3802,7 @@ export function DashboardPageInner() {
           setSecurityGateOpen(false)
           setChatHubFocus(null)
           setSupportThreadFocusId(null)
-          setSettingsRequestedView("deposit-withdraw")
-          setTabProgrammatic("settings", "security_gate_update_details")
+          router.push("/settings/deposit-withdraw")
         }}
       />
 

@@ -1,17 +1,43 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { ArrowDownUp, Check, Loader2, Shield } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabaseClient"
 import type { PublicSecurityProfile } from "@/lib/nexus-security-profile-types"
+import { cn } from "@/lib/utils"
 
 const UserSecuritySetupForm = dynamic(
   () => import("@/components/dashboard/user-security-setup-form").then((m) => m.UserSecuritySetupForm),
   { ssr: false },
 )
+
+function GlassSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <Card
+      className={cn(
+        "border-border/80 bg-card/95 p-5 shadow-sm backdrop-blur-sm dark:bg-card/90",
+        className,
+      )}
+    >
+      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      {description ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p> : null}
+      <div className="mt-4">{children}</div>
+    </Card>
+  )
+}
 
 export function DepositWithdrawDetailsPanel() {
   const [loading, setLoading] = useState(true)
@@ -91,20 +117,15 @@ export function DepositWithdrawDetailsPanel() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="border-border bg-card p-5">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
-            <ArrowDownUp className="h-5 w-5 text-primary" aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-foreground">Deposit & withdrawal details</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              These details are required before you can Add Funds or Withdraw. Keep them accurate — changes require review.
-            </p>
-          </div>
+    <div className="mt-6 space-y-6">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+          <ArrowDownUp className="h-5 w-5 text-primary" aria-hidden />
         </div>
-      </Card>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Required before Add Funds or Withdraw. Changes after setup go through Security Appeal review.
+        </p>
+      </div>
 
       {error ? (
         <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -112,8 +133,57 @@ export function DepositWithdrawDetailsPanel() {
         </p>
       ) : null}
 
+      {setupComplete ? (
+        <GlassSection
+          title="Registered details"
+          description="Numbers and wallets on file for deposits and withdrawals."
+        >
+          <div className="space-y-3 text-sm">
+            {payoutSummary.length === 0 ? (
+              <p className="text-muted-foreground">No payout lines on file yet.</p>
+            ) : (
+              payoutSummary.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5"
+                >
+                  <span className="text-muted-foreground">{row.label}</span>
+                  <span className="text-right font-medium text-foreground">{row.value}</span>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="touch-manipulation"
+              onClick={() => (window.location.href = "/dashboard/security/appeals")}
+            >
+              <Shield className="mr-2 h-4 w-4" aria-hidden />
+              Edit via Security Appeal
+            </Button>
+            <Button type="button" variant="ghost" className="touch-manipulation" onClick={() => void load()}>
+              Refresh
+            </Button>
+          </div>
+        </GlassSection>
+      ) : (
+        <GlassSection
+          title="Registered details"
+          description="Complete setup below to register your first mobile money or bank lines."
+        >
+          <p className="text-sm text-muted-foreground">No registered details yet.</p>
+        </GlassSection>
+      )}
+
       {!setupComplete ? (
-        <UserSecuritySetupForm variant="settings" onComplete={() => setRefreshKey((n) => n + 1)} />
+        <GlassSection
+          title="Add new detail"
+          description="Set your 6-digit Nexus Security PIN and at least one mobile money number for deposits and withdrawals."
+        >
+          <UserSecuritySetupForm variant="settings" onComplete={() => setRefreshKey((n) => n + 1)} />
+        </GlassSection>
       ) : (
         <Card className="border-emerald-500/30 bg-emerald-500/5 p-5">
           <div className="flex items-start gap-3">
@@ -121,32 +191,10 @@ export function DepositWithdrawDetailsPanel() {
               <Check className="h-5 w-5 text-emerald-700 dark:text-emerald-300" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-sm font-semibold text-foreground">Details on file</h4>
+              <h4 className="text-sm font-semibold text-foreground">Setup complete</h4>
               <p className="mt-1 text-xs text-muted-foreground">
-                Your details are saved and protected. To change them, open a Security Appeal.
+                You can use Add Funds and Withdraw from the dashboard. To change numbers, open a Security Appeal.
               </p>
-              <div className="mt-4 space-y-2 text-xs">
-                {payoutSummary.map((row) => (
-                  <div key={row.label} className="flex items-start justify-between gap-3">
-                    <span className="text-muted-foreground">{row.label}</span>
-                    <span className="text-right font-medium text-foreground">{row.value}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="touch-manipulation"
-                  onClick={() => (window.location.href = "/dashboard/security/appeals")}
-                >
-                  <Shield className="mr-2 h-4 w-4" aria-hidden />
-                  Open Security Appeal
-                </Button>
-                <Button type="button" variant="ghost" className="touch-manipulation" onClick={() => void load()}>
-                  Refresh
-                </Button>
-              </div>
             </div>
           </div>
         </Card>
@@ -154,4 +202,3 @@ export function DepositWithdrawDetailsPanel() {
     </div>
   )
 }
-
