@@ -1001,7 +1001,7 @@ export function DashboardPageInner() {
   useEffect(() => {
     if (isGuestSession) return
     if (!authLoading && !user) {
-      router.replace("/auth/login")
+      router.replace("/auth/login?reason=session_required")
     }
   }, [authLoading, user, isGuestSession, router])
 

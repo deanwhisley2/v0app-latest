@@ -57,6 +57,7 @@ export default function LoginForm() {
 
   const [resetSuccess, setResetSuccess] = useState(false)
   const [sessionCleared, setSessionCleared] = useState(false)
+  const [sessionRequired, setSessionRequired] = useState(false)
   const [android, setAndroid] = useState(false)
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function LoginForm() {
       const params = new URLSearchParams(window.location.search)
       setResetSuccess(params.get("reset") === "success")
       setSessionCleared(params.get("reason") === "session_cleared")
+      setSessionRequired(params.get("reason") === "session_required")
     } catch {
       /* ignore */
     }
@@ -185,8 +187,8 @@ export default function LoginForm() {
       }
 
       markFreshLoginLanding()
-      router.replace("/dashboard")
       router.refresh()
+      router.replace("/dashboard")
     } catch (err) {
       if (
         isGuestLoginEnabled() &&
@@ -277,6 +279,12 @@ export default function LoginForm() {
           {sessionCleared ? (
             <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-100" role="status">
               Session reset — sign in again. Your account data is intact.
+            </p>
+          ) : null}
+          {sessionRequired ? (
+            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100" role="status">
+              Your session could not be restored on this device. Sign in with your full email and password. Use{" "}
+              <span className="font-medium">www.nexuspro.it.com</span> (not a saved apex bookmark) if sign-in keeps failing.
             </p>
           ) : null}
           {resetSuccess ? (

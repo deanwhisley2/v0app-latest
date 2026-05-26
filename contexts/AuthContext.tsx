@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useRouter } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabaseClient"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
@@ -30,9 +31,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-const AUTH_BOOT_MS = 8000
+/** Slow mobile networks can exceed 8s; premature false here caused silent login redirects. */
+const AUTH_BOOT_MS = 25_000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(() => !isDevLocalOnly())
   /** When true, do not synthesize guest (user chose “real login only” after sign-out). */
@@ -42,10 +45,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isDevLocalOnly()) return
     const t = window.setTimeout(() => {
-      if (!bootDoneRef.current) {
-        bootDoneRef.current = true
-        setIsLoading(false)
-      }
+      if (bootDoneRef.current) return
+      void supabase.auth
+        .getSession()
+        .then(({ data, error }) => {
+          if (bootDoneRef.current) return
+          if (error) console.error("Auth getSession (boot timeout retry):", error.message)
+          else setSession(data.session)
+        })
+        .catch((e: unknown) => {
+          if (!bootDoneRef.current) console.error("Auth getSession boot timeout retry failed:", e)
+        })
+        .finally(() => {
+          if (bootDoneRef.current) return
+          bootDoneRef.current = true
+          setIsLoading(false)
+        })
     }, AUTH_BOOT_MS)
     return () => window.clearTimeout(t)
   }, [])
@@ -95,12 +110,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!cancelled) {
         setSession(nextSession)
         if (nextSession?.user) setGuestDeclined(false)
         bootDoneRef.current = true
         setIsLoading(false)
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "SIGNED_OUT") {
+          router.refresh()
+        }
       }
     })
 
@@ -108,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [])
+  }, [router])
 
   const reenterGuestMode = useCallback(() => {
     setGuestDeclined(false)
