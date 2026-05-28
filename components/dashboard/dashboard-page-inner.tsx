@@ -96,7 +96,7 @@ import {
 } from "@/lib/mobile/chrome-android-safe-mode"
 import { HistoryCenterScreen } from "@/components/dashboard/history-center-screen"
 import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
-import { fetchSecurityProfileForAction, fetchSecurityProfilePassive } from "@/lib/nexus-security-profile-client"
+import { fetchSecurityProfileForAction } from "@/lib/nexus-security-profile-client"
 import { loadWithdrawReadiness } from "@/lib/client/withdraw-readiness"
 import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
@@ -289,7 +289,13 @@ export function DashboardPageInner() {
   })
   const navCtrl = useDashboardNavigationController(operationalWorkspace)
   const activeTabRef = useRef("container")
+  const uiHistoryPopRef = useRef(false)
+  const uiHistoryReadyRef = useRef(false)
+  const prevFundModalRef = useRef<"add" | "withdraw" | null>(null)
+  const prevSettingsViewRef = useRef<SettingsView | null>(null)
   const [activeTab, setActiveTab] = useState<DashboardMainTab | string>("container")
+  const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
+  const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
 
   const setTabProgrammatic = useCallback(
     (tab: string, source: string) => {
@@ -314,6 +320,9 @@ export function DashboardPageInner() {
         message: source,
         meta: { from: activeTabRef.current, to: next, userInitiated: true },
       })
+      if (typeof window !== "undefined" && !uiHistoryPopRef.current && uiHistoryReadyRef.current) {
+        window.history.pushState({ nexusDashboardUi: true, tab: next }, "")
+      }
       setActiveTab(next)
     },
     [navCtrl],
@@ -322,6 +331,75 @@ export function DashboardPageInner() {
   useEffect(() => {
     activeTabRef.current = activeTab
   }, [activeTab])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !uiHistoryReadyRef.current || uiHistoryPopRef.current) {
+      prevFundModalRef.current = showFundModal
+      prevSettingsViewRef.current = settingsRequestedView
+      return
+    }
+    const openedFundModal = !prevFundModalRef.current && Boolean(showFundModal)
+    const openedSettingsSubView = !prevSettingsViewRef.current && Boolean(settingsRequestedView)
+    if (openedFundModal || openedSettingsSubView) {
+      window.history.pushState(
+        {
+          nexusDashboardUi: true,
+          tab: navCtrl.normalizeTab(activeTabRef.current),
+          modal: showFundModal,
+          settingsView: settingsRequestedView,
+        },
+        "",
+      )
+    }
+    prevFundModalRef.current = showFundModal
+    prevSettingsViewRef.current = settingsRequestedView
+  }, [showFundModal, settingsRequestedView, navCtrl])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!uiHistoryReadyRef.current) {
+      window.history.replaceState(
+        {
+          nexusDashboardUi: true,
+          tab: navCtrl.normalizeTab(activeTabRef.current),
+          modal: showFundModal,
+          settingsView: settingsRequestedView,
+        },
+        "",
+      )
+      uiHistoryReadyRef.current = true
+      return
+    }
+    if (uiHistoryPopRef.current) {
+      uiHistoryPopRef.current = false
+      return
+    }
+    window.history.replaceState(
+      {
+        nexusDashboardUi: true,
+        tab: navCtrl.normalizeTab(activeTabRef.current),
+        modal: showFundModal,
+        settingsView: settingsRequestedView,
+      },
+      "",
+    )
+  }, [activeTab, showFundModal, settingsRequestedView, navCtrl])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as
+        | { nexusDashboardUi?: boolean; tab?: string; modal?: "add" | "withdraw" | null; settingsView?: SettingsView | null }
+        | null
+      if (!state?.nexusDashboardUi) return
+      uiHistoryPopRef.current = true
+      setTabProgrammatic(state.tab ?? postLoginTab(operationalWorkspace), "popstate_ui")
+      setShowFundModal(state.modal ?? null)
+      setSettingsRequestedView(state.settingsView ?? null)
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [operationalWorkspace, setTabProgrammatic])
 
   const [containerActiveTradeCount, setContainerActiveTradeCount] = useState(0)
   const [containerDeskOpenNonce, setContainerDeskOpenNonce] = useState(0)
@@ -372,7 +450,6 @@ export function DashboardPageInner() {
   }, [activeTab, operationalWorkspace, setTabProgrammatic])
 
   const tradeView: DashboardTradeView = "overview"
-  const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   /** Deep-link / notification → operational support thread (wallet Assets). */
   const [supportThreadFocusId, setSupportThreadFocusId] = useState<string | null>(null)
   const supportThreadFromUrlRef = useRef<string | null>(null)
@@ -403,7 +480,6 @@ export function DashboardPageInner() {
   const [containerWithdrawableEarnings, setContainerWithdrawableEarnings] = useState(0)
   const [containerFeesPaid, setContainerFeesPaid] = useState(0)
   const [isContainerFlowBusy, setIsContainerFlowBusy] = useState(false)
-  const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
   const [fundAmount, setFundAmount] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
   const [withdrawalEligibility, setWithdrawalEligibility] = useState<{

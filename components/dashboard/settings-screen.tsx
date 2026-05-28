@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -101,6 +101,25 @@ export function SettingsScreen({
         ? t("settings.theme.system")
         : t("settings.theme.dark")
   const [currentView, setCurrentView] = useState<SettingsView>("main")
+  const historyReadyRef = useRef(false)
+  const popNavigatingRef = useRef(false)
+
+  const navigateToView = useCallback((view: SettingsView) => {
+    if (view === currentView) return
+    if (typeof window !== "undefined" && historyReadyRef.current && !popNavigatingRef.current) {
+      window.history.pushState({ nexusSettingsUi: true, view }, "")
+    }
+    setCurrentView(view)
+  }, [currentView])
+
+  const navigateBack = useCallback(() => {
+    if (currentView === "main") return
+    if (typeof window !== "undefined" && historyReadyRef.current) {
+      window.history.back()
+      return
+    }
+    setCurrentView("main")
+  }, [currentView])
   const [regionMessage, setRegionMessage] = useState<string | null>(null)
   const [wireCurrency, setWireCurrency] = useState("USD")
   const [securityLevel, setSecurityLevel] = useState<1 | 2 | 3>(1)
@@ -125,9 +144,35 @@ export function SettingsScreen({
 
   useEffect(() => {
     if (!requestedView) return
-    setCurrentView(requestedView)
+    navigateToView(requestedView)
     onRequestViewConsumed?.()
-  }, [requestedView, onRequestViewConsumed])
+  }, [requestedView, onRequestViewConsumed, navigateToView])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!historyReadyRef.current) {
+      window.history.replaceState({ nexusSettingsUi: true, view: currentView }, "")
+      historyReadyRef.current = true
+      return
+    }
+    if (popNavigatingRef.current) {
+      popNavigatingRef.current = false
+      return
+    }
+    window.history.replaceState({ nexusSettingsUi: true, view: currentView }, "")
+  }, [currentView])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as { nexusSettingsUi?: boolean; view?: SettingsView } | null
+      if (!state?.nexusSettingsUi) return
+      popNavigatingRef.current = true
+      setCurrentView(state.view ?? "main")
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [])
 
   const languageLabel = LANGUAGE_OPTIONS.find((o) => o.code === appLanguage)?.label ?? appLanguage
   const currencyLabel = CURRENCY_OPTIONS.find((o) => o.code === appCurrency)?.label ?? appCurrency
@@ -183,7 +228,7 @@ export function SettingsScreen({
 
   const renderBackButton = () => (
     <button
-      onClick={() => setCurrentView("main")}
+      onClick={navigateBack}
       className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
     >
       <ChevronLeft className="h-4 w-4" />
@@ -250,7 +295,7 @@ export function SettingsScreen({
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => setCurrentView(item.key as SettingsView)}
+                  onClick={() => navigateToView(item.key as SettingsView)}
                   className="flex w-full items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-muted"
                 >
                   {inner}
@@ -454,7 +499,7 @@ export function SettingsScreen({
                 type="button"
                 onClick={() => {
                   setPreferences({ currency: opt.code as FiatCurrencyCode })
-                  setCurrentView("main")
+                  navigateBack()
                 }}
                 className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
                   appCurrency === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
@@ -493,7 +538,7 @@ export function SettingsScreen({
                 type="button"
                 onClick={() => {
                   setPreferences({ language: opt.code as AppLanguage })
-                  setCurrentView("main")
+                  navigateBack()
                 }}
                 className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
                   appLanguage === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
@@ -576,7 +621,7 @@ export function SettingsScreen({
                 type="button"
                 onClick={() => {
                   setTheme(option.key)
-                  setCurrentView("main")
+                  navigateBack()
                 }}
                 className={`flex w-full items-center justify-between rounded-lg px-4 py-4 transition-colors ${
                   themeChoice === option.key ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
@@ -612,7 +657,7 @@ export function SettingsScreen({
                 type="button"
                 onClick={() => {
                   setWireCurrency(opt.code)
-                  setCurrentView("main")
+                  navigateBack()
                 }}
                 className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
                   wireCurrency === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
