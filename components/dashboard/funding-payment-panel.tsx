@@ -58,6 +58,7 @@ type Props = {
   /** When set, sender identity is read-only from Security profile (no manual re-entry). */
   savedPayerPhoneMasked?: string | null
   savedPayerAccountNames?: string | null
+  savedPayerNetwork?: "MTN" | "Airtel" | null
   savedPayerNetworkLabel?: string | null
   /** When set with onFundAmountChange, amount field is rendered in crypto flow (compact mobile layout). */
   fundAmount?: string
@@ -91,6 +92,7 @@ export function FundingPaymentPanel({
   onPayerPhoneChange,
   savedPayerPhoneMasked = null,
   savedPayerAccountNames = null,
+  savedPayerNetwork = null,
   savedPayerNetworkLabel = null,
   fundAmount = "",
   onFundAmountChange,
@@ -198,6 +200,7 @@ export function FundingPaymentPanel({
   const payerFields =
     savedPayerPhoneMasked && savedPayerAccountNames ? (
       <SavedPayerDisplay
+        network={savedPayerNetwork}
         networkLabel={savedPayerNetworkLabel ?? undefined}
         phoneMasked={savedPayerPhoneMasked}
         accountNames={savedPayerAccountNames}

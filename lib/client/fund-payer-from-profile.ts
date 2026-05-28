@@ -7,6 +7,7 @@ export type FundPayerBinding = {
   source: FundPayerSource
   displayName: string
   displayPhone: string
+  network: "MTN" | "Airtel" | null
   networkLabel: string | null
   hasRegisteredLine: boolean
 }
@@ -44,6 +45,7 @@ export function bindFundPayerFromProfile(
       source: "manual",
       displayName: "",
       displayPhone: "",
+      network: null,
       networkLabel: null,
       hasRegisteredLine: false,
     }
@@ -54,6 +56,7 @@ export function bindFundPayerFromProfile(
       source: opt.id,
       displayName: opt.accountNames ?? "",
       displayPhone: opt.numberMasked,
+      network: opt.network,
       networkLabel: opt.network,
       hasRegisteredLine: true,
     }
@@ -62,6 +65,7 @@ export function bindFundPayerFromProfile(
     source: "manual",
     displayName: "",
     displayPhone: "",
+    network: null,
     networkLabel: null,
     hasRegisteredLine: false,
   }

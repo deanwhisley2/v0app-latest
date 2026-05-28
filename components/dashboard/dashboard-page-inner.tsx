@@ -2979,6 +2979,7 @@ export function DashboardPageInner() {
                   savedPayerAccountNames={
                     fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayName : null
                   }
+                  savedPayerNetwork={fundPayerBinding.network}
                   savedPayerNetworkLabel={
                     fundPayerBinding.networkLabel
                       ? `${fundPayerBinding.networkLabel} Money`
@@ -3006,6 +3007,12 @@ export function DashboardPageInner() {
                     <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.local.step1Body")}</p>
                     {fundPayerBinding.hasRegisteredLine ? (
                       <SavedPayerDisplay
+                        network={fundPayerBinding.network}
+                        networkLabel={
+                          fundPayerBinding.networkLabel
+                            ? `${fundPayerBinding.networkLabel} Money`
+                            : undefined
+                        }
                         phoneMasked={fundPayerBinding.displayPhone}
                         accountNames={fundPayerBinding.displayName}
                         hint="Sender details are taken from Security & Recovery. Enter amount and network below, then continue."
