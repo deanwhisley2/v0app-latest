@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
+import { routeErrorMessage } from "@/lib/server/route-error-message"
 import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid-withdraw-base"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { minWithdrawUsdFloor } from "@/lib/nexus-fx"
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
       msRemaining,
     })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+    console.error("[withdrawal/eligibility GET]", e)
+    return NextResponse.json({ error: routeErrorMessage(e) }, { status: 500 })
   }
 }

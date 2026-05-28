@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
+import { routeErrorMessage } from "@/lib/server/route-error-message"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import {
   getPublicSecurityProfile,
@@ -16,7 +17,8 @@ export async function GET(request: Request) {
     const profile = await getPublicSecurityProfile(admin, auth.user.id)
     return NextResponse.json({ profile })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 })
+    console.error("[security-profile GET]", e)
+    return NextResponse.json({ error: routeErrorMessage(e) }, { status: 500 })
   }
 }
 
@@ -63,7 +65,9 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ ok: true, profile })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Internal error"
-    return NextResponse.json({ error: msg }, { status: 400 })
+    console.error("[security-profile POST]", e)
+    const msg = routeErrorMessage(e, "Could not save security details.")
+    const status = /already configured|must be exactly|required|invalid|does not match/i.test(msg) ? 400 : 500
+    return NextResponse.json({ error: msg }, { status })
   }
 }

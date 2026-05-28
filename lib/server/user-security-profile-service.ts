@@ -142,12 +142,22 @@ export async function setupSecurityProfile(
   },
 ): Promise<PublicSecurityProfile> {
   const row = await getOrCreateSecurityProfile(admin, params.userId)
-  if (row.security_code_hash) {
+  const hasNumbers = Boolean(row.deposit_number?.trim() || row.withdrawal_number?.trim())
+  if (row.security_code_hash && hasNumbers) {
     throw new Error("Security profile already configured.")
   }
-  if (!isValidSecurityCodeFormat(params.securityCode)) {
+
+  const completingIncomplete = Boolean(row.security_code_hash && !hasNumbers)
+  if (!completingIncomplete && !isValidSecurityCodeFormat(params.securityCode)) {
     throw new Error("Security code must be exactly 6 digits.")
   }
+  if (completingIncomplete) {
+    const ok = await verifySecurityCode(params.securityCode, row.security_code_hash)
+    if (!ok) {
+      throw new Error("Security PIN does not match your saved code. Enter the same 6-digit PIN you set earlier.")
+    }
+  }
+
   const deposit = normalizeDepositNumber(params.depositNumber)
   const withdrawal = normalizeWithdrawalNumber(params.withdrawalNumber)
   const depositOk = deposit.length >= 8
@@ -175,21 +185,22 @@ export async function setupSecurityProfile(
   }
 
   const now = new Date().toISOString()
-  const { error } = await admin
-    .from("user_security_profiles")
-    .update({
-      security_code_hash: hashSecurityCode(params.securityCode),
-      security_code_set_at: now,
-      deposit_number: depositOk ? deposit : null,
-      withdrawal_number: withdrawalOk ? withdrawal : null,
-      deposit_account_names: depositOk ? depositNames : null,
-      withdrawal_account_names: withdrawalOk ? withdrawalNames : null,
-      crypto_wallet: crypto,
-      payout_method: params.payoutMethod,
-      last_sensitive_change_at: now,
-      updated_at: now,
-    })
-    .eq("user_id", params.userId)
+  const patch: Record<string, unknown> = {
+    deposit_number: depositOk ? deposit : row.deposit_number,
+    withdrawal_number: withdrawalOk ? withdrawal : row.withdrawal_number,
+    deposit_account_names: depositOk ? depositNames : row.deposit_account_names,
+    withdrawal_account_names: withdrawalOk ? withdrawalNames : row.withdrawal_account_names,
+    crypto_wallet: crypto,
+    payout_method: params.payoutMethod,
+    last_sensitive_change_at: now,
+    updated_at: now,
+  }
+  if (!completingIncomplete) {
+    patch.security_code_hash = hashSecurityCode(params.securityCode)
+    patch.security_code_set_at = now
+  }
+
+  const { error } = await admin.from("user_security_profiles").update(patch).eq("user_id", params.userId)
   if (error) throw error
   return getPublicSecurityProfile(admin, params.userId)
 }
