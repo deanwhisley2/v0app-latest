@@ -4,6 +4,7 @@ import { routeErrorMessage } from "@/lib/server/route-error-message"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import {
   getPublicSecurityProfile,
+  getSecurityProfileSetupFields,
   setupSecurityProfile,
   verifyUserSecurityCode,
 } from "@/lib/server/user-security-profile-service"
@@ -15,7 +16,8 @@ export async function GET(request: Request) {
     if ("response" in auth) return auth.response
     const admin = createAdminClient()
     const profile = await getPublicSecurityProfile(admin, auth.user.id)
-    return NextResponse.json({ profile })
+    const setupFields = await getSecurityProfileSetupFields(admin, auth.user.id)
+    return NextResponse.json({ profile, setupFields })
   } catch (e) {
     console.error("[security-profile GET]", e)
     return NextResponse.json({ error: routeErrorMessage(e) }, { status: 500 })

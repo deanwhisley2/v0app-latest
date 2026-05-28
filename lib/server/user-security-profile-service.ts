@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
+import type {
+  PublicSecurityProfile,
+  RegisteredPayoutOption,
+  SecurityProfileSetupFields,
+} from "@/lib/nexus-security-profile-types"
 import {
   fingerprintValue,
   hashSecurityCode,
@@ -127,6 +131,25 @@ export async function getPublicSecurityProfile(
 ): Promise<PublicSecurityProfile> {
   const row = await getOrCreateSecurityProfile(admin, userId)
   return rowToPublic(row)
+}
+
+export function rowToSetupFields(row: UserSecurityProfileRow | null): SecurityProfileSetupFields {
+  return {
+    hasSecurityCode: Boolean(row?.security_code_hash),
+    depositNumber: row?.deposit_number?.trim() || null,
+    withdrawalNumber: row?.withdrawal_number?.trim() || null,
+    depositAccountNames: row?.deposit_account_names?.trim() || null,
+    withdrawalAccountNames: row?.withdrawal_account_names?.trim() || null,
+    cryptoWallet: row?.crypto_wallet?.trim() || null,
+  }
+}
+
+export async function getSecurityProfileSetupFields(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<SecurityProfileSetupFields> {
+  const row = await getOrCreateSecurityProfile(admin, userId)
+  return rowToSetupFields(row)
 }
 
 export function assertNotInCooldown(row: UserSecurityProfileRow): void {

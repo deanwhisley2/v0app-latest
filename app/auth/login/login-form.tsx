@@ -3,55 +3,43 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Fingerprint, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { getSupabaseBrowserConfigIssue } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
+import { AuthCollapsibleSection } from "@/components/auth/auth-collapsible-section"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
-import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { markFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PasswordField } from "@/components/auth/password-field"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
-import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
+
 const REMEMBER_KEY = "nexus_auth_remember_id"
 const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? ""
 
 const LOGIN_JOELIN_CHIPS = [
   { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
-  { label: "Container mode", prompt: "Explain Container Mode benefits and how fixed trades work at a high level." },
   { label: "Wallet & withdrawals", prompt: "Explain Nexus Main wallet rules and how withdrawals work." },
-  { label: "Referrals", prompt: "How do referrals work for Nexus Pro?" },
-  { label: "Trust & safety", prompt: "Why should I trust Nexus Pro with deposits? What safeguards exist?" },
   { label: "Human support", prompt: "How do I reach a human assistant or official support?" },
-  { label: "Forgot password flow", prompt: "How does password recovery work if I lose access?" },
 ]
 
-const inputClass =
-  "min-h-12 text-base sm:text-sm touch-manipulation"
+const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
 
 export default function LoginForm() {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
-  const { language, formatUserMoney } = useUserPreferences()
+  const { language } = useUserPreferences()
   const t = getAuthMessages(language)
-  const testimonialNotif = useAuthTestimonialNotifs({
-    enabled: true,
-    pageKey: "login",
-    formatUserMoney,
-  })
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [resetSuccess, setResetSuccess] = useState(false)
@@ -102,7 +90,6 @@ export default function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setInfo(null)
     if (isDevLocalOnly()) {
       goGuestDashboard()
       return
@@ -189,7 +176,6 @@ export default function LoginForm() {
       }
 
       markFreshLoginLanding()
-      // Full navigation so middleware + AuthProvider read server-set auth cookies on a new device.
       window.location.assign("/dashboard")
     } catch (err) {
       if (
@@ -202,7 +188,7 @@ export default function LoginForm() {
       }
       if (err instanceof TypeError && String(err.message).toLowerCase().includes("fetch")) {
         setError(
-          "Cannot reach Supabase (network). Confirm the project URL in .env.local, that the project is not paused, and try disabling VPN/ad-block for *.supabase.co."
+          "Cannot reach Supabase (network). Confirm the project URL in .env.local, that the project is not paused, and try disabling VPN/ad-block for *.supabase.co.",
         )
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong")
@@ -212,67 +198,61 @@ export default function LoginForm() {
     }
   }
 
+  const loginFooter = (
+    <div className="mt-4 space-y-2">
+      <AuthCollapsibleSection
+        title="NEXUS PRO Account Security Reminder"
+        open={showSecurityNotice}
+        onToggle={() => setShowSecurityNotice((v) => !v)}
+        panelId="login-security-reminder"
+      >
+        <p>Use only your own verified email and avoid shared or public devices.</p>
+        <p className="mt-1.5">Never share your password or 6-digit Nexus Security PIN with anyone.</p>
+        <p className="mt-1.5">
+          Confirm you are on <span className="font-medium text-foreground">www.nexuspro.it.com</span> before signing
+          in.
+        </p>
+      </AuthCollapsibleSection>
+      <AuthCollapsibleSection
+        title="Service Agreement"
+        open={showServiceAgreement}
+        onToggle={() => setShowServiceAgreement((v) => !v)}
+        panelId="login-service-agreement"
+      >
+        <p>Last updated: 2023/05/26</p>
+        <Link
+          href="/legal/service-agreement"
+          className="mt-2 inline-flex min-h-[40px] items-center font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Open Service Agreement
+        </Link>
+      </AuthCollapsibleSection>
+      <footer className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2 text-center text-[11px] text-muted-foreground">
+        <Link href="/legal/terms" className="min-h-[44px] inline-flex items-center hover:text-foreground">
+          {t.footer.terms}
+        </Link>
+        <Link href="/legal/privacy" className="min-h-[44px] inline-flex items-center hover:text-foreground">
+          {t.footer.privacy}
+        </Link>
+        <Link href="/auth/recovery" className="min-h-[44px] inline-flex items-center hover:text-foreground">
+          {t.footer.support}
+        </Link>
+      </footer>
+    </div>
+  )
+
   return (
     <>
-      <WelcomePlatformModal />
-      <AuthLayoutShell language={language} showBrand={false} showTrustStrip={false}>
-        <header className="mb-6 text-center">
+      <AuthLayoutShell language={language} showBrand={false} showTrustStrip={false} footer={loginFooter}>
+        <header className="mb-5 text-center">
           <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{t.login.welcomeBack}</h1>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t.login.subtitle}</p>
         </header>
 
         {isDevLocalOnly() ? (
-          <p className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2.5 text-xs text-cyan-100">
-            <strong>Local dev:</strong> Sign in opens guest dashboard. Disable{" "}
-            <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY</code> for real auth.
+          <p className="mb-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+            Local dev: opens guest dashboard.
           </p>
         ) : null}
-
-        <section className="mb-4 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5">
-          <button
-            type="button"
-            onClick={() => setShowSecurityNotice((v) => !v)}
-            className="flex w-full items-center justify-between text-left"
-            aria-expanded={showSecurityNotice}
-            aria-controls="login-security-reminder"
-          >
-            <span className="text-sm font-semibold text-foreground">NEXUS PRO Account Security Reminder</span>
-            <span className="text-xs text-muted-foreground">{showSecurityNotice ? "Hide" : "Show"}</span>
-          </button>
-          {showSecurityNotice ? (
-            <div id="login-security-reminder" className="mt-2 space-y-1 text-xs leading-relaxed text-muted-foreground">
-              <p>Use only your own verified email and avoid shared/public devices for account access.</p>
-              <p>Never share your password or 6-digit Nexus Security PIN with anyone, including support staff.</p>
-              <p>Always confirm you are on <span className="font-medium text-foreground">www.nexuspro.it.com</span> before signing in.</p>
-              <p>After login, review Security &amp; Recovery settings and keep your payout details up to date.</p>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="mb-4 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5">
-          <button
-            type="button"
-            onClick={() => setShowServiceAgreement((v) => !v)}
-            className="flex w-full items-center justify-between text-left"
-            aria-expanded={showServiceAgreement}
-            aria-controls="login-service-agreement"
-          >
-            <span className="text-sm font-semibold text-foreground">Service Agreement</span>
-            <span className="text-xs text-muted-foreground">{showServiceAgreement ? "Hide" : "Show"}</span>
-          </button>
-          {showServiceAgreement ? (
-            <div id="login-service-agreement" className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground">
-              <p>Last Updated: 2023/05/26</p>
-              <p>Read the full Service Agreement before using the platform.</p>
-              <Link
-                href="/legal/service-agreement"
-                className="inline-flex min-h-[40px] items-center font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Open Service Agreement
-              </Link>
-            </div>
-          ) : null}
-        </section>
 
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">
@@ -306,7 +286,7 @@ export default function LoginForm() {
             aria-invalid={!!error}
           />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
               <Checkbox
                 checked={rememberMe}
@@ -324,28 +304,22 @@ export default function LoginForm() {
           </div>
 
           {sessionCleared ? (
-            <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-100" role="status">
-              Session reset — sign in again. Your account data is intact.
+            <p className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100" role="status">
+              Session reset — sign in again.
             </p>
           ) : null}
           {sessionRequired ? (
-            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100" role="status">
-              You were signed out on this device. Enter your full email and password to sign in again. Use{" "}
-              <span className="font-medium">www.nexuspro.it.com</span> if the page keeps reloading.
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100" role="status">
+              Signed out on this device. Use your full email and password.
             </p>
           ) : null}
           {resetSuccess ? (
-            <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-300" role="status">
+            <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
               Password updated. Sign in with your new password.
             </p>
           ) : null}
-          {info ? (
-            <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-300" role="status">
-              {info}
-            </p>
-          ) : null}
           {error ? (
-            <p className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive" role="alert">
+            <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
               {error}
             </p>
           ) : null}
@@ -360,60 +334,36 @@ export default function LoginForm() {
               t.login.accessDashboard
             )}
           </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 w-full gap-2 text-sm"
-            disabled
-            title="Biometric sign-in will be enabled in a future release"
-          >
-            <Fingerprint className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
-            {t.login.biometricSoon}
-          </Button>
-
-          {android && APK_URL ? (
-            <div className="rounded-2xl border border-border bg-muted/15 p-4">
-              <p className="text-sm font-semibold text-foreground">Android app</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Prefer the app experience? Download the Nexus Pro Android package after you sign in.
-              </p>
-              <Button asChild className="mt-3 w-full min-h-11 touch-manipulation">
-                <a href={APK_URL} target="_blank" rel="noreferrer">
-                  Download Android App
-                </a>
-              </Button>
-            </div>
-          ) : null}
         </form>
 
         {isGuestLoginEnabled() ? (
-          <div className="mt-6 space-y-2 border-t border-border pt-6">
-            <p className="text-center text-xs text-muted-foreground">{t.login.orDivider}</p>
+          <div className="mt-5 space-y-2 border-t border-border pt-5">
             <Button
               type="button"
               variant="secondary"
-              className="min-h-12 w-full"
+              className="min-h-11 w-full"
               disabled={isSubmitting}
               onClick={() => goGuestDashboard()}
             >
               {t.login.guestContinue}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">{t.login.guestHint}</p>
           </div>
         ) : null}
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
+        {android && APK_URL ? (
+          <p className="mt-4 text-center text-[11px] text-muted-foreground">
+            <a href={APK_URL} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              Download Android app
+            </a>
+          </p>
+        ) : null}
+
+        <p className="mt-5 text-center text-sm text-muted-foreground">
           {t.login.noAccount}{" "}
           <Link href="/auth/register" className="font-semibold text-primary underline-offset-4 hover:underline">
             {t.login.register}
           </Link>
-          {" · "}
-          <Link href="/" className="underline-offset-4 hover:underline">
-            {t.login.home}
-          </Link>
         </p>
-
       </AuthLayoutShell>
 
       <AuthAssistantPanel
@@ -422,17 +372,10 @@ export default function LoginForm() {
         initialMessages={[
           {
             role: "assistant",
-            text: "I’m the Nexus assistant — ask me about Nexus Main / wallet rules, referrals, Container fixed flows, deposits & withdrawals, or what to tap next after you sign in.",
+            text: "Ask about wallet rules, deposits, withdrawals, or what to do after sign-in.",
           },
         ]}
         chips={LOGIN_JOELIN_CHIPS}
-      />
-
-      <DashboardTestimonialStrip
-        visible={testimonialNotif.visible}
-        text={testimonialNotif.text}
-        onDismiss={testimonialNotif.dismiss}
-        subtitle="Community"
       />
     </>
   )

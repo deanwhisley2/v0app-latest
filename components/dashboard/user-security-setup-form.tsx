@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Check, Lock, Smartphone, Wallet } from "lucide-react"
+import type { SecurityProfileSetupFields } from "@/lib/nexus-security-profile-types"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,6 +35,60 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
   const [withdrawalNames, setWithdrawalNames] = useState("")
   const [payoutMethod, setPayoutMethod] = useState<NexusPayoutMethod>("mobile_money")
   const [cryptoWallet, setCryptoWallet] = useState("")
+  const [hasExistingPin, setHasExistingPin] = useState(false)
+  const [prefillLoaded, setPrefillLoaded] = useState(false)
+
+  const applySetupFields = useCallback((fields: SecurityProfileSetupFields) => {
+    setHasExistingPin(fields.hasSecurityCode)
+    if (fields.depositNumber) setDeposit(fields.depositNumber)
+    if (fields.depositAccountNames) setDepositNames(fields.depositAccountNames)
+    if (fields.withdrawalNumber) setWithdrawal(fields.withdrawalNumber)
+    if (fields.withdrawalAccountNames) setWithdrawalNames(fields.withdrawalAccountNames)
+    if (fields.cryptoWallet) {
+      setCryptoWallet(fields.cryptoWallet)
+      setPayoutMethod("crypto_trc20")
+    }
+    if (fields.depositNumber && !fields.withdrawalNumber) {
+      setWithdrawal(fields.depositNumber)
+      if (fields.depositAccountNames && !fields.withdrawalAccountNames) {
+        setWithdrawalNames(fields.depositAccountNames)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          if (!cancelled) setPrefillLoaded(true)
+          return
+        }
+        const res = await fetch("/api/user/security-profile", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        })
+        const j = (await res.json().catch(() => ({}))) as {
+          setupFields?: SecurityProfileSetupFields
+          error?: string
+        }
+        if (!cancelled && res.ok && j.setupFields) {
+          applySetupFields(j.setupFields)
+        }
+      } catch {
+        /* ignore — form still works empty */
+      } finally {
+        if (!cancelled) setPrefillLoaded(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [applySetupFields])
 
   const submitSetup = async () => {
     if (code.length !== 6 || code !== codeConfirm) {
@@ -137,9 +192,21 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
         withdrawal. Optional TRC20 wallet can be added now or later via appeal.
       </p>
       {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
+      {!prefillLoaded ? (
+        <p className="mb-3 text-xs text-muted-foreground" aria-busy="true">
+          Loading your saved details…
+        </p>
+      ) : null}
+      {prefillLoaded && (deposit || withdrawal || depositNames || withdrawalNames) ? (
+        <p className="mb-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+          Registered numbers and names from your account are pre-filled below. Update only what you need, then save.
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label className="text-xs">6-digit Nexus Security PIN</Label>
+          <Label className="text-xs">
+            {hasExistingPin ? "Confirm 6-digit Nexus Security PIN" : "6-digit Nexus Security PIN"}
+          </Label>
           <Input
             type="password"
             inputMode="numeric"
@@ -151,7 +218,7 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
           />
         </div>
         <div>
-          <Label className="text-xs">Confirm PIN</Label>
+          <Label className="text-xs">{hasExistingPin ? "Re-enter PIN" : "Confirm PIN"}</Label>
           <Input
             type="password"
             inputMode="numeric"
