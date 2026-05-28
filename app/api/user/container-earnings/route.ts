@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         status: "completed",
         actorType: "user",
         actorId: user.id,
-        summary: "Earnings extracted from active container to container liquid.",
+        summary: "Fixed trade earnings credited to container balance.",
         metadata: { creditedAmount: credited, feeRate: CONTAINER_FEE_RATE },
       })
 
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
       status: "completed",
       actorType: "user",
       actorId: user.id,
-      summary: "Container liquid earnings transferred into Nexus main account.",
+      summary: "Fixed trade earnings credited to Nexus main balance.",
     })
 
     return NextResponse.json({

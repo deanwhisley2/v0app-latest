@@ -123,7 +123,8 @@ export function DepositWithdrawDetailsPanel() {
           <ArrowDownUp className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Required before Add Funds or Withdraw. Changes after setup go through Security Appeal review.
+          Minimum for Add Funds, trading, and Withdraw: 6-digit PIN plus one mobile money number with registered names.
+          Extra payout methods are optional. Changes after setup go through Security Appeal review.
         </p>
       </div>
 

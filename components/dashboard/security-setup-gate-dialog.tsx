@@ -31,7 +31,7 @@ export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow, det
           <Shield className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <h2 id="security-gate-title" className="text-base font-semibold text-foreground">
-          Transaction details required
+          Security setup required
         </h2>
         {detail ? (
           <p className="mt-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm leading-relaxed text-amber-100">
@@ -39,8 +39,8 @@ export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow, det
           </p>
         ) : null}
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Please update your deposit & withdrawal details to continue. You need your 6-digit Nexus Security PIN and at
-          least one registered mobile money number.
+          To add funds, trade, or withdraw, set your 6-digit Nexus Security PIN and register at least one mobile money
+          number with the account holder name(s). A second number or crypto wallet can be added later.
         </p>
         <div className="mt-5 flex flex-col gap-2">
           <Button type="button" className="w-full touch-manipulation" onClick={() => onUpdateDetailsNow()}>

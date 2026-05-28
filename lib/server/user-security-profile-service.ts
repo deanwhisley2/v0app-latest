@@ -8,6 +8,11 @@ import {
   verifySecurityCode,
 } from "@/lib/nexus-security-code"
 import {
+  hasMinimumPayoutLine,
+  hasMinimumSecurity,
+  suggestsOptionalSecurityEnhancements,
+} from "@/lib/nexus-security-minimum"
+import {
   CRYPTO_WITHDRAWAL_NOTICE,
   isValidTrc20UsdtAddress,
   normalizeDepositNumber,
@@ -33,22 +38,22 @@ export type UserSecurityProfileRow = {
 function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayoutOption[] {
   if (!row) return []
   const opts: RegisteredPayoutOption[] = []
-  if (row.deposit_number) {
+  if (row.deposit_number?.trim() && row.deposit_account_names?.trim()) {
     opts.push({
       id: "deposit_line",
       label: "Mobile money (deposit line)",
       rail: "mobile_money_deposit",
       numberMasked: maskSensitiveValue(row.deposit_number, "phone"),
-      accountNames: row.deposit_account_names?.trim() || null,
+      accountNames: row.deposit_account_names.trim(),
     })
   }
-  if (row.withdrawal_number) {
+  if (row.withdrawal_number?.trim() && row.withdrawal_account_names?.trim()) {
     opts.push({
       id: "withdrawal_line",
       label: "Mobile money (withdrawal line)",
       rail: "mobile_money_withdrawal",
       numberMasked: maskSensitiveValue(row.withdrawal_number, "phone"),
-      accountNames: row.withdrawal_account_names?.trim() || null,
+      accountNames: row.withdrawal_account_names.trim(),
     })
   }
   if (row.crypto_wallet && isValidTrc20UsdtAddress(row.crypto_wallet)) {
@@ -65,13 +70,17 @@ function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayou
 
 function rowToPublic(row: UserSecurityProfileRow | null): PublicSecurityProfile {
   const hasSecurityCode = Boolean(row?.security_code_hash)
-  const hasTransactionNumber = Boolean(row?.deposit_number?.trim() || row?.withdrawal_number?.trim())
+  const minimumPayoutLine = row ? hasMinimumPayoutLine(row) : false
+  const minimumSecurity = row ? hasMinimumSecurity(row) : false
   const cooldownUntil = row?.cooldown_until ?? null
   const inCooldown = cooldownUntil ? new Date(cooldownUntil).getTime() > Date.now() : false
   return {
     hasSecurityCode,
-    hasTransactionNumber,
-    needsSetup: !hasSecurityCode || !hasTransactionNumber,
+    hasMinimumSecurity: minimumSecurity,
+    hasTransactionNumber: minimumPayoutLine,
+    hasMinimumPayoutLine: minimumPayoutLine,
+    needsSetup: !minimumSecurity,
+    suggestsOptionalEnhancements: row ? suggestsOptionalSecurityEnhancements(row) : false,
     payoutMethod: (row?.payout_method as NexusPayoutMethod) ?? "mobile_money",
     depositNumberMasked: row?.deposit_number
       ? maskSensitiveValue(row.deposit_number, "phone")

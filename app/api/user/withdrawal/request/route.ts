@@ -170,9 +170,13 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!secRow.deposit_number?.trim() && !secRow.withdrawal_number?.trim()) {
+    const { hasMinimumSecurity } = await import("@/lib/nexus-security-minimum")
+    if (!hasMinimumSecurity(secRow)) {
       return NextResponse.json(
-        { error: "Register at least one mobile money number in Security & Recovery before withdrawing." },
+        {
+          error:
+            "Set your 6-digit Nexus Security PIN and register at least one mobile money number with account holder name(s) before withdrawing.",
+        },
         { status: 403 },
       )
     }
@@ -188,15 +192,15 @@ export async function POST(request: Request) {
       rail = "USDT_TRC20"
       destPlain = secRow.crypto_wallet
     } else if (optionId === "deposit_line") {
-      if (!secRow.deposit_number) {
-        return NextResponse.json({ error: "Deposit line not registered." }, { status: 400 })
+      if (!secRow.deposit_number?.trim() || !secRow.deposit_account_names?.trim()) {
+        return NextResponse.json({ error: "Deposit line not fully registered." }, { status: 400 })
       }
       rail = "mobile_money_deposit"
       destPlain = secRow.deposit_number
       accountNames = secRow.deposit_account_names
     } else if (optionId === "withdrawal_line") {
-      if (!secRow.withdrawal_number) {
-        return NextResponse.json({ error: "Withdrawal line not registered." }, { status: 400 })
+      if (!secRow.withdrawal_number?.trim() || !secRow.withdrawal_account_names?.trim()) {
+        return NextResponse.json({ error: "Withdrawal line not fully registered." }, { status: 400 })
       }
       rail = "mobile_money_withdrawal"
       destPlain = secRow.withdrawal_number

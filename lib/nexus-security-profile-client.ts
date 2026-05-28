@@ -99,8 +99,8 @@ export async function fetchSecurityNeedsSetupPassive(
     if (!result.ok) {
       const cached = readCachedNeedsSetup()
       return {
-        // Fail closed for funding/withdraw — stale "false" cache blocked users with no feedback.
-        needsSetup: cached ?? true,
+        // If minimum security was already confirmed, do not block on transient network errors.
+        needsSetup: cached === null ? true : cached,
         error: result.error,
       }
     }

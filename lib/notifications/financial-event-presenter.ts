@@ -1,3 +1,4 @@
+import { fixedTradeActivityTitle } from "@/lib/notifications/fixed-trade-activity-labels"
 import { mapCustomerNotification } from "@/lib/notifications/notification-mapper"
 import { isInternalNotificationCopy, sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
 
@@ -42,6 +43,15 @@ export function presentFinancialEventForCustomer(row: {
   const fallback = "Account activity recorded."
   const rawSummary = (row.summary ?? "").trim()
   const syntheticType = `${row.category}_${row.event_type}`.toLowerCase()
+  const fixedTitle = fixedTradeActivityTitle(row.event_type)
+  const cat = CATEGORY_LABEL[row.category] ?? "Activity"
+  const status = STATUS_LABEL[row.status] ?? row.status.replace(/_/g, " ")
+  const amt = formatUsd(row.gross_amount)
+  const detailParts = [cat, status, amt].filter(Boolean)
+
+  if (fixedTitle) {
+    return { title: fixedTitle, detailLine: detailParts.join(" · ") }
+  }
 
   const mapped = mapCustomerNotification({
     notificationType: syntheticType,
@@ -55,11 +65,6 @@ export function presentFinancialEventForCustomer(row: {
 
   const title = sanitizeCustomerNotificationText(mapped?.title ?? rawSummary, fallback)
   const body = sanitizeCustomerNotificationText(mapped?.body ?? "", "")
-
-  const cat = CATEGORY_LABEL[row.category] ?? "Activity"
-  const status = STATUS_LABEL[row.status] ?? row.status.replace(/_/g, " ")
-  const amt = formatUsd(row.gross_amount)
-  const detailParts = [cat, status, amt].filter(Boolean)
 
   const safeTitle = sanitizeCustomerNotificationText(title, fallback)
   const safeBody = body && !isInternalNotificationCopy(body) ? body : ""

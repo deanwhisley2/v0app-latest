@@ -15,8 +15,8 @@ function messageFromProfile(profile: PublicSecurityProfile): string | null {
   if (!profile.hasSecurityCode) {
     return "Set your 6-digit Nexus Security PIN in Settings before withdrawing."
   }
-  if (!profile.hasTransactionNumber) {
-    return "Register at least one mobile money number (deposit or withdrawal line) in Settings before withdrawing."
+  if (!profile.hasMinimumPayoutLine) {
+    return "Register at least one mobile money number with the account holder name(s) in Settings before withdrawing."
   }
   if (!profile.payoutOptions?.length) {
     return "No payout method is on file. Add deposit or withdrawal details in Settings, then try again."
@@ -39,7 +39,11 @@ export function assessWithdrawReadiness(
   }
   const block = messageFromProfile(profile)
   if (block) {
-    return { ok: false, message: block, showSecurityGate: true }
+    const showSecurityGate =
+      profile.needsSetup ||
+      (!profile.hasSecurityCode && !profile.inCooldown) ||
+      !profile.hasMinimumPayoutLine
+    return { ok: false, message: block, showSecurityGate }
   }
   return { ok: true, profile }
 }

@@ -11,9 +11,15 @@ export type RegisteredPayoutOption = {
 
 export type PublicSecurityProfile = {
   hasSecurityCode: boolean
-  /** PIN + at least one transaction number required for funding/withdraw. */
+  /** PIN + at least one mobile-money line with registered names. */
+  hasMinimumSecurity: boolean
+  /** True when minimum security is not yet complete (blocks funding/trade/withdraw). */
   needsSetup: boolean
+  /** @deprecated Use hasMinimumPayoutLine — kept for API compat. */
   hasTransactionNumber: boolean
+  hasMinimumPayoutLine: boolean
+  /** Gentle reminder only — never blocks dashboard or funding. */
+  suggestsOptionalEnhancements: boolean
   payoutMethod: NexusPayoutMethod
   depositNumberMasked: string | null
   withdrawalNumberMasked: string | null

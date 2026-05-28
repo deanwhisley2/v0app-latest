@@ -95,6 +95,7 @@ import {
   purgeChromeUnsafeSessionState,
 } from "@/lib/mobile/chrome-android-safe-mode"
 import { HistoryCenterScreen } from "@/components/dashboard/history-center-screen"
+import { OptionalSecurityReminderBanner } from "@/components/dashboard/optional-security-reminder-banner"
 import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
 import { fetchSecurityProfileForAction } from "@/lib/nexus-security-profile-client"
 import { loadWithdrawReadiness } from "@/lib/client/withdraw-readiness"
@@ -2161,7 +2162,7 @@ export function DashboardPageInner() {
         if (!profile || profile.needsSetup) {
           const msg =
             error ??
-            "Set your Nexus Security PIN and at least one mobile money number before adding funds."
+            "Set your 6-digit Nexus Security PIN and register at least one mobile money number with account holder name(s) before adding funds."
           setSecurityGateDetail(msg)
           setSecurityGateOpen(true)
           showToast(msg, "error")
@@ -2202,7 +2203,7 @@ export function DashboardPageInner() {
       return t("withdrawal.error.enterAmount")
     }
     if (!withdrawPayoutProfile?.payoutOptions?.length) {
-      return "Add deposit & withdrawal details in Settings before you can withdraw."
+      return "Register at least one mobile money payout line with account holder name(s) in Settings before you can withdraw."
     }
     if (!selectedWithdrawPayoutId) {
       return "Select a registered payout method below."
@@ -2271,11 +2272,7 @@ export function DashboardPageInner() {
 
     if (showFundModal === "withdraw" && withdrawSubmitBlockedReason) {
       setFundModalError(withdrawSubmitBlockedReason)
-      if (
-        !withdrawPayoutProfile?.payoutOptions?.length ||
-        !withdrawPayoutProfile?.hasSecurityCode ||
-        !withdrawPayoutProfile?.hasTransactionNumber
-      ) {
+      if (withdrawPayoutProfile?.needsSetup) {
         setSecurityGateDetail(withdrawSubmitBlockedReason)
         setSecurityGateOpen(true)
       }
@@ -4046,6 +4043,18 @@ export function DashboardPageInner() {
               />
         )}
       </div>
+
+      {!isGuestSession && (
+        <div className="mx-auto max-w-[1600px] px-4 pb-1">
+          <OptionalSecurityReminderBanner
+            onOpenSettings={() => {
+              setChatHubFocus(null)
+              setSupportThreadFocusId(null)
+              router.push("/settings/deposit-withdraw")
+            }}
+          />
+        </div>
+      )}
 
       {!isGuestSession && (currentUser?.level ?? 1) === 5 && (
         <div className="mx-auto max-w-[1600px] px-4 pb-1">

@@ -216,17 +216,17 @@ export function mapCustomerNotification(params: {
       }
     }
     if (/fixed|principal locked|insurance|gross commit|active fixed session/i.test(combined)) {
-      if (/finished|completed|matured|closed/i.test(combined)) {
+      if (/finished|completed|matured|closed|session completed/i.test(combined)) {
         return {
-          title: "Fixed trade completed",
+          title: "Fixed trade session completed",
           body: usdFmt
-            ? `Your fixed trade has completed. ${usdFmt} is now available per your program terms.`
-            : "Your fixed trade has completed. Funds are available per your program terms.",
+            ? `Your fixed trade session has completed. ${usdFmt} is now available per your program terms.`
+            : "Your fixed trade session has completed. Funds are available per your program terms.",
         }
       }
       return {
-        title: "Fixed trade active",
-        body: "Your fixed trade session is active. View schedule and releases on the Container screen.",
+        title: "Fixed trade allocation active",
+        body: "Your fixed trade allocation is active. View schedule and releases on the Container screen.",
       }
     }
     if (/insurance.*reserved|carved from gross|reserved from allocation/i.test(combined)) {
@@ -243,12 +243,12 @@ export function mapCustomerNotification(params: {
           : "Your copy trade session has started.",
       }
     }
-    if (/container liquid|transferred into|earnings transferred|release|added to your balance/i.test(combined)) {
+    if (/container liquid|transferred into|earnings transferred|release|added to your balance|fixed[- ]?trade earnings/i.test(combined)) {
       return {
-        title: "Earnings credited",
+        title: "Fixed trade earnings credited",
         body: usdFmt
-          ? `Trading earnings of ${usdFmt} have been added to your balance.`
-          : "Trading earnings have been added to your balance.",
+          ? `Fixed trade earnings of ${usdFmt} have been credited to your balance.`
+          : "Fixed trade earnings have been credited to your balance.",
       }
     }
     if (usdFmt) {
@@ -344,16 +344,18 @@ function mapInternalOpsNotification(
   }
   if (/insurance|gross commit|principal locked|fixed session/i.test(combined)) {
     return {
-      title: /locked|reserved|open/i.test(combined) ? "Fixed trade active" : "Fixed trade completed",
+      title: /locked|reserved|open|allocation active/i.test(combined)
+        ? "Fixed trade allocation active"
+        : "Fixed trade session completed",
       body: "Your fixed trade session was updated. See Container for details.",
     }
   }
-  if (/container liquid|earnings transferred|internal_transfer/i.test(combined)) {
+  if (/container liquid|earnings transferred|internal_transfer|withdrawable_to_main/i.test(combined)) {
     return {
-      title: "Earnings credited",
+      title: "Fixed trade earnings credited",
       body: usdFmt
-        ? `Trading earnings of ${usdFmt} have been added to your balance.`
-        : "Trading earnings have been added to your balance.",
+        ? `Fixed trade earnings of ${usdFmt} have been credited to your balance.`
+        : "Fixed trade earnings have been credited to your balance.",
     }
   }
   if (/login|sign[- ]?in/i.test(combined)) {
