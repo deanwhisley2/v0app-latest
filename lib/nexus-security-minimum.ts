@@ -3,26 +3,32 @@
  * Optional: second mobile line, crypto wallet, extra payout methods.
  */
 
-export type SecurityPayoutFields = {
-  deposit_number?: string | null
-  withdrawal_number?: string | null
-  deposit_account_names?: string | null
-  withdrawal_account_names?: string | null
+import { hasAnyNetworkPayoutLine, lineReady, type MobileMoneyLineFields } from "@/lib/nexus-mobile-money-lines"
+
+export type SecurityPayoutFields = MobileMoneyLineFields & {
   security_code_hash?: string | null
   crypto_wallet?: string | null
 }
 
 export function depositPayoutLineReady(row: SecurityPayoutFields): boolean {
-  return Boolean(row.deposit_number?.trim() && row.deposit_account_names?.trim())
+  return (
+    lineReady(row.mtn_deposit_number, row.mtn_deposit_account_names) ||
+    lineReady(row.airtel_deposit_number, row.airtel_deposit_account_names) ||
+    lineReady(row.deposit_number, row.deposit_account_names)
+  )
 }
 
 export function withdrawalPayoutLineReady(row: SecurityPayoutFields): boolean {
-  return Boolean(row.withdrawal_number?.trim() && row.withdrawal_account_names?.trim())
+  return (
+    lineReady(row.mtn_withdrawal_number, row.mtn_withdrawal_account_names) ||
+    lineReady(row.airtel_withdrawal_number, row.airtel_withdrawal_account_names) ||
+    lineReady(row.withdrawal_number, row.withdrawal_account_names)
+  )
 }
 
 /** At least one mobile-money line with registered owner names. */
 export function hasMinimumPayoutLine(row: SecurityPayoutFields): boolean {
-  return depositPayoutLineReady(row) || withdrawalPayoutLineReady(row)
+  return hasAnyNetworkPayoutLine(row)
 }
 
 export function hasMinimumSecurity(row: SecurityPayoutFields): boolean {
@@ -32,9 +38,14 @@ export function hasMinimumSecurity(row: SecurityPayoutFields): boolean {
 /** True when minimum is met but optional payout rails are still empty. */
 export function suggestsOptionalSecurityEnhancements(row: SecurityPayoutFields): boolean {
   if (!hasMinimumSecurity(row)) return false
-  const missingSecondLine = !depositPayoutLineReady(row) || !withdrawalPayoutLineReady(row)
+  const hasMtnDeposit = lineReady(row.mtn_deposit_number, row.mtn_deposit_account_names)
+  const hasAirtelDeposit = lineReady(row.airtel_deposit_number, row.airtel_deposit_account_names)
+  const hasMtnWithdraw = lineReady(row.mtn_withdrawal_number, row.mtn_withdrawal_account_names)
+  const hasAirtelWithdraw = lineReady(row.airtel_withdrawal_number, row.airtel_withdrawal_account_names)
+  const missingSecondNetwork =
+    !(hasMtnDeposit && hasAirtelDeposit) || !(hasMtnWithdraw && hasAirtelWithdraw)
   const missingCrypto = !row.crypto_wallet?.trim()
-  return missingSecondLine || missingCrypto
+  return missingSecondNetwork || missingCrypto
 }
 
 export const OPTIONAL_SECURITY_REMINDER =

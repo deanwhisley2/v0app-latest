@@ -82,20 +82,15 @@ export function DepositWithdrawDetailsPanel() {
   const payoutSummary = useMemo(() => {
     if (!profile) return []
     const out: Array<{ label: string; value: string }> = []
-    if (profile.depositNumberMasked) {
-      out.push({
-        label: "Deposit number",
-        value: `${profile.depositNumberMasked}${profile.depositAccountNames ? ` · ${profile.depositAccountNames}` : ""}`,
-      })
-    }
-    if (profile.withdrawalNumberMasked) {
-      out.push({
-        label: "Withdrawal number",
-        value: `${profile.withdrawalNumberMasked}${profile.withdrawalAccountNames ? ` · ${profile.withdrawalAccountNames}` : ""}`,
-      })
-    }
-    if (profile.cryptoWalletMasked) {
-      out.push({ label: "USDT wallet", value: profile.cryptoWalletMasked })
+    for (const opt of profile.payoutOptions) {
+      if (opt.id === "crypto") {
+        out.push({ label: opt.label, value: opt.numberMasked })
+      } else {
+        out.push({
+          label: opt.label,
+          value: `${opt.numberMasked}${opt.accountNames ? ` · ${opt.accountNames}` : ""}`,
+        })
+      }
     }
     return out
   }, [profile])

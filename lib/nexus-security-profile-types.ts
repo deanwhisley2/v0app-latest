@@ -1,20 +1,26 @@
 import type { NexusPayoutMethod } from "@/lib/nexus-payout-methods"
+import type { MobileMoneyNetwork, PayoutLineId } from "@/lib/nexus-mobile-money-lines"
 
 /** Saved payout rail the user may select at withdraw (no manual entry). */
 /** Owner-only prefill for setup forms (full numbers — never expose to other users). */
 export type SecurityProfileSetupFields = {
   hasSecurityCode: boolean
-  depositNumber: string | null
-  withdrawalNumber: string | null
-  depositAccountNames: string | null
-  withdrawalAccountNames: string | null
+  mtnDepositNumber: string | null
+  mtnDepositAccountNames: string | null
+  airtelDepositNumber: string | null
+  airtelDepositAccountNames: string | null
+  mtnWithdrawalNumber: string | null
+  mtnWithdrawalAccountNames: string | null
+  airtelWithdrawalNumber: string | null
+  airtelWithdrawalAccountNames: string | null
   cryptoWallet: string | null
 }
 
 export type RegisteredPayoutOption = {
-  id: "deposit_line" | "withdrawal_line" | "crypto"
+  id: PayoutLineId
   label: string
   rail: string
+  network: MobileMoneyNetwork | null
   numberMasked: string
   accountNames: string | null
 }

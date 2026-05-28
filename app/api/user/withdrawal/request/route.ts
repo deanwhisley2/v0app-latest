@@ -33,7 +33,14 @@ export async function POST(request: Request) {
       amountInputLocal?: number
       inputCurrency?: string
       /** Registered payout from security profile — no manual entry. */
-      payoutOptionId?: "deposit_line" | "withdrawal_line" | "crypto"
+      payoutOptionId?:
+        | "deposit_line"
+        | "withdrawal_line"
+        | "mtn_deposit"
+        | "airtel_deposit"
+        | "mtn_withdrawal"
+        | "airtel_withdrawal"
+        | "crypto"
       payoutRail?: string
       destinationHint?: string
     }
@@ -185,26 +192,33 @@ export async function POST(request: Request) {
     let rail = "mobile_money"
     let destPlain: string | null = null
     let accountNames: string | null = null
+    let payoutNetwork: string | null = null
     if (optionId === "crypto") {
       if (!secRow.crypto_wallet) {
         return NextResponse.json({ error: "No crypto wallet on file." }, { status: 400 })
       }
       rail = "USDT_TRC20"
       destPlain = secRow.crypto_wallet
-    } else if (optionId === "deposit_line") {
-      if (!secRow.deposit_number?.trim() || !secRow.deposit_account_names?.trim()) {
-        return NextResponse.json({ error: "Deposit line not fully registered." }, { status: 400 })
+    } else if (
+      optionId === "deposit_line" ||
+      optionId === "withdrawal_line" ||
+      optionId === "mtn_deposit" ||
+      optionId === "airtel_deposit" ||
+      optionId === "mtn_withdrawal" ||
+      optionId === "airtel_withdrawal"
+    ) {
+      const { resolvePayerFromSecurityRow } = await import("@/lib/server/user-security-profile-service")
+      const line = resolvePayerFromSecurityRow(secRow, optionId)
+      if (!line.phone || !line.name) {
+        return NextResponse.json({ error: "Selected payout line is not fully registered." }, { status: 400 })
       }
-      rail = "mobile_money_deposit"
-      destPlain = secRow.deposit_number
-      accountNames = secRow.deposit_account_names
-    } else if (optionId === "withdrawal_line") {
-      if (!secRow.withdrawal_number?.trim() || !secRow.withdrawal_account_names?.trim()) {
-        return NextResponse.json({ error: "Withdrawal line not fully registered." }, { status: 400 })
-      }
-      rail = "mobile_money_withdrawal"
-      destPlain = secRow.withdrawal_number
-      accountNames = secRow.withdrawal_account_names
+      payoutNetwork = line.network
+      destPlain = line.phone
+      accountNames = line.name
+      rail =
+        optionId === "withdrawal_line" || optionId.includes("withdrawal")
+          ? `mobile_money_${(line.network ?? "unknown").toLowerCase()}_withdrawal`
+          : `mobile_money_${(line.network ?? "unknown").toLowerCase()}_deposit`
     } else if (secRow.payout_method === "crypto_trc20" && secRow.crypto_wallet) {
       rail = "USDT_TRC20"
       destPlain = secRow.crypto_wallet

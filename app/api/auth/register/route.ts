@@ -245,8 +245,8 @@ export async function POST(request: Request) {
         await setupSecurityProfile(admin, {
           userId: newUserId,
           securityCode: security_code,
-          depositNumber: deposit_number,
-          withdrawalNumber: withdrawal_number,
+          mtnDepositNumber: deposit_number,
+          mtnWithdrawalNumber: withdrawal_number,
           payoutMethod: "mobile_money",
         })
       } catch (secErr) {

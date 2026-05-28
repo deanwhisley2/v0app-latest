@@ -122,7 +122,13 @@ export async function POST(request: Request) {
       fundingCountryCode?: string
       payerDisplayName?: string
       payerPhone?: string
-      payerSource?: "deposit_line" | "withdrawal_line"
+      payerSource?:
+        | "deposit_line"
+        | "withdrawal_line"
+        | "mtn_deposit"
+        | "airtel_deposit"
+        | "mtn_withdrawal"
+        | "airtel_withdrawal"
       paymentProofPath?: string
       paymentProofDataUrl?: string
       paymentRotationLineId?: string
@@ -138,7 +144,17 @@ export async function POST(request: Request) {
     const payerDisplayName =
       typeof body.payerDisplayName === "string" ? body.payerDisplayName.trim().slice(0, 120) || null : null
     const payerPhone = typeof body.payerPhone === "string" ? body.payerPhone.trim().slice(0, 32) || null : null
-    const payerSource = body.payerSource === "deposit_line" || body.payerSource === "withdrawal_line" ? body.payerSource : null
+    const payerSourceIds = [
+      "deposit_line",
+      "withdrawal_line",
+      "mtn_deposit",
+      "airtel_deposit",
+      "mtn_withdrawal",
+      "airtel_withdrawal",
+    ] as const
+    const payerSource = payerSourceIds.includes(body.payerSource as (typeof payerSourceIds)[number])
+      ? (body.payerSource as (typeof payerSourceIds)[number])
+      : null
     const fundChannelRaw = typeof body.fundChannel === "string" ? body.fundChannel.trim() : "local_mobile"
     const fundChannel = isAdminDirectFundChannel(fundChannelRaw)
       ? fundChannelRaw
@@ -207,20 +223,15 @@ export async function POST(request: Request) {
     const resolvePayer = async (): Promise<{ name: string | null; phone: string | null }> => {
       if (payerDisplayName && payerPhone) return { name: payerDisplayName, phone: payerPhone }
       const sec = await getOrCreateSecurityProfile(admin, user.id)
-      const source = payerSource ?? (sec.deposit_number?.trim() ? "deposit_line" : "withdrawal_line")
-      if (source === "deposit_line" && sec.deposit_number?.trim()) {
-        return {
-          name: sec.deposit_account_names?.trim() || null,
-          phone: sec.deposit_number.trim(),
-        }
-      }
-      if (sec.withdrawal_number?.trim()) {
-        return {
-          name: sec.withdrawal_account_names?.trim() || null,
-          phone: sec.withdrawal_number.trim(),
-        }
-      }
-      return { name: payerDisplayName, phone: payerPhone }
+      const { resolvePayerFromSecurityRow } = await import("@/lib/server/user-security-profile-service")
+      const { fundPayerSourceForNetwork } = await import("@/lib/nexus-mobile-money-lines")
+      const source =
+        payerSource ??
+        fundPayerSourceForNetwork(sec, mobileNetwork) ??
+        (sec.deposit_number?.trim() ? "deposit_line" : "withdrawal_line")
+      if (!source) return { name: payerDisplayName, phone: payerPhone }
+      const resolved = resolvePayerFromSecurityRow(sec, source)
+      return { name: resolved.name, phone: resolved.phone }
     }
 
     const payerResolved =

@@ -16,12 +16,49 @@ import {
 import { cn } from "@/lib/utils"
 
 type Props = {
-  /** Settings-only form — no dashboard gate variant. */
   variant?: "settings"
   onComplete?: () => void
 }
 
-/** First-time setup — isolated page only, no global gating. */
+function NetworkBlock({
+  title,
+  number,
+  onNumber,
+  names,
+  onNames,
+  numberPlaceholder,
+}: {
+  title: string
+  number: string
+  onNumber: (v: string) => void
+  names: string
+  onNames: (v: string) => void
+  numberPlaceholder: string
+}) {
+  return (
+    <div className="rounded-lg border border-border/80 bg-muted/15 p-3">
+      <p className="mb-2 text-xs font-semibold text-foreground">{title}</p>
+      <Label className="text-[10px] text-muted-foreground">Mobile money number</Label>
+      <Input
+        value={number}
+        onChange={(e) => onNumber(e.target.value)}
+        className="mt-1"
+        placeholder={numberPlaceholder}
+        inputMode="tel"
+        autoComplete="tel"
+      />
+      <Label className="mt-2 block text-[10px] text-muted-foreground">Registered account name(s)</Label>
+      <Input
+        value={names}
+        onChange={(e) => onNames(e.target.value)}
+        className="mt-1"
+        placeholder="e.g. RICHARD KATO"
+        autoComplete="name"
+      />
+    </div>
+  )
+}
+
 export function UserSecuritySetupForm({ variant = "settings", onComplete }: Props) {
   const [phase, setPhase] = useState<"form" | "success">("form")
   const [error, setError] = useState<string | null>(null)
@@ -29,10 +66,14 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
 
   const [code, setCode] = useState("")
   const [codeConfirm, setCodeConfirm] = useState("")
-  const [deposit, setDeposit] = useState("")
-  const [depositNames, setDepositNames] = useState("")
-  const [withdrawal, setWithdrawal] = useState("")
-  const [withdrawalNames, setWithdrawalNames] = useState("")
+  const [mtnDeposit, setMtnDeposit] = useState("")
+  const [mtnDepositNames, setMtnDepositNames] = useState("")
+  const [airtelDeposit, setAirtelDeposit] = useState("")
+  const [airtelDepositNames, setAirtelDepositNames] = useState("")
+  const [mtnWithdrawal, setMtnWithdrawal] = useState("")
+  const [mtnWithdrawalNames, setMtnWithdrawalNames] = useState("")
+  const [airtelWithdrawal, setAirtelWithdrawal] = useState("")
+  const [airtelWithdrawalNames, setAirtelWithdrawalNames] = useState("")
   const [payoutMethod, setPayoutMethod] = useState<NexusPayoutMethod>("mobile_money")
   const [cryptoWallet, setCryptoWallet] = useState("")
   const [hasExistingPin, setHasExistingPin] = useState(false)
@@ -40,19 +81,17 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
 
   const applySetupFields = useCallback((fields: SecurityProfileSetupFields) => {
     setHasExistingPin(fields.hasSecurityCode)
-    if (fields.depositNumber) setDeposit(fields.depositNumber)
-    if (fields.depositAccountNames) setDepositNames(fields.depositAccountNames)
-    if (fields.withdrawalNumber) setWithdrawal(fields.withdrawalNumber)
-    if (fields.withdrawalAccountNames) setWithdrawalNames(fields.withdrawalAccountNames)
+    if (fields.mtnDepositNumber) setMtnDeposit(fields.mtnDepositNumber)
+    if (fields.mtnDepositAccountNames) setMtnDepositNames(fields.mtnDepositAccountNames)
+    if (fields.airtelDepositNumber) setAirtelDeposit(fields.airtelDepositNumber)
+    if (fields.airtelDepositAccountNames) setAirtelDepositNames(fields.airtelDepositAccountNames)
+    if (fields.mtnWithdrawalNumber) setMtnWithdrawal(fields.mtnWithdrawalNumber)
+    if (fields.mtnWithdrawalAccountNames) setMtnWithdrawalNames(fields.mtnWithdrawalAccountNames)
+    if (fields.airtelWithdrawalNumber) setAirtelWithdrawal(fields.airtelWithdrawalNumber)
+    if (fields.airtelWithdrawalAccountNames) setAirtelWithdrawalNames(fields.airtelWithdrawalAccountNames)
     if (fields.cryptoWallet) {
       setCryptoWallet(fields.cryptoWallet)
       setPayoutMethod("crypto_trc20")
-    }
-    if (fields.depositNumber && !fields.withdrawalNumber) {
-      setWithdrawal(fields.depositNumber)
-      if (fields.depositAccountNames && !fields.withdrawalAccountNames) {
-        setWithdrawalNames(fields.depositAccountNames)
-      }
     }
   }, [])
 
@@ -74,13 +113,12 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
         })
         const j = (await res.json().catch(() => ({}))) as {
           setupFields?: SecurityProfileSetupFields
-          error?: string
         }
         if (!cancelled && res.ok && j.setupFields) {
           applySetupFields(j.setupFields)
         }
       } catch {
-        /* ignore — form still works empty */
+        /* ignore */
       } finally {
         if (!cancelled) setPrefillLoaded(true)
       }
@@ -90,25 +128,20 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
     }
   }, [applySetupFields])
 
+  const lineOk = (num: string, names: string) =>
+    num.trim().replace(/\s+/g, "").length >= 8 && Boolean(names.trim())
+
   const submitSetup = async () => {
     if (code.length !== 6 || code !== codeConfirm) {
       setError("Enter matching 6-digit security codes.")
       return
     }
-    const depositTrim = deposit.trim()
-    const withdrawalTrim = withdrawal.trim()
-    const depositOk = depositTrim.replace(/\s+/g, "").length >= 8
-    const withdrawalOk = withdrawalTrim.replace(/\s+/g, "").length >= 8
-    if (!depositOk && !withdrawalOk) {
-      setError("Enter at least one mobile money number (8+ digits). You may add the second number later.")
-      return
-    }
-    if (depositOk && !depositNames.trim()) {
-      setError("Registered account names are required for the deposit number.")
-      return
-    }
-    if (withdrawalOk && !withdrawalNames.trim()) {
-      setError("Registered account names are required for the withdrawal number.")
+    const mtnDepOk = lineOk(mtnDeposit, mtnDepositNames)
+    const airtelDepOk = lineOk(airtelDeposit, airtelDepositNames)
+    const mtnWdOk = lineOk(mtnWithdrawal, mtnWithdrawalNames)
+    const airtelWdOk = lineOk(airtelWithdrawal, airtelWithdrawalNames)
+    if (!mtnDepOk && !airtelDepOk && !mtnWdOk && !airtelWdOk) {
+      setError("Enter at least one MTN or Airtel number (8+ digits) with registered account name(s).")
       return
     }
     if (payoutMethod === "crypto_trc20" && !isValidTrc20UsdtAddress(cryptoWallet)) {
@@ -136,10 +169,14 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
         },
         body: JSON.stringify({
           security_code: code,
-          deposit_number: depositOk ? depositTrim : "",
-          withdrawal_number: withdrawalOk ? withdrawalTrim : "",
-          deposit_account_names: depositOk ? depositNames.trim() : "",
-          withdrawal_account_names: withdrawalOk ? withdrawalNames.trim() : "",
+          mtn_deposit_number: mtnDepOk ? mtnDeposit.trim() : "",
+          mtn_deposit_account_names: mtnDepOk ? mtnDepositNames.trim() : "",
+          airtel_deposit_number: airtelDepOk ? airtelDeposit.trim() : "",
+          airtel_deposit_account_names: airtelDepOk ? airtelDepositNames.trim() : "",
+          mtn_withdrawal_number: mtnWdOk ? mtnWithdrawal.trim() : "",
+          mtn_withdrawal_account_names: mtnWdOk ? mtnWithdrawalNames.trim() : "",
+          airtel_withdrawal_number: airtelWdOk ? airtelWithdrawal.trim() : "",
+          airtel_withdrawal_account_names: airtelWdOk ? airtelWithdrawalNames.trim() : "",
           payout_method: payoutMethod,
           crypto_wallet: payoutMethod === "crypto_trc20" ? cryptoWallet : undefined,
         }),
@@ -166,13 +203,10 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
           <div className="min-w-0 flex-1">
             <h4 className="text-sm font-semibold text-foreground">Security setup completed</h4>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Your Nexus Security PIN and payout details are saved and locked. Verify carefully — changes require
-              Security Appeal review.
+              Your PIN and MTN/Airtel payout details are saved. The system will use the correct network for each
+              transaction.
             </p>
-            <Button
-              className="mt-4 w-full touch-manipulation sm:w-auto"
-              onClick={() => onComplete?.()}
-            >
+            <Button className="mt-4 w-full touch-manipulation sm:w-auto" onClick={() => onComplete?.()}>
               Back to Security & Recovery
             </Button>
           </div>
@@ -181,6 +215,9 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
     )
   }
 
+  const hasPrefill =
+    mtnDeposit || airtelDeposit || mtnWithdrawal || airtelWithdrawal || mtnDepositNames || airtelDepositNames
+
   return (
     <Card className="border-primary/30 bg-card p-4 shadow-sm">
       <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold">
@@ -188,8 +225,8 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
         Security setup (required for Add Funds & Withdraw)
       </h4>
       <p className="mb-4 text-xs text-muted-foreground">
-        Set your 6-digit PIN and at least one mobile money number. You may use the same number for deposit and
-        withdrawal. Optional TRC20 wallet can be added now or later via appeal.
+        Set your 6-digit PIN and register MTN and Airtel numbers separately so deposits and withdrawals use the correct
+        network. You only need one line to start; add the rest anytime.
       </p>
       {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
       {!prefillLoaded ? (
@@ -197,9 +234,9 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
           Loading your saved details…
         </p>
       ) : null}
-      {prefillLoaded && (deposit || withdrawal || depositNames || withdrawalNames) ? (
+      {prefillLoaded && hasPrefill ? (
         <p className="mb-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-          Registered numbers and names from your account are pre-filled below. Update only what you need, then save.
+          Saved MTN and Airtel details are pre-filled below when available.
         </p>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -229,29 +266,38 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
             autoComplete="off"
           />
         </div>
-        <div className="sm:col-span-2">
-          <Label className="text-xs">MTN / Airtel number (deposits)</Label>
-          <Input value={deposit} onChange={(e) => setDeposit(e.target.value)} className="mt-1" placeholder="+256…" />
-          <Input
-            value={depositNames}
-            onChange={(e) => setDepositNames(e.target.value)}
-            className="mt-2"
-            placeholder="Registered account names (e.g. RICHARD KATO)"
+        <div className="space-y-3 sm:col-span-2">
+          <NetworkBlock
+            title="MTN — deposits"
+            number={mtnDeposit}
+            onNumber={setMtnDeposit}
+            names={mtnDepositNames}
+            onNames={setMtnDepositNames}
+            numberPlaceholder="+256… MTN"
           />
-        </div>
-        <div className="sm:col-span-2">
-          <Label className="text-xs">MTN / Airtel number (withdrawals)</Label>
-          <Input
-            value={withdrawal}
-            onChange={(e) => setWithdrawal(e.target.value)}
-            className="mt-1"
-            placeholder="+256… (optional if same as deposit)"
+          <NetworkBlock
+            title="Airtel — deposits"
+            number={airtelDeposit}
+            onNumber={setAirtelDeposit}
+            names={airtelDepositNames}
+            onNames={setAirtelDepositNames}
+            numberPlaceholder="+256… Airtel"
           />
-          <Input
-            value={withdrawalNames}
-            onChange={(e) => setWithdrawalNames(e.target.value)}
-            className="mt-2"
-            placeholder="Registered account names"
+          <NetworkBlock
+            title="MTN — withdrawals"
+            number={mtnWithdrawal}
+            onNumber={setMtnWithdrawal}
+            names={mtnWithdrawalNames}
+            onNames={setMtnWithdrawalNames}
+            numberPlaceholder="+256… MTN (optional if same as deposit)"
+          />
+          <NetworkBlock
+            title="Airtel — withdrawals"
+            number={airtelWithdrawal}
+            onNumber={setAirtelWithdrawal}
+            names={airtelWithdrawalNames}
+            onNames={setAirtelWithdrawalNames}
+            numberPlaceholder="+256… Airtel (optional if same as deposit)"
           />
         </div>
         <div className="sm:col-span-2">

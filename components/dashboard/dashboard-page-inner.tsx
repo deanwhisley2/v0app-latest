@@ -504,20 +504,22 @@ export function DashboardPageInner() {
   const [fundPayerPhone, setFundPayerPhone] = useState("")
   const [fundPayerSource, setFundPayerSource] = useState<FundPayerSource>("manual")
   const [fundPayerProfile, setFundPayerProfile] = useState<PublicSecurityProfile | null>(null)
-  const fundPayerBinding = useMemo(() => bindFundPayerFromProfile(fundPayerProfile), [fundPayerProfile])
 
-  const applyRegisteredFundPayer = useCallback((profile: PublicSecurityProfile | null) => {
-    const binding = bindFundPayerFromProfile(profile)
-    if (binding.hasRegisteredLine) {
-      setFundPayerSource(binding.source)
-      setFundPayerName(binding.displayName)
-      setFundPayerPhone(binding.displayPhone)
-    } else {
-      setFundPayerSource("manual")
-      setFundPayerName("")
-      setFundPayerPhone("")
-    }
-  }, [])
+  const applyRegisteredFundPayer = useCallback(
+    (profile: PublicSecurityProfile | null, fundingNetwork?: string | null) => {
+      const binding = bindFundPayerFromProfile(profile, fundingNetwork)
+      if (binding.hasRegisteredLine) {
+        setFundPayerSource(binding.source)
+        setFundPayerName(binding.displayName)
+        setFundPayerPhone(binding.displayPhone)
+      } else {
+        setFundPayerSource("manual")
+        setFundPayerName("")
+        setFundPayerPhone("")
+      }
+    },
+    [],
+  )
   const [selectedRetailerId, setSelectedRetailerId] = useState("")
   const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
@@ -527,6 +529,15 @@ export function DashboardPageInner() {
   const [fundPaymentProofPreview, setFundPaymentProofPreview] = useState<string | null>(null)
   const [fundingCountryCodeInput, setFundingCountryCodeInput] = useState("")
   const [fundMobileNetwork, setFundMobileNetwork] = useState("")
+  const fundingPayerNetwork = useMemo(() => {
+    if (l1FundSource === "airtel") return "Airtel"
+    if (l1FundSource === "local" && fundMobileNetwork.trim()) return fundMobileNetwork.trim()
+    return null
+  }, [l1FundSource, fundMobileNetwork])
+  const fundPayerBinding = useMemo(
+    () => bindFundPayerFromProfile(fundPayerProfile, fundingPayerNetwork),
+    [fundPayerProfile, fundingPayerNetwork],
+  )
   const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
   /** When no desk qualifies, Level-5-configured official company receive line (same country/network). */
   const [officialCorridorFallback, setOfficialCorridorFallback] = useState<OfficialCorridorFallback | null>(null)
@@ -2201,7 +2212,7 @@ export function DashboardPageInner() {
         setWithdrawPayoutProfile(null)
         setSelectedWithdrawPayoutId(null)
         setFundPayerProfile(profile)
-        applyRegisteredFundPayer(profile)
+        applyRegisteredFundPayer(profile, null)
       }
       setShowFundModal(mode)
       setFundAmount("")
@@ -2932,6 +2943,11 @@ export function DashboardPageInner() {
                   activeSource={l1FundSource}
                   onSourceChange={(s) => {
                     setL1FundSource(s)
+                    if (fundPayerProfile) {
+                      const net =
+                        s === "airtel" ? "Airtel" : s === "local" ? fundMobileNetwork : null
+                      applyRegisteredFundPayer(fundPayerProfile, net)
+                    }
                     if (s === "local") {
                       setLocalMmWizardStep(1)
                       setQualifiedRetailers([])
@@ -2964,11 +2980,13 @@ export function DashboardPageInner() {
                     fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayName : null
                   }
                   savedPayerNetworkLabel={
-                    l1FundSource === "airtel"
-                      ? "Airtel Money"
-                      : l1FundSource === "mpesa_ke"
-                        ? "M-Pesa"
-                        : null
+                    fundPayerBinding.networkLabel
+                      ? `${fundPayerBinding.networkLabel} Money`
+                      : l1FundSource === "airtel"
+                        ? "Airtel Money"
+                        : l1FundSource === "mpesa_ke"
+                          ? "M-Pesa"
+                          : null
                   }
                   t={t}
                   minDepositLabel={t("funding.amount.minimumLine").replace(
@@ -3018,7 +3036,13 @@ export function DashboardPageInner() {
                         </label>
                         <select
                           value={fundMobileNetwork}
-                          onChange={(e) => setFundMobileNetwork(e.target.value)}
+                          onChange={(e) => {
+                            const net = e.target.value
+                            setFundMobileNetwork(net)
+                            if (fundPayerProfile && l1FundSource === "local") {
+                              applyRegisteredFundPayer(fundPayerProfile, net)
+                            }
+                          }}
                           className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                         >
                           <option value="">{t("funding.network.select")}</option>

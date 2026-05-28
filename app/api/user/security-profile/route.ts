@@ -28,16 +28,7 @@ export async function POST(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
-    const body = (await request.json().catch(() => ({}))) as {
-      action?: string
-      security_code?: string
-      deposit_number?: string
-      withdrawal_number?: string
-      deposit_account_names?: string
-      withdrawal_account_names?: string
-      payout_method?: string
-      crypto_wallet?: string
-    }
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     const admin = createAdminClient()
 
     if (body.action === "verify") {
@@ -47,23 +38,25 @@ export async function POST(request: Request) {
     }
 
     const code = typeof body.security_code === "string" ? body.security_code : ""
-    const deposit = typeof body.deposit_number === "string" ? body.deposit_number : ""
-    const withdrawal = typeof body.withdrawal_number === "string" ? body.withdrawal_number : ""
     const methodRaw = typeof body.payout_method === "string" ? body.payout_method.trim() : "mobile_money"
     const payoutMethod: NexusPayoutMethod =
       methodRaw === "crypto_trc20" ? "crypto_trc20" : "mobile_money"
 
+    const str = (k: string) => (typeof body[k] === "string" ? body[k] : "")
+
     const profile = await setupSecurityProfile(admin, {
       userId: auth.user.id,
       securityCode: code,
-      depositNumber: deposit,
-      withdrawalNumber: withdrawal,
-      depositAccountNames:
-        typeof body.deposit_account_names === "string" ? body.deposit_account_names : undefined,
-      withdrawalAccountNames:
-        typeof body.withdrawal_account_names === "string" ? body.withdrawal_account_names : undefined,
+      mtnDepositNumber: str("mtn_deposit_number") || str("deposit_number"),
+      mtnDepositAccountNames: str("mtn_deposit_account_names") || str("deposit_account_names"),
+      airtelDepositNumber: str("airtel_deposit_number"),
+      airtelDepositAccountNames: str("airtel_deposit_account_names"),
+      mtnWithdrawalNumber: str("mtn_withdrawal_number") || str("withdrawal_number"),
+      mtnWithdrawalAccountNames: str("mtn_withdrawal_account_names") || str("withdrawal_account_names"),
+      airtelWithdrawalNumber: str("airtel_withdrawal_number"),
+      airtelWithdrawalAccountNames: str("airtel_withdrawal_account_names"),
       payoutMethod,
-      cryptoWallet: body.crypto_wallet,
+      cryptoWallet: typeof body.crypto_wallet === "string" ? body.crypto_wallet : undefined,
     })
     return NextResponse.json({ ok: true, profile })
   } catch (e) {

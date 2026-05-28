@@ -17,6 +17,12 @@ import {
   suggestsOptionalSecurityEnhancements,
 } from "@/lib/nexus-security-minimum"
 import {
+  lineReady,
+  resolveLineFromPayoutId,
+  syncLegacyMirrorColumns,
+  type PayoutLineId,
+} from "@/lib/nexus-mobile-money-lines"
+import {
   CRYPTO_WITHDRAWAL_NOTICE,
   isValidTrc20UsdtAddress,
   normalizeDepositNumber,
@@ -33,38 +39,120 @@ export type UserSecurityProfileRow = {
   withdrawal_number: string | null
   deposit_account_names: string | null
   withdrawal_account_names: string | null
+  mtn_deposit_number: string | null
+  mtn_deposit_account_names: string | null
+  airtel_deposit_number: string | null
+  airtel_deposit_account_names: string | null
+  mtn_withdrawal_number: string | null
+  mtn_withdrawal_account_names: string | null
+  airtel_withdrawal_number: string | null
+  airtel_withdrawal_account_names: string | null
   crypto_wallet: string | null
   payout_method: NexusPayoutMethod
   last_sensitive_change_at: string | null
   cooldown_until: string | null
 }
 
+function pushLine(
+  opts: RegisteredPayoutOption[],
+  id: PayoutLineId,
+  label: string,
+  rail: string,
+  network: "MTN" | "Airtel" | null,
+  number: string,
+  names: string,
+): void {
+  opts.push({
+    id,
+    label,
+    rail,
+    network,
+    numberMasked: maskSensitiveValue(number, "phone"),
+    accountNames: names,
+  })
+}
+
 function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayoutOption[] {
   if (!row) return []
   const opts: RegisteredPayoutOption[] = []
-  if (row.deposit_number?.trim() && row.deposit_account_names?.trim()) {
-    opts.push({
-      id: "deposit_line",
-      label: "Mobile money (deposit line)",
-      rail: "mobile_money_deposit",
-      numberMasked: maskSensitiveValue(row.deposit_number, "phone"),
-      accountNames: row.deposit_account_names.trim(),
-    })
+  if (lineReady(row.mtn_deposit_number, row.mtn_deposit_account_names)) {
+    pushLine(
+      opts,
+      "mtn_deposit",
+      "MTN — deposits",
+      "mobile_money_mtn_deposit",
+      "MTN",
+      row.mtn_deposit_number!,
+      row.mtn_deposit_account_names!.trim(),
+    )
   }
-  if (row.withdrawal_number?.trim() && row.withdrawal_account_names?.trim()) {
-    opts.push({
-      id: "withdrawal_line",
-      label: "Mobile money (withdrawal line)",
-      rail: "mobile_money_withdrawal",
-      numberMasked: maskSensitiveValue(row.withdrawal_number, "phone"),
-      accountNames: row.withdrawal_account_names.trim(),
-    })
+  if (lineReady(row.airtel_deposit_number, row.airtel_deposit_account_names)) {
+    pushLine(
+      opts,
+      "airtel_deposit",
+      "Airtel — deposits",
+      "mobile_money_airtel_deposit",
+      "Airtel",
+      row.airtel_deposit_number!,
+      row.airtel_deposit_account_names!.trim(),
+    )
+  }
+  if (lineReady(row.mtn_withdrawal_number, row.mtn_withdrawal_account_names)) {
+    pushLine(
+      opts,
+      "mtn_withdrawal",
+      "MTN — withdrawals",
+      "mobile_money_mtn_withdrawal",
+      "MTN",
+      row.mtn_withdrawal_number!,
+      row.mtn_withdrawal_account_names!.trim(),
+    )
+  }
+  if (lineReady(row.airtel_withdrawal_number, row.airtel_withdrawal_account_names)) {
+    pushLine(
+      opts,
+      "airtel_withdrawal",
+      "Airtel — withdrawals",
+      "mobile_money_airtel_withdrawal",
+      "Airtel",
+      row.airtel_withdrawal_number!,
+      row.airtel_withdrawal_account_names!.trim(),
+    )
+  }
+  if (
+    opts.length === 0 &&
+    lineReady(row.deposit_number, row.deposit_account_names)
+  ) {
+    pushLine(
+      opts,
+      "deposit_line",
+      "Mobile money (deposit)",
+      "mobile_money_deposit",
+      null,
+      row.deposit_number!,
+      row.deposit_account_names!.trim(),
+    )
+  }
+  if (
+    !opts.some((o) => o.id.includes("withdrawal")) &&
+    lineReady(row.withdrawal_number, row.withdrawal_account_names)
+  ) {
+    pushLine(
+      opts,
+      "withdrawal_line",
+      "Mobile money (withdrawal)",
+      "mobile_money_withdrawal",
+      null,
+      row.withdrawal_number!,
+      row.withdrawal_account_names!.trim(),
+    )
   }
   if (row.crypto_wallet && isValidTrc20UsdtAddress(row.crypto_wallet)) {
     opts.push({
       id: "crypto",
       label: "USDT TRC20",
       rail: "USDT_TRC20",
+      network: null,
       numberMasked: maskSensitiveValue(row.crypto_wallet, "wallet"),
       accountNames: null,
     })
@@ -136,12 +224,26 @@ export async function getPublicSecurityProfile(
 export function rowToSetupFields(row: UserSecurityProfileRow | null): SecurityProfileSetupFields {
   return {
     hasSecurityCode: Boolean(row?.security_code_hash),
-    depositNumber: row?.deposit_number?.trim() || null,
-    withdrawalNumber: row?.withdrawal_number?.trim() || null,
-    depositAccountNames: row?.deposit_account_names?.trim() || null,
-    withdrawalAccountNames: row?.withdrawal_account_names?.trim() || null,
+    mtnDepositNumber: row?.mtn_deposit_number?.trim() || row?.deposit_number?.trim() || null,
+    mtnDepositAccountNames:
+      row?.mtn_deposit_account_names?.trim() || row?.deposit_account_names?.trim() || null,
+    airtelDepositNumber: row?.airtel_deposit_number?.trim() || null,
+    airtelDepositAccountNames: row?.airtel_deposit_account_names?.trim() || null,
+    mtnWithdrawalNumber: row?.mtn_withdrawal_number?.trim() || row?.withdrawal_number?.trim() || null,
+    mtnWithdrawalAccountNames:
+      row?.mtn_withdrawal_account_names?.trim() || row?.withdrawal_account_names?.trim() || null,
+    airtelWithdrawalNumber: row?.airtel_withdrawal_number?.trim() || null,
+    airtelWithdrawalAccountNames: row?.airtel_withdrawal_account_names?.trim() || null,
     cryptoWallet: row?.crypto_wallet?.trim() || null,
   }
+}
+
+export function resolvePayerFromSecurityRow(
+  row: UserSecurityProfileRow,
+  source: PayoutLineId,
+): { name: string | null; phone: string | null; network: string | null } {
+  const line = resolveLineFromPayoutId(row, source)
+  return { name: line.names, phone: line.number, network: line.network }
 }
 
 export async function getSecurityProfileSetupFields(
@@ -160,21 +262,27 @@ export function assertNotInCooldown(row: UserSecurityProfileRow): void {
   }
 }
 
+export type SetupSecurityProfileParams = {
+  userId: string
+  securityCode: string
+  mtnDepositNumber?: string
+  mtnDepositAccountNames?: string
+  airtelDepositNumber?: string
+  airtelDepositAccountNames?: string
+  mtnWithdrawalNumber?: string
+  mtnWithdrawalAccountNames?: string
+  airtelWithdrawalNumber?: string
+  airtelWithdrawalAccountNames?: string
+  payoutMethod: NexusPayoutMethod
+  cryptoWallet?: string | null
+}
+
 export async function setupSecurityProfile(
   admin: SupabaseClient,
-  params: {
-    userId: string
-    securityCode: string
-    depositNumber: string
-    withdrawalNumber: string
-    depositAccountNames?: string
-    withdrawalAccountNames?: string
-    payoutMethod: NexusPayoutMethod
-    cryptoWallet?: string | null
-  },
+  params: SetupSecurityProfileParams,
 ): Promise<PublicSecurityProfile> {
   const row = await getOrCreateSecurityProfile(admin, params.userId)
-  const hasNumbers = Boolean(row.deposit_number?.trim() || row.withdrawal_number?.trim())
+  const hasNumbers = hasMinimumPayoutLine(row)
   if (row.security_code_hash && hasNumbers) {
     throw new Error("Security profile already configured.")
   }
@@ -190,20 +298,32 @@ export async function setupSecurityProfile(
     }
   }
 
-  const deposit = normalizeDepositNumber(params.depositNumber)
-  const withdrawal = normalizeWithdrawalNumber(params.withdrawalNumber)
-  const depositOk = deposit.length >= 8
-  const withdrawalOk = withdrawal.length >= 8
-  if (!depositOk && !withdrawalOk) {
-    throw new Error("Enter at least one valid mobile money number (8+ digits).")
+  const mtnDep = normalizeDepositNumber(params.mtnDepositNumber ?? "")
+  const airtelDep = normalizeDepositNumber(params.airtelDepositNumber ?? "")
+  const mtnWd = normalizeWithdrawalNumber(params.mtnWithdrawalNumber ?? "")
+  const airtelWd = normalizeWithdrawalNumber(params.airtelWithdrawalNumber ?? "")
+  const mtnDepOk = mtnDep.length >= 8
+  const airtelDepOk = airtelDep.length >= 8
+  const mtnWdOk = mtnWd.length >= 8
+  const airtelWdOk = airtelWd.length >= 8
+  if (!mtnDepOk && !airtelDepOk && !mtnWdOk && !airtelWdOk) {
+    throw new Error("Enter at least one valid MTN or Airtel number (8+ digits).")
   }
-  const depositNames = params.depositAccountNames?.trim() || null
-  const withdrawalNames = params.withdrawalAccountNames?.trim() || null
-  if (depositOk && !depositNames) {
-    throw new Error("Registered account names are required for the deposit number.")
+  const mtnDepNames = params.mtnDepositAccountNames?.trim() || null
+  const airtelDepNames = params.airtelDepositAccountNames?.trim() || null
+  const mtnWdNames = params.mtnWithdrawalAccountNames?.trim() || null
+  const airtelWdNames = params.airtelWithdrawalAccountNames?.trim() || null
+  if (mtnDepOk && !mtnDepNames) {
+    throw new Error("Registered account names are required for the MTN deposit number.")
   }
-  if (withdrawalOk && !withdrawalNames) {
-    throw new Error("Registered account names are required for the withdrawal number.")
+  if (airtelDepOk && !airtelDepNames) {
+    throw new Error("Registered account names are required for the Airtel deposit number.")
+  }
+  if (mtnWdOk && !mtnWdNames) {
+    throw new Error("Registered account names are required for the MTN withdrawal number.")
+  }
+  if (airtelWdOk && !airtelWdNames) {
+    throw new Error("Registered account names are required for the Airtel withdrawal number.")
   }
 
   let crypto: string | null = row.crypto_wallet
@@ -218,15 +338,20 @@ export async function setupSecurityProfile(
 
   const now = new Date().toISOString()
   const patch: Record<string, unknown> = {
-    deposit_number: depositOk ? deposit : row.deposit_number,
-    withdrawal_number: withdrawalOk ? withdrawal : row.withdrawal_number,
-    deposit_account_names: depositOk ? depositNames : row.deposit_account_names,
-    withdrawal_account_names: withdrawalOk ? withdrawalNames : row.withdrawal_account_names,
+    mtn_deposit_number: mtnDepOk ? mtnDep : row.mtn_deposit_number,
+    mtn_deposit_account_names: mtnDepOk ? mtnDepNames : row.mtn_deposit_account_names,
+    airtel_deposit_number: airtelDepOk ? airtelDep : row.airtel_deposit_number,
+    airtel_deposit_account_names: airtelDepOk ? airtelDepNames : row.airtel_deposit_account_names,
+    mtn_withdrawal_number: mtnWdOk ? mtnWd : row.mtn_withdrawal_number,
+    mtn_withdrawal_account_names: mtnWdOk ? mtnWdNames : row.mtn_withdrawal_account_names,
+    airtel_withdrawal_number: airtelWdOk ? airtelWd : row.airtel_withdrawal_number,
+    airtel_withdrawal_account_names: airtelWdOk ? airtelWdNames : row.airtel_withdrawal_account_names,
     crypto_wallet: crypto,
     payout_method: params.payoutMethod,
     last_sensitive_change_at: now,
     updated_at: now,
   }
+  syncLegacyMirrorColumns(patch, row)
   if (!completingIncomplete) {
     patch.security_code_hash = hashSecurityCode(params.securityCode)
     patch.security_code_set_at = now
