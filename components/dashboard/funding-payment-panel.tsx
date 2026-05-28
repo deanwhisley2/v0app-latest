@@ -10,6 +10,7 @@ import {
   PaymentReferenceFields,
 } from "@/components/dashboard/mobile-money-payment-instructions"
 import { KenyaMpesaTillCard } from "@/components/dashboard/kenya-mpesa-till-card"
+import { SavedPayerDisplay } from "@/components/dashboard/saved-payer-display"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
@@ -54,6 +55,10 @@ type Props = {
   onPayerNameChange?: (v: string) => void
   fundPayerPhone?: string
   onPayerPhoneChange?: (v: string) => void
+  /** When set, sender identity is read-only from Security profile (no manual re-entry). */
+  savedPayerPhoneMasked?: string | null
+  savedPayerAccountNames?: string | null
+  savedPayerNetworkLabel?: string | null
   /** When set with onFundAmountChange, amount field is rendered in crypto flow (compact mobile layout). */
   fundAmount?: string
   onFundAmountChange?: (v: string) => void
@@ -84,6 +89,9 @@ export function FundingPaymentPanel({
   onPayerNameChange,
   fundPayerPhone = "",
   onPayerPhoneChange,
+  savedPayerPhoneMasked = null,
+  savedPayerAccountNames = null,
+  savedPayerNetworkLabel = null,
   fundAmount = "",
   onFundAmountChange,
   fundAmountLocale = "en-US",
@@ -188,7 +196,14 @@ export function FundingPaymentPanel({
   }, [wallet])
 
   const payerFields =
-    onPayerNameChange && onPayerPhoneChange ? (
+    savedPayerPhoneMasked && savedPayerAccountNames ? (
+      <SavedPayerDisplay
+        networkLabel={savedPayerNetworkLabel ?? undefined}
+        phoneMasked={savedPayerPhoneMasked}
+        accountNames={savedPayerAccountNames}
+        hint="This number is locked from your Security profile. Enter only amount and transaction reference below."
+      />
+    ) : onPayerNameChange && onPayerPhoneChange ? (
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="block text-[10px] font-medium text-foreground">{t("funding.field.senderName")}</label>

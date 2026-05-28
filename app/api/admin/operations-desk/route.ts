@@ -426,13 +426,24 @@ export async function GET(request: Request) {
         wdInputLocal = Number(intent.amount_input_local ?? NaN)
         wdInputCur = String(intent.input_currency ?? wdInputCur).trim()
       }
-      const rail = meta.payout_rail != null ? String(meta.payout_rail).trim() : ""
+      const snap =
+        meta.security_profile_snapshot && typeof meta.security_profile_snapshot === "object"
+          ? (meta.security_profile_snapshot as Record<string, unknown>)
+          : null
+      const rail =
+        (meta.payout_rail != null ? String(meta.payout_rail).trim() : "") ||
+        (snap?.payout_rail != null ? String(snap.payout_rail).trim() : "")
       const dest =
         meta.destination_hint != null
           ? String(meta.destination_hint).trim()
           : meta.destination != null
             ? String(meta.destination).trim()
-            : ""
+            : snap?.destination_hint != null
+              ? String(snap.destination_hint).trim()
+              : ""
+      const registeredNames =
+        (meta.registered_account_names != null ? String(meta.registered_account_names).trim() : "") ||
+        (snap?.registered_account_names != null ? String(snap.registered_account_names).trim() : "")
       const networkParts = [rail || null, dest || null].filter(Boolean) as string[]
       const payoutRailLine = networkParts.length ? networkParts.join(" · ") : null
       const secRow = secMap.get(uid) ?? null
@@ -466,8 +477,8 @@ export async function GET(request: Request) {
         retailer_desk_email: null,
         duplicate_risk_hint: null,
         note: null,
-        payer_display_name: null,
-        payer_phone: null,
+        payer_display_name: registeredNames || payoutSummary.registeredNames || null,
+        payer_phone: dest || payoutSummary.destination || null,
         commission_rate: null,
         amount_credited: null,
         resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,

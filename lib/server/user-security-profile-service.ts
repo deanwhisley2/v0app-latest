@@ -304,11 +304,17 @@ export function buildAdminPayoutSummary(row: UserSecurityProfileRow | null): Rec
   const ageDays = row.last_sensitive_change_at
     ? Math.floor((Date.now() - new Date(row.last_sensitive_change_at).getTime()) / 86_400_000)
     : null
+  const registeredNames =
+    row.withdrawal_account_names?.trim() ||
+    row.deposit_account_names?.trim() ||
+    "—"
   return {
     payoutMethod: method,
     route: row.payout_method,
     destination: dest,
     depositMasked: row.deposit_number ? maskSensitiveValue(row.deposit_number, "phone") : "—",
+    withdrawalMasked: row.withdrawal_number ? maskSensitiveValue(row.withdrawal_number, "phone") : "—",
+    registeredNames,
     securityAge: ageDays != null ? `${ageDays} days` : "new",
     inCooldown: row.cooldown_until && new Date(row.cooldown_until) > new Date() ? "yes" : "no",
   }

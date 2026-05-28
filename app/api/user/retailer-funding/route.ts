@@ -206,21 +206,39 @@ export async function POST(request: Request) {
 
     const resolvePayer = async (): Promise<{ name: string | null; phone: string | null }> => {
       if (payerDisplayName && payerPhone) return { name: payerDisplayName, phone: payerPhone }
-      if (!payerSource) return { name: payerDisplayName, phone: payerPhone }
       const sec = await getOrCreateSecurityProfile(admin, user.id)
-      if (payerSource === "deposit_line") {
-        return { name: sec.deposit_account_names?.trim() || null, phone: sec.deposit_number?.trim() || null }
+      const source = payerSource ?? (sec.deposit_number?.trim() ? "deposit_line" : "withdrawal_line")
+      if (source === "deposit_line" && sec.deposit_number?.trim()) {
+        return {
+          name: sec.deposit_account_names?.trim() || null,
+          phone: sec.deposit_number.trim(),
+        }
       }
-      return { name: sec.withdrawal_account_names?.trim() || null, phone: sec.withdrawal_number?.trim() || null }
+      if (sec.withdrawal_number?.trim()) {
+        return {
+          name: sec.withdrawal_account_names?.trim() || null,
+          phone: sec.withdrawal_number.trim(),
+        }
+      }
+      return { name: payerDisplayName, phone: payerPhone }
     }
 
-    const payerResolved = fundChannel === "local_mobile" ? await resolvePayer() : { name: payerDisplayName, phone: payerPhone }
+    const payerResolved =
+      fundChannel === "local_mobile" || isAdminDirectFundChannel(fundChannel)
+        ? await resolvePayer()
+        : { name: payerDisplayName, phone: payerPhone }
     const payerNameFinal = payerResolved.name
     const payerPhoneFinal = payerResolved.phone
-    if (fundChannel === "local_mobile" && (!payerNameFinal || !payerPhoneFinal)) {
+    if (
+      (fundChannel === "local_mobile" || isAdminDirectFundChannel(fundChannel)) &&
+      (!payerNameFinal || !payerPhoneFinal)
+    ) {
       return NextResponse.json(
-        { error: "payerDisplayName and payerPhone are required for local mobile funding." },
-        { status: 400 }
+        {
+          error:
+            "Register your mobile money number and account holder name(s) in Security & Recovery before funding.",
+        },
+        { status: 400 },
       )
     }
 
@@ -365,18 +383,6 @@ export async function POST(request: Request) {
       insertRetailerId = null
       insertOfficialRouteId = null
       retailerResponseDeadlineAt = null
-
-      if (!payerDisplayName || !payerPhone) {
-        return NextResponse.json(
-          {
-            error:
-              fundChannel === "admin_mpesa_ke"
-                ? "payerDisplayName and payerPhone are required for Kenya M-PESA funding."
-                : "payerDisplayName and payerPhone are required for Uganda Airtel funding.",
-          },
-          { status: 400 },
-        )
-      }
 
       const { data: prof } = await admin.from("profiles").select("funding_country_code").eq("id", user.id).maybeSingle()
       const userCountry =

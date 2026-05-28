@@ -116,6 +116,12 @@ import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
 import {
+  addFundsPayerIsReady,
+  bindFundPayerFromProfile,
+  type FundPayerSource,
+} from "@/lib/client/fund-payer-from-profile"
+import { SavedPayerDisplay } from "@/components/dashboard/saved-payer-display"
+import {
   isKenyaAdminMpesaEligible,
   isUgandaAdminAirtelEligible,
   mobileNetworksForFundingCountry,
@@ -496,8 +502,22 @@ export function DashboardPageInner() {
   const [fundNote, setFundNote] = useState("")
   const [fundPayerName, setFundPayerName] = useState("")
   const [fundPayerPhone, setFundPayerPhone] = useState("")
-  const [fundPayerSource, setFundPayerSource] = useState<"manual" | "deposit_line" | "withdrawal_line">("manual")
+  const [fundPayerSource, setFundPayerSource] = useState<FundPayerSource>("manual")
   const [fundPayerProfile, setFundPayerProfile] = useState<PublicSecurityProfile | null>(null)
+  const fundPayerBinding = useMemo(() => bindFundPayerFromProfile(fundPayerProfile), [fundPayerProfile])
+
+  const applyRegisteredFundPayer = useCallback((profile: PublicSecurityProfile | null) => {
+    const binding = bindFundPayerFromProfile(profile)
+    if (binding.hasRegisteredLine) {
+      setFundPayerSource(binding.source)
+      setFundPayerName(binding.displayName)
+      setFundPayerPhone(binding.displayPhone)
+    } else {
+      setFundPayerSource("manual")
+      setFundPayerName("")
+      setFundPayerPhone("")
+    }
+  }, [])
   const [selectedRetailerId, setSelectedRetailerId] = useState("")
   const [retailerRows, setRetailerRows] = useState<RetailerRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailerFundingRequest[]>([])
@@ -1956,8 +1976,8 @@ export function DashboardPageInner() {
       showToast("Choose your payment network first (MTN, Airtel, M-Pesa, …).", "error")
       return
     }
-    if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
-      showToast("Enter sender name and sending mobile number.", "error")
+    if (!addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)) {
+      showToast("Register your mobile money number in Security & Recovery first.", "error")
       return
     }
     setLoadingQualifiedRetailers(true)
@@ -2005,7 +2025,17 @@ export function DashboardPageInner() {
     } finally {
       setLoadingQualifiedRetailers(false)
     }
-  }, [fundAmount, addFundsCorridorCountry, currency, fundMobileNetwork, fundPayerName, fundPayerPhone, showToast])
+  }, [
+    fundAmount,
+    addFundsCorridorCountry,
+    currency,
+    fundMobileNetwork,
+    fundPayerName,
+    fundPayerPhone,
+    fundPayerSource,
+    fundPayerProfile,
+    showToast,
+  ])
 
   const handleBackLocalMmWizard = useCallback(() => {
     setLocalMmWizardStep(1)
@@ -2171,11 +2201,7 @@ export function DashboardPageInner() {
         setWithdrawPayoutProfile(null)
         setSelectedWithdrawPayoutId(null)
         setFundPayerProfile(profile)
-        const hasDeposit = Boolean(profile.depositNumberMasked)
-        const hasWithdrawal = Boolean(profile.withdrawalNumberMasked)
-        setFundPayerSource(hasDeposit ? "deposit_line" : hasWithdrawal ? "withdrawal_line" : "manual")
-        setFundPayerName("")
-        setFundPayerPhone("")
+        applyRegisteredFundPayer(profile)
       }
       setShowFundModal(mode)
       setFundAmount("")
@@ -2194,7 +2220,7 @@ export function DashboardPageInner() {
         setFundPaymentProofPreview(null)
       }
     },
-    [isGuestSession, showToast, t],
+    [isGuestSession, showToast, t, applyRegisteredFundPayer],
   )
 
   const withdrawSubmitBlockedReason = useMemo(() => {
@@ -2424,7 +2450,7 @@ export function DashboardPageInner() {
             }
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
-            if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
+            if (!addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)) {
               throw new Error(t("funding.error.senderIdentity"))
             }
             const airtelFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "UGX"
@@ -2466,7 +2492,7 @@ export function DashboardPageInner() {
             }
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
-            if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
+            if (!addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)) {
               throw new Error(t("funding.error.senderIdentity"))
             }
             const kesFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "KES"
@@ -2512,7 +2538,7 @@ export function DashboardPageInner() {
           if ((!localMmSelectedDesk && !selectedOfficialRouteId) || !fundTxReference.trim()) {
             throw new Error(t("funding.error.pickDeskAndTxRef"))
           }
-          if (fundPayerSource === "manual" && (!fundPayerName.trim() || !fundPayerPhone.trim())) {
+          if (!addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)) {
             throw new Error(t("funding.error.senderIdentity"))
           }
           const ccSave = addFundsCorridorCountry
@@ -2931,6 +2957,19 @@ export function DashboardPageInner() {
                   onPayerNameChange={setFundPayerName}
                   fundPayerPhone={fundPayerPhone}
                   onPayerPhoneChange={setFundPayerPhone}
+                  savedPayerPhoneMasked={
+                    fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayPhone : null
+                  }
+                  savedPayerAccountNames={
+                    fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayName : null
+                  }
+                  savedPayerNetworkLabel={
+                    l1FundSource === "airtel"
+                      ? "Airtel Money"
+                      : l1FundSource === "mpesa_ke"
+                        ? "M-Pesa"
+                        : null
+                  }
                   t={t}
                   minDepositLabel={t("funding.amount.minimumLine").replace(
                     "{{amount}}",
@@ -2947,41 +2986,12 @@ export function DashboardPageInner() {
                       </span>
                     </div>
                     <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.local.step1Body")}</p>
-                    {fundPayerProfile?.depositNumberMasked || fundPayerProfile?.withdrawalNumberMasked ? (
-                      <div className="rounded-lg border border-border/70 bg-background/60 p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                          Your registered sender
-                        </p>
-                        <div className="mt-2 space-y-2">
-                          <label className="flex cursor-pointer items-start gap-2 text-sm">
-                            <input
-                              type="radio"
-                              name="payerSource"
-                              checked={fundPayerSource !== "manual"}
-                              onChange={() =>
-                                setFundPayerSource(
-                                  fundPayerProfile?.depositNumberMasked ? "deposit_line" : "withdrawal_line",
-                                )
-                              }
-                            />
-                            <span className="text-xs">
-                              Use registered number{" "}
-                              <span className="font-medium text-foreground">
-                                {fundPayerProfile?.depositNumberMasked ?? fundPayerProfile?.withdrawalNumberMasked}
-                              </span>
-                            </span>
-                          </label>
-                          <label className="flex cursor-pointer items-start gap-2 text-sm">
-                            <input
-                              type="radio"
-                              name="payerSource"
-                              checked={fundPayerSource === "manual"}
-                              onChange={() => setFundPayerSource("manual")}
-                            />
-                            <span className="text-xs text-muted-foreground">Use another number (one-time)</span>
-                          </label>
-                        </div>
-                      </div>
+                    {fundPayerBinding.hasRegisteredLine ? (
+                      <SavedPayerDisplay
+                        phoneMasked={fundPayerBinding.displayPhone}
+                        accountNames={fundPayerBinding.displayName}
+                        hint="Sender details are taken from Security & Recovery. Enter amount and network below, then continue."
+                      />
                     ) : null}
                     <div className="space-y-2.5">
                       <div>
@@ -3046,34 +3056,36 @@ export function DashboardPageInner() {
                           )}
                         </p>
                       </div>
-                      <div>
-                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                          {t("funding.field.senderPhone")}
-                        </label>
-                        <input
-                          type="tel"
-                          value={fundPayerPhone}
-                          onChange={(e) => setFundPayerPhone(e.target.value)}
-                          placeholder={t("funding.placeholder.phoneExample")}
-                          autoComplete="tel"
-                          disabled={fundPayerSource !== "manual"}
-                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
-                          {t("funding.field.senderName")}
-                        </label>
-                        <input
-                          type="text"
-                          value={fundPayerName}
-                          onChange={(e) => setFundPayerName(e.target.value)}
-                          placeholder={t("funding.placeholder.fullName")}
-                          autoComplete="name"
-                          disabled={fundPayerSource !== "manual"}
-                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-                        />
-                      </div>
+                      {!fundPayerBinding.hasRegisteredLine ? (
+                        <>
+                          <div>
+                            <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                              {t("funding.field.senderPhone")}
+                            </label>
+                            <input
+                              type="tel"
+                              value={fundPayerPhone}
+                              onChange={(e) => setFundPayerPhone(e.target.value)}
+                              placeholder={t("funding.placeholder.phoneExample")}
+                              autoComplete="tel"
+                              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                              {t("funding.field.senderName")}
+                            </label>
+                            <input
+                              type="text"
+                              value={fundPayerName}
+                              onChange={(e) => setFundPayerName(e.target.value)}
+                              placeholder={t("funding.placeholder.fullName")}
+                              autoComplete="name"
+                              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                            />
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                     <button
                       type="button"
@@ -3831,7 +3843,7 @@ export function DashboardPageInner() {
                     ? t("withdrawal.status.selectDesk")
                     : !fundTxReference.trim()
                       ? t("withdrawal.status.enterTxRef")
-                      : !fundPayerName.trim() || !fundPayerPhone.trim()
+                      : !addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)
                         ? t("withdrawal.status.senderRequired")
                         : !fundMobileNetwork.trim() || addFundsCorridorCountry.length !== 2
                           ? t("withdrawal.status.countryNetwork")
@@ -3861,8 +3873,23 @@ export function DashboardPageInner() {
                         (!ugandaAdminAirtelEligible ||
                           !fundTxReference.trim() ||
                           Boolean(fundTxRefError) ||
-                          !fundPayerName.trim() ||
-                          !fundPayerPhone.trim() ||
+                          !addFundsPayerIsReady(
+                            fundPayerSource,
+                            fundPayerProfile,
+                            fundPayerName,
+                            fundPayerPhone,
+                          ) ||
+                          !(parseCustomerLocalAmountInput(fundAmount) > 0))) ||
+                      (l1FundSource === "mpesa_ke" &&
+                        (!kenyaAdminMpesaEligible ||
+                          !fundTxReference.trim() ||
+                          Boolean(fundTxRefError) ||
+                          !addFundsPayerIsReady(
+                            fundPayerSource,
+                            fundPayerProfile,
+                            fundPayerName,
+                            fundPayerPhone,
+                          ) ||
                           !(parseCustomerLocalAmountInput(fundAmount) > 0))))) ||
                   (showFundModal === "add" && retailerCreditDesk) ||
                   (showFundModal === "add" && (currentUser?.level ?? 1) === 5) ||
@@ -3873,8 +3900,7 @@ export function DashboardPageInner() {
                       (!localMmSelectedDesk && !selectedOfficialRouteId) ||
                       !fundTxReference.trim() ||
                       Boolean(fundTxRefError) ||
-                      !fundPayerName.trim() ||
-                      !fundPayerPhone.trim() ||
+                      !addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone) ||
                       !fundMobileNetwork.trim() ||
                       addFundsCorridorCountry.length !== 2 ||
                       !(parseCustomerLocalAmountInput(fundAmount) > 0)))
