@@ -714,30 +714,43 @@ type OperationsDeskApiRow = {
   payout_security_age?: string | null
   payout_in_cooldown?: boolean
   deposit_number_masked?: string | null
+  payout_option_label?: string | null
+  payout_network?: string | null
 }
 
 function AdminWithdrawalPayoutSummary({ row }: { row: OperationsDeskApiRow }) {
   if (row.kind !== "user_withdrawal") return null
   const method = row.payout_method_label ?? "—"
-  const dest = row.payout_destination ?? row.mobile_network ?? "—"
+  const selectedLine = row.payout_option_label ?? row.mobile_network ?? "—"
+  const payoutNumber = row.payer_phone ?? row.payout_destination ?? "—"
+  const registeredNames = row.payer_display_name ?? "—"
   const age = row.payout_security_age ?? "—"
   return (
-    <div className="mt-2 space-y-1 rounded border border-border/80 bg-background/60 px-2.5 py-2 text-[11px]">
+    <div className="mt-2 space-y-1.5 rounded border border-border/80 bg-background/60 px-2.5 py-2 text-[11px]">
       <p>
         <span className="text-muted-foreground">Payout method</span>{" "}
         <span className="font-semibold text-foreground">{method}</span>
       </p>
-      <p className="font-mono break-all">
-        <span className="text-muted-foreground">
-          {row.payout_route === "crypto_trc20" ? "Wallet" : "Withdrawal number"}
-        </span>{" "}
-        {dest}
-      </p>
-      {row.deposit_number_masked ? (
-        <p className="font-mono">
-          <span className="text-muted-foreground">Deposit number</span> {row.deposit_number_masked}
+      {row.payout_network ? (
+        <p>
+          <span className="text-muted-foreground">Network</span>{" "}
+          <span className="font-semibold text-foreground">{row.payout_network}</span>
         </p>
       ) : null}
+      <p>
+        <span className="text-muted-foreground">User-selected line</span>{" "}
+        <span className="font-semibold text-foreground">{selectedLine}</span>
+      </p>
+      <p className="font-mono break-all">
+        <span className="text-muted-foreground">
+          {row.payout_route === "crypto_trc20" ? "Wallet" : "Payout number (auto-filled)"}
+        </span>{" "}
+        {payoutNumber}
+      </p>
+      <p>
+        <span className="text-muted-foreground">Registered account name(s)</span>{" "}
+        <span className="font-semibold text-foreground">{registeredNames}</span>
+      </p>
       <p>
         <span className="text-muted-foreground">Security age</span> {age}
         {row.payout_in_cooldown ? (
@@ -1966,14 +1979,29 @@ export function AdminOperationalAssets({
                           : row.kind === "user_add_funds"
                             ? row.fund_channel ?? "—"
                             : "crypto_ref"}
-                        {row.kind === "user_withdrawal" && row.payout_method_label ? (
+                        {row.kind === "user_withdrawal" ? (
                           <>
-                            <br />
-                            <span className="text-foreground">{row.payout_method_label}</span>
-                            {row.payout_destination ? (
+                            {row.payout_option_label ? (
+                              <>
+                                <br />
+                                <span className="text-foreground">{row.payout_option_label}</span>
+                              </>
+                            ) : null}
+                            {row.payer_phone ? (
+                              <>
+                                <br />
+                                <span className="text-foreground">{row.payer_phone}</span>
+                              </>
+                            ) : row.payout_destination ? (
                               <>
                                 <br />
                                 {row.payout_destination}
+                              </>
+                            ) : null}
+                            {row.payer_display_name ? (
+                              <>
+                                <br />
+                                <span className="text-muted-foreground">{row.payer_display_name}</span>
                               </>
                             ) : null}
                           </>
@@ -2162,12 +2190,19 @@ export function AdminOperationalAssets({
                       {reviewRow.retailer_basin_usd != null ? ` · Basin $${Number(reviewRow.retailer_basin_usd).toFixed(2)}` : ""}
                     </p>
                     {reviewRow.kind === "user_withdrawal" ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        Currency context · {reviewRow.fund_channel ?? "—"}
+                      <p className="text-xs">
+                        <span className="text-muted-foreground">Payout line (user-selected)</span>{" "}
+                        {reviewRow.payout_option_label ?? reviewRow.mobile_network ?? "—"}
                         <br />
-                        Payout rail / destination · {reviewRow.mobile_network ?? "—"}
+                        <span className="text-muted-foreground">Payout number</span>{" "}
+                        <span className="font-mono">{reviewRow.payer_phone ?? "—"}</span>
                         <br />
-                        Payout state · {reviewRow.payout_status ?? "—"}
+                        <span className="text-muted-foreground">Registered name(s)</span>{" "}
+                        {reviewRow.payer_display_name ?? "—"}
+                        <br />
+                        <span className="text-[11px] text-muted-foreground">
+                          Currency · {reviewRow.fund_channel ?? "—"} · State {reviewRow.payout_status ?? "—"}
+                        </span>
                       </p>
                     ) : null}
                     {reviewRow.kind === "user_add_funds" ? (

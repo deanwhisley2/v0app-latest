@@ -14,6 +14,7 @@ import { normalizeFundingPaymentReference } from "@/lib/server/funding-reference
 import { resolveWithdrawalSettlementFromRow } from "@/lib/server/withdrawal-processing-fee"
 import {
   buildAdminPayoutSummary,
+  resolveAdminWithdrawalPayoutDetails,
   type UserSecurityProfileRow,
 } from "@/lib/server/user-security-profile-service"
 
@@ -84,6 +85,9 @@ export type OperationsDeskRow = {
   payout_security_age?: string | null
   payout_in_cooldown?: boolean
   deposit_number_masked?: string | null
+  /** User-selected payout line at withdraw submit (L5 full visibility). */
+  payout_option_label?: string | null
+  payout_network?: string | null
 }
 
 function msSince(iso: string): number | null {
@@ -186,7 +190,7 @@ export async function GET(request: Request) {
       const secRes = await admin
         .from("user_security_profiles")
         .select(
-          "user_id,security_code_hash,security_code_set_at,deposit_number,withdrawal_number,crypto_wallet,payout_method,last_sensitive_change_at,cooldown_until",
+          "user_id,security_code_hash,security_code_set_at,deposit_number,withdrawal_number,deposit_account_names,withdrawal_account_names,mtn_deposit_number,mtn_deposit_account_names,airtel_deposit_number,airtel_deposit_account_names,mtn_withdrawal_number,mtn_withdrawal_account_names,airtel_withdrawal_number,airtel_withdrawal_account_names,crypto_wallet,payout_method,last_sensitive_change_at,cooldown_until",
         )
         .in("user_id", [...userIds])
       if (secRes.error) {
@@ -444,10 +448,25 @@ export async function GET(request: Request) {
       const registeredNames =
         (meta.registered_account_names != null ? String(meta.registered_account_names).trim() : "") ||
         (snap?.registered_account_names != null ? String(snap.registered_account_names).trim() : "")
-      const networkParts = [rail || null, dest || null].filter(Boolean) as string[]
-      const payoutRailLine = networkParts.length ? networkParts.join(" · ") : null
       const secRow = secMap.get(uid) ?? null
+      const payoutDetails = resolveAdminWithdrawalPayoutDetails(secRow, meta)
+      const metaOptionLabel =
+        meta.payout_option_label != null ? String(meta.payout_option_label).trim() : ""
+      const metaNetwork =
+        meta.payout_network != null
+          ? String(meta.payout_network).trim()
+          : snap?.payout_network != null
+            ? String(snap.payout_network).trim()
+            : ""
+      const payoutOptionLabel = payoutDetails.optionLabel || metaOptionLabel || null
+      const payoutNetwork = payoutDetails.network || metaNetwork || null
+      const payoutRailLine = [payoutNetwork, payoutOptionLabel, rail || null]
+        .filter(Boolean)
+        .join(" · ") || null
       const payoutSummary = buildAdminPayoutSummary(secRow)
+      const adminPayoutPhone = payoutDetails.phone || dest || payoutSummary.destination || null
+      const adminPayoutNames =
+        payoutDetails.accountNames || registeredNames || payoutSummary.registeredNames || null
       const cc = String(raw.currency_context ?? "").trim() || null
       const created_at = String(raw.created_at ?? "")
       const status = String(raw.status ?? "")
@@ -477,8 +496,10 @@ export async function GET(request: Request) {
         retailer_desk_email: null,
         duplicate_risk_hint: null,
         note: null,
-        payer_display_name: registeredNames || payoutSummary.registeredNames || null,
-        payer_phone: dest || payoutSummary.destination || null,
+        payer_display_name: adminPayoutNames,
+        payer_phone: adminPayoutPhone,
+        payout_option_label: payoutOptionLabel,
+        payout_network: payoutNetwork,
         commission_rate: null,
         amount_credited: null,
         resolution_note: raw.resolution_note ? String(raw.resolution_note) : null,

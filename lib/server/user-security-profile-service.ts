@@ -496,6 +496,106 @@ export async function applyApprovedSecurityChange(
   void params.adminId
 }
 
+const PAYOUT_OPTION_LABELS: Record<PayoutLineId, string> = {
+  mtn_deposit: "MTN — deposits",
+  airtel_deposit: "Airtel — deposits",
+  mtn_withdrawal: "MTN — withdrawals",
+  airtel_withdrawal: "Airtel — withdrawals",
+  deposit_line: "Mobile money (deposit)",
+  withdrawal_line: "Mobile money (withdrawal)",
+  crypto: "USDT TRC20",
+}
+
+const PAYOUT_LINE_IDS: PayoutLineId[] = [
+  "mtn_deposit",
+  "airtel_deposit",
+  "mtn_withdrawal",
+  "airtel_withdrawal",
+  "deposit_line",
+  "withdrawal_line",
+  "crypto",
+]
+
+function payoutOptionIdFromMetadata(meta: Record<string, unknown>): PayoutLineId | null {
+  const snap =
+    meta.security_profile_snapshot && typeof meta.security_profile_snapshot === "object"
+      ? (meta.security_profile_snapshot as Record<string, unknown>)
+      : null
+  const raw = meta.payout_option_id ?? snap?.payout_option_id
+  if (typeof raw !== "string") return null
+  return PAYOUT_LINE_IDS.includes(raw as PayoutLineId) ? (raw as PayoutLineId) : null
+}
+
+export type AdminWithdrawalPayoutDetails = {
+  optionId: PayoutLineId | null
+  optionLabel: string | null
+  network: string | null
+  phone: string | null
+  accountNames: string | null
+}
+
+/** L5 desk: full payout number + registered names the user selected (from live security profile). */
+export function resolveAdminWithdrawalPayoutDetails(
+  secRow: UserSecurityProfileRow | null,
+  meta: Record<string, unknown>,
+): AdminWithdrawalPayoutDetails {
+  const empty: AdminWithdrawalPayoutDetails = {
+    optionId: null,
+    optionLabel: null,
+    network: null,
+    phone: null,
+    accountNames: null,
+  }
+  if (!secRow) return empty
+
+  const optionId = payoutOptionIdFromMetadata(meta)
+  if (optionId && optionId !== "crypto") {
+    const line = resolvePayerFromSecurityRow(secRow, optionId)
+    if (line.phone && line.name) {
+      return {
+        optionId,
+        optionLabel: PAYOUT_OPTION_LABELS[optionId],
+        network: line.network,
+        phone: line.phone,
+        accountNames: line.name,
+      }
+    }
+  }
+
+  const fallbackOrder: PayoutLineId[] = [
+    "mtn_withdrawal",
+    "airtel_withdrawal",
+    "withdrawal_line",
+    "mtn_deposit",
+    "airtel_deposit",
+    "deposit_line",
+  ]
+  for (const id of fallbackOrder) {
+    const line = resolvePayerFromSecurityRow(secRow, id)
+    if (line.phone && line.name) {
+      return {
+        optionId: id,
+        optionLabel: PAYOUT_OPTION_LABELS[id],
+        network: line.network,
+        phone: line.phone,
+        accountNames: line.name,
+      }
+    }
+  }
+
+  if (optionId === "crypto" && secRow.crypto_wallet) {
+    return {
+      optionId: "crypto",
+      optionLabel: PAYOUT_OPTION_LABELS.crypto,
+      network: null,
+      phone: secRow.crypto_wallet,
+      accountNames: null,
+    }
+  }
+
+  return empty
+}
+
 export function buildAdminPayoutSummary(row: UserSecurityProfileRow | null): Record<string, string> {
   if (!row) {
     return { payoutMethod: "—", route: "—", destination: "—", securityAge: "—" }

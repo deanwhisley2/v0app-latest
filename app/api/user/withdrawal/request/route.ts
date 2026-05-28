@@ -292,12 +292,34 @@ export async function POST(request: Request) {
             : {}),
           payout_method: secRow.payout_method,
           payout_option_id: optionId ?? null,
+          ...(payoutNetwork ? { payout_network: payoutNetwork } : {}),
+          ...(optionId
+            ? {
+                payout_option_label:
+                  optionId === "mtn_withdrawal"
+                    ? "MTN — withdrawals"
+                    : optionId === "airtel_withdrawal"
+                      ? "Airtel — withdrawals"
+                      : optionId === "mtn_deposit"
+                        ? "MTN — deposits"
+                        : optionId === "airtel_deposit"
+                          ? "Airtel — deposits"
+                          : optionId === "withdrawal_line"
+                            ? "Mobile money (withdrawal)"
+                            : optionId === "deposit_line"
+                              ? "Mobile money (deposit)"
+                              : optionId === "crypto"
+                                ? "USDT TRC20"
+                                : optionId,
+              }
+            : {}),
           ...(rail ? { payout_rail: rail } : {}),
           ...(destHint ? { destination_hint: destHint } : {}),
           ...(accountNames ? { registered_account_names: accountNames } : {}),
           security_profile_snapshot: {
             payout_method: secRow.payout_method,
             payout_option_id: optionId ?? null,
+            payout_network: payoutNetwork,
             destination_masked: destHint,
             registered_account_names: accountNames,
             payout_rail: rail,
