@@ -23,6 +23,7 @@ import { getLaunchStarterFixPersonaId, getPlatformLaunchStatus, launchPromotions
 import { buildFixedTradeLifecycleV2 } from "@/lib/server/fixed-trade-lifecycle-v2"
 import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
+import { applyReferralRewardOnFirstTrade } from "@/lib/server/platform-incentives"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -298,6 +299,9 @@ export async function POST(request: Request) {
       summary: "Net principal locked into active fixed session (insurance carved from gross commit).",
       metadata: { grossCommitUsd: grossUsd, insuranceFeeUsd, fixPeriodMonths, riskClass },
     })
+
+    // Referral reward is triggered once, only when referee opens the first trade.
+    await applyReferralRewardOnFirstTrade(admin, user.id, `fixed_trade_open:${sessionId}`)
 
     return NextResponse.json({
       success: true,

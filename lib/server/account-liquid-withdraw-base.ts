@@ -27,7 +27,19 @@ export async function computeAccountLiquidWithdrawBaseUsd(
     .maybeSingle()
   if (selErr) throw new Error(selErr.message)
 
-  const availableUsd = roundUsd2(Number(row?.available_balance ?? 0))
+  const { data: profileRow, error: profileErr } = await admin
+    .from("profiles")
+    .select("startup_capital_locked_usd")
+    .eq("id", userId)
+    .maybeSingle()
+  if (profileErr) throw new Error(profileErr.message)
+
+  const availableRawUsd = roundUsd2(Number(row?.available_balance ?? 0))
+  const startupLockedUsd = roundUsd2(
+    Number((profileRow as { startup_capital_locked_usd?: unknown } | null)?.startup_capital_locked_usd ?? 0),
+  )
+  // Startup capital principal is tradable but non-withdrawable.
+  const availableUsd = roundUsd2(Math.max(0, availableRawUsd - startupLockedUsd))
   const pendingUsd = roundUsd2(Number((row as Record<string, unknown> | null)?.withdrawal_pending_balance ?? 0))
   const containerLiquidUsd = roundUsd2(Number(row?.container_withdrawable_earnings ?? 0))
 

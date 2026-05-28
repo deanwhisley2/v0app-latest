@@ -186,6 +186,23 @@ export async function POST(request: Request) {
       }
     }
     const admin = createAdminClient()
+    const since24h = new Date(Date.now() - 86_400_000).toISOString()
+    const { count: recentDepositsCount, error: depCountErr } = await admin
+      .from("retailer_fund_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", since24h)
+    if (depCountErr) throw new Error(depCountErr.message)
+    if ((recentDepositsCount ?? 0) >= 3) {
+      return NextResponse.json(
+        {
+          error:
+            "You have reached the limit of 3 deposit requests in 24 hours. Please wait a little and try again.",
+          code: "DEPOSIT_LIMIT_24H",
+        },
+        { status: 429 },
+      )
+    }
 
     const resolvePayer = async (): Promise<{ name: string | null; phone: string | null }> => {
       if (payerDisplayName && payerPhone) return { name: payerDisplayName, phone: payerPhone }

@@ -8,8 +8,8 @@ import type { FixTradeRiskLevel } from "@/lib/fix-trade-access"
 /** Minimum deposit in USD (normalized accounting unit). */
 export const NEXUS_MIN_DEPOSIT_USD = 5
 
-/** Legacy floor in USD; product minimum is driven by {@link NEXUS_MIN_WITHDRAW_UGX} equivalent via FX. */
-export const NEXUS_MIN_WITHDRAW_USD = 3
+/** Global minimum withdrawal in USD-equivalent (displayed in local currency). */
+export const NEXUS_MIN_WITHDRAW_USD = 3.18
 
 /**
  * Congo (DRC) Nexus Main minimum retain — not disclosed in UI until a full-balance withdraw is attempted.

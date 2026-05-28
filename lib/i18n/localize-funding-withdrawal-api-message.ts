@@ -46,6 +46,10 @@ EXACT_KEY["Transaction reference already used."] = "funding.apiErr.duplicateRefe
 EXACT_KEY["Transaction reference unavailable."] = "funding.apiErr.referenceUnavailable"
 EXACT_KEY["Transaction reference invalid."] = "funding.apiErr.referenceInvalid"
 EXACT_KEY["Funding temporarily unavailable."] = "funding.apiErr.fundingCooldown"
+EXACT_KEY["You have reached the limit of 3 deposit requests in 24 hours. Please wait a little and try again."] =
+  "funding.apiErr.depositLimit24h"
+EXACT_KEY["You have reached the limit of 3 deposits in 24 hours. Please wait before submitting another deposit."] =
+  "funding.apiErr.depositLimit24h"
 
 const MIN_WITHDRAW_RE =
   /^Minimum withdrawal is ([\d.]+) USD \(normalized internal unit\)\.$/

@@ -353,6 +353,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.apiErr.referenceUnavailable": "Transaction reference unavailable.",
   "funding.apiErr.referenceInvalid": "Transaction reference invalid.",
   "funding.apiErr.fundingCooldown": "Funding temporarily unavailable.",
+  "funding.apiErr.depositLimit24h": "You can make up to 3 deposits every 24 hours. Please try again later.",
   "funding.apiErr.duplicatePendingTopup": "Similar float request already pending.",
   "funding.field.txRefError": "Check transaction reference.",
   "funding.apiErr.createPendingFailed": "Could not create pending funding.",

@@ -64,10 +64,10 @@ export type PlatformLaunchPublicStatus = {
   launchMode: boolean
 }
 
-export const LAUNCH_REFERRER_FLAT_USD = 0.53
+export const LAUNCH_REFERRER_FLAT_USD = 0.26
 export const LAUNCH_REFEREE_FIRST_DEPOSIT_RATE = 0.2
 export const LAUNCH_STARTER_FIX_PERSONA_ID = "fix_l1_t1"
-export const STARTUP_CAPITAL_USD_REWARD = 6
+export const STARTUP_CAPITAL_USD_REWARD = 5.3
 export const STARTUP_CAPITAL_REGISTRATIONS_REQUIRED = 10
 
 export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {

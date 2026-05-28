@@ -13,6 +13,7 @@ import {
 import { buildCopyTradeLifecycle } from "@/lib/server/copy-trade-lifecycle"
 import { jsonMutationError } from "@/lib/api/mutation-error-envelope"
 import { customerTradingApiGuardResponse } from "@/lib/server/customer-trading-api-guard"
+import { applyReferralRewardOnFirstTrade } from "@/lib/server/platform-incentives"
 
 export async function POST(request: Request) {
   try {
@@ -166,6 +167,9 @@ export async function POST(request: Request) {
       summary: `Copy-trade stake reserved from Nexus Main (${roundUsd2(stakeUsd)} USD).`,
       metadata: { traderPersonaId: persona.id, sessionId: sessionRow?.id },
     })
+
+    // Referral reward is triggered once, only when referee opens the first trade.
+    await applyReferralRewardOnFirstTrade(admin, user.id, `copy_trade_open:${sessionRow?.id as string}`)
 
     return NextResponse.json({
       success: true,

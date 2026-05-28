@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Fingerprint, Loader2 } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
-import { getSupabaseBrowserConfigIssue, supabase } from "@/lib/supabaseClient"
+import { getSupabaseBrowserConfigIssue } from "@/lib/supabaseClient"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
@@ -20,7 +20,6 @@ import { PasswordField } from "@/components/auth/password-field"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
-import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 const REMEMBER_KEY = "nexus_auth_remember_id"
 const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? ""
@@ -59,6 +58,7 @@ export default function LoginForm() {
   const [sessionCleared, setSessionCleared] = useState(false)
   const [sessionRequired, setSessionRequired] = useState(false)
   const [android, setAndroid] = useState(false)
+  const [showSecurityNotice, setShowSecurityNotice] = useState(false)
 
   useEffect(() => {
     try {
@@ -214,7 +214,6 @@ export default function LoginForm() {
   return (
     <>
       <WelcomePlatformModal />
-      <StartupCapitalPromoModal />
       <AuthLayoutShell language={language} showBrand={false} showTrustStrip={false}>
         <header className="mb-6 text-center">
           <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{t.login.welcomeBack}</h1>
@@ -227,6 +226,27 @@ export default function LoginForm() {
             <code className="rounded bg-black/30 px-1">NEXT_PUBLIC_DEV_LOCAL_ONLY</code> for real auth.
           </p>
         ) : null}
+
+        <section className="mb-4 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5">
+          <button
+            type="button"
+            onClick={() => setShowSecurityNotice((v) => !v)}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={showSecurityNotice}
+            aria-controls="login-security-reminder"
+          >
+            <span className="text-sm font-semibold text-foreground">NEXUS PRO Account Security Reminder</span>
+            <span className="text-xs text-muted-foreground">{showSecurityNotice ? "Hide" : "Show"}</span>
+          </button>
+          {showSecurityNotice ? (
+            <div id="login-security-reminder" className="mt-2 space-y-1 text-xs leading-relaxed text-muted-foreground">
+              <p>Use only your own verified email and avoid shared/public devices for account access.</p>
+              <p>Never share your password or 6-digit Nexus Security PIN with anyone, including support staff.</p>
+              <p>Always confirm you are on <span className="font-medium text-foreground">www.nexuspro.it.com</span> before signing in.</p>
+              <p>After login, review Security &amp; Recovery settings and keep your payout details up to date.</p>
+            </div>
+          ) : null}
+        </section>
 
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">

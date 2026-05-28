@@ -8,7 +8,6 @@ import { USD_TO_FX, type FiatCurrencyCode } from "@/lib/currency-display"
 import {
   NEXUS_MIN_DEPOSIT_USD,
   NEXUS_MIN_WITHDRAW_USD,
-  NEXUS_MIN_WITHDRAW_UGX,
   roundUsd2,
 } from "@/lib/nexus-financial-policy"
 
@@ -57,16 +56,12 @@ export function minDepositUsdOk(amountUsd: number): boolean {
   return Number.isFinite(amountUsd) && amountUsd >= NEXUS_MIN_DEPOSIT_USD - 1e-9
 }
 
-/** Minimum withdrawal in USD: max(legacy USD floor, UGX 20k equivalent at configured FX). */
+/** Minimum withdrawal in USD-equivalent policy floor. */
 export function minWithdrawUsdFloor(): number {
-  const rate = readFxLocalPerUsdMap().UGX ?? USD_TO_FX.UGX
-  if (!rate || !Number.isFinite(rate) || rate <= 0) {
-    return roundUsd2(NEXUS_MIN_WITHDRAW_UGX / 3900)
-  }
-  return roundUsd2(NEXUS_MIN_WITHDRAW_UGX / rate)
+  return roundUsd2(NEXUS_MIN_WITHDRAW_USD)
 }
 
 export function minWithdrawUsdOk(amountUsd: number): boolean {
-  const floor = Math.max(NEXUS_MIN_WITHDRAW_USD, minWithdrawUsdFloor())
+  const floor = minWithdrawUsdFloor()
   return Number.isFinite(amountUsd) && amountUsd >= floor - 1e-9
 }
