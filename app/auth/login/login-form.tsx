@@ -59,6 +59,7 @@ export default function LoginForm() {
   const [sessionRequired, setSessionRequired] = useState(false)
   const [android, setAndroid] = useState(false)
   const [showSecurityNotice, setShowSecurityNotice] = useState(false)
+  const [showServiceAgreement, setShowServiceAgreement] = useState(false)
 
   useEffect(() => {
     try {
@@ -244,6 +245,31 @@ export default function LoginForm() {
               <p>Never share your password or 6-digit Nexus Security PIN with anyone, including support staff.</p>
               <p>Always confirm you are on <span className="font-medium text-foreground">www.nexuspro.it.com</span> before signing in.</p>
               <p>After login, review Security &amp; Recovery settings and keep your payout details up to date.</p>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="mb-4 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5">
+          <button
+            type="button"
+            onClick={() => setShowServiceAgreement((v) => !v)}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={showServiceAgreement}
+            aria-controls="login-service-agreement"
+          >
+            <span className="text-sm font-semibold text-foreground">Service Agreement</span>
+            <span className="text-xs text-muted-foreground">{showServiceAgreement ? "Hide" : "Show"}</span>
+          </button>
+          {showServiceAgreement ? (
+            <div id="login-service-agreement" className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground">
+              <p>Last Updated: 2023/05/26</p>
+              <p>Read the full Service Agreement before using the platform.</p>
+              <Link
+                href="/legal/service-agreement"
+                className="inline-flex min-h-[40px] items-center font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Open Service Agreement
+              </Link>
             </div>
           ) : null}
         </section>

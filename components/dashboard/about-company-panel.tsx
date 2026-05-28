@@ -178,6 +178,12 @@ export function AboutCompanyPanel({ className }: { className?: string }) {
           </a>
         </Button>
         <Button variant="ghost" className="h-11 w-full justify-between px-4 text-sm font-normal" asChild>
+          <a href="/legal/service-agreement">
+            Service Agreement
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </a>
+        </Button>
+        <Button variant="ghost" className="h-11 w-full justify-between px-4 text-sm font-normal" asChild>
           <a href={`mailto:${COMPANY_CONTACT.email}?subject=Nexus%20Pro%20FX%20Support`}>
             {t("about.support")}
             <ExternalLink className="h-4 w-4 text-muted-foreground" />
