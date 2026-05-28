@@ -121,10 +121,18 @@ import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
 import {
   addFundsPayerIsReady,
+  bindFundPayerFromOption,
   bindFundPayerFromProfile,
+  listFundPayerOptionsForNetwork,
   type FundPayerSource,
 } from "@/lib/client/fund-payer-from-profile"
-import { SavedPayerDisplay } from "@/components/dashboard/saved-payer-display"
+import { RegisteredPayerPicker } from "@/components/dashboard/registered-payer-picker"
+import { NetworkPaymentCardHeader } from "@/components/dashboard/network-payment-card-header"
+import {
+  filterDeskPaymentLinesForNetwork,
+  formatDeskPaymentLinesSummary,
+} from "@/lib/retailer-desk-network-display"
+import { PaymentNetworkLogo } from "@/components/brand/payment-network-logo"
 import {
   isKenyaAdminMpesaEligible,
   isUgandaAdminAirtelEligible,
@@ -510,8 +518,8 @@ export function DashboardPageInner() {
   const [fundPayerProfile, setFundPayerProfile] = useState<PublicSecurityProfile | null>(null)
 
   const applyRegisteredFundPayer = useCallback(
-    (profile: PublicSecurityProfile | null, fundingNetwork?: string | null) => {
-      const binding = bindFundPayerFromProfile(profile, fundingNetwork)
+    (profile: PublicSecurityProfile | null, fundingNetwork?: string | null, preferredSource?: FundPayerSource) => {
+      const binding = bindFundPayerFromProfile(profile, fundingNetwork, preferredSource)
       if (binding.hasRegisteredLine) {
         setFundPayerSource(binding.source)
         setFundPayerName(binding.displayName)
@@ -539,7 +547,11 @@ export function DashboardPageInner() {
     return null
   }, [l1FundSource, fundMobileNetwork])
   const fundPayerBinding = useMemo(
-    () => bindFundPayerFromProfile(fundPayerProfile, fundingPayerNetwork),
+    () => bindFundPayerFromProfile(fundPayerProfile, fundingPayerNetwork, fundPayerSource),
+    [fundPayerProfile, fundingPayerNetwork, fundPayerSource],
+  )
+  const fundPayerOptions = useMemo(
+    () => listFundPayerOptionsForNetwork(fundPayerProfile, fundingPayerNetwork),
     [fundPayerProfile, fundingPayerNetwork],
   )
   const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
@@ -1095,19 +1107,15 @@ export function DashboardPageInner() {
 
   const localMmMtnMobile = useMemo(() => {
     if (!localMmSelectedDesk || fundMobileNetwork !== "MTN" || localMmFundingCountry !== "UG") return null
-    return parseUgMtnMobileDesk(
-      localMmSelectedDesk.payment_numbers,
-      localMmSelectedDesk.registered_payee_names,
-    )
+    const filtered = filterDeskPaymentLinesForNetwork(localMmSelectedDesk.payment_numbers, fundMobileNetwork)
+    return parseUgMtnMobileDesk(filtered, localMmSelectedDesk.registered_payee_names)
   }, [localMmSelectedDesk, fundMobileNetwork, localMmFundingCountry])
 
   const localMmAirtelMerchant = useMemo(() => {
     if (!localMmSelectedDesk || fundMobileNetwork === "MTN" || localMmMpesaKenya) return null
     if (localMmFundingCountry !== "UG") return null
-    return parseUgAirtelMerchantDesk(
-      localMmSelectedDesk.payment_numbers,
-      localMmSelectedDesk.registered_payee_names,
-    )
+    const filtered = filterDeskPaymentLinesForNetwork(localMmSelectedDesk.payment_numbers, fundMobileNetwork)
+    return parseUgAirtelMerchantDesk(filtered, localMmSelectedDesk.registered_payee_names)
   }, [localMmSelectedDesk, fundMobileNetwork, localMmMpesaKenya, localMmFundingCountry])
 
   useEffect(() => {
@@ -3037,17 +3045,17 @@ export function DashboardPageInner() {
                       </span>
                     </div>
                     <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.local.step1Body")}</p>
-                    {fundPayerBinding.hasRegisteredLine ? (
-                      <SavedPayerDisplay
-                        network={fundPayerBinding.network}
-                        networkLabel={
-                          fundPayerBinding.networkLabel
-                            ? `${fundPayerBinding.networkLabel} Money`
-                            : undefined
-                        }
-                        phoneMasked={fundPayerBinding.displayPhone}
-                        accountNames={fundPayerBinding.displayName}
-                        hint="Sender details are taken from Security & Recovery. Enter amount and network below, then continue."
+                    {fundPayerOptions.length > 0 ? (
+                      <RegisteredPayerPicker
+                        options={fundPayerOptions}
+                        selectedSource={fundPayerSource}
+                        onSelect={(opt) => {
+                          const binding = bindFundPayerFromOption(opt)
+                          setFundPayerSource(binding.source)
+                          setFundPayerName(binding.displayName)
+                          setFundPayerPhone(binding.displayPhone)
+                        }}
+                        t={t}
                       />
                     ) : null}
                     <div className="space-y-2.5">
@@ -3202,12 +3210,18 @@ export function DashboardPageInner() {
                         <div className="grid max-sm:grid-cols-1 max-sm:gap-2 sm:max-h-[min(50vh,320px)] sm:grid-cols-2 sm:gap-2 sm:overflow-y-auto">
                           {qualifiedRetailers.map((r) => {
                             const active = selectedRetailerId === r.id && !selectedOfficialRouteId
-                            const nums = (r.payment_numbers ?? [])
-                              .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                              .filter(Boolean)
+                            const nums = formatDeskPaymentLinesSummary(r.payment_numbers, fundMobileNetwork)
                             const statusLabel = String(r.liquidity_status ?? "—")
                             const spend = typeof r.spendable_liquidity === "number" ? r.spendable_liquidity.toFixed(0) : "—"
                             const payee = String(r.registered_payee_names ?? "").trim()
+                            const networkLogo =
+                              fundMobileNetwork === "MTN"
+                                ? "MTN"
+                                : fundMobileNetwork === "Airtel"
+                                  ? "Airtel"
+                                  : /mpesa/i.test(fundMobileNetwork)
+                                    ? "MPesa"
+                                    : null
                             return (
                               <button
                                 key={r.id}
@@ -3220,16 +3234,19 @@ export function DashboardPageInner() {
                                   active ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-background hover:bg-muted/50"
                                 }`}
                               >
-                                <p className="flex flex-wrap items-center gap-1 font-semibold text-foreground">
-                                  {t("funding.deskPrefix")}
-                                  {String(r.country_code ?? "").toUpperCase() || "—"}
-                                  {r.qualification_verified_desk ? (
-                                    <span className="rounded bg-emerald-500/20 px-1.5 py-0 text-[9px] font-bold uppercase text-emerald-800 dark:text-emerald-100">
-                                      {t("funding.badge.verified")}
-                                    </span>
-                                  ) : null}
-                                </p>
-                                <p className="mt-1 font-mono text-[10px] text-muted-foreground line-clamp-3">
+                                <div className="mb-2 flex items-center gap-2">
+                                  {networkLogo ? <PaymentNetworkLogo network={networkLogo} size="sm" /> : null}
+                                  <p className="flex min-w-0 flex-1 flex-wrap items-center gap-1 font-semibold text-foreground">
+                                    {t("funding.deskPrefix")}
+                                    {String(r.country_code ?? "").toUpperCase() || "—"}
+                                    {r.qualification_verified_desk ? (
+                                      <span className="rounded bg-emerald-500/20 px-1.5 py-0 text-[9px] font-bold uppercase text-emerald-800 dark:text-emerald-100">
+                                        {t("funding.badge.verified")}
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                </div>
+                                <p className="font-mono text-[10px] text-foreground line-clamp-2">
                                   {nums.length ? nums.join(" · ") : t("funding.paymentNumbersOnFile")}
                                 </p>
                                 {payee ? (
@@ -3276,10 +3293,9 @@ export function DashboardPageInner() {
                           }`}
                         >
                           <p className="font-bold text-foreground">{officialCorridorFallback.payee_display_name}</p>
-                          <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                            {(officialCorridorFallback.payment_numbers ?? [])
-                              .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                              .join(" · ") || t("funding.numbersConfigured")}
+                          <p className="mt-1 font-mono text-[10px] text-foreground">
+                            {formatDeskPaymentLinesSummary(officialCorridorFallback.payment_numbers, fundMobileNetwork).join(" · ") ||
+                              t("funding.numbersConfigured")}
                           </p>
                           <p className="mt-1 text-[10px] text-muted-foreground">
                             WA {officialCorridorFallback.whatsapp_number || "—"} · {officialCorridorFallback.contact_phone || "—"}
@@ -3295,8 +3311,33 @@ export function DashboardPageInner() {
                       <div className="max-w-full space-y-2 overflow-x-hidden border-t border-border/60 pt-2 sm:space-y-3 sm:pt-3">
                         {localMmSelectedDesk ? (
                           <>
+                            <NetworkPaymentCardHeader
+                              network={fundMobileNetwork}
+                              title={t("funding.payDeskOnlyTitle")}
+                              subtitle={`${t("funding.deskPrefix")}${String(localMmSelectedDesk.country_code ?? "").toUpperCase()}`}
+                              payeeNumber={
+                                localMmMtnMobile?.msisdn ??
+                                localMmAirtelMerchant?.merchantId ??
+                                formatDeskPaymentLinesSummary(localMmSelectedDesk.payment_numbers, fundMobileNetwork)[0] ??
+                                null
+                              }
+                              payeeName={
+                                localMmMtnMobile?.payeeName ??
+                                localMmSelectedDesk.registered_payee_names ??
+                                null
+                              }
+                              senderNumber={fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayPhone : null}
+                              senderName={fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayName : null}
+                              amountLabel={formatLocalFiatAmount(
+                                parseCustomerLocalAmountInput(fundAmount) || 0,
+                                fundingAmountLabelCurrency,
+                                locale,
+                              )}
+                              statusLabel={t("funding.badge.verified")}
+                              statusTone="processing"
+                              t={t}
+                            />
                             <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] leading-snug sm:p-3 sm:text-xs">
-                              <p className="font-semibold text-warning">{t("funding.payDeskOnlyTitle")}</p>
                               {localMmMpesaKenya ? (
                                 <>
                                   {localMmMpesaKenya.lines.map((line) => (
@@ -3308,55 +3349,12 @@ export function DashboardPageInner() {
                                   ))}
                                 </>
                               ) : localMmMtnMobile ? (
-                                <>
-                                  <p className="break-words">
-                                    {t("funding.numbersLabel")}{" "}
-                                    {t("funding.retailer.mtnDeskNumbersLine").replace(
-                                      "{{msisdn}}",
-                                      localMmMtnMobile.msisdn,
-                                    )}
-                                  </p>
-                                  <p className="break-words">
-                                    {t("funding.registeredPayeeNames")}{" "}
-                                    {t("funding.retailer.mtnDeskPayeeLine")
-                                      .replace("{{payee}}", localMmMtnMobile.payeeName)
-                                      .replace("{{brand}}", localMmMtnMobile.payeeBrand)}
-                                  </p>
-                                  <p className="break-words font-mono text-[10px]">
-                                    {t("funding.payment.mtnStep1").replace("{{ussd}}", localMmMtnMobile.ussdPrefix)}
-                                  </p>
-                                </>
+                                <p className="break-words font-mono text-[10px]">
+                                  {t("funding.payment.mtnStep1").replace("{{ussd}}", localMmMtnMobile.ussdPrefix)}
+                                </p>
                               ) : localMmAirtelMerchant ? (
-                                <>
-                                  <p className="break-words">
-                                    {t("funding.numbersLabel")}{" "}
-                                    {t("funding.retailer.airtelDeskNumbersLine").replace(
-                                      "{{merchantId}}",
-                                      localMmAirtelMerchant.merchantId,
-                                    )}
-                                  </p>
-                                  <p className="break-words">
-                                    {t("funding.registeredPayeeNames")} {t("funding.retailer.airtelDeskPayeeLine")}
-                                  </p>
-                                </>
-                              ) : (
-                                <>
-                                  <p className="break-words">
-                                    {t("funding.numbersLabel")}{" "}
-                                    {(localMmSelectedDesk.payment_numbers ?? [])
-                                      .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                                      .join(" · ") || t("funding.noneInParens")}
-                                  </p>
-                                  <p className="break-words">
-                                    {t("funding.registeredPayeeNames")}{" "}
-                                    {localMmSelectedDesk.registered_payee_names || t("funding.confirmWithDesk")}
-                                  </p>
-                                </>
-                              )}
-                              <p className="break-words">
-                                {t("funding.whatsappCall")} {localMmSelectedDesk.whatsapp_number || "—"} ·{" "}
-                                {localMmSelectedDesk.contact_phone || "—"}
-                              </p>
+                                <p className="break-words text-[10px]">{t("funding.retailer.airtelDeskPayeeLine")}</p>
+                              ) : null}
                               <p className="font-medium text-destructive break-words">{t("funding.wrongDestinationWarning")}</p>
                             </div>
                             <RetailerPaymentInstructionPanel

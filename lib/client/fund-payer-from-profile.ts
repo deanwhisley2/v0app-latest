@@ -1,4 +1,4 @@
-import type { PublicSecurityProfile } from "@/lib/nexus-security-profile-types"
+import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
 import type { PayoutLineId } from "@/lib/nexus-mobile-money-lines"
 
 export type FundPayerSource = PayoutLineId | "manual"
@@ -12,10 +12,62 @@ export type FundPayerBinding = {
   hasRegisteredLine: boolean
 }
 
+function isDepositLineId(id: PayoutLineId): boolean {
+  return id === "mtn_deposit" || id === "airtel_deposit" || id === "deposit_line"
+}
+
+/** All registered deposit lines for the selected network (tap-to-select in Add Funds). */
+export function listFundPayerOptionsForNetwork(
+  profile: PublicSecurityProfile | null,
+  fundingNetwork?: string | null,
+): RegisteredPayoutOption[] {
+  if (!profile) return []
+
+  const net = fundingNetwork?.trim().toUpperCase()
+  let options = profile.payoutOptions.filter((o) => isDepositLineId(o.id))
+
+  if (net === "MTN") {
+    options = options.filter((o) => o.network === "MTN" || (o.id === "deposit_line" && o.network == null))
+    if (!options.length) {
+      const wd = profile.payoutOptions.find((o) => o.id === "mtn_withdrawal")
+      if (wd) options = [wd]
+    }
+  } else if (net === "AIRTEL") {
+    options = options.filter((o) => o.network === "Airtel" || (o.id === "deposit_line" && o.network == null))
+    if (!options.length) {
+      const wd = profile.payoutOptions.find((o) => o.id === "airtel_withdrawal")
+      if (wd) options = [wd]
+    }
+  }
+
+  return options
+}
+
+export function bindFundPayerFromOption(opt: RegisteredPayoutOption): FundPayerBinding {
+  return {
+    source: opt.id,
+    displayName: opt.accountNames ?? "",
+    displayPhone: opt.numberMasked,
+    network: opt.network,
+    networkLabel: opt.network,
+    hasRegisteredLine: true,
+  }
+}
+
 function optionForFunding(
   profile: PublicSecurityProfile,
   network: string | null,
+  preferredSource?: FundPayerSource | null,
 ): (typeof profile.payoutOptions)[number] | null {
+  if (preferredSource && preferredSource !== "manual") {
+    const picked = profile.payoutOptions.find((o) => o.id === preferredSource)
+    if (picked) return picked
+  }
+
+  const listed = listFundPayerOptionsForNetwork(profile, network)
+  if (listed.length === 1) return listed[0]
+  if (listed.length > 1) return listed[0]
+
   const n = network?.trim().toUpperCase()
   if (n === "MTN" || n === "AIRTEL") {
     const net = n === "MTN" ? "MTN" : "Airtel"
@@ -28,9 +80,6 @@ function optionForFunding(
     profile.payoutOptions.find((o) => o.id === "mtn_deposit") ??
     profile.payoutOptions.find((o) => o.id === "airtel_deposit") ??
     profile.payoutOptions.find((o) => o.id === "deposit_line") ??
-    profile.payoutOptions.find((o) => o.id === "mtn_withdrawal") ??
-    profile.payoutOptions.find((o) => o.id === "airtel_withdrawal") ??
-    profile.payoutOptions.find((o) => o.id === "withdrawal_line") ??
     null
   )
 }
@@ -39,6 +88,7 @@ function optionForFunding(
 export function bindFundPayerFromProfile(
   profile: PublicSecurityProfile | null,
   fundingNetwork?: string | null,
+  preferredSource?: FundPayerSource | null,
 ): FundPayerBinding {
   if (!profile) {
     return {
@@ -50,7 +100,7 @@ export function bindFundPayerFromProfile(
       hasRegisteredLine: false,
     }
   }
-  const opt = optionForFunding(profile, fundingNetwork ?? null)
+  const opt = optionForFunding(profile, fundingNetwork ?? null, preferredSource)
   if (opt) {
     return {
       source: opt.id,

@@ -1,6 +1,6 @@
 "use client"
 
-import { MobileMoneyNetworkLogo } from "@/components/brand/mobile-money-network-logo"
+import { PaymentNetworkLogo } from "@/components/brand/payment-network-logo"
 import { Shield } from "lucide-react"
 
 type Props = {
@@ -17,7 +17,7 @@ export function SavedPayerDisplay({ network, networkLabel, phoneMasked, accountN
     <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
       <div className="mb-2 flex items-center gap-2.5">
         {network ? (
-          <MobileMoneyNetworkLogo network={network} size="sm" />
+          <PaymentNetworkLogo network={network} size="sm" />
         ) : (
           <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden />
         )}

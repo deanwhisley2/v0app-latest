@@ -38,6 +38,7 @@ export type TransactionReceipt = {
   fields: ReceiptField[]
   timestamp: string
   reference?: string
+  payoutRail?: string | null
   /** Plain-text payload for future share/download. */
   shareText: string
 }
@@ -131,14 +132,13 @@ export function inferWithdrawalBrand(metadata: unknown): ReceiptBrand {
       : null
   const rail = String(m.payout_rail ?? snap?.payout_rail ?? "").toUpperCase()
   const method = String(m.payout_method ?? "").toLowerCase()
-  const network = String(m.payout_network ?? "").toUpperCase()
+  const network = String(m.payout_network ?? snap?.payout_network ?? "").toUpperCase()
   const option = String(m.payout_option_id ?? "").toLowerCase()
 
   if (rail.includes("USDT") || rail.includes("TRC20") || method.includes("crypto")) return "usdt_trc20"
-  if (network === "MTN" || option.includes("mtn")) return "mtn"
-  if (network === "AIRTEL" || option.includes("airtel")) return "airtel"
-  if (rail.includes("MOBILE") || method.includes("mobile")) return "mobile_money"
-  return "mobile_money"
+  if (network === "MTN" || option.includes("mtn") || rail.includes("MTN")) return "mtn"
+  if (network === "AIRTEL" || option.includes("airtel") || rail.includes("AIRTEL")) return "airtel"
+  return "nexus"
 }
 
 export function inferWithdrawalKind(brand: ReceiptBrand): ReceiptKind {
@@ -217,18 +217,29 @@ export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionRe
     metadata: row.metadata,
   })
 
-  const dest =
-    typeof m.destination_hint === "string"
-      ? m.destination_hint
-      : typeof m.security_profile_snapshot === "object" && m.security_profile_snapshot
-        ? String((m.security_profile_snapshot as Record<string, unknown>).destination_masked ?? "")
-        : ""
+  const snap =
+    m.security_profile_snapshot && typeof m.security_profile_snapshot === "object"
+      ? (m.security_profile_snapshot as Record<string, unknown>)
+      : null
+  const destCandidates = [
+    m.destination_hint,
+    m.payout_destination,
+    snap?.destination_masked,
+  ]
+  let dest = ""
+  for (const c of destCandidates) {
+    if (typeof c === "string" && c.trim()) {
+      dest = c.trim()
+      break
+    }
+  }
   const names =
     typeof m.registered_account_names === "string"
       ? m.registered_account_names
-      : typeof m.security_profile_snapshot === "object" && m.security_profile_snapshot
-        ? String((m.security_profile_snapshot as Record<string, unknown>).registered_account_names ?? "")
+      : typeof snap?.registered_account_names === "string"
+        ? String(snap.registered_account_names)
         : ""
+  const payoutRail = typeof m.payout_rail === "string" ? m.payout_rail : typeof snap?.payout_rail === "string" ? String(snap.payout_rail) : null
 
   const fields: ReceiptField[] = [
     { labelKey: "receipt.field.amount", value: fmtUsd(settlement.grossAmount) },
@@ -251,7 +262,7 @@ export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionRe
 
   if (brand === "usdt_trc20") {
     fields.push(
-      { labelKey: "receipt.field.network", value: "TRC20" },
+      { labelKey: "receipt.field.network", value: "USDT · TRC20" },
       {
         labelKey: "receipt.field.walletAddress",
         value: dest || "—",
@@ -270,9 +281,9 @@ export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionRe
       typeof m.payout_network === "string"
         ? m.payout_network
         : brand === "mtn"
-          ? "MTN"
+          ? "MTN Mobile Money"
           : brand === "airtel"
-            ? "Airtel"
+            ? "Airtel Money"
             : "Mobile Money"
     fields.push({ labelKey: "receipt.field.network", value: network })
   }
@@ -303,6 +314,7 @@ export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionRe
     fields,
     timestamp: row.reviewed_at ?? row.created_at,
     reference: row.transaction_ref,
+    payoutRail,
     shareText: shareLines.join("\n"),
   }
 }

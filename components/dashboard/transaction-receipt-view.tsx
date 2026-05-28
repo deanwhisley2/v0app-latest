@@ -42,7 +42,7 @@ export function TransactionReceiptView({
   return (
     <div className={cn("flex flex-col", className)}>
       <div className="flex flex-col items-center px-4 pb-4 pt-5 text-center">
-        <TransactionReceiptBrandMark brand={receipt.brand} />
+        <TransactionReceiptBrandMark brand={receipt.brand} payoutRail={receipt.payoutRail} />
         <div className="mt-4">
           <ReceiptStatusBadge label={statusLabel} tone={receipt.statusTone} />
         </div>

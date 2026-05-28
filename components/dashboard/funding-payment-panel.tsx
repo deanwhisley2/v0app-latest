@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import QRCode from "qrcode"
-import { Check, ChevronDown, Copy, Smartphone, Wallet } from "lucide-react"
+import { Check, ChevronDown, Copy } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
+import { PaymentNetworkLogo } from "@/components/brand/payment-network-logo"
 import {
   AirtelPaymentSteps,
   MpesaTillPaymentSteps,
@@ -243,9 +244,7 @@ export function FundingPaymentPanel({
         onClick={() => onSourceChange("crypto")}
         className={`${CARD_TRIGGER} ${activeSource === "crypto" ? "border-[#26A17B]/50 bg-[#26A17B]/8 ring-1 ring-[#26A17B]/30" : CARD_INACTIVE}`}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#26A17B]/20 text-[#26A17B]">
-          <Wallet className="h-5 w-5" aria-hidden />
-        </span>
+        <PaymentNetworkLogo network="USDT_TRC20" size="sm" className="shrink-0" />
         <div className={LABEL_ROW}>
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-bold text-foreground">{t("funding.payment.globalTitle")}</span>
@@ -270,9 +269,7 @@ export function FundingPaymentPanel({
           onClick={() => onSourceChange("airtel")}
           className={`${CARD_TRIGGER} ${activeSource === "airtel" ? "border-[#ED1C24]/40 bg-[#ED1C24]/8 ring-1 ring-[#ED1C24]/25" : CARD_INACTIVE}`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#ED1C24]/15 text-[#ED1C24]">
-            <Smartphone className="h-5 w-5" aria-hidden />
-          </span>
+          <PaymentNetworkLogo network="Airtel" size="sm" className="shrink-0" />
           <div className={LABEL_ROW}>
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-bold text-foreground">{t("funding.payment.ugandaTitle")}</span>
@@ -295,9 +292,7 @@ export function FundingPaymentPanel({
           onClick={() => onSourceChange("mpesa_ke")}
           className={`${CARD_TRIGGER} ${activeSource === "mpesa_ke" ? "border-[#39B54A]/50 bg-[#39B54A]/10 ring-1 ring-[#39B54A]/30" : CARD_INACTIVE}`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#39B54A]/20 text-[#39B54A]">
-            <Smartphone className="h-5 w-5" aria-hidden />
-          </span>
+          <PaymentNetworkLogo network="MPesa" size="sm" className="shrink-0" />
           <div className={LABEL_ROW}>
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-bold text-foreground">{t("funding.payment.kenyaMpesaTitle")}</span>
@@ -321,9 +316,7 @@ export function FundingPaymentPanel({
         onClick={() => onSourceChange("local")}
         className={`${CARD_TRIGGER} ${activeSource === "local" ? "border-primary/40 bg-primary/8 ring-1 ring-primary/25" : CARD_INACTIVE}`}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-          <Smartphone className="h-5 w-5" aria-hidden />
-        </span>
+        <PaymentNetworkLogo network="combined_local" size="sm" className="shrink-0" />
         <div className={LABEL_ROW}>
           <span className="block min-w-0 flex-1 text-xs font-bold text-foreground">
             {t("funding.optionLocal")}{" "}
