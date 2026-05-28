@@ -16,7 +16,9 @@ export async function GET(request: Request) {
 
     let q = admin
       .from("user_account_notifications")
-      .select("id,notification_type,title,body,nav,read_at,metadata,created_at,user_archived_at")
+      .select(
+        "id,notification_type,title,body,nav,read_at,metadata,created_at,user_archived_at,source_kind,source_id",
+      )
       .eq("user_id", user.id)
       .is("user_deleted_at", null)
       .order("created_at", { ascending: false })

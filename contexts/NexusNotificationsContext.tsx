@@ -71,6 +71,8 @@ function mapServerAccountRow(r: {
   created_at: string
   user_archived_at?: string | null
   metadata?: unknown
+  source_kind?: string | null
+  source_id?: string | null
 }): NexusNotificationItem {
   const raw = (r.notification_type ?? "system").toLowerCase()
   let type: NexusNotificationType = KNOWN_NOTIF_TYPES.includes(raw as NexusNotificationType)
@@ -129,6 +131,8 @@ function mapServerAccountRow(r: {
     nav,
     customerAmountUsd,
     accountNotificationType: r.notification_type ?? undefined,
+    receiptSourceKind: r.source_kind ?? undefined,
+    receiptSourceId: r.source_id ?? undefined,
   }
 }
 
@@ -370,6 +374,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
             created_at: string
             user_archived_at?: string | null
             metadata?: unknown
+            source_kind?: string | null
+            source_id?: string | null
           }>
         }
         const rows = out.items ?? []
@@ -428,6 +434,8 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
               ? null
               : undefined,
         metadata: raw.metadata,
+        source_kind: typeof raw.source_kind === "string" ? raw.source_kind : null,
+        source_id: typeof raw.source_id === "string" ? raw.source_id : null,
       })
     }
 

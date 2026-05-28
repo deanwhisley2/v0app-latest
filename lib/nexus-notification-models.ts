@@ -34,4 +34,8 @@ export type NexusNotificationItem = {
   customerAmountUsd?: number
   /** Raw server notification_type for inbox routing (alerts vs history). */
   accountNotificationType?: string
+  /** Server source_kind — links financial alerts to withdrawal/deposit rows for receipts. */
+  receiptSourceKind?: string
+  /** Server source_id — withdrawal request id, deposit id, etc. */
+  receiptSourceId?: string
 }

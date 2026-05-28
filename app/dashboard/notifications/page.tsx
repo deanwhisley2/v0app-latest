@@ -15,6 +15,9 @@ import {
   NotificationInboxRow,
   type InboxFilter,
 } from "@/components/dashboard/notification-inbox-ui"
+import { TransactionReceiptSheet } from "@/components/dashboard/transaction-receipt-sheet"
+import { useTransactionReceiptOpener } from "@/hooks/use-transaction-receipt"
+import { isFinancialReceiptNotification } from "@/lib/transactions/transaction-receipt-model"
 import { filterInboxNotifications, usePresentedNotifications } from "@/hooks/use-presented-notifications"
 import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
 import type { NexusNotificationNav } from "@/lib/nexus-notification-nav"
@@ -32,6 +35,17 @@ export default function NotificationsHistoryPage() {
   const deferredSearch = useDeferredValue(search)
   const [selected, setSelected] = useState<NexusNotificationItem | null>(null)
   const [listLimit, setListLimit] = useState(80)
+
+  const viewer = useMemo(
+    () => ({
+      fundingCountryCode: country ?? null,
+      displayCurrency: currency,
+      locale,
+    }),
+    [country, currency, locale],
+  )
+
+  const { receipt, receiptOpen, closeReceipt, openNotification } = useTransactionReceiptOpener(t, viewer)
 
   useEffect(() => {
     if (isGuestSession) return
@@ -57,10 +71,14 @@ export default function NotificationsHistoryPage() {
 
   const openItem = useCallback(
     (n: NexusNotificationItem) => {
-      setSelected(n)
       markRead(n.id)
+      if (isFinancialReceiptNotification(n)) {
+        void openNotification(n)
+        return
+      }
+      setSelected(n)
     },
-    [markRead]
+    [markRead, openNotification],
   )
 
   const openLinked = useCallback(
@@ -174,7 +192,7 @@ export default function NotificationsHistoryPage() {
         </section>
       </div>
 
-      {selected && selectedPresented ? (
+      {selected && selectedPresented && !isFinancialReceiptNotification(selected) ? (
         <NotificationDetailSheet
           item={selected}
           presented={selectedPresented}
@@ -191,6 +209,14 @@ export default function NotificationsHistoryPage() {
           }
         />
       ) : null}
+
+      <TransactionReceiptSheet
+        open={receiptOpen}
+        receipt={receipt}
+        t={t}
+        locale={locale}
+        onClose={closeReceipt}
+      />
     </div>
   )
 }

@@ -6,50 +6,48 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { supabase } from "@/lib/supabaseClient"
 import { filterTransactionHistoryFromInbox } from "@/lib/notifications/inbox-routing"
-import { presentNotification, formatNotificationTimeAgo } from "@/lib/notifications/notification-inbox-presenter"
+import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
 import { presentFinancialEventForCustomer } from "@/lib/notifications/financial-event-presenter"
 import { INBOX_CARD } from "@/components/dashboard/notification-inbox-ui"
+import { TransactionHistoryRow } from "@/components/dashboard/transaction-history-row"
+import { TransactionReceiptSheet } from "@/components/dashboard/transaction-receipt-sheet"
+import { useTransactionReceiptOpener } from "@/hooks/use-transaction-receipt"
+import {
+  depositTimelineLabelKey,
+  withdrawalTimelineLabelKey,
+  type CryptoDepositReceiptRow,
+  type FinancialEventReceiptRow,
+  type WithdrawalReceiptRow,
+} from "@/lib/transactions/transaction-receipt-model"
 
-type FinancialEvent = {
-  id: string
-  event_type: string
-  category: string
-  gross_amount: number | null
-  status: string
-  summary: string | null
-  created_at: string
-}
-
-type CryptoDepositRow = {
-  id: string
-  amount_usd: number
-  status: string
-  tx_hash: string
-  created_at: string
-  credited_at: string | null
-}
-
-type WithdrawalRow = {
-  id: string
-  amount: number
-  status: string
-  transaction_ref: string
-  created_at: string
-}
-
-function depositStatusLabel(status: string, t: (key: string) => string): string {
-  const key = `notifications.center.depositStatus.${status}`
-  const mapped = t(key)
-  return mapped !== key ? mapped : status
-}
+type FinancialEvent = FinancialEventReceiptRow
 
 export function HistoryCenterScreen() {
   const { t, currency, country, locale } = useUserPreferences()
   const { inbox, accountInboxReady } = useNexusNotifications()
   const [events, setEvents] = useState<FinancialEvent[]>([])
-  const [deposits, setDeposits] = useState<CryptoDepositRow[]>([])
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([])
+  const [deposits, setDeposits] = useState<CryptoDepositReceiptRow[]>([])
+  const [withdrawals, setWithdrawals] = useState<WithdrawalReceiptRow[]>([])
   const [loading, setLoading] = useState(true)
+
+  const viewer = useMemo(
+    () => ({
+      fundingCountryCode: country ?? null,
+      displayCurrency: currency,
+      locale,
+    }),
+    [country, currency, locale],
+  )
+
+  const {
+    receipt,
+    receiptOpen,
+    closeReceipt,
+    openWithdrawal,
+    openDeposit,
+    openFinancialEvent,
+    openNotification,
+  } = useTransactionReceiptOpener(t, viewer)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,11 +73,11 @@ export function HistoryCenterScreen() {
         setEvents(j.events ?? [])
       }
       if (depRes.ok) {
-        const j = (await depRes.json()) as { deposits?: CryptoDepositRow[] }
+        const j = (await depRes.json()) as { deposits?: CryptoDepositReceiptRow[] }
         setDeposits(j.deposits ?? [])
       }
       if (wRes.ok) {
-        const j = (await wRes.json()) as { requests?: WithdrawalRow[] }
+        const j = (await wRes.json()) as { requests?: WithdrawalReceiptRow[] }
         setWithdrawals(j.requests ?? [])
       }
     } finally {
@@ -94,15 +92,6 @@ export function HistoryCenterScreen() {
   const historyNotifs = useMemo(
     () => filterTransactionHistoryFromInbox([...inbox].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))),
     [inbox],
-  )
-
-  const viewer = useMemo(
-    () => ({
-      fundingCountryCode: country ?? null,
-      displayCurrency: currency,
-      locale,
-    }),
-    [country, currency, locale],
   )
 
   return (
@@ -132,15 +121,14 @@ export function HistoryCenterScreen() {
               </div>
               <ul className="divide-y divide-border/50">
                 {withdrawals.map((w) => (
-                  <li key={w.id} className="px-4 py-3">
-                    <p className="text-sm font-semibold capitalize text-foreground">{w.status}</p>
-                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                      ${Number(w.amount).toFixed(2)} · {w.transaction_ref.slice(0, 8)}…
-                    </p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
-                      {formatNotificationTimeAgo(w.created_at, t)}
-                    </p>
-                  </li>
+                  <TransactionHistoryRow
+                    key={w.id}
+                    title={t(withdrawalTimelineLabelKey(w))}
+                    subtitle={`$${Number(w.amount).toFixed(2)} · ${w.transaction_ref.slice(0, 8)}…`}
+                    timestamp={w.created_at}
+                    t={t}
+                    onOpen={() => openWithdrawal(w)}
+                  />
                 ))}
               </ul>
             </section>
@@ -155,17 +143,14 @@ export function HistoryCenterScreen() {
               </div>
               <ul className="divide-y divide-border/50">
                 {deposits.map((d) => (
-                  <li key={d.id} className="px-4 py-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      {depositStatusLabel(String(d.status), t)}
-                    </p>
-                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                      ${Number(d.amount_usd).toFixed(2)} · {d.tx_hash.slice(0, 8)}…
-                    </p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
-                      {formatNotificationTimeAgo(d.created_at, t)}
-                    </p>
-                  </li>
+                  <TransactionHistoryRow
+                    key={d.id}
+                    title={t(depositTimelineLabelKey(d))}
+                    subtitle={`$${Number(d.amount_usd).toFixed(2)} · ${d.tx_hash.slice(0, 8)}…`}
+                    timestamp={d.created_at}
+                    t={t}
+                    onOpen={() => openDeposit(d)}
+                  />
                 ))}
               </ul>
             </section>
@@ -182,13 +167,14 @@ export function HistoryCenterScreen() {
                 {events.map((e) => {
                   const presented = presentFinancialEventForCustomer(e)
                   return (
-                  <li key={e.id} className="px-4 py-3">
-                    <p className="text-sm font-medium text-foreground">{presented.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{presented.detailLine}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
-                      {formatNotificationTimeAgo(e.created_at, t)}
-                    </p>
-                  </li>
+                    <TransactionHistoryRow
+                      key={e.id}
+                      title={presented.title}
+                      subtitle={presented.detailLine}
+                      timestamp={e.created_at}
+                      t={t}
+                      onOpen={() => openFinancialEvent(e)}
+                    />
                   )
                 })}
               </ul>
@@ -206,13 +192,14 @@ export function HistoryCenterScreen() {
                 {historyNotifs.map((n) => {
                   const p = presentNotification(n, t, viewer)
                   return (
-                    <li key={n.id} className="px-4 py-3">
-                      <p className="text-sm font-medium text-foreground">{p.title}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{p.summary}</p>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        {formatNotificationTimeAgo(n.timestamp, t)}
-                      </p>
-                    </li>
+                    <TransactionHistoryRow
+                      key={n.id}
+                      title={p.title}
+                      subtitle={p.summary}
+                      timestamp={n.timestamp}
+                      t={t}
+                      onOpen={() => void openNotification(n)}
+                    />
                   )
                 })}
               </ul>
@@ -230,6 +217,14 @@ export function HistoryCenterScreen() {
           ) : null}
         </div>
       )}
+
+      <TransactionReceiptSheet
+        open={receiptOpen}
+        receipt={receipt}
+        t={t}
+        locale={locale}
+        onClose={closeReceipt}
+      />
     </div>
   )
 }

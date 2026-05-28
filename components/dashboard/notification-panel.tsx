@@ -35,6 +35,9 @@ import { NotificationInboxEmpty, NotificationInboxRow } from "@/components/dashb
 import { cn } from "@/lib/utils"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isMobileLowGpuMode } from "@/lib/mobile/mobile-low-gpu-mode"
+import { TransactionReceiptSheet } from "@/components/dashboard/transaction-receipt-sheet"
+import { useTransactionReceiptOpener } from "@/hooks/use-transaction-receipt"
+import { isFinancialReceiptNotification } from "@/lib/transactions/transaction-receipt-model"
 
 interface NotificationPanelProps {
   isOpen: boolean
@@ -165,7 +168,7 @@ const InboxRow = memo(function InboxRow({ notification, onActivate, onSwipeRight
 })
 
 export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
-  const { t } = useUserPreferences()
+  const { t, currency, country, locale } = useUserPreferences()
   const {
     inbox,
     accountInboxReady,
@@ -194,6 +197,17 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<NexusNotificationItem | null>(null)
+
+  const viewer = useMemo(
+    () => ({
+      fundingCountryCode: country ?? null,
+      displayCurrency: currency,
+      locale,
+    }),
+    [country, currency, locale],
+  )
+
+  const { receipt, receiptOpen, closeReceipt, openNotification } = useTransactionReceiptOpener(t, viewer)
 
   const alertInbox = useMemo(
     () =>
@@ -235,6 +249,10 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const onItemActivate = useCallback(
     (n: NexusNotificationItem) => {
       markRead(n.id)
+      if (isFinancialReceiptNotification(n)) {
+        void openNotification(n)
+        return
+      }
       if (n.nav && n.nav.kind !== "detail") {
         runAppNavigation(n.nav)
         onClose()
@@ -242,7 +260,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
         setDetail(n)
       }
     },
-    [markRead, onClose, runAppNavigation]
+    [markRead, onClose, openNotification, runAppNavigation],
   )
 
   const scrollRaf = useRef<number | null>(null)
@@ -530,8 +548,17 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
         </>
       )}
 
-      {detail ? <PanelDetailOverlay detail={detail} onClose={() => setDetail(null)} /> : null}
+      {detail && !isFinancialReceiptNotification(detail) ? (
+        <PanelDetailOverlay detail={detail} onClose={() => setDetail(null)} />
+      ) : null}
     </div>
+    <TransactionReceiptSheet
+      open={receiptOpen}
+      receipt={receipt}
+      t={t}
+      locale={locale}
+      onClose={closeReceipt}
+    />
     </>,
     document.body
   )
