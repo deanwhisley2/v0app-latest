@@ -72,56 +72,84 @@ function pushLine(
   })
 }
 
+/** Mirror deposit lines into withdrawal slots when user registered one number for both directions. */
+export function enrichRowWithdrawalMirrors(row: UserSecurityProfileRow): UserSecurityProfileRow {
+  const next = { ...row }
+  if (
+    lineReady(next.mtn_deposit_number, next.mtn_deposit_account_names) &&
+    !lineReady(next.mtn_withdrawal_number, next.mtn_withdrawal_account_names)
+  ) {
+    next.mtn_withdrawal_number = next.mtn_deposit_number
+    next.mtn_withdrawal_account_names = next.mtn_deposit_account_names
+  }
+  if (
+    lineReady(next.airtel_deposit_number, next.airtel_deposit_account_names) &&
+    !lineReady(next.airtel_withdrawal_number, next.airtel_withdrawal_account_names)
+  ) {
+    next.airtel_withdrawal_number = next.airtel_deposit_number
+    next.airtel_withdrawal_account_names = next.airtel_deposit_account_names
+  }
+  if (
+    lineReady(next.deposit_number, next.deposit_account_names) &&
+    !lineReady(next.withdrawal_number, next.withdrawal_account_names)
+  ) {
+    next.withdrawal_number = next.deposit_number
+    next.withdrawal_account_names = next.deposit_account_names
+  }
+  return next
+}
+
 function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayoutOption[] {
   if (!row) return []
+  const enriched = enrichRowWithdrawalMirrors(row)
   const opts: RegisteredPayoutOption[] = []
-  if (lineReady(row.mtn_deposit_number, row.mtn_deposit_account_names)) {
+  if (lineReady(enriched.mtn_deposit_number, enriched.mtn_deposit_account_names)) {
     pushLine(
       opts,
       "mtn_deposit",
       "MTN — deposits",
       "mobile_money_mtn_deposit",
       "MTN",
-      row.mtn_deposit_number!,
-      row.mtn_deposit_account_names!.trim(),
+      enriched.mtn_deposit_number!,
+      enriched.mtn_deposit_account_names!.trim(),
     )
   }
-  if (lineReady(row.airtel_deposit_number, row.airtel_deposit_account_names)) {
+  if (lineReady(enriched.airtel_deposit_number, enriched.airtel_deposit_account_names)) {
     pushLine(
       opts,
       "airtel_deposit",
       "Airtel — deposits",
       "mobile_money_airtel_deposit",
       "Airtel",
-      row.airtel_deposit_number!,
-      row.airtel_deposit_account_names!.trim(),
+      enriched.airtel_deposit_number!,
+      enriched.airtel_deposit_account_names!.trim(),
     )
   }
-  if (lineReady(row.mtn_withdrawal_number, row.mtn_withdrawal_account_names)) {
+  if (lineReady(enriched.mtn_withdrawal_number, enriched.mtn_withdrawal_account_names)) {
     pushLine(
       opts,
       "mtn_withdrawal",
       "MTN — withdrawals",
       "mobile_money_mtn_withdrawal",
       "MTN",
-      row.mtn_withdrawal_number!,
-      row.mtn_withdrawal_account_names!.trim(),
+      enriched.mtn_withdrawal_number!,
+      enriched.mtn_withdrawal_account_names!.trim(),
     )
   }
-  if (lineReady(row.airtel_withdrawal_number, row.airtel_withdrawal_account_names)) {
+  if (lineReady(enriched.airtel_withdrawal_number, enriched.airtel_withdrawal_account_names)) {
     pushLine(
       opts,
       "airtel_withdrawal",
       "Airtel — withdrawals",
       "mobile_money_airtel_withdrawal",
       "Airtel",
-      row.airtel_withdrawal_number!,
-      row.airtel_withdrawal_account_names!.trim(),
+      enriched.airtel_withdrawal_number!,
+      enriched.airtel_withdrawal_account_names!.trim(),
     )
   }
   if (
     opts.length === 0 &&
-    lineReady(row.deposit_number, row.deposit_account_names)
+    lineReady(enriched.deposit_number, enriched.deposit_account_names)
   ) {
     pushLine(
       opts,
@@ -129,13 +157,13 @@ function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayou
       "Mobile money (deposit)",
       "mobile_money_deposit",
       null,
-      row.deposit_number!,
-      row.deposit_account_names!.trim(),
+      enriched.deposit_number!,
+      enriched.deposit_account_names!.trim(),
     )
   }
   if (
     !opts.some((o) => o.id.includes("withdrawal")) &&
-    lineReady(row.withdrawal_number, row.withdrawal_account_names)
+    lineReady(enriched.withdrawal_number, enriched.withdrawal_account_names)
   ) {
     pushLine(
       opts,
@@ -143,27 +171,57 @@ function buildPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayou
       "Mobile money (withdrawal)",
       "mobile_money_withdrawal",
       null,
-      row.withdrawal_number!,
-      row.withdrawal_account_names!.trim(),
+      enriched.withdrawal_number!,
+      enriched.withdrawal_account_names!.trim(),
     )
   }
-  if (row.crypto_wallet && isValidTrc20UsdtAddress(row.crypto_wallet)) {
+  if (enriched.crypto_wallet && isValidTrc20UsdtAddress(enriched.crypto_wallet)) {
     opts.push({
       id: "crypto",
       label: "USDT TRC20",
       rail: "USDT_TRC20",
       network: null,
-      numberMasked: maskSensitiveValue(row.crypto_wallet, "wallet"),
+      numberMasked: maskSensitiveValue(enriched.crypto_wallet, "wallet"),
       accountNames: null,
     })
   }
   return opts
 }
 
+/** Lines the user may select when withdrawing (withdrawal rails first, then deposit fallback). */
+export function buildWithdrawPayoutOptions(row: UserSecurityProfileRow | null): RegisteredPayoutOption[] {
+  const all = buildPayoutOptions(row)
+  const withdrawal = all.filter(
+    (o) => o.id.includes("withdrawal") || o.id === "withdrawal_line",
+  )
+  if (withdrawal.length > 0) {
+    const crypto = all.filter((o) => o.id === "crypto")
+    return [...withdrawal, ...crypto]
+  }
+  const deposit = all.filter((o) => o.id.includes("deposit") || o.id === "deposit_line")
+  if (deposit.length > 0) {
+    const crypto = all.filter((o) => o.id === "crypto")
+    return [...deposit, ...crypto]
+  }
+  return all
+}
+
+export function defaultWithdrawPayoutOptionId(
+  opts: RegisteredPayoutOption[],
+): PayoutLineId | null {
+  const preferred = opts.find((o) => o.id.includes("withdrawal") || o.id === "withdrawal_line")
+  if (preferred) return preferred.id
+  const deposit = opts.find((o) => o.id.includes("deposit") || o.id === "deposit_line")
+  if (deposit) return deposit.id
+  return opts[0]?.id ?? null
+}
+
 function rowToPublic(row: UserSecurityProfileRow | null): PublicSecurityProfile {
-  const hasSecurityCode = Boolean(row?.security_code_hash)
-  const minimumPayoutLine = row ? hasMinimumPayoutLine(row) : false
-  const minimumSecurity = row ? hasMinimumSecurity(row) : false
+  const enriched = row ? enrichRowWithdrawalMirrors(row) : null
+  const hasSecurityCode = Boolean(enriched?.security_code_hash)
+  const minimumPayoutLine = enriched ? hasMinimumPayoutLine(enriched) : false
+  const minimumSecurity = enriched ? hasMinimumSecurity(enriched) : false
+  const withdrawOpts = buildWithdrawPayoutOptions(enriched)
   const cooldownUntil = row?.cooldown_until ?? null
   const inCooldown = cooldownUntil ? new Date(cooldownUntil).getTime() > Date.now() : false
   return {
@@ -172,18 +230,20 @@ function rowToPublic(row: UserSecurityProfileRow | null): PublicSecurityProfile 
     hasTransactionNumber: minimumPayoutLine,
     hasMinimumPayoutLine: minimumPayoutLine,
     needsSetup: !minimumSecurity,
-    suggestsOptionalEnhancements: row ? suggestsOptionalSecurityEnhancements(row) : false,
-    payoutMethod: (row?.payout_method as NexusPayoutMethod) ?? "mobile_money",
-    depositNumberMasked: row?.deposit_number
-      ? maskSensitiveValue(row.deposit_number, "phone")
+    suggestsOptionalEnhancements: enriched ? suggestsOptionalSecurityEnhancements(enriched) : false,
+    payoutMethod: (enriched?.payout_method as NexusPayoutMethod) ?? "mobile_money",
+    depositNumberMasked: enriched?.deposit_number
+      ? maskSensitiveValue(enriched.deposit_number, "phone")
       : null,
-    withdrawalNumberMasked: row?.withdrawal_number
-      ? maskSensitiveValue(row.withdrawal_number, "phone")
+    withdrawalNumberMasked: enriched?.withdrawal_number
+      ? maskSensitiveValue(enriched.withdrawal_number, "phone")
       : null,
-    depositAccountNames: row?.deposit_account_names?.trim() || null,
-    withdrawalAccountNames: row?.withdrawal_account_names?.trim() || null,
-    cryptoWalletMasked: row?.crypto_wallet ? maskSensitiveValue(row.crypto_wallet, "wallet") : null,
-    payoutOptions: buildPayoutOptions(row),
+    depositAccountNames: enriched?.deposit_account_names?.trim() || null,
+    withdrawalAccountNames: enriched?.withdrawal_account_names?.trim() || null,
+    cryptoWalletMasked: enriched?.crypto_wallet ? maskSensitiveValue(enriched.crypto_wallet, "wallet") : null,
+    payoutOptions: buildPayoutOptions(enriched),
+    withdrawPayoutOptions: withdrawOpts,
+    hasWithdrawalPayoutLine: withdrawOpts.some((o) => o.id !== "crypto"),
     cooldownUntil,
     inCooldown,
     canChangeSensitive: hasSecurityCode && !inCooldown,
@@ -242,7 +302,7 @@ export function resolvePayerFromSecurityRow(
   row: UserSecurityProfileRow,
   source: PayoutLineId,
 ): { name: string | null; phone: string | null; network: string | null } {
-  const line = resolveLineFromPayoutId(row, source)
+  const line = resolveLineFromPayoutId(enrichRowWithdrawalMirrors(row), source)
   return { name: line.names, phone: line.number, network: line.network }
 }
 

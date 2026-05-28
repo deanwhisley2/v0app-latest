@@ -99,6 +99,10 @@ import { OptionalSecurityReminderBanner } from "@/components/dashboard/optional-
 import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
 import { fetchSecurityProfileForAction } from "@/lib/nexus-security-profile-client"
 import { loadWithdrawReadiness } from "@/lib/client/withdraw-readiness"
+import {
+  defaultWithdrawPayoutOptionId,
+  withdrawPayoutOptionsFromProfile,
+} from "@/lib/client/withdraw-payout-options"
 import type { PublicSecurityProfile, RegisteredPayoutOption } from "@/lib/nexus-security-profile-types"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import {
@@ -2175,6 +2179,34 @@ export function DashboardPageInner() {
     if (showFundModal === "withdraw") void loadWithdrawalEligibility()
   }, [showFundModal, loadWithdrawalEligibility])
 
+  useEffect(() => {
+    if (showFundModal !== "withdraw" || withdrawPayoutProfile) return
+    let cancelled = false
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token || cancelled) return
+      const readiness = await loadWithdrawReadiness(token)
+      if (cancelled) return
+      if (readiness.ok) {
+        setWithdrawPayoutProfile(readiness.profile)
+        setSelectedWithdrawPayoutId((prev) => prev ?? defaultWithdrawPayoutOptionId(readiness.profile))
+      } else {
+        setFundModalError(readiness.message)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showFundModal, withdrawPayoutProfile])
+
+  const withdrawPayoutOptionsList = useMemo(
+    () => withdrawPayoutOptionsFromProfile(withdrawPayoutProfile),
+    [withdrawPayoutProfile],
+  )
+
   const tryOpenFundModal = useCallback(
     async (mode: "add" | "withdraw") => {
       if (isGuestSession) return
@@ -2197,7 +2229,7 @@ export function DashboardPageInner() {
           return
         }
         setWithdrawPayoutProfile(readiness.profile)
-        setSelectedWithdrawPayoutId(readiness.profile.payoutOptions[0]?.id ?? null)
+        setSelectedWithdrawPayoutId(defaultWithdrawPayoutOptionId(readiness.profile))
       } else {
         const { profile, error } = await fetchSecurityProfileForAction(token)
         if (!profile || profile.needsSetup) {
@@ -2239,7 +2271,7 @@ export function DashboardPageInner() {
     if (!fundAmount.trim() || parseCustomerLocalAmountInput(fundAmount) <= 0) {
       return t("withdrawal.error.enterAmount")
     }
-    if (!withdrawPayoutProfile?.payoutOptions?.length) {
+    if (!withdrawPayoutOptionsList.length) {
       return "Register at least one mobile money payout line with account holder name(s) in Settings before you can withdraw."
     }
     if (!selectedWithdrawPayoutId) {
@@ -2262,7 +2294,7 @@ export function DashboardPageInner() {
     showFundModal,
     isFundProcessing,
     fundAmount,
-    withdrawPayoutProfile,
+    withdrawPayoutOptionsList,
     selectedWithdrawPayoutId,
     withdrawalEligibility,
     t,
@@ -2333,8 +2365,8 @@ export function DashboardPageInner() {
             throw new Error(readiness.message)
           }
           setWithdrawPayoutProfile(readiness.profile)
-          if (!selectedWithdrawPayoutId && readiness.profile.payoutOptions[0]?.id) {
-            setSelectedWithdrawPayoutId(readiness.profile.payoutOptions[0].id)
+          if (!selectedWithdrawPayoutId) {
+            setSelectedWithdrawPayoutId(defaultWithdrawPayoutOptionId(readiness.profile))
           }
         }
         const liveMain = refreshed.balance.available_balance
@@ -3753,11 +3785,11 @@ export function DashboardPageInner() {
                     {showBalance ? formatUserMoney(mainBalance) : "••••"}
                   </p>
                 )}
-                {showFundModal === "withdraw" && withdrawPayoutProfile?.payoutOptions?.length ? (
+                {showFundModal === "withdraw" && withdrawPayoutOptionsList.length ? (
                   <div className="mt-3 space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
                     <p className="text-xs font-medium text-foreground">Registered payout method</p>
                     <div className="space-y-2">
-                      {withdrawPayoutProfile.payoutOptions.map((opt: RegisteredPayoutOption) => (
+                      {withdrawPayoutOptionsList.map((opt: RegisteredPayoutOption) => (
                         <label
                           key={opt.id}
                           className={`flex cursor-pointer gap-2 rounded-lg border px-3 py-2 touch-manipulation ${
@@ -3825,7 +3857,7 @@ export function DashboardPageInner() {
 
             <div className="flex flex-col gap-1.5 sm:gap-2">
               {showFundModal === "withdraw" &&
-              !withdrawPayoutProfile?.payoutOptions?.length &&
+              !withdrawPayoutOptionsList.length &&
               !isFundProcessing ? (
                 <div
                   className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100"
@@ -3889,9 +3921,10 @@ export function DashboardPageInner() {
                 disabled={
                   isFundProcessing ||
                   (showFundModal === "withdraw" &&
-                    (withdrawalEligibility != null &&
-                      (withdrawalEligibility.cooldownActive ||
-                        withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd))) ||
+                    (Boolean(withdrawSubmitBlockedReason) ||
+                      (withdrawalEligibility != null &&
+                        (withdrawalEligibility.cooldownActive ||
+                          withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd)))) ||
                   (showFundModal === "withdraw" && (!fundAmount || parseCustomerLocalAmountInput(fundAmount) <= 0)) ||
                   (showFundModal === "add" &&
                     customerRetailFunding &&
@@ -4007,10 +4040,7 @@ export function DashboardPageInner() {
                   setFundMobileNetwork("")
                   setCryptoFundingMeta(null)
                 }}
-                onWithdraw={() => {
-                  setShowFundModal("withdraw")
-                  setFundAmount("")
-                }}
+                onWithdraw={() => void tryOpenFundModal("withdraw")}
                 onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
               />
             ) : null}

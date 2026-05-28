@@ -43,6 +43,9 @@ export type PublicSecurityProfile = {
   withdrawalAccountNames: string | null
   cryptoWalletMasked: string | null
   payoutOptions: RegisteredPayoutOption[]
+  /** Withdraw modal / API — withdrawal lines, or deposit lines when shared-number setup. */
+  withdrawPayoutOptions: RegisteredPayoutOption[]
+  hasWithdrawalPayoutLine: boolean
   cooldownUntil: string | null
   inCooldown: boolean
   canChangeSensitive: boolean

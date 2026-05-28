@@ -18,8 +18,14 @@ function messageFromProfile(profile: PublicSecurityProfile): string | null {
   if (!profile.hasMinimumPayoutLine) {
     return "Register at least one mobile money number with the account holder name(s) in Settings before withdrawing."
   }
-  if (!profile.payoutOptions?.length) {
+  const withdrawOpts = profile.withdrawPayoutOptions?.length
+    ? profile.withdrawPayoutOptions
+    : profile.payoutOptions
+  if (!profile.hasWithdrawalPayoutLine && !withdrawOpts?.length) {
     return "No payout method is on file. Add deposit or withdrawal details in Settings, then try again."
+  }
+  if (!withdrawOpts?.length) {
+    return "Register at least one mobile money number with the account holder name(s) in Settings before withdrawing."
   }
   return null
 }
@@ -42,7 +48,7 @@ export function assessWithdrawReadiness(
     const showSecurityGate =
       profile.needsSetup ||
       (!profile.hasSecurityCode && !profile.inCooldown) ||
-      !profile.hasMinimumPayoutLine
+      (!profile.hasMinimumPayoutLine && !profile.hasWithdrawalPayoutLine)
     return { ok: false, message: block, showSecurityGate }
   }
   return { ok: true, profile }

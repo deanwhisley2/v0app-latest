@@ -177,8 +177,10 @@ export async function POST(request: Request) {
       )
     }
 
+    const { enrichRowWithdrawalMirrors } = await import("@/lib/server/user-security-profile-service")
     const { hasMinimumSecurity } = await import("@/lib/nexus-security-minimum")
-    if (!hasMinimumSecurity(secRow)) {
+    const payoutRow = enrichRowWithdrawalMirrors(secRow)
+    if (!hasMinimumSecurity(payoutRow)) {
       return NextResponse.json(
         {
           error:
@@ -208,7 +210,7 @@ export async function POST(request: Request) {
       optionId === "airtel_withdrawal"
     ) {
       const { resolvePayerFromSecurityRow } = await import("@/lib/server/user-security-profile-service")
-      const line = resolvePayerFromSecurityRow(secRow, optionId)
+      const line = resolvePayerFromSecurityRow(payoutRow, optionId)
       if (!line.phone || !line.name) {
         return NextResponse.json({ error: "Selected payout line is not fully registered." }, { status: 400 })
       }
