@@ -21,11 +21,9 @@ import {
   Check,
   ExternalLink,
   LogOut,
-  Link2,
   ArrowDownUp,
   MapPin,
 } from "lucide-react"
-import { ExchangeBinding } from "./exchange-binding"
 import { DepositWithdraw } from "./deposit-withdraw"
 import { DepositWithdrawDetailsPanel } from "@/components/dashboard/deposit-withdraw-details-panel"
 import { Card } from "@/components/ui/card"
@@ -59,7 +57,6 @@ export type SettingsView =
   | "payment-methods"
   | "privacy"
   | "about"
-  | "exchanges"
   | "deposit-withdraw"
 
 interface SettingItem {
@@ -196,7 +193,6 @@ export function SettingsScreen({
   }
 
   const settingsItems: SettingItem[] = [
-    { key: "exchanges", icon: <Link2 className="h-5 w-5" />, label: t("settings.menu.exchanges"), description: t("settings.menu.exchangesDesc"), badge: "New" },
     { key: "security", href: "/dashboard/security", icon: <Shield className="h-5 w-5" />, label: t("settings.menu.security"), description: t("settings.menu.securityDesc").replace("{{level}}", String(securityLevel)) },
     { key: "deposit-withdraw", icon: <ArrowDownUp className="h-5 w-5" />, label: t("settings.menu.depositWithdraw"), description: t("settings.menu.depositWithdrawDesc") },
     { key: "notifications", icon: <Bell className="h-5 w-5" />, label: t("settings.menu.notifications"), description: t("settings.menu.notificationsDesc") },
@@ -445,21 +441,6 @@ export function SettingsScreen({
             </div>
           </div>
         </Card>
-      </div>
-    )
-  }
-
-  // Connected Exchanges
-  if (currentView === "exchanges") {
-    return (
-      <div className="space-y-4">
-        {renderBackButton()}
-        <h2 className="text-lg font-semibold">Connected Exchanges</h2>
-        <p className="text-sm text-muted-foreground">
-          Link exchange for balance display. Read-only API keys recommended. Disconnect
-          anytime from this screen.
-        </p>
-        <ExchangeBinding />
       </div>
     )
   }

@@ -1695,7 +1695,7 @@ export function DashboardPageInner() {
           }
           break
         case "orders":
-          setSettingsRequestedView("exchanges")
+          setSettingsRequestedView("main")
           setTabProgrammatic("settings", "notification_nav_orders")
           break
         case "support_thread":
@@ -1752,7 +1752,6 @@ export function DashboardPageInner() {
       if (
         rawView === "deposit-withdraw" ||
         rawView === "notifications" ||
-        rawView === "exchanges" ||
         rawView === "about"
       ) {
         setSettingsRequestedView(rawView as SettingsView)
