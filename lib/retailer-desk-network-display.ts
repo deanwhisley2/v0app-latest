@@ -1,4 +1,9 @@
 import type { RetailerPaymentLine } from "@/lib/retailer-payment-templates"
+import {
+  parseKeMpesaMobileDesk,
+  parseUgAirtelMerchantDesk,
+  parseUgMtnMobileDesk,
+} from "@/lib/retailer-payment-templates"
 
 /** Show only payment lines matching the customer's selected network (never mix MTN + Airtel on one card). */
 export function filterDeskPaymentLinesForNetwork(
@@ -51,4 +56,27 @@ export function formatDeskPaymentLinesSummary(
       return lab ? `${lab}: ${val}` : val
     })
     .filter(Boolean)
+}
+
+/** Payee name for the selected network only — never the full multi-network desk string. */
+export function deskPayeeDisplayForNetwork(
+  paymentNumbers: unknown,
+  mobileNetwork: string,
+  registeredPayeeNames?: string | null,
+): string | null {
+  const net = mobileNetwork.trim().toUpperCase()
+  const filtered = filterDeskPaymentLinesForNetwork(paymentNumbers, mobileNetwork)
+  if (net === "MTN") {
+    return parseUgMtnMobileDesk(filtered, registeredPayeeNames)?.payeeName ?? null
+  }
+  if (net === "AIRTEL") {
+    return parseUgAirtelMerchantDesk(filtered, registeredPayeeNames)?.payeeName ?? null
+  }
+  if (/MPESA/i.test(net)) {
+    const mpesa = parseKeMpesaMobileDesk(filtered)
+    return mpesa?.lines[0]?.payeeName ?? null
+  }
+  const first = filtered[0]
+  if (!first) return registeredPayeeNames?.trim() || null
+  return registeredPayeeNames?.trim() || null
 }

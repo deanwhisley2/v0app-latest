@@ -99,6 +99,7 @@ const en: Record<string, string> = {
   "receipt.share.comingSoon": "Coming soon",
   "funding.registeredNumbersTitle": "Your registered numbers",
   "funding.registeredNumbersHint": "Tap the number you will send from. Name and network fill automatically.",
+  "withdrawal.payoutLockedHint": "Payout details are locked from your Security profile. Change them only via Security Appeal.",
   "funding.card.payeeNumber": "Payee number",
   "funding.card.payeeName": "Payee name",
   "funding.card.yourNumber": "Your number",

@@ -29,6 +29,7 @@ export function RegisteredPayerPicker({ options, selectedSource, onSelect, t }: 
       <ul className="space-y-1.5" role="radiogroup" aria-label={t("funding.registeredNumbersTitle")}>
         {options.map((opt) => {
           const active = selectedSource === opt.id
+          const rowNetwork = opt.network ?? network
           return (
             <li key={opt.id}>
               <button
@@ -43,6 +44,7 @@ export function RegisteredPayerPicker({ options, selectedSource, onSelect, t }: 
                     : "border-border/70 bg-background hover:bg-muted/40",
                 )}
               >
+                {rowNetwork ? <PaymentNetworkLogo network={rowNetwork} size="sm" className="shrink-0" /> : null}
                 <span
                   className={cn(
                     "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",

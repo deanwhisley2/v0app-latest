@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { grantNewMemberWelcomeBonus } from "@/lib/server/new-member-campaign"
 
 type LoginBody = {
   email?: string
@@ -62,6 +63,12 @@ export async function POST(request: Request) {
         },
         { status: 403 },
       )
+    } else {
+      try {
+        await grantNewMemberWelcomeBonus(admin, data.user.id, "login")
+      } catch (grantErr) {
+        console.warn("[auth/login] welcome bonus:", grantErr instanceof Error ? grantErr.message : grantErr)
+      }
     }
   } catch (e) {
     console.warn("[auth/login] profile gate:", e instanceof Error ? e.message : e)

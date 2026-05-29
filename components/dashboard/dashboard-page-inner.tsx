@@ -129,6 +129,7 @@ import {
 import { RegisteredPayerPicker } from "@/components/dashboard/registered-payer-picker"
 import { NetworkPaymentCardHeader } from "@/components/dashboard/network-payment-card-header"
 import {
+  deskPayeeDisplayForNetwork,
   filterDeskPaymentLinesForNetwork,
   formatDeskPaymentLinesSummary,
 } from "@/lib/retailer-desk-network-display"
@@ -543,17 +544,35 @@ export function DashboardPageInner() {
   const [fundMobileNetwork, setFundMobileNetwork] = useState("")
   const fundingPayerNetwork = useMemo(() => {
     if (l1FundSource === "airtel") return "Airtel"
+    if (l1FundSource === "mpesa_ke") return "MPesa"
     if (l1FundSource === "local" && fundMobileNetwork.trim()) return fundMobileNetwork.trim()
     return null
   }, [l1FundSource, fundMobileNetwork])
-  const fundPayerBinding = useMemo(
-    () => bindFundPayerFromProfile(fundPayerProfile, fundingPayerNetwork, fundPayerSource),
-    [fundPayerProfile, fundingPayerNetwork, fundPayerSource],
-  )
   const fundPayerOptions = useMemo(
     () => listFundPayerOptionsForNetwork(fundPayerProfile, fundingPayerNetwork),
     [fundPayerProfile, fundingPayerNetwork],
   )
+  const showFundRegisteredPayerPicker = useMemo(() => {
+    if (showFundModal !== "add" || fundPayerOptions.length === 0) return false
+    if (l1FundSource === "pick" || l1FundSource === "crypto") return false
+    if (l1FundSource === "local") return Boolean(fundMobileNetwork.trim())
+    return l1FundSource === "airtel" || l1FundSource === "mpesa_ke"
+  }, [showFundModal, fundPayerOptions.length, l1FundSource, fundMobileNetwork])
+  const selectFundPayerOption = useCallback((opt: RegisteredPayoutOption) => {
+    const binding = bindFundPayerFromOption(opt)
+    setFundPayerSource(binding.source)
+    setFundPayerName(binding.displayName)
+    setFundPayerPhone(binding.displayPhone)
+  }, [])
+  const fundPayerBinding = useMemo(
+    () => bindFundPayerFromProfile(fundPayerProfile, fundingPayerNetwork, fundPayerSource),
+    [fundPayerProfile, fundingPayerNetwork, fundPayerSource],
+  )
+  useEffect(() => {
+    if (!showFundRegisteredPayerPicker || fundPayerOptions.length !== 1) return
+    const only = fundPayerOptions[0]
+    if (fundPayerSource !== only.id) selectFundPayerOption(only)
+  }, [showFundRegisteredPayerPicker, fundPayerOptions, fundPayerSource, selectFundPayerOption])
   const [qualifiedRetailers, setQualifiedRetailers] = useState<QualifiedRetailer[]>([])
   /** When no desk qualifies, Level-5-configured official company receive line (same country/network). */
   const [officialCorridorFallback, setOfficialCorridorFallback] = useState<OfficialCorridorFallback | null>(null)
@@ -2227,6 +2246,7 @@ export function DashboardPageInner() {
         showToast(t("withdrawal.error.sessionExpired"), "error")
         return
       }
+      let addFundProfile: PublicSecurityProfile | null = null
       if (mode === "withdraw") {
         const readiness = await loadWithdrawReadiness(token)
         if (!readiness.ok) {
@@ -2249,10 +2269,10 @@ export function DashboardPageInner() {
           showToast(msg, "error")
           return
         }
+        addFundProfile = profile
         setWithdrawPayoutProfile(null)
         setSelectedWithdrawPayoutId(null)
         setFundPayerProfile(profile)
-        applyRegisteredFundPayer(profile, null)
       }
       setShowFundModal(mode)
       setFundAmount("")
@@ -2264,11 +2284,16 @@ export function DashboardPageInner() {
         setFundTxReference("")
         setFundNote("")
         setFundMobileNetwork("")
-        setFundPayerName("")
-        setFundPayerPhone("")
+        setFundPayerSource("manual")
         setCryptoFundingMeta(null)
         setFundPaymentProofDataUrl(null)
         setFundPaymentProofPreview(null)
+        if (addFundProfile) {
+          applyRegisteredFundPayer(addFundProfile, null)
+        } else {
+          setFundPayerName("")
+          setFundPayerPhone("")
+        }
       }
     },
     [isGuestSession, showToast, t, applyRegisteredFundPayer],
@@ -2985,7 +3010,13 @@ export function DashboardPageInner() {
                     setL1FundSource(s)
                     if (fundPayerProfile) {
                       const net =
-                        s === "airtel" ? "Airtel" : s === "local" ? fundMobileNetwork : null
+                        s === "airtel"
+                          ? "Airtel"
+                          : s === "mpesa_ke"
+                            ? "MPesa"
+                            : s === "local"
+                              ? fundMobileNetwork
+                              : null
                       applyRegisteredFundPayer(fundPayerProfile, net)
                     }
                     if (s === "local") {
@@ -3034,7 +3065,17 @@ export function DashboardPageInner() {
                     "{{amount}}",
                     customerMinDepositDisplay,
                   )}
+                  hidePayerIdentityFields={showFundRegisteredPayerPicker}
                 />
+
+                {showFundRegisteredPayerPicker ? (
+                  <RegisteredPayerPicker
+                    options={fundPayerOptions}
+                    selectedSource={fundPayerSource}
+                    onSelect={selectFundPayerOption}
+                    t={t}
+                  />
+                ) : null}
 
                                 {l1FundSource === "local" && localMmWizardStep === 1 ? (
                   <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3 sm:p-4">
@@ -3045,19 +3086,6 @@ export function DashboardPageInner() {
                       </span>
                     </div>
                     <p className="text-[11px] leading-snug text-muted-foreground">{t("funding.local.step1Body")}</p>
-                    {fundPayerOptions.length > 0 ? (
-                      <RegisteredPayerPicker
-                        options={fundPayerOptions}
-                        selectedSource={fundPayerSource}
-                        onSelect={(opt) => {
-                          const binding = bindFundPayerFromOption(opt)
-                          setFundPayerSource(binding.source)
-                          setFundPayerName(binding.displayName)
-                          setFundPayerPhone(binding.displayPhone)
-                        }}
-                        t={t}
-                      />
-                    ) : null}
                     <div className="space-y-2.5">
                       <div>
                         <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
@@ -3213,7 +3241,12 @@ export function DashboardPageInner() {
                             const nums = formatDeskPaymentLinesSummary(r.payment_numbers, fundMobileNetwork)
                             const statusLabel = String(r.liquidity_status ?? "—")
                             const spend = typeof r.spendable_liquidity === "number" ? r.spendable_liquidity.toFixed(0) : "—"
-                            const payee = String(r.registered_payee_names ?? "").trim()
+                            const payee =
+                              deskPayeeDisplayForNetwork(
+                                r.payment_numbers,
+                                fundMobileNetwork,
+                                r.registered_payee_names,
+                              ) ?? ""
                             const networkLogo =
                               fundMobileNetwork === "MTN"
                                 ? "MTN"
@@ -3246,12 +3279,20 @@ export function DashboardPageInner() {
                                     ) : null}
                                   </p>
                                 </div>
-                                <p className="font-mono text-[10px] text-foreground line-clamp-2">
-                                  {nums.length ? nums.join(" · ") : t("funding.paymentNumbersOnFile")}
-                                </p>
+                                {nums.length ? (
+                                  nums.map((line) => (
+                                    <p key={line} className="font-mono text-[10px] text-foreground break-all">
+                                      {line}
+                                    </p>
+                                  ))
+                                ) : (
+                                  <p className="font-mono text-[10px] text-muted-foreground">
+                                    {t("funding.paymentNumbersOnFile")}
+                                  </p>
+                                )}
                                 {payee ? (
-                                  <p className="mt-1 line-clamp-2 text-[10px] text-foreground/90">
-                                    {t("funding.payeeLabel")} {payee}
+                                  <p className="mt-1 text-[10px] font-medium text-foreground/90">
+                                    {t("funding.card.payeeName")}: {payee}
                                   </p>
                                 ) : null}
                                 <p className="mt-1 text-[10px]">
@@ -3323,7 +3364,12 @@ export function DashboardPageInner() {
                               }
                               payeeName={
                                 localMmMtnMobile?.payeeName ??
-                                localMmSelectedDesk.registered_payee_names ??
+                                localMmAirtelMerchant?.payeeName ??
+                                deskPayeeDisplayForNetwork(
+                                  localMmSelectedDesk.payment_numbers,
+                                  fundMobileNetwork,
+                                  localMmSelectedDesk.registered_payee_names,
+                                ) ??
                                 null
                               }
                               senderNumber={fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayPhone : null}
@@ -3338,37 +3384,24 @@ export function DashboardPageInner() {
                               t={t}
                             />
                             <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] leading-snug sm:p-3 sm:text-xs">
-                              {localMmMpesaKenya ? (
-                                <>
-                                  {localMmMpesaKenya.lines.map((line) => (
-                                    <p key={line.msisdn} className="break-words font-mono text-[10px]">
-                                      {t("funding.retailer.mpesaDeskNumbersLine")
-                                        .replace("{{msisdn}}", line.msisdn)
-                                        .replace("{{payee}}", line.payeeName)}
-                                    </p>
-                                  ))}
-                                </>
-                              ) : localMmMtnMobile ? (
-                                <p className="break-words font-mono text-[10px]">
-                                  {t("funding.payment.mtnStep1").replace("{{ussd}}", localMmMtnMobile.ussdPrefix)}
-                                </p>
-                              ) : localMmAirtelMerchant ? (
-                                <p className="break-words text-[10px]">{t("funding.retailer.airtelDeskPayeeLine")}</p>
-                              ) : null}
                               <p className="font-medium text-destructive break-words">{t("funding.wrongDestinationWarning")}</p>
                             </div>
                             <RetailerPaymentInstructionPanel
-                              mpesa={localMmMpesaKenya}
-                              mtn={localMmMtnMobile}
+                              mpesa={/mpesa/i.test(fundMobileNetwork) ? localMmMpesaKenya : null}
+                              mtn={fundMobileNetwork === "MTN" ? localMmMtnMobile : null}
                               airtel={
-                                localMmAirtelMerchant
+                                fundMobileNetwork === "Airtel" && localMmAirtelMerchant
                                   ? {
                                       ussdPrefix: localMmAirtelMerchant.ussdPrefix,
                                       merchantId: localMmAirtelMerchant.merchantId,
                                     }
                                   : null
                               }
-                              instructionPayeeRaw={localMmSelectedDesk.registered_payee_names}
+                              instructionPayeeRaw={deskPayeeDisplayForNetwork(
+                                localMmSelectedDesk.payment_numbers,
+                                fundMobileNetwork,
+                                localMmSelectedDesk.registered_payee_names,
+                              )}
                               payerEmail={currentUser?.email || t("funding.payment.yourLoginEmail")}
                               fundTxReference={fundTxReference}
                               onTxReferenceChange={(v) => {
@@ -3391,10 +3424,11 @@ export function DashboardPageInner() {
                             <p>
                               {t("funding.officialPayee")} <strong>{localMmSelectedOfficial.payee_display_name}</strong>
                             </p>
-                            <p className="font-mono">
-                              {(localMmSelectedOfficial.payment_numbers ?? [])
-                                .map((p) => `${p.label ? `${p.label}: ` : ""}${p.value}`.trim())
-                                .join(" · ")}
+                            <p className="font-mono break-all">
+                              {formatDeskPaymentLinesSummary(
+                                localMmSelectedOfficial.payment_numbers,
+                                fundMobileNetwork,
+                              ).join(" · ") || t("funding.numbersConfigured")}
                             </p>
                             <p>
                               {t("funding.whatsappCall")} {localMmSelectedOfficial.whatsapp_number || "—"} ·{" "}
@@ -3784,39 +3818,15 @@ export function DashboardPageInner() {
                   </p>
                 )}
                 {showFundModal === "withdraw" && withdrawPayoutOptionsList.length ? (
-                  <div className="mt-3 space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                    <p className="text-xs font-medium text-foreground">Registered payout method</p>
-                    <div className="space-y-2">
-                      {withdrawPayoutOptionsList.map((opt: RegisteredPayoutOption) => (
-                        <label
-                          key={opt.id}
-                          className={`flex cursor-pointer gap-2 rounded-lg border px-3 py-2 touch-manipulation ${
-                            selectedWithdrawPayoutId === opt.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="withdraw-payout"
-                            className="mt-1"
-                            checked={selectedWithdrawPayoutId === opt.id}
-                            onChange={() => setSelectedWithdrawPayoutId(opt.id)}
-                          />
-                          <span className="min-w-0 flex-1 text-xs">
-                            <span className="font-semibold text-foreground">{opt.label}</span>
-                            <span className="mt-0.5 block font-mono text-muted-foreground">{opt.numberMasked}</span>
-                            {opt.accountNames ? (
-                              <span className="mt-0.5 block text-muted-foreground">
-                                Registered names: {opt.accountNames}
-                              </span>
-                            ) : null}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Payout details are locked. Change them only via Security Appeal.
+                  <div className="mt-3">
+                    <RegisteredPayerPicker
+                      options={withdrawPayoutOptionsList}
+                      selectedSource={(selectedWithdrawPayoutId ?? "manual") as FundPayerSource}
+                      onSelect={(opt) => setSelectedWithdrawPayoutId(opt.id)}
+                      t={t}
+                    />
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      {t("withdrawal.payoutLockedHint")}
                     </p>
                   </div>
                 ) : null}

@@ -8,6 +8,7 @@ import {
   recordSignupCorridorEvent,
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
+import { grantNewMemberWelcomeBonus } from "@/lib/server/new-member-campaign"
 
 /** Validates code from public.email_verifications (issued via Brevo). */
 
@@ -110,19 +111,29 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error: balanceUpsertErr } = await admin.from("user_balances").upsert(
-      {
+    const { data: existingBalance } = await admin
+      .from("user_balances")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    if (!existingBalance) {
+      const { error: balanceInsertErr } = await admin.from("user_balances").insert({
         user_id: userId,
         total_earnings: 0,
         current_stake: 0,
         available_balance: 0,
         last_updated: nowIso,
-      },
-      { onConflict: "user_id" }
-    )
+      })
+      if (balanceInsertErr) {
+        console.error("user_balances insert:", balanceInsertErr)
+      }
+    }
 
-    if (balanceUpsertErr) {
-      console.error("user_balances upsert:", balanceUpsertErr)
+    try {
+      await grantNewMemberWelcomeBonus(admin, userId, "verify_code")
+    } catch (grantErr) {
+      console.error("[verify-code] welcome bonus:", grantErr)
     }
 
     await admin.from("email_verifications").delete().eq("user_id", userId)

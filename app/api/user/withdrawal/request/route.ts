@@ -9,8 +9,12 @@ import { customerNotifyT } from "@/lib/server/customer-ui-language"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
-import { nexusMainMinimumRetainUsd } from "@/lib/customer-corridor-money"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
+import {
+  WITHDRAWAL_COOLDOWN_MS,
+  mainMinimumRetainUsd,
+  withdrawalCooldownError,
+} from "@/lib/server/withdrawal-policy"
 import {
   assertWithdrawalSettlementConserved,
   computeWithdrawalProcessingSettlement,
@@ -73,7 +77,7 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
-    const since = new Date(Date.now() - 86_400_000).toISOString()
+    const since = new Date(Date.now() - WITHDRAWAL_COOLDOWN_MS).toISOString()
     const { data: recentW, error: wqErr } = await admin
       .from("withdrawal_requests")
       .select("id,created_at")
@@ -85,10 +89,10 @@ export async function POST(request: Request) {
     if (wqErr) throw new Error(wqErr.message)
     if (recentW?.created_at) {
       const last = new Date(recentW.created_at as string).getTime()
-      const next = new Date(last + 86_400_000).toISOString()
+      const next = new Date(last + WITHDRAWAL_COOLDOWN_MS).toISOString()
       return NextResponse.json(
         {
-          error: `Withdrawal limit: one per 24 hours. Next window: ${next}.`,
+          error: withdrawalCooldownError(next),
           nextEligibleAt: next,
         },
         { status: 429 }
@@ -97,16 +101,14 @@ export async function POST(request: Request) {
 
     const { data: profileRow } = await admin
       .from("profiles")
-      .select("funding_country_code")
+      .select("funding_country_code,startup_bonus_received_at,startup_capital_locked_usd,startup_capital_granted_at")
       .eq("id", user.id)
       .maybeSingle()
-    const fundingCountryCode = (profileRow as { funding_country_code?: string | null } | null)
-      ?.funding_country_code
 
     const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
     const available = liquid.availableUsd
     const totalBalance = liquid.totalLiquidUsd
-    const mainRetainUsd = nexusMainMinimumRetainUsd(fundingCountryCode)
+    const mainRetainUsd = mainMinimumRetainUsd(profileRow)
     const withdrawableMainUsd = round2(Math.max(0, available - mainRetainUsd))
     const maxAllowed = withdrawableMainUsd
 

@@ -9,7 +9,7 @@ import { grantNewMemberWelcomeBonusToProfile } from "@/lib/server/platform-incen
 /** Deploy timestamp of campaign slice 5900e55 — registrations before this are ineligible. */
 export const DEFAULT_NEW_MEMBER_WELCOME_ELIGIBLE_AFTER = "2026-05-29T00:42:00.000Z"
 
-export type NewMemberWelcomeGrantSource = "registration"
+export type NewMemberWelcomeGrantSource = "registration" | "verify_code" | "login"
 
 /** Kill-switch: set NEXUS_NEW_MEMBER_CAMPAIGN=0 to stop grants without redeploying copy. */
 export async function isNewMemberCampaignActive(): Promise<boolean> {
@@ -88,7 +88,7 @@ export function profileRowEligibleForNewMemberWelcome(
 }
 
 /**
- * Idempotent welcome bonus — registration route only.
+ * Idempotent welcome bonus — registration, email verify, and login safety net.
  * Guarded by startup_bonus_received_at + profile.created_at >= eligible_after.
  */
 export async function grantNewMemberWelcomeBonus(

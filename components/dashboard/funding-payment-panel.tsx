@@ -71,6 +71,8 @@ type Props = {
   /** Pre-submit server check message (customer-safe). */
   txReferenceError?: string | null
   onTxReferenceBlur?: () => void
+  /** When true, sender identity is chosen via RegisteredPayerPicker (parent) — no manual fields. */
+  hidePayerIdentityFields?: boolean
   t: (key: string) => string
 }
 
@@ -102,6 +104,7 @@ export function FundingPaymentPanel({
   minDepositLabel,
   txReferenceError,
   onTxReferenceBlur,
+  hidePayerIdentityFields = false,
   t,
 }: Props) {
   const [config, setConfig] = useState<PaymentConfig | null>(null)
@@ -198,14 +201,13 @@ export function FundingPaymentPanel({
     }
   }, [wallet])
 
-  const payerFields =
-    savedPayerPhoneMasked && savedPayerAccountNames ? (
+  const payerFields = hidePayerIdentityFields ? null : savedPayerPhoneMasked && savedPayerAccountNames ? (
       <SavedPayerDisplay
         network={savedPayerNetwork}
         networkLabel={savedPayerNetworkLabel ?? undefined}
         phoneMasked={savedPayerPhoneMasked}
         accountNames={savedPayerAccountNames}
-        hint="This number is locked from your Security profile. Enter only amount and transaction reference below."
+        hint={t("funding.registeredNumbersHint")}
       />
     ) : onPayerNameChange && onPayerPhoneChange ? (
       <div className="grid gap-2 sm:grid-cols-2">

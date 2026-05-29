@@ -11,8 +11,17 @@ export const NEXUS_MIN_DEPOSIT_USD = 5
 /** Global minimum withdrawal in USD-equivalent (displayed in local currency). */
 export const NEXUS_MIN_WITHDRAW_USD = 3.18
 
+/** One successful withdrawal request per user per 12 hours (rolling window). */
+export const WITHDRAWAL_COOLDOWN_MS = 12 * 60 * 60 * 1000
+
 /**
- * Congo (DRC) Nexus Main minimum retain — not disclosed in UI until a full-balance withdraw is attempted.
+ * Minimum Nexus Main retain for users without new-member welcome lock (referral-session / legacy).
+ * New-member welcome users retain non-withdrawable principal via `startup_capital_locked_usd` instead.
+ */
+export const NEXUS_MIN_MAIN_RETAIN_USD = 1.5
+
+/**
+ * Congo (DRC) Nexus Main minimum retain when no welcome lock applies.
  * Ledger remains USD-normalized; enforcement is on withdraw only.
  */
 export const NEXUS_CD_MIN_MAIN_RETAIN_USD = 3

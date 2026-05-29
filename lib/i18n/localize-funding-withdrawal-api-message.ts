@@ -60,7 +60,7 @@ const MIN_WITHDRAW_ABOUT_RE =
 const MIN_WITHDRAW_LOCAL_RE = /^Minimum withdrawal is (.+)\.$/
 
 const WITHDRAW_COOLDOWN_RE =
-  /^(?:You can submit one withdrawal every 24 hours\. Next withdrawal is available after|Withdrawal limit: one per 24 hours\. Next window:) (.+)\.$/
+  /^(?:You can submit one withdrawal every (?:12|24) hours\. Next withdrawal is available after|Withdrawal limit: one per (?:12|24) hours\. Next window:) (.+)\.$/
 
 const WITHDRAW_MAX_BALANCE_RE =
   /^Withdrawal amount exceeds your withdrawable Nexus Main balance \(about ([^)]+)\)\.$/

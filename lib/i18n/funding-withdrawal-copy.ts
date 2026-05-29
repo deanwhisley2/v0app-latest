@@ -184,7 +184,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.error.belowMinimum": "Amount is below the minimum withdrawal ({{min}}).",
   "withdrawal.error.aboveWithdrawableMax":
     "Amount exceeds withdrawable Nexus Main balance ({{max}}). {{locked}} is locked in open container trades.",
-  "withdrawal.error.cooldownActive": "One withdrawal per 24 hours. Try again in about {{hours}} hour(s).",
+  "withdrawal.error.cooldownActive": "One withdrawal per 12 hours. Try again in about {{hours}} hour(s).",
   "withdrawal.error.nothingWithdrawable":
     "Withdrawable balance is below the minimum right now. Only free Nexus Main can be withdrawn; open trades stay locked until they settle.",
   "withdrawal.error.retailerPendingBlocksWithdraw":
@@ -201,7 +201,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.error.fundActionFailed": "Funding action failed",
   "withdrawal.toast.success": "Withdrawal submitted.",
   "withdrawal.toast.processingFeeNote": "Processing fee applied.",
-  "withdrawal.modal.ruleOnce": "One withdrawal per 24 hours.",
+  "withdrawal.modal.ruleOnce": "One withdrawal per 12 hours.",
   "withdrawal.modal.waitHours": "Next withdrawal in ~{{hours}} hours.",
   "withdrawal.modal.readyNow": "Withdrawal available now.",
   "withdrawal.modal.minLine": "Minimum withdrawal: {{min}}",
@@ -210,7 +210,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.fix.releaseRulesBody":
     "Move trade performance gains to your pocket when you are ready. A small release fee may apply. Your main lock stays in place until the plan ends or you choose early exit.",
   "container.fix.pocketWithdrawCap":
-    "You can withdraw available Nexus Main balance on your schedule (once per 24 hours). Money still inside an active trade lock stays allocated until that trade ends.",
+    "You can withdraw available Nexus Main balance on your schedule (once per 12 hours). Money still inside an active trade lock stays allocated until that trade ends.",
   "container.fix.unreleasedLabel": "Ready to release",
   "container.fix.availableToRelease": "Available now",
   "container.promo.title": "Grow with Container mode",
@@ -364,7 +364,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.apiErr.minimumUsd": "Minimum withdrawal: {{min}}.",
   "withdrawal.apiErr.insufficientMain": "Amount exceeds main balance.",
   "withdrawal.apiErr.genericFailed": "Withdrawal could not be completed.",
-  "withdrawal.apiErr.cooldownNext": "One withdrawal per 24 hours. Next window: {{when}}.",
+  "withdrawal.apiErr.cooldownNext": "One withdrawal per 12 hours. Next window: {{when}}.",
   "withdrawal.apiErr.maxHalfBalance": "Amount exceeds withdrawable Nexus Main balance (~{{max}}).",
 }
 

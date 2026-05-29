@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { sumActiveSessionAccrualUsd } from "@/lib/server/container-session-accruals"
 import { computeFixedSessionPolicyGrossUsd, type FixedSessionEarnedRow } from "@/lib/server/fixed-trade-earnings-snapshot"
+import { effectiveStartupCapitalLockUsd } from "@/lib/server/withdrawal-policy"
 
 /**
  * Liquid account base for withdrawal eligibility (main + container liquid; trade principal excluded).
@@ -29,16 +30,15 @@ export async function computeAccountLiquidWithdrawBaseUsd(
 
   const { data: profileRow, error: profileErr } = await admin
     .from("profiles")
-    .select("startup_capital_locked_usd")
+    .select("startup_bonus_received_at,startup_capital_locked_usd,startup_capital_granted_at")
     .eq("id", userId)
     .maybeSingle()
   if (profileErr) throw new Error(profileErr.message)
 
   const availableRawUsd = roundUsd2(Number(row?.available_balance ?? 0))
-  const startupLockedUsd = roundUsd2(
-    Number((profileRow as { startup_capital_locked_usd?: unknown } | null)?.startup_capital_locked_usd ?? 0),
+  const startupLockedUsd = effectiveStartupCapitalLockUsd(
+    profileRow as { startup_bonus_received_at?: string | null; startup_capital_locked_usd?: unknown } | null,
   )
-  // Startup capital principal is tradable but non-withdrawable.
   const availableUsd = roundUsd2(Math.max(0, availableRawUsd - startupLockedUsd))
   const pendingUsd = roundUsd2(Number((row as Record<string, unknown> | null)?.withdrawal_pending_balance ?? 0))
   const containerLiquidUsd = roundUsd2(Number(row?.container_withdrawable_earnings ?? 0))

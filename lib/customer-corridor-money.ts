@@ -94,6 +94,7 @@ export function isCentralAfricaLocalizedCorridor(code: string | null | undefined
   return cc === CONGO_DRC_COUNTRY_ISO2 || cc === CONGO_BRAZZAVILLE_COUNTRY_ISO2
 }
 
+/** @deprecated Prefer `mainMinimumRetainUsd` from `lib/server/withdrawal-policy` with full profile row. */
 export function nexusMainMinimumRetainUsd(fundingCountryCode: string | null | undefined): number {
   return isDrcOperatingCountry(fundingCountryCode) ? NEXUS_CD_MIN_MAIN_RETAIN_USD : 0
 }

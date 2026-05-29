@@ -4,10 +4,12 @@ import { routeErrorMessage } from "@/lib/server/route-error-message"
 import { computeAccountLiquidWithdrawBaseUsd } from "@/lib/server/account-liquid-withdraw-base"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { minWithdrawUsdFloor } from "@/lib/nexus-fx"
-import { nexusMainMinimumRetainUsd } from "@/lib/customer-corridor-money"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-
-const WINDOW_MS = 86_400_000
+import {
+  WITHDRAWAL_COOLDOWN_MS,
+  effectiveStartupCapitalLockUsd,
+  mainMinimumRetainUsd,
+} from "@/lib/server/withdrawal-policy"
 
 export async function GET(request: Request) {
   try {
@@ -18,22 +20,20 @@ export async function GET(request: Request) {
 
     const { data: profileRow } = await admin
       .from("profiles")
-      .select("funding_country_code")
+      .select("funding_country_code,startup_bonus_received_at,startup_capital_locked_usd,startup_capital_granted_at")
       .eq("id", user.id)
       .maybeSingle()
-    const fundingCountryCode = (profileRow as { funding_country_code?: string | null } | null)
-      ?.funding_country_code
 
     const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
     const available = liquid.availableUsd
     const total = liquid.totalLiquidUsd
     const minUsd = roundUsd2(minWithdrawUsdFloor())
-    const withdrawableMainUsd = roundUsd2(
-      Math.max(0, available - nexusMainMinimumRetainUsd(fundingCountryCode)),
-    )
+    const retainUsd = mainMinimumRetainUsd(profileRow)
+    const startupLockedUsd = effectiveStartupCapitalLockUsd(profileRow)
+    const withdrawableMainUsd = roundUsd2(Math.max(0, available - retainUsd))
     const maxUsd = withdrawableMainUsd
 
-    const since = new Date(Date.now() - WINDOW_MS).toISOString()
+    const since = new Date(Date.now() - WITHDRAWAL_COOLDOWN_MS).toISOString()
     const { data: recent, error: wErr } = await admin
       .from("withdrawal_requests")
       .select("id,created_at")
@@ -46,10 +46,10 @@ export async function GET(request: Request) {
 
     const lastAt = recent?.created_at ? new Date(recent.created_at as string).getTime() : null
     const nextEligibleAt =
-      lastAt !== null ? new Date(lastAt + WINDOW_MS).toISOString() : null
-    const cooldownActive = lastAt !== null && Date.now() - lastAt < WINDOW_MS
+      lastAt !== null ? new Date(lastAt + WITHDRAWAL_COOLDOWN_MS).toISOString() : null
+    const cooldownActive = lastAt !== null && Date.now() - lastAt < WITHDRAWAL_COOLDOWN_MS
     const msRemaining =
-      lastAt !== null && cooldownActive ? Math.max(0, lastAt + WINDOW_MS - Date.now()) : 0
+      lastAt !== null && cooldownActive ? Math.max(0, lastAt + WITHDRAWAL_COOLDOWN_MS - Date.now()) : 0
 
     return NextResponse.json({
       minUsd,
@@ -58,9 +58,12 @@ export async function GET(request: Request) {
       totalBalanceUsd: total,
       containerLiquidUsd: liquid.containerLiquidUsd,
       activeTradeProfitUsd: roundUsd2(liquid.fixedUnreleasedUsd + liquid.copyAccrualUsd),
+      startupCapitalLockedUsd: startupLockedUsd,
+      mainMinimumRetainUsd: retainUsd,
       cooldownActive,
       nextEligibleAt,
       msRemaining,
+      cooldownHours: 12,
     })
   } catch (e) {
     console.error("[withdrawal/eligibility GET]", e)
