@@ -26,6 +26,9 @@ export const customerNotificationMessageEn: Record<string, string> = {
   "notifications.launch.welcomeTitle": "Welcome",
   "notifications.launch.welcomeBody":
     "Your account is active. Add funds to start trading. Referral rewards apply while promotions run.",
+  "notifications.launch.welcomeCampaignTitle": "Welcome — your bonus is ready",
+  "notifications.launch.welcomeCampaignBody":
+    "Your new member welcome bonus is credited to Nexus Main. Explore copy trading, fixed trades, and fast withdrawals.",
   "notifications.launch.newReferralTitle": "New referral",
   "notifications.launch.newReferralBody":
     "Someone registered with your referral link. Rewards apply after they fund and trade.",

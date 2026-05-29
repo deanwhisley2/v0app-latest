@@ -189,14 +189,15 @@ export async function grantStartupCapitalOnRegistration(
   if (pErr || !prof) return
   if (prof.startup_capital_granted_at) return
 
+  const bonusFmt = await formatCustomerMoneyForUser(admin, userId, STARTUP_CAPITAL_USD)
   const ok = await creditUserFromTreasury(admin, {
     userId,
     amountUsd: STARTUP_CAPITAL_USD,
     referenceId: `startup_capital:${userId}`,
-    reason: "Startup trading capital grant",
+    reason: "New member welcome bonus (startup trading capital)",
     notificationType: "startup_trading_capital",
-    notificationTitle: "Startup trading capital active.",
-    notificationBody: "Startup trading capital active.",
+    notificationTitle: "New member welcome bonus credited",
+    notificationBody: `${bonusFmt} is in your Nexus Main balance. Explore copy trading, fixed trades, and fast withdrawals.`,
     sourceKind: "startup_trading_capital",
   })
   if (!ok) return

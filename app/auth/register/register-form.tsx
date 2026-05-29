@@ -25,6 +25,7 @@ import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-test
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
 import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
+import { NewMemberCampaignRegisterStrip } from "@/components/marketing/new-member-campaign-register-strip"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
@@ -279,6 +280,8 @@ export default function RegisterForm() {
         </header>
 
         <RegisterStepIndicator steps={steps} current={step} />
+
+        <NewMemberCampaignRegisterStrip />
 
         <form
           className="space-y-4"

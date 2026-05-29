@@ -39,11 +39,20 @@ export type LaunchStartupCapitalPrograms = {
   promo_modal?: boolean
 }
 
+/** Automatic welcome bonus credited to Nexus Main on registration / first login. */
+export type LaunchNewMemberWelcomePrograms = {
+  enabled: boolean
+  usd_reward?: number
+  promo_banner?: boolean
+  promo_modal?: boolean
+}
+
 export type LaunchProgramsConfig = {
   referrals?: LaunchReferralPrograms
   onboarding?: LaunchOnboardingPrograms
   monitoring?: LaunchMonitoringPrograms
   startup_capital?: LaunchStartupCapitalPrograms
+  new_member_welcome?: LaunchNewMemberWelcomePrograms
 }
 
 export const UGANDA_LAUNCH_SLUG = "uganda-launch-2026"
@@ -92,6 +101,12 @@ export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
     enabled: true,
     usd_reward: STARTUP_CAPITAL_USD_REWARD,
     registrations_required: STARTUP_CAPITAL_REGISTRATIONS_REQUIRED,
+    promo_modal: true,
+  },
+  new_member_welcome: {
+    enabled: true,
+    usd_reward: STARTUP_CAPITAL_USD_REWARD,
+    promo_banner: true,
     promo_modal: true,
   },
 }

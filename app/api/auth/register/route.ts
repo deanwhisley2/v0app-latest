@@ -13,7 +13,7 @@ import {
   notifyLaunchWelcome,
   notifyReferrerNewReferee,
 } from "@/lib/server/launch-notifications"
-import { grantStartupCapitalOnRegistration } from "@/lib/server/platform-incentives"
+import { grantNewMemberWelcomeBonus } from "@/lib/server/new-member-campaign"
 import { isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import {
@@ -239,7 +239,7 @@ export async function POST(request: Request) {
         void notifyReferrerNewReferee(admin, referredByUserId, newUserId)
       }
       void notifyLaunchWelcome(admin, newUserId, countryForProfile)
-      void grantStartupCapitalOnRegistration(admin, newUserId)
+      void grantNewMemberWelcomeBonus(admin, newUserId, "registration")
 
       try {
         await setupSecurityProfile(admin, {

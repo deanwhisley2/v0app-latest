@@ -3,6 +3,8 @@ import { getBearerTokenFromRequest } from "@/lib/auth-api"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { buildOperationalBootstrapV1 } from "@/lib/server/operational-bootstrap"
 import { getRequestIpAddress, trackLoginSession } from "@/lib/server/login-session"
+import { grantNewMemberWelcomeBonus } from "@/lib/server/new-member-campaign"
+import { createAdminClient } from "@/lib/supabaseAdmin"
 
 /**
  * DB-authoritative operational snapshot after auth (sessions, positions, governance, canonical exchanges).
@@ -17,6 +19,9 @@ export async function GET(request: Request) {
     const meta = user.user_metadata as Record<string, unknown> | undefined
     const jwtExchanges = meta?.nexus_exchanges
     const bearer = getBearerTokenFromRequest(request)
+
+    const admin = createAdminClient()
+    void grantNewMemberWelcomeBonus(admin, user.id, "first_login")
 
     const [payload, deviceLogin] = await Promise.all([
       buildOperationalBootstrapV1({

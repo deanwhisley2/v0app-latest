@@ -17,6 +17,10 @@ import {
   startupCapitalMarketingFr,
 } from "@/lib/i18n/startup-capital-marketing"
 import {
+  newMemberCampaignMarketingEn,
+  newMemberCampaignMarketingFr,
+} from "@/lib/i18n/new-member-campaign-marketing"
+import {
   mobileMessagesEn,
   mobileMessagesFr,
   mobileMessagesSw,
@@ -259,6 +263,7 @@ const en: Record<string, string> = {
   ...fundingWithdrawalEn,
   ...companyMessagesEn,
   ...startupCapitalMarketingEn,
+  ...newMemberCampaignMarketingEn,
   ...mobileMessagesEn,
 }
 
@@ -291,6 +296,7 @@ const fr: Partial<Record<string, string>> = {
   ...(fundingWithdrawalOverlays.fr ?? {}),
   ...frNotificationsOverlay,
   ...startupCapitalMarketingFr,
+  ...newMemberCampaignMarketingFr,
   ...mobileMessagesFr,
 }
 
