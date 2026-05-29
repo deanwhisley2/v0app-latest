@@ -4,9 +4,12 @@ import {
   type LaunchProgramsConfig,
 } from "@/lib/platform-launch-config"
 import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
-import { grantStartupCapitalOnRegistration } from "@/lib/server/platform-incentives"
+import { grantNewMemberWelcomeBonusToProfile } from "@/lib/server/platform-incentives"
 
-export type NewMemberWelcomeGrantSource = "registration" | "first_login"
+/** Deploy timestamp of campaign slice 5900e55 — registrations before this are ineligible. */
+export const DEFAULT_NEW_MEMBER_WELCOME_ELIGIBLE_AFTER = "2026-05-29T00:42:00.000Z"
+
+export type NewMemberWelcomeGrantSource = "registration"
 
 /** Kill-switch: set NEXUS_NEW_MEMBER_CAMPAIGN=0 to stop grants without redeploying copy. */
 export async function isNewMemberCampaignActive(): Promise<boolean> {
@@ -22,14 +25,55 @@ export async function isNewMemberCampaignActive(): Promise<boolean> {
   return launch.active
 }
 
+export function newMemberWelcomeEligibleAfter(programs?: LaunchProgramsConfig): string {
+  const env = process.env.NEXUS_NEW_MEMBER_CAMPAIGN_START?.trim()
+  if (env) return env
+  const fromPrograms = programs?.new_member_welcome?.eligible_after
+  if (typeof fromPrograms === "string" && fromPrograms.length > 0) return fromPrograms
+  return DEFAULT_NEW_MEMBER_WELCOME_ELIGIBLE_AFTER
+}
+
 export function newMemberWelcomeBonusUsd(programs?: LaunchProgramsConfig): number {
   const v = programs?.new_member_welcome?.usd_reward
   return typeof v === "number" && v > 0 ? v : STARTUP_CAPITAL_USD_REWARD
 }
 
+type ProfileEligibilityRow = {
+  id: string
+  created_at: string
+  startup_bonus_received_at: string | null
+}
+
+/** True only for accounts created on/after campaign eligible_after with no prior bonus flag. */
+export async function isProfileEligibleForNewMemberWelcome(
+  admin: SupabaseClient,
+  userId: string,
+  programs?: LaunchProgramsConfig,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id,created_at,startup_bonus_received_at")
+    .eq("id", userId)
+    .maybeSingle()
+  if (error || !data) return false
+  return profileRowEligibleForNewMemberWelcome(data as ProfileEligibilityRow, programs)
+}
+
+export function profileRowEligibleForNewMemberWelcome(
+  row: ProfileEligibilityRow,
+  programs?: LaunchProgramsConfig,
+): boolean {
+  if (row.startup_bonus_received_at) return false
+  const cutoffMs = new Date(newMemberWelcomeEligibleAfter(programs)).getTime()
+  if (!Number.isFinite(cutoffMs)) return false
+  const createdMs = new Date(row.created_at).getTime()
+  if (!Number.isFinite(createdMs)) return false
+  return createdMs >= cutoffMs
+}
+
 /**
- * Idempotent welcome bonus to Nexus Main (startup_capital_granted_at guard).
- * Safe to call on registration and again on first authenticated bootstrap.
+ * Idempotent welcome bonus — registration route only.
+ * Guarded by startup_bonus_received_at + profile.created_at >= eligible_after.
  */
 export async function grantNewMemberWelcomeBonus(
   admin: SupabaseClient,
@@ -37,12 +81,19 @@ export async function grantNewMemberWelcomeBonus(
   _source: NewMemberWelcomeGrantSource,
 ): Promise<boolean> {
   if (!(await isNewMemberCampaignActive())) return false
-  await grantStartupCapitalOnRegistration(admin, userId)
+
+  const launch = await getPlatformLaunchStatus()
+  if (!(await isProfileEligibleForNewMemberWelcome(admin, userId, launch.programs))) {
+    return false
+  }
+
+  await grantNewMemberWelcomeBonusToProfile(admin, userId, launch.programs)
+
   const { data, error } = await admin
     .from("profiles")
-    .select("startup_capital_granted_at")
+    .select("startup_bonus_received_at")
     .eq("id", userId)
     .maybeSingle()
   if (error) return false
-  return Boolean(data?.startup_capital_granted_at)
+  return Boolean(data?.startup_bonus_received_at)
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { LaunchProgramsConfig } from "@/lib/platform-launch-config"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { treasury } from "@/lib/financial/treasury-authority"
 import { adminRetailPoolUserId } from "@/lib/server/admin-retail-pool"
@@ -176,23 +177,31 @@ export async function applyReferralRewardOnFirstTrade(
     .is("referral_first_trade_reward_at", null)
 }
 
-/** Company startup capital (trading capital) grant + locked principal marker. */
-export async function grantStartupCapitalOnRegistration(
+/** One-time new-member welcome bonus — Nexus Main credit + locked principal marker. */
+export async function grantNewMemberWelcomeBonusToProfile(
   admin: SupabaseClient,
   userId: string,
+  programs?: LaunchProgramsConfig,
 ): Promise<void> {
+  const bonusUsd = roundUsd2(
+    typeof programs?.new_member_welcome?.usd_reward === "number" &&
+      programs.new_member_welcome.usd_reward > 0
+      ? programs.new_member_welcome.usd_reward
+      : STARTUP_CAPITAL_USD,
+  )
+
   const { data: prof, error: pErr } = await admin
     .from("profiles")
-    .select("id,startup_capital_granted_at,startup_capital_locked_usd")
+    .select("id,startup_bonus_received_at,startup_capital_locked_usd")
     .eq("id", userId)
     .maybeSingle()
   if (pErr || !prof) return
-  if (prof.startup_capital_granted_at) return
+  if (prof.startup_bonus_received_at) return
 
-  const bonusFmt = await formatCustomerMoneyForUser(admin, userId, STARTUP_CAPITAL_USD)
+  const bonusFmt = await formatCustomerMoneyForUser(admin, userId, bonusUsd)
   const ok = await creditUserFromTreasury(admin, {
     userId,
-    amountUsd: STARTUP_CAPITAL_USD,
+    amountUsd: bonusUsd,
     referenceId: `startup_capital:${userId}`,
     reason: "New member welcome bonus (startup trading capital)",
     notificationType: "startup_trading_capital",
@@ -206,10 +215,18 @@ export async function grantStartupCapitalOnRegistration(
   await admin
     .from("profiles")
     .update({
-      startup_capital_granted_at: now,
-      startup_capital_locked_usd: STARTUP_CAPITAL_USD,
+      startup_bonus_received_at: now,
+      startup_capital_locked_usd: bonusUsd,
       updated_at: now,
     })
     .eq("id", userId)
-    .is("startup_capital_granted_at", null)
+    .is("startup_bonus_received_at", null)
+}
+
+/** @deprecated Use grantNewMemberWelcomeBonusToProfile — kept for legacy imports. */
+export async function grantStartupCapitalOnRegistration(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  await grantNewMemberWelcomeBonusToProfile(admin, userId)
 }

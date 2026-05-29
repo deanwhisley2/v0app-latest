@@ -45,6 +45,8 @@ export type LaunchNewMemberWelcomePrograms = {
   usd_reward?: number
   promo_banner?: boolean
   promo_modal?: boolean
+  /** ISO timestamp — only profiles created at or after this time qualify. */
+  eligible_after?: string
 }
 
 export type LaunchProgramsConfig = {
@@ -108,6 +110,7 @@ export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
     usd_reward: STARTUP_CAPITAL_USD_REWARD,
     promo_banner: true,
     promo_modal: true,
+    eligible_after: "2026-05-29T00:42:00.000Z",
   },
 }
 
