@@ -46,17 +46,19 @@ async function creditUserFromTreasury(
   const amountUsd = roundUsd2(params.amountUsd)
   if (!(amountUsd > 0)) return false
 
-  if (!(await treasuryDebitReferenceExists(admin, params.referenceId))) {
-    const tr = await treasury.mutateTreasury(
-      "DEBIT",
-      amountUsd,
-      params.referenceId,
-      params.reason,
-      treasuryActorId(),
-      "MAIN_TREASURY",
-    )
-    if (!tr.success) return false
+  if (await treasuryDebitReferenceExists(admin, params.referenceId)) {
+    return true
   }
+
+  const tr = await treasury.mutateTreasury(
+    "DEBIT",
+    amountUsd,
+    params.referenceId,
+    params.reason,
+    treasuryActorId(),
+    "MAIN_TREASURY",
+  )
+  if (!tr.success) return false
 
   const now = new Date().toISOString()
   const { data: bal, error: balErr } = await admin

@@ -46,6 +46,7 @@ BEGIN
       AND (
         p.startup_bonus_received_at IS NOT NULL
         OR p.startup_capital_locked_usd > 0
+        OR p.startup_capital_granted_at IS NOT NULL
         OR EXISTS (
           SELECT 1
           FROM public.unified_ledger ul
