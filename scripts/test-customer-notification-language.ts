@@ -6,8 +6,10 @@ import {
 
 const bad =
   "L5 approved admin direct admin_airtel_ug funding (MAIN_TREASURY debited). Normalized settlement: $13.33 USD."
+const badLedger = "Deposit approved and credited (admin treasury settlement)."
 const clean = sanitizeCustomerNotificationText(bad, "Your funding has been approved.")
 assert.ok(!/MAIN_TREASURY|normalized settlement|admin_airtel/i.test(clean))
+assert.ok(!/MAIN_TREASURY|admin treasury settlement/i.test(sanitizeCustomerNotificationText(badLedger, "Deposit credited")))
 
 const approvedUg = buildFundingApprovedCustomerCopy({
   amountInputLocal: 50_000,

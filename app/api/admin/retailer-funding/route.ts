@@ -314,7 +314,7 @@ export async function PATCH(request: Request) {
           actorType: "admin",
           actorId: user.id,
           transactionRef: (reqRow as { tx_reference?: string }).tx_reference,
-          summary: `L5 approved admin direct ${fundChannel} funding (MAIN_TREASURY debited).`,
+          summary: "Deposit approved and credited (admin treasury settlement).",
           metadata: { requestId: body.requestId, fundChannel, ...fxLink },
         })
         await notifyCustomerFundingOperational(admin, {
@@ -612,8 +612,8 @@ export async function PATCH(request: Request) {
           actorId: user.id,
           transactionRef: reqMeta.tx_reference,
           summary: isTreasury
-            ? "L5 approved add-funds using company treasury (MAIN_TREASURY debited; customer Nexus Main credited)."
-            : "L5 approved add-funds on behalf of retailer desk (Retail Balance debited; customer Nexus Main credited).",
+            ? "Deposit approved and credited (company treasury settlement)."
+            : "Deposit approved and credited (retailer desk settlement).",
           metadata: {
             requestId: reqMeta.id,
             retailerId: reqMeta.retailer_id,

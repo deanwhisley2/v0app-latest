@@ -19,12 +19,13 @@ export async function notifyUserFundingDecision(
     const { t } = await customerNotifyForUser(sb, params.userId)
     const localizedHeadline = localizeStoredNotificationTitle(params.headline.trim(), t)
     const fallback = t("notifications.inbox.accountUpdateTitle")
+    const safeHeadline = sanitizeCustomerNotificationText(localizedHeadline, fallback).slice(0, 120)
     const { error } = await sb.from("NotificationRecord").insert({
       id: randomUUID(),
       userId: params.userId,
       analysisId: params.relatedId,
       symbol: "NEXUS_OPS",
-      action: sanitizeCustomerNotificationText(localizedHeadline, fallback).slice(0, 120),
+      action: safeHeadline,
       confidence: 0,
       read: false,
       deleted: false,
@@ -35,9 +36,9 @@ export async function notifyUserFundingDecision(
     try {
       await notifyUserPushIfAllowed(sb, {
         userId: params.userId,
-        headline: params.headline,
-        title: localizedHeadline,
-        body: localizedHeadline,
+        headline: safeHeadline,
+        title: safeHeadline,
+        body: safeHeadline,
         tag: `funding:${params.relatedId}`,
         url: "/dashboard",
       })
