@@ -24,7 +24,6 @@ import { RegisterStepIndicator } from "@/components/auth/register-step-indicator
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
 import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-modal"
-import { StartupCapitalPromoModal } from "@/components/marketing/startup-capital-promo-modal"
 import { NewMemberCampaignRegisterStrip } from "@/components/marketing/new-member-campaign-register-strip"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
@@ -272,7 +271,6 @@ export default function RegisterForm() {
   return (
     <>
       <WelcomePlatformModal />
-      <StartupCapitalPromoModal />
       <AuthLayoutShell language={language}>
         <header className="mb-2 text-center">
           <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{authT.register.title}</h2>

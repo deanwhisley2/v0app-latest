@@ -30,16 +30,7 @@ export type LaunchMonitoringPrograms = {
   elevated_ops?: boolean
 }
 
-/** Startup Capital Session — 10 referral registrations unlock ~$6 USD equiv once. */
-export type LaunchStartupCapitalPrograms = {
-  enabled: boolean
-  /** USD treasury debit amount (converted for customer display only). */
-  usd_reward?: number
-  registrations_required?: number
-  promo_modal?: boolean
-}
-
-/** Automatic welcome bonus credited to Nexus Main on registration / first login. */
+/** Automatic welcome bonus credited to Nexus Main on registration. */
 export type LaunchNewMemberWelcomePrograms = {
   enabled: boolean
   usd_reward?: number
@@ -53,7 +44,6 @@ export type LaunchProgramsConfig = {
   referrals?: LaunchReferralPrograms
   onboarding?: LaunchOnboardingPrograms
   monitoring?: LaunchMonitoringPrograms
-  startup_capital?: LaunchStartupCapitalPrograms
   new_member_welcome?: LaunchNewMemberWelcomePrograms
 }
 
@@ -78,8 +68,8 @@ export type PlatformLaunchPublicStatus = {
 export const LAUNCH_REFERRER_FLAT_USD = 0.26
 export const LAUNCH_REFEREE_FIRST_DEPOSIT_RATE = 0.2
 export const LAUNCH_STARTER_FIX_PERSONA_ID = "fix_l1_t1"
+/** New-member welcome bonus (Nexus Main credit on signup). */
 export const STARTUP_CAPITAL_USD_REWARD = 5.3
-export const STARTUP_CAPITAL_REGISTRATIONS_REQUIRED = 10
 
 export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
   referrals: {
@@ -98,12 +88,6 @@ export const DEFAULT_GLOBAL_LAUNCH_PROGRAMS: LaunchProgramsConfig = {
   },
   monitoring: {
     elevated_ops: true,
-  },
-  startup_capital: {
-    enabled: true,
-    usd_reward: STARTUP_CAPITAL_USD_REWARD,
-    registrations_required: STARTUP_CAPITAL_REGISTRATIONS_REQUIRED,
-    promo_modal: true,
   },
   new_member_welcome: {
     enabled: true,

@@ -13,10 +13,6 @@ import { companyMessagesEn } from "@/lib/i18n/company-messages"
 import { frNotificationsOverlay } from "@/lib/i18n/fr-notifications-overlay"
 import { customerNotificationMessageEn } from "@/lib/i18n/customer-notification-messages"
 import {
-  startupCapitalMarketingEn,
-  startupCapitalMarketingFr,
-} from "@/lib/i18n/startup-capital-marketing"
-import {
   newMemberCampaignMarketingEn,
   newMemberCampaignMarketingFr,
 } from "@/lib/i18n/new-member-campaign-marketing"
@@ -262,7 +258,6 @@ const en: Record<string, string> = {
   ...financialStatusEn,
   ...fundingWithdrawalEn,
   ...companyMessagesEn,
-  ...startupCapitalMarketingEn,
   ...newMemberCampaignMarketingEn,
   ...mobileMessagesEn,
 }
@@ -295,7 +290,6 @@ const fr: Partial<Record<string, string>> = {
   "settings.regionSaved": "Pays enregistré pour la correspondance de financement.",
   ...(fundingWithdrawalOverlays.fr ?? {}),
   ...frNotificationsOverlay,
-  ...startupCapitalMarketingFr,
   ...newMemberCampaignMarketingFr,
   ...mobileMessagesFr,
 }

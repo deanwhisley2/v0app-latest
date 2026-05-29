@@ -741,16 +741,12 @@ GRANT EXECUTE ON FUNCTION public.record_retailer_payment_rotation_approval(uuid)
 ALTER TABLE public.retailer_payment_rotation_pools ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.retailer_payment_rotation_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.retailer_payment_rotation_audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.retailer_payment_line_client_usage ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "retailer_payment_rotation_pools_select_authenticated"
-  ON public.retailer_payment_rotation_pools;
-CREATE POLICY "retailer_payment_rotation_pools_select_authenticated"
-  ON public.retailer_payment_rotation_pools FOR SELECT TO authenticated USING (true);
+-- No anon/authenticated policies: rotation is server-only via SECURITY DEFINER RPCs.
+-- See 20260629120000_retailer_payment_rotation_rls_v1.sql for grant revocation on existing DBs.
 
-DROP POLICY IF EXISTS "retailer_payment_rotation_lines_select_authenticated"
-  ON public.retailer_payment_rotation_lines;
-CREATE POLICY "retailer_payment_rotation_lines_select_authenticated"
-  ON public.retailer_payment_rotation_lines FOR SELECT TO authenticated USING (true);
-
-GRANT SELECT ON TABLE public.retailer_payment_rotation_pools TO authenticated;
-GRANT SELECT ON TABLE public.retailer_payment_rotation_lines TO authenticated;
+REVOKE ALL ON TABLE public.retailer_payment_rotation_pools FROM anon, authenticated;
+REVOKE ALL ON TABLE public.retailer_payment_rotation_lines FROM anon, authenticated;
+REVOKE ALL ON TABLE public.retailer_payment_rotation_audit FROM anon, authenticated;
+REVOKE ALL ON TABLE public.retailer_payment_line_client_usage FROM anon, authenticated;

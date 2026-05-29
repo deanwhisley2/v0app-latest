@@ -178,6 +178,17 @@ export async function POST(request: Request) {
           { status: issued.status ?? 400 }
         )
       }
+      try {
+        const granted = await grantNewMemberWelcomeBonus(admin, existingId, "registration")
+        if (!granted) {
+          console.warn("[register] welcome bonus not granted (duplicate-email path):", existingId)
+        }
+      } catch (grantErr) {
+        console.warn(
+          "[register] welcome bonus (duplicate-email path):",
+          grantErr instanceof Error ? grantErr.message : String(grantErr),
+        )
+      }
       await supabase.auth.signOut()
       return NextResponse.json({ ok: true })
     } catch (e) {
@@ -239,7 +250,10 @@ export async function POST(request: Request) {
         void notifyReferrerNewReferee(admin, referredByUserId, newUserId)
       }
       void notifyLaunchWelcome(admin, newUserId, countryForProfile)
-      void grantNewMemberWelcomeBonus(admin, newUserId, "registration")
+      const welcomeGranted = await grantNewMemberWelcomeBonus(admin, newUserId, "registration")
+      if (!welcomeGranted) {
+        console.warn("[register] welcome bonus not granted:", newUserId)
+      }
 
       try {
         await setupSecurityProfile(admin, {

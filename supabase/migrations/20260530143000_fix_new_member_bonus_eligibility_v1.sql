@@ -21,7 +21,7 @@ SET
           'usd_reward', 5.3,
           'promo_banner', true,
           'promo_modal', true,
-          'eligible_after', '2026-05-29T00:42:00+00'
+          'eligible_after', '2026-05-29T00:42:00.000Z'
         )
     ),
   updated_at = now()

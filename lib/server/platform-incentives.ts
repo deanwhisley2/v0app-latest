@@ -58,7 +58,10 @@ async function creditUserFromTreasury(
     treasuryActorId(),
     "MAIN_TREASURY",
   )
-  if (!tr.success) return false
+  if (!tr.success) {
+    console.warn("[platform-incentives] treasury debit failed:", params.referenceId, tr.error)
+    return false
+  }
 
   const now = new Date().toISOString()
   const { data: bal, error: balErr } = await admin
@@ -66,7 +69,10 @@ async function creditUserFromTreasury(
     .select("available_balance")
     .eq("user_id", params.userId)
     .maybeSingle()
-  if (balErr) return false
+  if (balErr) {
+    console.warn("[platform-incentives] balance read failed:", params.userId, balErr.message)
+    return false
+  }
 
   const { error: upErr } = await admin.from("user_balances").upsert(
     {
@@ -76,7 +82,10 @@ async function creditUserFromTreasury(
     },
     { onConflict: "user_id" },
   )
-  if (upErr) return false
+  if (upErr) {
+    console.warn("[platform-incentives] balance upsert failed:", params.userId, upErr.message)
+    return false
+  }
 
   await appendUserAccountNotification(admin, {
     userId: params.userId,
@@ -225,10 +234,3 @@ export async function grantNewMemberWelcomeBonusToProfile(
     .is("startup_bonus_received_at", null)
 }
 
-/** @deprecated Use grantNewMemberWelcomeBonusToProfile — kept for legacy imports. */
-export async function grantStartupCapitalOnRegistration(
-  admin: SupabaseClient,
-  userId: string,
-): Promise<void> {
-  await grantNewMemberWelcomeBonusToProfile(admin, userId)
-}

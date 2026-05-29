@@ -33,6 +33,22 @@ export function newMemberWelcomeEligibleAfter(programs?: LaunchProgramsConfig): 
   return DEFAULT_NEW_MEMBER_WELCOME_ELIGIBLE_AFTER
 }
 
+/** Postgres/JSON often uses `+00`; JS `Date` needs `Z` or `+00:00`. */
+export function parseEligibleAfterMs(raw: string): number {
+  const trimmed = raw.trim()
+  if (!trimmed) return NaN
+  const candidates = [
+    trimmed,
+    trimmed.replace(/\+00$/, "Z"),
+    trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T"),
+  ]
+  for (const c of candidates) {
+    const ms = new Date(c).getTime()
+    if (Number.isFinite(ms)) return ms
+  }
+  return NaN
+}
+
 export function newMemberWelcomeBonusUsd(programs?: LaunchProgramsConfig): number {
   const v = programs?.new_member_welcome?.usd_reward
   return typeof v === "number" && v > 0 ? v : STARTUP_CAPITAL_USD_REWARD
@@ -64,7 +80,7 @@ export function profileRowEligibleForNewMemberWelcome(
   programs?: LaunchProgramsConfig,
 ): boolean {
   if (row.startup_bonus_received_at) return false
-  const cutoffMs = new Date(newMemberWelcomeEligibleAfter(programs)).getTime()
+  const cutoffMs = parseEligibleAfterMs(newMemberWelcomeEligibleAfter(programs))
   if (!Number.isFinite(cutoffMs)) return false
   const createdMs = new Date(row.created_at).getTime()
   if (!Number.isFinite(createdMs)) return false
@@ -80,10 +96,14 @@ export async function grantNewMemberWelcomeBonus(
   userId: string,
   _source: NewMemberWelcomeGrantSource,
 ): Promise<boolean> {
-  if (!(await isNewMemberCampaignActive())) return false
+  if (!(await isNewMemberCampaignActive())) {
+    console.warn("[new-member-campaign] inactive — skip grant:", userId)
+    return false
+  }
 
   const launch = await getPlatformLaunchStatus()
   if (!(await isProfileEligibleForNewMemberWelcome(admin, userId, launch.programs))) {
+    console.warn("[new-member-campaign] ineligible profile — skip grant:", userId)
     return false
   }
 
