@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { usePlatformLaunch } from "@/hooks/use-platform-launch"
+import { useStartupOnboarding } from "@/hooks/use-startup-onboarding"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { STARTUP_CAPITAL_USD_REWARD } from "@/lib/platform-launch-config"
 import { cn } from "@/lib/utils"
@@ -32,12 +33,15 @@ type NewMemberCampaignPromoModalProps = {
 
 export function NewMemberCampaignPromoModal({ enabled = true }: NewMemberCampaignPromoModalProps) {
   const { launch, active, loading } = usePlatformLaunch()
+  const { data: onboarding, loading: onboardingLoading } = useStartupOnboarding(enabled)
   const { t, formatUserMoney, language, country } = useUserPreferences()
   const [open, setOpen] = useState(false)
 
   const promoOn = Boolean(
     enabled &&
       !loading &&
+      !onboardingLoading &&
+      !onboarding.hasStartupBonus &&
       launch?.programs.new_member_welcome?.enabled !== false &&
       launch?.programs.new_member_welcome?.promo_modal !== false &&
       (active || launch?.programs.new_member_welcome?.enabled === true),
@@ -128,6 +132,16 @@ export function NewMemberCampaignPromoModal({ enabled = true }: NewMemberCampaig
           <p className="text-xs leading-relaxed text-muted-foreground">
             {t("marketing.newMember.modalFooter")}
           </p>
+          <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("marketing.newMember.panelHotOffer")}
+            </p>
+            {(["marketing.newMember.testimonial1", "marketing.newMember.testimonial2"] as const).map((key) => (
+              <p key={key} className="text-xs leading-relaxed text-foreground">
+                {t(key)}
+              </p>
+            ))}
+          </div>
         </div>
         <DialogFooter className="border-t border-border/80 bg-muted/30 px-4 py-3 sm:px-6">
           <Button type="button" className="w-full sm:w-auto" onClick={dismiss}>

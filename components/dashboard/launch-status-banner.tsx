@@ -55,7 +55,8 @@ export function LaunchStatusBanner() {
         </span>
       </div>
       <p className="relative mt-1 text-[11px] text-muted-foreground sm:text-xs">
-        {t("marketing.newMember.bannerCta")}
+        {t("marketing.newMember.bannerCta")}{" "}
+        <span className="font-semibold text-primary md:hidden">{t("marketing.newMember.mobileBannerCta")}</span>
       </p>
     </div>
   )

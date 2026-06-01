@@ -34,7 +34,7 @@ export async function sendVerificationEmail(
   }
 
   const senderEmail =
-    (process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com").trim()
+    (process.env.BREVO_SENDER_EMAIL ?? "no-reply@nexuspro.it.com").trim()
   const senderName = (process.env.BREVO_SENDER_NAME ?? "Nexus Pro").trim()
   const safeName = escapeHtml(fullName.trim() || "Valued Customer")
   const safeCode = escapeHtml(code)
@@ -100,7 +100,7 @@ export async function sendPasswordRecoveryEmail(
   }
 
   const senderEmail =
-    (process.env.BREVO_SENDER_EMAIL ?? "noreply@nexuspro.it.com").trim()
+    (process.env.BREVO_SENDER_EMAIL ?? "no-reply@nexuspro.it.com").trim()
   const senderName = (process.env.BREVO_SENDER_NAME ?? "Nexus Pro").trim()
   const safeName = escapeHtml(fullName.trim() || "Valued Customer")
   const safeUrl = escapeHtml(recoveryUrl.trim())

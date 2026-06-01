@@ -21,8 +21,65 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
     "New members receive instant trading capital in Nexus Main. Built for serious traders who want speed, clarity, and professional execution.",
   "marketing.newMember.modalReward": "Your welcome bonus: {{amount}} credited to Nexus Main",
   "marketing.newMember.modalFooter":
-    "Campaign runs until further notice. Principal stays locked; realized profits remain withdrawable.",
+    "Your welcome capital is ready to trade. Principal stays locked; realized profits remain withdrawable.",
   "marketing.newMember.modalContinue": "Explore the platform",
+
+  "marketing.newMember.howToTradeButton": "How to Trade",
+  "marketing.newMember.howToTradeBadge": "Quick guide",
+  "marketing.newMember.howToTradeTitle": "How to start trading on Nexus",
+  "marketing.newMember.howToTradeLead":
+    "Turn your startup capital into active earnings in three simple steps.",
+  "marketing.newMember.howToTradeBalance": "Your Nexus Main balance: {{amount}}",
+  "marketing.newMember.howToTradeStep1":
+    "Open Container Mode — your trading dashboard for fixed-trade desks.",
+  "marketing.newMember.howToTradeStep2":
+    "Choose the starter fixed desk and commit your full welcome bonus as the allocation.",
+  "marketing.newMember.howToTradeStep3":
+    "Tap Release Bullish to lock your capital and start earning on the schedule.",
+  "marketing.newMember.howToTradeStep4":
+    "Track earnings in your dashboard and withdraw realized profits when ready.",
+  "marketing.newMember.howToTradeEncourage":
+    "Start trading and get earnings into your pocket — your capital is already waiting.",
+  "marketing.newMember.howToTradeCta": "Start Trading with Nexus Now",
+  "marketing.newMember.howToTradeLater": "I'll explore first",
+
+  "marketing.newMember.onboardProgress": "Step {{step}} of {{total}}",
+  "marketing.newMember.onboardStep1Title": "Congratulations! You received your startup capital.",
+  "marketing.newMember.onboardStep1Body":
+    "{{amount}} is now in your Nexus Main balance — ready to activate on a fixed-trade desk.",
+  "marketing.newMember.onboardStep1Cta": "Activate my capital",
+  "marketing.newMember.onboardStep2Title": "Fix your trade with the full amount",
+  "marketing.newMember.onboardStep2Body":
+    "We recommend opening a 1-month starter fixed trade with your full {{amount}} welcome bonus.",
+  "marketing.newMember.onboardStep3Title": "Secure your account for withdrawals",
+  "marketing.newMember.onboardStep3Body":
+    "Set your 6-digit Security PIN and register your mobile money numbers so future withdrawals are fast and safe.",
+  "marketing.newMember.onboardStep3Cta": "Set up Security PIN & numbers",
+  "marketing.newMember.onboardSkipForNow": "Skip for now",
+
+  "marketing.newMember.activateLabel": "Startup capital ready",
+  "marketing.newMember.activateHint": "Fixed trade · 1 month · Low risk starter desk",
+  "marketing.newMember.releaseBullish": "Release Bullish",
+  "marketing.newMember.activateOpening": "Opening your trade…",
+  "marketing.newMember.activateSuccess": "Your startup capital has been activated! Start earning returns now.",
+
+  "marketing.newMember.panelAria": "Startup bonus campaign",
+  "marketing.newMember.panelHotOffer": "Hot offer",
+  "marketing.newMember.panelTitle": "Your {{amount}} startup capital is waiting — activate it today",
+  "marketing.newMember.panelPendingBody":
+    "Thousands of traders are already earning. Fix your welcome bonus now and start building returns.",
+  "marketing.newMember.panelActiveBody":
+    "Your fixed trade is live. Track earnings and explore more desks when you're ready.",
+  "marketing.newMember.panelViewTrades": "View my trades",
+
+  "marketing.newMember.testimonial1":
+    "“I fixed my welcome bonus on day one — earnings showed up right on schedule.” — James K., Kenya",
+  "marketing.newMember.testimonial2":
+    "“Release Bullish made it one tap. Clear, fast, professional.” — Amina M., Uganda",
+  "marketing.newMember.testimonial3":
+    "“Best onboarding I've seen on a trading platform. Capital was live in minutes.” — Samuel T., Nigeria",
+
+  "marketing.newMember.mobileBannerCta": "Activate your bonus →",
 }
 
 export const newMemberCampaignMarketingFr: Partial<Record<string, string>> = {
@@ -49,4 +106,8 @@ export const newMemberCampaignMarketingFr: Partial<Record<string, string>> = {
   "marketing.newMember.modalFooter":
     "Campagne en cours jusqu'à nouvel ordre. Le principal reste verrouillé ; les profits réalisés restent retirables.",
   "marketing.newMember.modalContinue": "Explorer la plateforme",
+
+  "marketing.newMember.howToTradeButton": "Comment trader",
+  "marketing.newMember.releaseBullish": "Release Bullish",
+  "marketing.newMember.howToTradeCta": "Commencer à trader avec Nexus",
 }

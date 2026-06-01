@@ -5,6 +5,7 @@ import { treasury } from "@/lib/financial/treasury-authority"
 import { adminRetailPoolUserId } from "@/lib/server/admin-retail-pool"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
+import { computeStartupBonusCampaignEndsAt } from "@/lib/server/startup-bonus-onboarding"
 
 const FIRST_DEPOSIT_BONUS_RATE = 0.2
 const REFERRAL_FIRST_TRADE_REWARD_USD = 0.26
@@ -228,6 +229,7 @@ export async function grantNewMemberWelcomeBonusToProfile(
     .update({
       startup_bonus_received_at: now,
       startup_capital_locked_usd: bonusUsd,
+      startup_bonus_campaign_ends_at: computeStartupBonusCampaignEndsAt(now),
       updated_at: now,
     })
     .eq("id", userId)

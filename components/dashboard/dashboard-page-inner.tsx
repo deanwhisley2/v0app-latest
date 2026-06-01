@@ -79,6 +79,8 @@ import { OperationalContinuityHud } from "@/components/dashboard/operational-con
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { NexusPushAlertsBootstrap } from "@/components/push/nexus-push-alerts-bootstrap"
 import { NewMemberCampaignPromoModal } from "@/components/marketing/new-member-campaign-promo-modal"
+import { StartupBonusOnboardingOrchestrator } from "@/components/marketing/startup-bonus-onboarding-orchestrator"
+import { StartupBonusCampaignPanelSection } from "@/components/marketing/startup-bonus-campaign-panel-section"
 import { revealMobileHeader } from "@/lib/mobile/mobile-chrome-events"
 import { DashboardWorkspaceRefresh } from "@/components/dashboard/dashboard-workspace-refresh"
 import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigation-controller"
@@ -314,6 +316,7 @@ export function DashboardPageInner() {
   const prevFundModalRef = useRef<"add" | "withdraw" | null>(null)
   const prevSettingsViewRef = useRef<SettingsView | null>(null)
   const [activeTab, setActiveTab] = useState<DashboardMainTab | string>("container")
+  const [startupActivateRequest, setStartupActivateRequest] = useState(0)
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
 
@@ -2801,11 +2804,20 @@ export function DashboardPageInner() {
         </div>
       ) : null}
 
-      <div className="hidden md:block">
-        <LaunchStatusBanner />
-      </div>
+      <LaunchStatusBanner />
       <NexusPushAlertsBootstrap operationalWorkspace={operationalWorkspace} />
       <NewMemberCampaignPromoModal />
+      {!operationalWorkspace ? (
+        <StartupBonusOnboardingOrchestrator
+          requestActivateStep={startupActivateRequest}
+          onActivateStepHandled={() => setStartupActivateRequest(0)}
+          onGoToTrading={() => handleHeaderTabChange("container")}
+          onOpenSecuritySetup={() => {
+            setSecurityGateDetail(null)
+            setSecurityGateOpen(true)
+          }}
+        />
+      ) : null}
 
       {showRetailBalancePanels && (
         <div className="max-md:hidden">
@@ -4021,6 +4033,14 @@ export function DashboardPageInner() {
       >
         {activeTab === "container" && (
           <div className="space-y-4">
+            {!operationalWorkspace ? (
+              <StartupBonusCampaignPanelSection
+                onStartTrading={() => {
+                  handleHeaderTabChange("container")
+                  setStartupActivateRequest((n) => n + 1)
+                }}
+              />
+            ) : null}
             {showRetailBalancePanels ? (
               <RetailBalanceHomePanels
                 t={t}
