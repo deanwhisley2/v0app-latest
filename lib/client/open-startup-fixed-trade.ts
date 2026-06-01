@@ -54,5 +54,3 @@ export async function openStartupFixedTrade(
 
   return { ok: true, sessionId: out.sessionId }
 }
-
-export { toastMutationError }

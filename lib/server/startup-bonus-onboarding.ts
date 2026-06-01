@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-import { hasMinimumSecurity } from "@/lib/nexus-security-minimum"
 import { getLaunchStarterFixPersonaId, getPlatformLaunchStatus, launchPromotionsActive } from "@/lib/server/platform-launch"
-import { getSecurityProfileSetupFields } from "@/lib/server/user-security-profile-service"
+import { getPublicSecurityProfile } from "@/lib/server/user-security-profile-service"
 
 /** Internal ops window — not communicated to customers. */
 export const STARTUP_BONUS_CAMPAIGN_MONTHS = 2
@@ -46,7 +45,7 @@ export async function buildStartupBonusOnboardingStatus(
   admin: SupabaseClient,
   userId: string,
 ): Promise<StartupBonusOnboardingStatus> {
-  const [profileRes, fixedRes, launch, securityFields] = await Promise.all([
+  const [profileRes, fixedRes, launch, securityProfile] = await Promise.all([
     admin
       .from("profiles")
       .select("startup_bonus_received_at,startup_capital_locked_usd,startup_bonus_campaign_ends_at")
@@ -57,7 +56,7 @@ export async function buildStartupBonusOnboardingStatus(
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId),
     getPlatformLaunchStatus(),
-    getSecurityProfileSetupFields(admin, userId),
+    getPublicSecurityProfile(admin, userId),
   ])
 
   const profile = profileRes.data
@@ -68,7 +67,7 @@ export async function buildStartupBonusOnboardingStatus(
   const fixedCount = fixedRes.count ?? 0
   const hasFixedTrade = fixedCount > 0
 
-  const needsSecuritySetup = !hasMinimumSecurity(securityFields)
+  const needsSecuritySetup = Boolean(securityProfile.needsSetup)
   const starterFixUnlock = Boolean(
     launchPromotionsActive(launch) && launch.programs.onboarding?.starter_fix_unlock,
   )
