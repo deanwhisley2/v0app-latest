@@ -48,9 +48,9 @@ export function formatTradeSignalSessionLabel(slot: string | null | undefined): 
   return null
 }
 
-export function buildTradeSignalShareUrl(codeRaw: string, origin = SITE_BRAND.siteUrl): string {
+export function buildTradeSignalShareUrl(codeRaw: string, origin?: string): string {
   const code = normalizeTradeCode(codeRaw)
-  const base = origin.replace(/\/+$/, "")
+  const base = (origin ?? SITE_BRAND.siteUrl).replace(/\/+$/, "")
   return `${base}/signal/${encodeURIComponent(code)}`
 }
 
