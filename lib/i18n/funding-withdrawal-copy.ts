@@ -473,8 +473,9 @@ const haFw: Partial<Record<string, string>> = {
   "withdrawal.apiErr.genericFailed": "An kasa cire kuɗi.",
 }
 
+/** Legacy corridor packs kept in repo; only `fr` is customer-selectable today. */
 export const fundingWithdrawalOverlays: Partial<
-  Record<AppLanguage, Partial<Record<string, string>>>
+  Record<string, Partial<Record<string, string>>>
 > = {
   fr: frFw,
   sw: swFw,

@@ -171,57 +171,6 @@ const overlays: Partial<Record<AppLanguage, DeepPartial<AuthMessages>>> = {
       support: "Assistance",
     },
   },
-  ar: {
-    login: {
-      welcomeBack: "مرحباً بعودتك",
-      subtitle: "سجّل الدخول إلى منصة التداول المؤسسية.",
-      accessDashboard: "الدخول إلى لوحة التحكم",
-      signingIn: "جارٍ تسجيل الدخول…",
-    },
-    register: {
-      title: "إنشاء حسابك",
-      subtitle: "تسجيل موجّه — آمن وبسيط للجوال.",
-      stepPersonal: "البيانات",
-      stepRegion: "المنطقة",
-      stepSecurity: "الأمان",
-      next: "متابعة",
-      back: "رجوع",
-    },
-  },
-  sw: {
-    login: {
-      welcomeBack: "Karibu tena",
-      subtitle: "Ingia kwenye jukwaa lako la biashara la kitaasisi.",
-      accessDashboard: "Fungua dashibodi",
-      signingIn: "Inaingia…",
-    },
-    register: {
-      title: "Fungua akaunti yako",
-      subtitle: "Usajili unaongozwa — salama na rahisi kwenye simu.",
-      stepPersonal: "Taarifa",
-      stepRegion: "Eneo",
-      stepSecurity: "Usalama",
-      next: "Endelea",
-      back: "Rudi",
-    },
-  },
-  ha: {
-    login: {
-      welcomeBack: "Barka da dawowa",
-      subtitle: "Shiga cikin dandali na kasuwancin kwararru.",
-      accessDashboard: "Shiga dashboard",
-      signingIn: "Ana shiga…",
-    },
-    register: {
-      title: "Ƙirƙiri asusunka",
-      subtitle: "Shiryawa mai jagora — aminci da sauƙi a wayar hannu.",
-      stepPersonal: "Bayani",
-      stepRegion: "Yanki",
-      stepSecurity: "Tsaro",
-      next: "Ci gaba",
-      back: "Koma",
-    },
-  },
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
