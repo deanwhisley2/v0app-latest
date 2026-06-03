@@ -53,6 +53,7 @@ export function AdminNexusBotPanel() {
   const [grants, setGrants] = useState<Record<string, boolean>>({})
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [registeredOk, setRegisteredOk] = useState(false)
   const [reviewUserId, setReviewUserId] = useState("")
   const [memberPoints, setMemberPoints] = useState<{
     points: number
