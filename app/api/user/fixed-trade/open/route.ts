@@ -33,6 +33,17 @@ export async function POST(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
+
+    if (process.env.NEXUS_LEGACY_COPY_FIX_OPEN !== "1") {
+      return NextResponse.json(
+        {
+          error:
+            "Fixed trade locks have moved to Nexus Bot. Use Signal sessions or Auto Trade in Container.",
+        },
+        { status: 410 },
+      )
+    }
+
     const { user } = auth
 
     const body = (await request.json().catch(() => ({}))) as {

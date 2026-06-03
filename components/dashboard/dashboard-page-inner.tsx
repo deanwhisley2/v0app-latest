@@ -19,12 +19,12 @@ import { Loader2 } from "lucide-react"
 import type { SettingsView } from "@/components/dashboard/settings-screen"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
 
-const ContainerMode = dynamic(
-  () => import("@/components/dashboard/container-mode").then((m) => m.ContainerMode),
+const NexusBotWorkspace = dynamic(
+  () => import("@/components/dashboard/nexus-bot-workspace").then((m) => m.NexusBotWorkspace),
   {
     ssr: false,
     loading: () => (
-      <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading trading workspace">
+      <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading Nexus Bot">
         <div className="h-12 rounded-xl bg-muted/40 max-md:animate-none" />
         <div className="h-32 rounded-xl bg-muted/30 max-md:animate-none" />
       </div>
@@ -4128,11 +4128,7 @@ export function DashboardPageInner() {
               activeTradeCount={containerActiveTradeCount}
               deskOpenNonce={containerDeskOpenNonce}
             >
-              <ContainerMode
-                userLevel={(currentUser?.level ?? 1) as 1 | 2 | 3 | 4 | 5}
-                retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
-                retailerLiquidityOpsBlocked={retailerOpsBlocked}
-                containerLiquidEarningsUsd={containerWithdrawableEarnings}
+              <NexusBotWorkspace
                 mainBalanceUsd={mainBalance}
                 onActiveSessionCountsChange={handleContainerSessionCounts}
               />

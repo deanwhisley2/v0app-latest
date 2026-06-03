@@ -19,6 +19,17 @@ export async function POST(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
+
+    if (process.env.NEXUS_LEGACY_COPY_FIX_OPEN !== "1") {
+      return NextResponse.json(
+        {
+          error:
+            "Copy trading has moved to Nexus Bot. Open Container → Signal Code or Auto Trade (admin approval required).",
+        },
+        { status: 410 },
+      )
+    }
+
     const { user } = auth
 
     const tradingBlock = await customerTradingApiGuardResponse(
