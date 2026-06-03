@@ -6,7 +6,9 @@ import {
   completeDueNexusBotSessions,
   getAutoTradeGrantsMap,
   recordAttendanceVisit,
+  syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
+import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
 
@@ -17,7 +19,9 @@ export async function GET(request: Request) {
     const { user } = auth
     const admin = createAdminClient()
 
+    await expireDueTradeSessions(admin)
     await completeDueNexusBotSessions(admin, user.id)
+    await syncTradeSessionBotStates(admin, user.id)
     const streak = await recordAttendanceVisit(admin, user.id)
     const grants = await getAutoTradeGrantsMap(admin, user.id)
     const availableUsd = await readNexusMainAvailableUsd(admin, user.id)
@@ -34,10 +38,10 @@ export async function GET(request: Request) {
     const { data: activeSessions } = await admin
       .from("nexus_bot_sessions")
       .select(
-        "id,session_kind,plan_key,stake_usd,strategy_title,confidence,ends_at,created_at,signal_code_id",
+        "id,session_kind,plan_key,stake_usd,strategy_title,confidence,ends_at,created_at,signal_code_id,status,display_phase,trade_session_id,trade_sessions(start_at,end_at,session_name,code)",
       )
       .eq("user_id", user.id)
-      .eq("status", "active")
+      .in("status", ["pending", "running", "active"])
       .order("created_at", { ascending: false })
       .limit(3)
 

@@ -1352,7 +1352,7 @@ export function AdminOperationalAssets({
             { id: "users" as const, label: "Users", icon: Users },
             { id: "retailers" as const, label: "Retailers", icon: Building2 },
             { id: "history" as const, label: "History", icon: History },
-            { id: "nexusbot" as const, label: "Nexus Bot", icon: Bot },
+            { id: "nexusbot" as const, label: "Trades", icon: Bot },
           ] as const
         ).map((tab) => (
           <button

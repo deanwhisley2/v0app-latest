@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Bot, Lock, MessageCircle, Sparkles, Zap } from "lucide-react"
+import { Bot, Lock, MessageCircle, Sparkles, Trophy, Zap } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { supabase } from "@/lib/supabaseClient"
@@ -12,20 +12,21 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FixedTradeSimulation } from "@/components/dashboard/fixed-trade-simulation"
 import { NEXUS_AUTO_TRADE_PLANS, NEXUS_SIGNAL_STAKE_TIERS_USD } from "@/lib/nexus-bot/plans"
 import { buildOperationsWhatsAppHref } from "@/lib/nexus-operations-whatsapp"
+import { formatSessionClock } from "@/lib/nexus-bot/trade-code"
 import { cn } from "@/lib/utils"
 
 const LEGACY_RELEASE_KEY = "nexus_bot_legacy_released_v1"
 
 type BotTab = "signal" | "auto"
 
-type OpenSignal = {
+type VerifiedSession = {
   id: string
-  slot: string
   code: string
-  strategyTitle: string
-  confidence: string
-  durationHours: number
-  windowClosesAt: string
+  sessionName: string
+  displayLabel: string
+  sessionSlot: string
+  startAt: string
+  endAt: string
 }
 
 type ActiveSession = {
@@ -36,23 +37,27 @@ type ActiveSession = {
   strategy_title: string | null
   confidence: string | null
   ends_at: string
+  status?: string
+  display_phase?: string | null
+  trade_sessions?: {
+    start_at?: string
+    end_at?: string
+    session_name?: string
+    code?: string
+  } | null
+}
+
+type LeaderboardRow = {
+  rank: number
+  username: string
+  points: number
+  completedSessions: number
+  streak: number
 }
 
 type NexusBotWorkspaceProps = {
   mainBalanceUsd?: number
   onActiveSessionCountsChange?: (counts: { copy: number; fix: number }) => void
-}
-
-function formatCountdown(endsAt: string): string {
-  const ms = new Date(endsAt).getTime() - Date.now()
-  if (ms <= 0) return "Completing…"
-  const h = Math.floor(ms / 3_600_000)
-  const m = Math.floor((ms % 3_600_000) / 60_000)
-  if (h >= 24) {
-    const d = Math.floor(h / 24)
-    return `${d}d ${h % 24}h remaining`
-  }
-  return `${h}h ${m}m remaining`
 }
 
 export function NexusBotWorkspace({
@@ -64,19 +69,22 @@ export function NexusBotWorkspace({
   const [tab, setTab] = useState<BotTab>("signal")
   const [loading, setLoading] = useState(true)
   const [availableUsd, setAvailableUsd] = useState(mainBalanceUsd)
-  const [openSignals, setOpenSignals] = useState<OpenSignal[]>([])
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [grants, setGrants] = useState<Record<string, boolean>>({})
   const [streak, setStreak] = useState({ current: 0, longest: 0, visits: 0 })
+  const [weeklyBoard, setWeeklyBoard] = useState<LeaderboardRow[]>([])
+  const [myPoints, setMyPoints] = useState(0)
 
   const [codeInput, setCodeInput] = useState("")
-  const [signalSlot, setSignalSlot] = useState<"morning" | "evening">("morning")
+  const [verifiedSession, setVerifiedSession] = useState<VerifiedSession | null>(null)
+  const [verifySteps, setVerifySteps] = useState<string[]>([])
+  const [verifyPhase, setVerifyPhase] = useState<string | null>(null)
   const [stakeTier, setStakeTier] = useState<number | "max">(50)
+  const [activateConfirm, setActivateConfirm] = useState(false)
   const [autoPlan, setAutoPlan] = useState<string>("auto_24h")
   const [autoStake, setAutoStake] = useState("50")
   const [autoConfirm, setAutoConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [tick, setTick] = useState(0)
 
   const waHref = useMemo(
     () =>
@@ -87,15 +95,18 @@ export function NexusBotWorkspace({
     [user?.id, user?.email],
   )
 
-  const selectedSignal = useMemo(
-    () => openSignals.find((s) => s.slot === signalSlot) ?? openSignals[0] ?? null,
-    [openSignals, signalSlot],
-  )
-
   const signalCommitUsd = useMemo(() => {
     if (stakeTier === "max") return availableUsd
     return stakeTier
   }, [stakeTier, availableUsd])
+
+  const sessionStartEnd = useMemo(() => {
+    const ts = activeSession?.trade_sessions
+    if (ts?.start_at && ts?.end_at) {
+      return { start: ts.start_at, end: ts.end_at }
+    }
+    return null
+  }, [activeSession])
 
   const load = useCallback(async () => {
     const {
@@ -104,29 +115,39 @@ export function NexusBotWorkspace({
     const token = session?.access_token
     if (!token) return
     const h = { Authorization: `Bearer ${token}` }
-    const res = await fetch("/api/user/nexus-bot", { headers: h, cache: "no-store" })
-    if (!res.ok) return
-    const j = (await res.json()) as {
-      availableUsd?: number
-      openSignals?: OpenSignal[]
-      activeSessions?: ActiveSession[]
-      autoTradePlans?: Array<{ key: string; granted: boolean }>
-      attendance?: { current_streak?: number; longest_streak?: number; total_visits?: number }
+    const [botRes, perfRes] = await Promise.all([
+      fetch("/api/user/nexus-bot", { headers: h, cache: "no-store" }),
+      fetch("/api/user/performance", { headers: h, cache: "no-store" }),
+    ])
+    if (botRes.ok) {
+      const j = (await botRes.json()) as {
+        availableUsd?: number
+        activeSessions?: ActiveSession[]
+        autoTradePlans?: Array<{ key: string; granted: boolean }>
+        attendance?: { current_streak?: number; longest_streak?: number; total_visits?: number }
+      }
+      setAvailableUsd(Number(j.availableUsd ?? mainBalanceUsd))
+      const active = (j.activeSessions ?? [])[0] ?? null
+      setActiveSession(active)
+      const g: Record<string, boolean> = {}
+      for (const p of j.autoTradePlans ?? []) g[p.key] = Boolean(p.granted)
+      setGrants(g)
+      const att = j.attendance ?? {}
+      setStreak({
+        current: Number(att.current_streak ?? 0),
+        longest: Number(att.longest_streak ?? 0),
+        visits: Number(att.total_visits ?? 0),
+      })
+      onActiveSessionCountsChange?.({ copy: 0, fix: active ? 1 : 0 })
     }
-    setAvailableUsd(Number(j.availableUsd ?? mainBalanceUsd))
-    setOpenSignals(j.openSignals ?? [])
-    const active = (j.activeSessions ?? [])[0] ?? null
-    setActiveSession(active)
-    const g: Record<string, boolean> = {}
-    for (const p of j.autoTradePlans ?? []) g[p.key] = Boolean(p.granted)
-    setGrants(g)
-    const att = j.attendance ?? {}
-    setStreak({
-      current: Number(att.current_streak ?? 0),
-      longest: Number(att.longest_streak ?? 0),
-      visits: Number(att.total_visits ?? 0),
-    })
-    onActiveSessionCountsChange?.({ copy: 0, fix: active ? 1 : 0 })
+    if (perfRes.ok) {
+      const p = (await perfRes.json()) as {
+        weeklyBoard?: LeaderboardRow[]
+        myPoints?: number
+      }
+      setWeeklyBoard(p.weeklyBoard ?? [])
+      setMyPoints(Number(p.myPoints ?? 0))
+    }
   }, [mainBalanceUsd, onActiveSessionCountsChange])
 
   useEffect(() => {
@@ -168,16 +189,51 @@ export function NexusBotWorkspace({
   }, [load])
 
   useEffect(() => {
-    if (!activeSession) return
-    const id = window.setInterval(() => setTick((t) => t + 1), 30_000)
-    return () => window.clearInterval(id)
-  }, [activeSession])
-
-  useEffect(() => {
     setAvailableUsd(mainBalanceUsd)
   }, [mainBalanceUsd])
 
-  const activateSignal = async () => {
+  const verifyCode = async () => {
+    setBusy(true)
+    setVerifiedSession(null)
+    setVerifySteps([])
+    setVerifyPhase(null)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      setVerifySteps(["Checking code…"])
+      const res = await fetch("/api/user/nexus-bot/trade-session/verify", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ code: codeInput }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(out.message ?? out.error ?? "Code not valid")
+      setVerifySteps(out.steps ?? ["Code verified…"])
+      setVerifyPhase(out.phase ?? "ready")
+      if (out.session) {
+        setVerifiedSession({
+          id: out.session.id,
+          code: out.session.code,
+          sessionName: out.session.sessionName,
+          displayLabel: out.session.displayLabel,
+          sessionSlot: out.session.sessionSlot,
+          startAt: out.session.startAt,
+          endAt: out.session.endAt,
+        })
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Verification failed")
+      setVerifySteps([])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const activateTradeSession = async () => {
+    if (!verifiedSession) return
     setBusy(true)
     try {
       const {
@@ -185,14 +241,21 @@ export function NexusBotWorkspace({
       } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) return
-      const res = await fetch("/api/user/nexus-bot/signal/activate", {
+      const res = await fetch("/api/user/nexus-bot/trade-session/activate", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ slot: signalSlot, code: codeInput, stakeTierUsd: stakeTier }),
+        body: JSON.stringify({
+          code: verifiedSession.code,
+          stakeTierUsd: stakeTier,
+          confirm: activateConfirm,
+        }),
       })
       const out = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(out.error ?? "Activation failed")
       setCodeInput("")
+      setVerifiedSession(null)
+      setVerifySteps([])
+      setActivateConfirm(false)
       await load()
     } catch (e) {
       alert(e instanceof Error ? e.message : "Activation failed")
@@ -242,9 +305,9 @@ export function NexusBotWorkspace({
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold">Nexus Bot</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Signal sessions and Auto Trade — community-driven engagement with governed operations approval.
+              Join live trade sessions, stay consistent, and climb the weekly performance board.
             </p>
-            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
               <div className="flex justify-between rounded-lg bg-background/80 px-3 py-2">
                 <span className="text-muted-foreground">Available (USD)</span>
                 <span className="font-mono font-semibold">{formatUserMoney(availableUsd)}</span>
@@ -255,25 +318,66 @@ export function NexusBotWorkspace({
                   {streak.current} day{streak.current === 1 ? "" : "s"} · best {streak.longest}
                 </span>
               </div>
+              <div className="flex justify-between rounded-lg bg-background/80 px-3 py-2">
+                <span className="text-muted-foreground">Performance points</span>
+                <span className="font-mono font-semibold">{myPoints}</span>
+              </div>
             </div>
           </div>
         </div>
       </Card>
 
+      {weeklyBoard.length > 0 ? (
+        <Card className="overflow-hidden p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-warning" aria-hidden />
+            <h3 className="font-semibold">Weekly performance board</h3>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Recognition for consistency and participation — separate from your wallet balance.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[320px] text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-xs uppercase text-muted-foreground">
+                  <th className="pb-2 pr-3">Rank</th>
+                  <th className="pb-2 pr-3">Member</th>
+                  <th className="pb-2 pr-3">Points</th>
+                  <th className="pb-2 pr-3">Sessions</th>
+                  <th className="pb-2">Streak</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weeklyBoard.map((row) => (
+                  <tr key={row.rank} className="border-b border-border/30 last:border-0">
+                    <td className="py-2 pr-3 font-mono">#{row.rank}</td>
+                    <td className="py-2 pr-3">{row.username}</td>
+                    <td className="py-2 pr-3 font-mono font-semibold">{row.points}</td>
+                    <td className="py-2 pr-3 font-mono">{row.completedSessions}</td>
+                    <td className="py-2 font-mono">{row.streak}d</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : null}
+
       {activeSession ? (
         <Card className="overflow-hidden border-success/30 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-semibold uppercase tracking-wide text-success">
-              {activeSession.session_kind === "auto" ? "AUTO ACTIVE" : "SIGNAL ACTIVE"}
+              {activeSession.display_phase ?? "Trade active"}
             </p>
-            <p className="font-mono text-xs text-muted-foreground">
-              {tick >= 0 ? formatCountdown(activeSession.ends_at) : null}
-            </p>
+            {sessionStartEnd ? (
+              <p className="font-mono text-xs text-muted-foreground">
+                {formatSessionClock(sessionStartEnd.start)} – {formatSessionClock(sessionStartEnd.end)}
+              </p>
+            ) : null}
           </div>
           <p className="text-sm font-medium">{activeSession.strategy_title}</p>
           <p className="text-xs text-muted-foreground">
-            Stake {formatUserMoney(Number(activeSession.stake_usd))} · Confidence{" "}
-            {activeSession.confidence ?? "—"}
+            Stake {formatUserMoney(Number(activeSession.stake_usd))}
           </p>
           <div className="mt-4">
             <FixedTradeSimulation sessionId={activeSession.id} deskSalt={activeSession.id} />
@@ -291,7 +395,7 @@ export function NexusBotWorkspace({
           )}
         >
           <Sparkles className="h-4 w-4" />
-          Signal Code
+          Trade Code
         </button>
         <button
           type="button"
@@ -308,94 +412,111 @@ export function NexusBotWorkspace({
 
       {tab === "signal" ? (
         <Card className="space-y-4 p-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Signal code panel</p>
-          <div className="flex gap-2">
-            {(["morning", "evening"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSignalSlot(s)}
-                className={cn(
-                  "flex-1 rounded-lg py-2 text-sm font-medium capitalize",
-                  signalSlot === s ? "bg-warning/20 text-warning" : "bg-muted",
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-          {selectedSignal ? (
-            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm space-y-1">
-              <p>
-                <span className="text-muted-foreground">Code:</span>{" "}
-                <span className="font-mono font-bold">{selectedSignal.code}</span>
-              </p>
-              <p>
-                <span className="text-muted-foreground">Strategy:</span> {selectedSignal.strategyTitle}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Confidence:</span> {selectedSignal.confidence}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Duration:</span> {selectedSignal.durationHours} hours
-              </p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No active {signalSlot} code published yet. Check WhatsApp for today&apos;s Nexus code.</p>
-          )}
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Paste today&apos;s trade code
+          </p>
           <Input
             value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-            placeholder="Enter Nexus code"
+            onChange={(e) => {
+              setCodeInput(e.target.value.toUpperCase())
+              setVerifiedSession(null)
+              setVerifySteps([])
+            }}
+            placeholder="NXP-7A82-X91K"
             className="font-mono uppercase"
             disabled={Boolean(activeSession)}
           />
-          <p className="text-sm text-muted-foreground">Choose stake (USD commit)</p>
-          <div className="flex flex-wrap gap-2">
-            {NEXUS_SIGNAL_STAKE_TIERS_USD.map((usd) => (
-              <button
-                key={usd}
-                type="button"
-                disabled={Boolean(activeSession)}
-                onClick={() => setStakeTier(usd)}
-                className={cn(
-                  "rounded-lg px-4 py-2 font-mono text-sm font-semibold",
-                  stakeTier === usd ? "bg-primary text-primary-foreground" : "bg-muted",
-                )}
-              >
-                ${usd}
-              </button>
-            ))}
-            <button
-              type="button"
-              disabled={Boolean(activeSession)}
-              onClick={() => setStakeTier("max")}
-              className={cn(
-                "rounded-lg px-4 py-2 font-mono text-sm font-semibold",
-                stakeTier === "max" ? "bg-primary text-primary-foreground" : "bg-muted",
-              )}
-            >
-              Max
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Trade commit:{" "}
-            <span className="font-mono font-semibold text-foreground">
-              {formatUserMoney(signalCommitUsd)}
-            </span>
-          </p>
           <Button
-            className="w-full min-h-[48px]"
+            variant="outline"
+            className="w-full"
             disabled={busy || Boolean(activeSession) || !codeInput.trim()}
-            onClick={() => void activateSignal()}
+            onClick={() => void verifyCode()}
           >
-            Activate Session
+            Verify code
           </Button>
+          {verifySteps.length > 0 ? (
+            <ul className="space-y-1 rounded-lg bg-muted/30 p-3 text-sm">
+              {verifySteps.map((step) => (
+                <li key={step} className="text-muted-foreground">
+                  {step}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {verifiedSession ? (
+            <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-sm space-y-1">
+              <p className="font-medium">{verifiedSession.displayLabel}</p>
+              <p className="text-muted-foreground">
+                {formatSessionClock(verifiedSession.startAt)} – {formatSessionClock(verifiedSession.endAt)}
+              </p>
+              {verifyPhase === "pending" ? (
+                <p className="text-xs text-warning">Waiting for session start</p>
+              ) : (
+                <p className="text-xs text-success">Preparing trade session…</p>
+              )}
+            </div>
+          ) : null}
+          {verifiedSession && !activeSession ? (
+            <>
+              <p className="text-sm text-muted-foreground">Select capital (USD commit)</p>
+              <div className="flex flex-wrap gap-2">
+                {NEXUS_SIGNAL_STAKE_TIERS_USD.map((usd) => (
+                  <button
+                    key={usd}
+                    type="button"
+                    onClick={() => setStakeTier(usd)}
+                    className={cn(
+                      "rounded-lg px-4 py-2 font-mono text-sm font-semibold",
+                      stakeTier === usd ? "bg-primary text-primary-foreground" : "bg-muted",
+                    )}
+                  >
+                    ${usd}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setStakeTier("max")}
+                  className={cn(
+                    "rounded-lg px-4 py-2 font-mono text-sm font-semibold",
+                    stakeTier === "max" ? "bg-primary text-primary-foreground" : "bg-muted",
+                  )}
+                >
+                  Max
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Trade commit:{" "}
+                <span className="font-mono font-semibold text-foreground">
+                  {formatUserMoney(signalCommitUsd)}
+                </span>
+              </p>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={activateConfirm}
+                  onCheckedChange={(v) => setActivateConfirm(v === true)}
+                />
+                <span>
+                  By activating Nexus Bot you authorize the platform strategy engine to manage the selected
+                  capital during the session period. The system may enter and exit positions automatically
+                  according to session strategy. Only profits become available for release. Capital remains
+                  governed by the session rules.
+                </span>
+              </label>
+              <Button
+                className="w-full min-h-[48px]"
+                disabled={busy || !activateConfirm || verifyPhase === "expired"}
+                onClick={() => void activateTradeSession()}
+              >
+                Activate Nexus Bot
+              </Button>
+            </>
+          ) : null}
         </Card>
       ) : (
         <Card className="space-y-4 p-4">
           <p className="text-xs text-muted-foreground">
-            AUTO MODE — Automatically executes Nexus-approved strategy sessions during the selected period. Administrator approval required for each plan.
+            AUTO MODE — Automatically executes Nexus-approved strategy sessions during the selected period.
+            Administrator approval required for each plan.
           </p>
           <div className="space-y-3">
             {NEXUS_AUTO_TRADE_PLANS.map((plan) => {
