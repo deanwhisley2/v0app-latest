@@ -276,7 +276,7 @@ export function NexusBotWorkspace({
             {activeSession.confidence ?? "—"}
           </p>
           <div className="mt-4">
-            <FixedTradeSimulation sessionId={activeSession.id} seedKey={activeSession.id} />
+            <FixedTradeSimulation sessionId={activeSession.id} deskSalt={activeSession.id} />
           </div>
         </Card>
       ) : null}

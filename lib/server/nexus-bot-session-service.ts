@@ -161,7 +161,7 @@ export async function activateNexusBotSession(
     amount: stake,
     balanceSource: "available_balance",
     balanceDestination: "nexus_bot_session",
-    status: "active",
+    status: "pending",
     actorType: "user",
     actorId: params.userId,
     summary:
