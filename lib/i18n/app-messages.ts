@@ -34,6 +34,7 @@ const en: Record<string, string> = {
   "nav.history": "History",
   "history.center.subtitle": "Deposits, withdrawals, transfers, and trading activity.",
   "history.center.empty": "No activity recorded yet.",
+  "history.center.refreshing": "Updating activity…",
   "history.section.withdrawals": "Withdrawals",
   "history.section.deposits": "Deposits",
   "history.section.addFunds": "Add funds",

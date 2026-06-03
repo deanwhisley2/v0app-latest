@@ -58,17 +58,25 @@ export async function GET(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const admin = createAdminClient()
-    const gate = await getRetailFundingCustomerGate(user.id, user.email)
-    const level = gate.level
+    const requestsOnly = new URL(request.url).searchParams.get("requestsOnly") === "1"
     const requestsRes = await admin
       .from("retailer_fund_requests")
       .select(
-        "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,appeal_note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
+        requestsOnly
+          ? "id,amount,amount_usd_locked,tx_reference,status,created_at"
+          : "id,retailer_id,official_corridor_route_id,amount,amount_usd_locked,amount_input_local,input_currency,fx_rate_snapshot,fx_locked_at,fx_quote_expires_at,tx_reference,status,note,appeal_note,fund_channel,mobile_network,payment_proof_path,created_at,reviewed_at,resolved_at,escalated_to_admin,payer_display_name,payer_phone,retailer_response_deadline_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50)
     if (requestsRes.error) return NextResponse.json({ error: requestsRes.error.message }, { status: 500 })
+
+    if (requestsOnly) {
+      return NextResponse.json({ requests: requestsRes.data ?? [] })
+    }
+
+    const gate = await getRetailFundingCustomerGate(user.id, user.email)
+    const level = gate.level
 
     /** Full desk directory only for designated Level-2 retailer credit sellers; buyers use GET /qualified-retailers. */
     const rawRetailers =

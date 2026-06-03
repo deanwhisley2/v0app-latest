@@ -32,6 +32,9 @@ type RetailFundRequestRow = {
   created_at: string
 }
 
+const LEDGER_BUMP_DEBOUNCE_MS = 500
+const HISTORY_POLL_MS = 90_000
+
 function fundRequestTitleKey(status: string): string {
   const s = status.toLowerCase()
   if (s === "approved" || s === "settled" || s === "completed") return "history.fundRequest.approved"
@@ -49,8 +52,12 @@ export function HistoryCenterScreen() {
   const [deposits, setDeposits] = useState<CryptoDepositReceiptRow[]>([])
   const [withdrawals, setWithdrawals] = useState<WithdrawalReceiptRow[]>([])
   const [fundRequests, setFundRequests] = useState<RetailFundRequestRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [coreLoading, setCoreLoading] = useState(true)
+  const [fundLoading, setFundLoading] = useState(false)
   const loadGenRef = useRef(0)
+  const fundGenRef = useRef(0)
+  const bumpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasLoadedCoreRef = useRef(false)
 
   const viewer = useMemo(
     () => ({
@@ -71,9 +78,38 @@ export function HistoryCenterScreen() {
     openNotification,
   } = useTransactionReceiptOpener(t, viewer)
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  const historyNotifs = useMemo(
+    () => filterTransactionHistoryFromInbox([...inbox].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))),
+    [inbox],
+  )
+
+  const loadFundRequests = useCallback(async () => {
+    const gen = ++fundGenRef.current
+    setFundLoading(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) {
+        if (gen === fundGenRef.current) setFundRequests([])
+        return
+      }
+      const res = await fetch("/api/user/retailer-funding?requestsOnly=1", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      if (gen !== fundGenRef.current || !res.ok) return
+      const j = (await res.json()) as { requests?: RetailFundRequestRow[] }
+      setFundRequests(j.requests ?? [])
+    } finally {
+      if (gen === fundGenRef.current) setFundLoading(false)
+    }
+  }, [])
+
+  const loadCore = useCallback(async () => {
     const gen = ++loadGenRef.current
-    if (!opts?.silent) setLoading(true)
+    if (!hasLoadedCoreRef.current) setCoreLoading(true)
     try {
       const {
         data: { session },
@@ -84,16 +120,14 @@ export function HistoryCenterScreen() {
           setEvents([])
           setDeposits([])
           setWithdrawals([])
-          setFundRequests([])
         }
         return
       }
       const h = { Authorization: `Bearer ${token}` }
-      const [evRes, depRes, wRes, fundRes] = await Promise.all([
+      const [evRes, depRes, wRes] = await Promise.all([
         fetch("/api/user/financial-events", { headers: h, cache: "no-store" }),
         fetch("/api/user/crypto-deposit", { headers: h, cache: "no-store" }),
         fetch("/api/user/withdrawal-requests", { headers: h, cache: "no-store" }),
-        fetch("/api/user/retailer-funding", { headers: h, cache: "no-store" }),
       ])
       if (gen !== loadGenRef.current) return
       if (evRes.ok) {
@@ -108,44 +142,61 @@ export function HistoryCenterScreen() {
         const j = (await wRes.json()) as { requests?: WithdrawalReceiptRow[] }
         setWithdrawals(j.requests ?? [])
       }
-      if (fundRes.ok) {
-        const j = (await fundRes.json()) as { requests?: RetailFundRequestRow[] }
-        setFundRequests(j.requests ?? [])
-      }
+      hasLoadedCoreRef.current = true
     } finally {
-      if (gen === loadGenRef.current && !opts?.silent) setLoading(false)
+      if (gen === loadGenRef.current) setCoreLoading(false)
     }
   }, [])
 
+  const refreshAll = useCallback(() => {
+    void loadCore()
+    void loadFundRequests()
+  }, [loadCore, loadFundRequests])
+
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadCore()
+    void loadFundRequests()
+  }, [loadCore, loadFundRequests])
 
   useEffect(() => {
     const onBump = () => {
-      void load({ silent: true })
+      if (bumpTimerRef.current) clearTimeout(bumpTimerRef.current)
+      bumpTimerRef.current = setTimeout(() => {
+        bumpTimerRef.current = null
+        refreshAll()
+      }, LEDGER_BUMP_DEBOUNCE_MS)
     }
     window.addEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onBump)
-    return () => window.removeEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onBump)
-  }, [load])
-
-  useEffect(() => {
-    if (!accountInboxReady) return
-    void load({ silent: true })
-  }, [accountInboxReady, inbox.length, load])
+    return () => {
+      window.removeEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onBump)
+      if (bumpTimerRef.current) clearTimeout(bumpTimerRef.current)
+    }
+  }, [refreshAll])
 
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return
-      void load({ silent: true })
-    }, 45_000)
+      refreshAll()
+    }, HISTORY_POLL_MS)
     return () => window.clearInterval(id)
-  }, [load])
+  }, [refreshAll])
 
-  const historyNotifs = useMemo(
-    () => filterTransactionHistoryFromInbox([...inbox].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))),
-    [inbox],
-  )
+  const showFullSpinner =
+    coreLoading &&
+    !accountInboxReady &&
+    withdrawals.length === 0 &&
+    deposits.length === 0 &&
+    events.length === 0 &&
+    historyNotifs.length === 0
+
+  const showEmpty =
+    !coreLoading &&
+    !fundLoading &&
+    withdrawals.length === 0 &&
+    deposits.length === 0 &&
+    fundRequests.length === 0 &&
+    events.length === 0 &&
+    historyNotifs.length === 0
 
   return (
     <div className="mx-auto w-full max-w-lg pb-24 pt-4 md:max-w-2xl md:pb-8">
@@ -159,12 +210,18 @@ export function HistoryCenterScreen() {
         </div>
       </header>
 
-      {loading ? (
+      {showFullSpinner ? (
         <div className="flex justify-center py-12" aria-busy="true">
           <Loader2 className="h-7 w-7 animate-spin text-primary" />
         </div>
       ) : (
         <div className="space-y-4 px-1">
+          {coreLoading ? (
+            <p className="px-1 text-center text-xs text-muted-foreground" aria-live="polite">
+              {t("history.center.refreshing")}
+            </p>
+          ) : null}
+
           {withdrawals.length > 0 ? (
             <section className={`${INBOX_CARD} overflow-hidden`}>
               <div className="border-b border-border/60 px-4 py-3">
@@ -185,6 +242,12 @@ export function HistoryCenterScreen() {
                 ))}
               </ul>
             </section>
+          ) : null}
+
+          {fundLoading && fundRequests.length === 0 ? (
+            <div className="flex justify-center py-4" aria-busy="true">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
           ) : null}
 
           {fundRequests.length > 0 ? (
@@ -287,12 +350,7 @@ export function HistoryCenterScreen() {
             </section>
           ) : null}
 
-          {!loading &&
-          withdrawals.length === 0 &&
-          deposits.length === 0 &&
-          fundRequests.length === 0 &&
-          events.length === 0 &&
-          historyNotifs.length === 0 ? (
+          {showEmpty ? (
             <p className="rounded-xl border border-border/60 bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
               {t("history.center.empty")}
             </p>
