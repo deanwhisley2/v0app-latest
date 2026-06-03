@@ -87,6 +87,7 @@ import { useDashboardNavigationController } from "@/hooks/use-dashboard-navigati
 import { reportClientDiagnostic } from "@/lib/mobile/mobile-navigation-diagnostics"
 import type { DashboardMainTab } from "@/lib/dashboard-navigation-policy"
 import { hasRecentFreshLogin, postLoginTab } from "@/lib/dashboard-navigation-policy"
+import { isValidTradeCodeFormat, normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
 import {
   DASHBOARD_CLEAN_BOOT_RESET_EVENT,
   purgeDashboardUnsafeSessionState,
@@ -428,6 +429,7 @@ export function DashboardPageInner() {
 
   const [containerActiveTradeCount, setContainerActiveTradeCount] = useState(0)
   const [containerDeskOpenNonce, setContainerDeskOpenNonce] = useState(0)
+  const [tradeCodePrefill, setTradeCodePrefill] = useState<string | null>(null)
   const handleContainerSessionCounts = useCallback((counts: { copy: number; fix: number }) => {
     setContainerActiveTradeCount(counts.copy + counts.fix)
   }, [])
@@ -1804,6 +1806,27 @@ export function DashboardPageInner() {
       /* ignore */
     }
   }, [authLoading, setTabProgrammatic])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return
+    try {
+      const u = new URL(window.location.href)
+      const raw = u.searchParams.get("tradeCode")?.trim()
+      if (!raw) return
+      const code = normalizeTradeCode(raw)
+      if (!isValidTradeCodeFormat(code)) return
+      setTradeCodePrefill(code)
+      if (!operationalWorkspace) {
+        setTabProgrammatic("container", "trade_code_deeplink")
+        setContainerDeskOpenNonce((n) => n + 1)
+      }
+      u.searchParams.delete("tradeCode")
+      const qs = u.searchParams.toString()
+      window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
+    } catch {
+      /* ignore */
+    }
+  }, [authLoading, operationalWorkspace, setTabProgrammatic])
 
   useEffect(() => {
     const forceCleanTab = () => {
@@ -4131,6 +4154,7 @@ export function DashboardPageInner() {
               <NexusBotWorkspace
                 mainBalanceUsd={mainBalance}
                 onActiveSessionCountsChange={handleContainerSessionCounts}
+                initialTradeCode={tradeCodePrefill}
               />
             </ContainerDeskSection>
           </div>

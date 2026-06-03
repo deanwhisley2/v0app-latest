@@ -56,11 +56,13 @@ type ProfitCelebration = {
 type NexusBotWorkspaceProps = {
   mainBalanceUsd?: number
   onActiveSessionCountsChange?: (counts: { copy: number; fix: number }) => void
+  initialTradeCode?: string | null
 }
 
 export function NexusBotWorkspace({
   mainBalanceUsd = 0,
   onActiveSessionCountsChange,
+  initialTradeCode = null,
 }: NexusBotWorkspaceProps) {
   const { user } = useAuth()
   const { formatUserMoney } = useUserPreferences()
@@ -205,6 +207,16 @@ export function NexusBotWorkspace({
   useEffect(() => {
     setAvailableUsd(mainBalanceUsd)
   }, [mainBalanceUsd])
+
+  useEffect(() => {
+    if (!initialTradeCode?.trim()) return
+    setCodeInput(initialTradeCode.trim().toUpperCase())
+    setFlowStep(1)
+    setVerifiedSession(null)
+    setVerifyError(null)
+    setActivateError(null)
+    setActivateConfirm(false)
+  }, [initialTradeCode])
 
   const dismissCelebration = useCallback(async () => {
     if (!celebration) return

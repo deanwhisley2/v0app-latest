@@ -12,6 +12,7 @@ import {
   parseDatetimeLocalInput,
   toDatetimeLocalInputValue,
 } from "@/lib/nexus-bot/trade-code"
+import { TradeSignalShareActions } from "@/components/dashboard/trade-signal-share-actions"
 
 type TradeSessionRow = {
   id: string
@@ -553,13 +554,23 @@ export function AdminNexusBotPanel() {
               </p>
             ) : null}
             {lastRegistered ? (
-              <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
-                <p className="font-semibold text-success">Saved to database</p>
-                <p className="font-mono">{lastRegistered.code}</p>
-                <p>
-                  {lastRegistered.session_name} · {lastRegistered.status} ·{" "}
-                  {formatSessionClock(lastRegistered.start_at)} – {formatSessionClock(lastRegistered.end_at)}
-                </p>
+              <div className="space-y-3">
+                <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
+                  <p className="font-semibold text-success">Saved to database</p>
+                  <p className="font-mono">{lastRegistered.code}</p>
+                  <p>
+                    {lastRegistered.session_name} · {lastRegistered.status} ·{" "}
+                    {formatSessionClock(lastRegistered.start_at)} – {formatSessionClock(lastRegistered.end_at)}
+                  </p>
+                </div>
+                {lastRegistered.status === "active" ? (
+                  <TradeSignalShareActions
+                    code={lastRegistered.code}
+                    sessionSlot={
+                      lastRegistered.session_slot === "evening" ? "evening" : "morning"
+                    }
+                  />
+                ) : null}
               </div>
             ) : null}
             <Button
@@ -624,16 +635,22 @@ export function AdminNexusBotPanel() {
                         : ""}
                     </p>
                     {s.status === "active" ? (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="mt-3 min-h-[44px] w-full touch-manipulation sm:w-auto"
-                        disabled={busy}
-                        onClick={() => void terminateSession(s)}
-                      >
-                        End session &amp; release earnings
-                      </Button>
+                      <>
+                        <TradeSignalShareActions
+                          code={s.code}
+                          sessionSlot={s.session_slot === "evening" ? "evening" : "morning"}
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="mt-3 min-h-[44px] w-full touch-manipulation sm:w-auto"
+                          disabled={busy}
+                          onClick={() => void terminateSession(s)}
+                        >
+                          End session &amp; release earnings
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 ))

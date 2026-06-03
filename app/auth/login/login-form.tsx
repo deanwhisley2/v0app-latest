@@ -13,6 +13,7 @@ import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { AuthCollapsibleSection } from "@/components/auth/auth-collapsible-section"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
 import { markFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
+import { sanitizeInternalRedirect } from "@/lib/nexus-bot/trade-signal-share"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,6 +46,7 @@ export default function LoginForm() {
   const [resetSuccess, setResetSuccess] = useState(false)
   const [sessionCleared, setSessionCleared] = useState(false)
   const [sessionRequired, setSessionRequired] = useState(false)
+  const [postLoginPath, setPostLoginPath] = useState("/dashboard")
   const [android, setAndroid] = useState(false)
   const [showSecurityNotice, setShowSecurityNotice] = useState(false)
   const [showServiceAgreement, setShowServiceAgreement] = useState(false)
@@ -55,6 +57,7 @@ export default function LoginForm() {
       setResetSuccess(params.get("reset") === "success")
       setSessionCleared(params.get("reason") === "session_cleared")
       setSessionRequired(params.get("reason") === "session_required")
+      setPostLoginPath(sanitizeInternalRedirect(params.get("next")) ?? "/dashboard")
     } catch {
       /* ignore */
     }
@@ -176,7 +179,7 @@ export default function LoginForm() {
       }
 
       markFreshLoginLanding()
-      window.location.assign("/dashboard")
+      window.location.assign(postLoginPath)
     } catch (err) {
       if (
         isGuestLoginEnabled() &&
