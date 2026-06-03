@@ -3,6 +3,12 @@ export function normalizeTradeCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, "")
 }
 
+export const TRADE_CODE_PATTERN = /^NXP-[A-Z0-9]{4}-[A-Z0-9]{4}$/
+
+export function isValidTradeCodeFormat(raw: string): boolean {
+  return TRADE_CODE_PATTERN.test(normalizeTradeCode(raw))
+}
+
 export function generateTradeCodeCandidate(): string {
   const seg = () =>
     Math.random()
@@ -38,3 +44,36 @@ export const USER_SESSION_PHASES = [
 ] as const
 
 export type UserSessionPhase = (typeof USER_SESSION_PHASES)[number]
+
+/** Format for `<input type="datetime-local" />` in local time. */
+export function toDatetimeLocalInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** Suggested morning (9:00) or evening (17:00) window — 25 minutes. */
+export function defaultTradeSessionWindow(slot: "morning" | "evening", now = new Date()): {
+  start: Date
+  end: Date
+} {
+  const start = new Date(now)
+  start.setSeconds(0, 0)
+  start.setMilliseconds(0)
+  if (slot === "morning") {
+    start.setHours(9, 0, 0, 0)
+  } else {
+    start.setHours(17, 0, 0, 0)
+  }
+  if (start.getTime() <= now.getTime()) {
+    start.setDate(start.getDate() + 1)
+  }
+  const end = new Date(start.getTime() + 25 * 60_000)
+  return { start, end }
+}
+
+export function parseDatetimeLocalInput(raw: string): Date | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const d = new Date(trimmed)
+  return Number.isFinite(d.getTime()) ? d : null
+}

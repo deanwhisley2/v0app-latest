@@ -6,7 +6,12 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NEXUS_AUTO_TRADE_PLAN_KEYS } from "@/lib/nexus-bot/plans"
-import { formatSessionClock } from "@/lib/nexus-bot/trade-code"
+import {
+  defaultTradeSessionWindow,
+  formatSessionClock,
+  parseDatetimeLocalInput,
+  toDatetimeLocalInputValue,
+} from "@/lib/nexus-bot/trade-code"
 
 type TradeSessionRow = {
   id: string
@@ -53,6 +58,9 @@ export function AdminNexusBotPanel() {
   const [grants, setGrants] = useState<Record<string, boolean>>({})
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [registerError, setRegisterError] = useState<string | null>(null)
+  const [lastRegistered, setLastRegistered] = useState<TradeSessionRow | null>(null)
   const [registeredOk, setRegisteredOk] = useState(false)
   const [reviewUserId, setReviewUserId] = useState("")
   const [memberPoints, setMemberPoints] = useState<{
@@ -91,15 +99,45 @@ export function AdminNexusBotPanel() {
     }
   }
 
+  const applyDefaultTimes = useCallback((slot: "morning" | "evening") => {
+    const { start, end } = defaultTradeSessionWindow(slot)
+    setStartAt(toDatetimeLocalInputValue(start))
+    setEndAt(toDatetimeLocalInputValue(end))
+  }, [])
+
+  const pickGeneratedCode = (codeValue: string) => {
+    setRegisterCode(codeValue)
+    setRegisterError(null)
+    setRegisteredOk(false)
+    if (!sessionName.trim()) {
+      setSessionName(sessionSlot === "morning" ? "Session 1 Morning" : "Session 2 Evening")
+    }
+    if (!startAt || !endAt) {
+      applyDefaultTimes(sessionSlot)
+    }
+  }
+
   const loadSessions = useCallback(async () => {
-    const h = await tokenHeaders()
-    const res = await fetch(`/api/admin/trade-sessions?view=${sessionFilter}`, { headers: h })
-    const j = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(j.error ?? "Load failed")
-    setSessions(j.sessions ?? [])
-    setUnregisteredCodes(j.unregisteredCodes ?? [])
-    setStats(j.stats ?? null)
+    setSessionsLoading(true)
+    try {
+      const h = await tokenHeaders()
+      const res = await fetch(`/api/admin/trade-sessions?view=${sessionFilter}`, { headers: h })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error ?? "Load failed")
+      setSessions(j.sessions ?? [])
+      setUnregisteredCodes(j.unregisteredCodes ?? [])
+      setStats(j.stats ?? null)
+    } finally {
+      setSessionsLoading(false)
+    }
   }, [sessionFilter])
+
+  useEffect(() => {
+    if (view !== "sessions") return
+    if (!startAt && !endAt) {
+      applyDefaultTimes(sessionSlot)
+    }
+  }, [view, sessionSlot, startAt, endAt, applyDefaultTimes])
 
   useEffect(() => {
     if (view !== "sessions") return
@@ -128,9 +166,31 @@ export function AdminNexusBotPanel() {
   }
 
   const registerSession = async () => {
+    setRegisterError(null)
+    setRegisteredOk(false)
+    setLastRegistered(null)
+
+    const start = parseDatetimeLocalInput(startAt)
+    const end = parseDatetimeLocalInput(endAt)
+    if (!registerCode.trim()) {
+      setRegisterError("Paste or select a generated code.")
+      return
+    }
+    if (!sessionName.trim()) {
+      setRegisterError("Enter a session name.")
+      return
+    }
+    if (!start || !end) {
+      setRegisterError("Set valid start and end times.")
+      return
+    }
+    if (end.getTime() <= start.getTime()) {
+      setRegisterError("End time must be after start time.")
+      return
+    }
+
     setBusy(true)
     setMsg(null)
-    setRegisteredOk(false)
     try {
       const h = await tokenHeaders()
       const res = await fetch("/api/admin/trade-sessions", {
@@ -141,23 +201,60 @@ export function AdminNexusBotPanel() {
           code: registerCode,
           sessionName,
           sessionSlot,
-          startAt: new Date(startAt).toISOString(),
-          endAt: new Date(endAt).toISOString(),
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
           status: registerStatus,
         }),
       })
-      const j = await res.json().catch(() => ({}))
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        session?: {
+          sessionId: string
+          code: string
+          sessionName: string
+          sessionSlot: string
+          startAt: string
+          endAt: string
+          status: string
+          displayLabel: string
+        }
+      }
       if (!res.ok) throw new Error(j.error ?? "Register failed")
+
+      const saved = j.session
+      if (!saved?.sessionId) throw new Error("Registration did not persist — retry.")
+
       setRegisteredOk(true)
-      setMsg(`Code registered: ${j.code}`)
+      setLastRegistered({
+        id: saved.sessionId,
+        code: saved.code,
+        session_name: saved.sessionName,
+        session_slot: saved.sessionSlot,
+        start_at: saved.startAt,
+        end_at: saved.endAt,
+        status: saved.status,
+        display_label: saved.displayLabel,
+        created_at: new Date().toISOString(),
+      })
+      setMsg(`Registered ${saved.code} · ${saved.status} · saved to database`)
       setRegisterCode("")
+      setRegisterError(null)
       await loadSessions()
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Register failed")
+      const message = e instanceof Error ? e.message : "Register failed"
+      setRegisterError(message)
+      setMsg(message)
     } finally {
       setBusy(false)
     }
   }
+
+  const canRegister =
+    Boolean(registerCode.trim()) &&
+    Boolean(sessionName.trim()) &&
+    Boolean(startAt) &&
+    Boolean(endAt) &&
+    !busy
 
   const publishSignal = async () => {
     setBusy(true)
@@ -304,19 +401,24 @@ export function AdminNexusBotPanel() {
             <p className="text-xs text-muted-foreground">
               Creates unique codes stored in history. Only a manually registered code becomes active.
             </p>
-            <Button disabled={busy} onClick={() => void generateCodes()}>
-              Generate trade code
+            <Button
+              type="button"
+              className="min-h-[48px] w-full touch-manipulation sm:w-auto"
+              disabled={busy}
+              onClick={() => void generateCodes()}
+            >
+              {busy ? "Working…" : "Generate trade code"}
             </Button>
             {unregisteredCodes.length > 0 ? (
               <div className="rounded-lg bg-muted/40 p-3 text-xs">
-                <p className="mb-2 font-medium">Unregistered suggestions</p>
+                <p className="mb-2 font-medium">Unregistered suggestions — tap to fill register form</p>
                 <div className="flex flex-wrap gap-2">
                   {unregisteredCodes.map((c) => (
                     <button
                       key={c.code}
                       type="button"
-                      className="rounded-md bg-background px-2 py-1 font-mono hover:ring-1 hover:ring-primary/40"
-                      onClick={() => setRegisterCode(c.code)}
+                      className="min-h-[44px] rounded-md bg-background px-3 py-2 font-mono touch-manipulation hover:ring-2 hover:ring-primary/40"
+                      onClick={() => pickGeneratedCode(c.code)}
                     >
                       {c.code}
                     </button>
@@ -335,11 +437,19 @@ export function AdminNexusBotPanel() {
                 </span>
               ) : null}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Registration is saved on the server immediately. Users can verify only <strong>active</strong>{" "}
+              sessions before end time.
+            </p>
             <Input
               value={registerCode}
-              onChange={(e) => setRegisterCode(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setRegisterCode(e.target.value.toUpperCase())
+                setRegisterError(null)
+                setRegisteredOk(false)
+              }}
               placeholder="NXP-7A82-X91K"
-              className="font-mono uppercase"
+              className="min-h-[48px] font-mono uppercase"
             />
             <Input
               value={sessionName}
@@ -351,8 +461,12 @@ export function AdminNexusBotPanel() {
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setSessionSlot(s)}
-                  className={`flex-1 rounded-lg py-2 text-sm capitalize ${
+                  onClick={() => {
+                    setSessionSlot(s)
+                    applyDefaultTimes(s)
+                    setRegisterError(null)
+                  }}
+                  className={`min-h-[44px] flex-1 rounded-lg py-2 text-sm capitalize touch-manipulation ${
                     sessionSlot === s ? "bg-primary/15 text-primary" : "bg-muted"
                   }`}
                 >
@@ -394,9 +508,32 @@ export function AdminNexusBotPanel() {
                 </button>
               ))}
             </div>
-            <Button disabled={busy || !registerCode.trim() || !sessionName.trim()} onClick={() => void registerSession()}>
-              Register trade code
+            {registerError ? (
+              <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {registerError}
+              </p>
+            ) : null}
+            {lastRegistered ? (
+              <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
+                <p className="font-semibold text-success">Saved to database</p>
+                <p className="font-mono">{lastRegistered.code}</p>
+                <p>
+                  {lastRegistered.session_name} · {lastRegistered.status} ·{" "}
+                  {formatSessionClock(lastRegistered.start_at)} – {formatSessionClock(lastRegistered.end_at)}
+                </p>
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              className="min-h-[52px] w-full touch-manipulation text-base font-semibold"
+              disabled={!canRegister}
+              onClick={() => void registerSession()}
+            >
+              {busy ? "Registering on server…" : "Register trade code"}
             </Button>
+            {sessionsLoading ? (
+              <p className="text-xs text-muted-foreground">Refreshing session list…</p>
+            ) : null}
           </Card>
 
           <Card className="space-y-3 p-4">

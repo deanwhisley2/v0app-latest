@@ -1,5 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { generateTradeCodeCandidate, normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
+import {
+  generateTradeCodeCandidate,
+  isValidTradeCodeFormat,
+  normalizeTradeCode,
+} from "@/lib/nexus-bot/trade-code"
+
+export type RegisteredTradeSession = {
+  sessionId: string
+  code: string
+  sessionName: string
+  sessionSlot: string
+  startAt: string
+  endAt: string
+  status: "draft" | "active"
+  displayLabel: string
+}
+
+function parseRequiredInstant(raw: string, field: string): Date {
+  const d = new Date(String(raw ?? "").trim())
+  if (!Number.isFinite(d.getTime())) {
+    throw new Error(`INVALID_${field.toUpperCase()}`)
+  }
+  return d
+}
 
 export async function generateTradeCodes(
   admin: SupabaseClient,
@@ -36,43 +59,71 @@ export async function registerTradeSession(
     status: "draft" | "active"
     displayLabel?: string
   },
-): Promise<{ sessionId: string; code: string }> {
+): Promise<RegisteredTradeSession> {
   const code = normalizeTradeCode(params.code)
-  const { data: gen } = await admin
+  if (!isValidTradeCodeFormat(code)) throw new Error("CODE_FORMAT_INVALID")
+
+  const sessionName = params.sessionName.trim()
+  if (!sessionName) throw new Error("SESSION_NAME_REQUIRED")
+
+  const sessionSlot = params.sessionSlot.trim() || "morning"
+  const start = parseRequiredInstant(params.startAt, "start_at")
+  const end = parseRequiredInstant(params.endAt, "end_at")
+  if (!(end.getTime() > start.getTime())) throw new Error("INVALID_TIME_WINDOW")
+
+  const { data: gen, error: genErr } = await admin
     .from("trade_code_generations")
     .select("id,trade_session_id")
     .eq("code", code)
     .maybeSingle()
+  if (genErr) throw new Error(genErr.message)
   if (!gen) throw new Error("CODE_NOT_GENERATED")
   if (gen.trade_session_id) throw new Error("CODE_ALREADY_REGISTERED")
 
-  const start = new Date(params.startAt)
-  const end = new Date(params.endAt)
-  if (!(end.getTime() > start.getTime())) throw new Error("INVALID_TIME_WINDOW")
+  const displayLabel = params.displayLabel?.trim() || sessionName
 
   const { data: session, error: sErr } = await admin
     .from("trade_sessions")
     .insert({
       code,
-      session_name: params.sessionName.trim(),
-      session_slot: params.sessionSlot.trim() || "morning",
+      session_name: sessionName,
+      session_slot: sessionSlot,
       start_at: start.toISOString(),
       end_at: end.toISOString(),
       status: params.status,
-      display_label: params.displayLabel?.trim() || params.sessionName.trim(),
+      display_label: displayLabel,
       registered_by: params.actorId,
     })
-    .select("id,code")
+    .select("id,code,session_name,session_slot,start_at,end_at,status,display_label")
     .single()
-  if (sErr) throw new Error(sErr.message)
+  if (sErr) {
+    if (sErr.code === "23505") throw new Error("CODE_ALREADY_REGISTERED")
+    throw new Error(sErr.message)
+  }
 
-  const { error: gErr } = await admin
+  const { data: linked, error: gErr } = await admin
     .from("trade_code_generations")
     .update({ trade_session_id: session.id })
     .eq("id", gen.id)
+    .is("trade_session_id", null)
+    .select("id")
+    .maybeSingle()
   if (gErr) throw new Error(gErr.message)
+  if (!linked) {
+    await admin.from("trade_sessions").delete().eq("id", session.id)
+    throw new Error("CODE_ALREADY_REGISTERED")
+  }
 
-  return { sessionId: String(session.id), code: String(session.code) }
+  return {
+    sessionId: String(session.id),
+    code: String(session.code),
+    sessionName: String(session.session_name),
+    sessionSlot: String(session.session_slot),
+    startAt: String(session.start_at),
+    endAt: String(session.end_at),
+    status: params.status,
+    displayLabel: String(session.display_label ?? sessionName),
+  }
 }
 
 export async function findActiveTradeSessionByCode(
@@ -108,6 +159,30 @@ export async function findActiveTradeSessionByCode(
     startAt: String(data.start_at),
     endAt: String(data.end_at),
     status: String(data.status),
+  }
+}
+
+export async function getTradeSessionByCode(
+  admin: SupabaseClient,
+  codeRaw: string,
+): Promise<RegisteredTradeSession | null> {
+  const code = normalizeTradeCode(codeRaw)
+  const { data, error } = await admin
+    .from("trade_sessions")
+    .select("id,code,session_name,session_slot,start_at,end_at,status,display_label")
+    .eq("code", code)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return {
+    sessionId: String(data.id),
+    code: String(data.code),
+    sessionName: String(data.session_name),
+    sessionSlot: String(data.session_slot),
+    startAt: String(data.start_at),
+    endAt: String(data.end_at),
+    status: data.status === "draft" ? "draft" : data.status === "active" ? "active" : "draft",
+    displayLabel: String(data.display_label ?? data.session_name),
   }
 }
 
@@ -165,5 +240,25 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
     participants: participantCount,
     totalCapitalAllocatedUsd: Math.round(totalStake * 100) / 100,
     totalReleasedProfitUsd: Math.round(totalProfit * 100) / 100,
+  }
+}
+
+export function humanizeTradeSessionError(code: string): string {
+  switch (code) {
+    case "CODE_NOT_GENERATED":
+      return "Generate this code in admin history first, then register it here."
+    case "CODE_ALREADY_REGISTERED":
+      return "This code is already registered and cannot be reused."
+    case "CODE_FORMAT_INVALID":
+      return "Code must match NXP-XXXX-XXXX (generate one above)."
+    case "SESSION_NAME_REQUIRED":
+      return "Enter a session name before registering."
+    case "INVALID_TIME_WINDOW":
+      return "End time must be after start time."
+    case "INVALID_START_AT":
+    case "INVALID_END_AT":
+      return "Set valid start and end times before registering."
+    default:
+      return code
   }
 }

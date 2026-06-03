@@ -6,6 +6,8 @@ import {
   expireDueTradeSessions,
   generateTradeCodes,
   getTradeSessionAdminStats,
+  getTradeSessionByCode,
+  humanizeTradeSessionError,
   registerTradeSession,
 } from "@/lib/server/trade-sessions"
 
@@ -123,13 +125,28 @@ export async function POST(request: Request) {
         status: body.status === "draft" ? "draft" : "active",
         displayLabel: body.displayLabel,
       })
-      return NextResponse.json({ ok: true, registered: true, ...out })
+      const persisted = await getTradeSessionByCode(admin, out.code)
+      if (!persisted) {
+        return NextResponse.json({ error: "Registration did not persist — retry." }, { status: 500 })
+      }
+      return NextResponse.json({
+        ok: true,
+        registered: true,
+        session: persisted,
+        sessionId: persisted.sessionId,
+        code: persisted.code,
+      })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Forbidden"
-    const status = msg.includes("CODE_") || msg.includes("INVALID") ? 400 : 403
-    return NextResponse.json({ error: msg }, { status })
+    const friendly = humanizeTradeSessionError(msg)
+    const isClient =
+      msg.includes("CODE_") ||
+      msg.includes("INVALID") ||
+      msg.includes("SESSION_NAME") ||
+      msg.includes("FORMAT")
+    return NextResponse.json({ error: friendly, code: msg }, { status: isClient ? 400 : 403 })
   }
 }
