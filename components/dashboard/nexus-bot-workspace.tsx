@@ -13,7 +13,6 @@ import { FixedTradeSimulation } from "@/components/dashboard/fixed-trade-simulat
 import { TradeSessionProfitCelebration } from "@/components/dashboard/trade-session-profit-celebration"
 import { NEXUS_AUTO_TRADE_PLANS, NEXUS_SIGNAL_STAKE_TIERS_USD } from "@/lib/nexus-bot/plans"
 import { buildOperationsWhatsAppHref } from "@/lib/nexus-operations-whatsapp"
-import { formatSessionClock } from "@/lib/nexus-bot/trade-code"
 import { VERIFY_STEPS_USER } from "@/lib/nexus-bot/user-session-messaging"
 import { cn } from "@/lib/utils"
 
@@ -25,8 +24,6 @@ type FlowStep = 1 | 2 | 3 | 4 | 5
 type VerifiedSession = {
   verificationId: string
   verifiedAt: string
-  startAt: string
-  endAt: string
 }
 
 type ActiveSession = {
@@ -37,8 +34,6 @@ type ActiveSession = {
   phaseKey?: string
   headline?: string
   detail?: string
-  start_at?: string
-  end_at?: string
   projected_profit_usd?: number
   earnings_withdrawable?: boolean
 }
@@ -255,8 +250,6 @@ export function NexusBotWorkspace({
       setVerifiedSession({
         verificationId: out.verificationId,
         verifiedAt: out.verifiedAt,
-        startAt: out.session.startAt,
-        endAt: out.session.endAt,
       })
       setFlowStep(3)
     } catch (e) {
@@ -417,11 +410,6 @@ export function NexusBotWorkspace({
                 {activeSession.detail ?? "Nexus Bot analysing market conditions"}
               </p>
             </div>
-            {activeSession.start_at && activeSession.end_at ? (
-              <p className="font-mono text-xs text-muted-foreground">
-                {formatSessionClock(activeSession.start_at)} – {formatSessionClock(activeSession.end_at)}
-              </p>
-            ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
             Allocation {formatUserMoney(Number(activeSession.stake_usd))}
@@ -546,9 +534,8 @@ export function NexusBotWorkspace({
                   <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-sm">
                     <p className="font-semibold text-success">Trade Session Ready</p>
                     <p className="text-muted-foreground">Code verified · Strategy verified</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      Window {formatSessionClock(verifiedSession.startAt)} –{" "}
-                      {formatSessionClock(verifiedSession.endAt)}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Select your capital allocation, then activate Nexus Bot to join the queue.
                     </p>
                   </div>
 

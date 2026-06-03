@@ -29,8 +29,6 @@ export async function POST(request: Request) {
       expiresAt: out.expiresAt,
       session: {
         id: out.session.id,
-        startAt: out.session.startAt,
-        endAt: out.session.endAt,
       },
       steps: [...VERIFY_STEPS_USER],
       headline: "Trade Session Ready",

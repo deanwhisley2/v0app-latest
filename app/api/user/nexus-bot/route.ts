@@ -43,8 +43,6 @@ function mapTradeSessionForUser(row: Record<string, unknown>) {
     phaseKey,
     headline: presentation.headline,
     detail: presentation.detail,
-    start_at: startAt,
-    end_at: endAt,
     participation_weight: weight,
     profit_released_usd: Number(row.profit_released_usd ?? 0),
     projected_profit_usd: projectedProfitUsd,
