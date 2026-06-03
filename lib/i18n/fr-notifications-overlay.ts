@@ -150,6 +150,10 @@ export const frNotificationsOverlay: Record<string, string> = {
   "container.error.belowFixMinimum":
     "Allocation fixe minimum : {{min}} (net après assurance).",
   "container.error.belowCopyMinimum": "Allocation copie minimum : {{min}}.",
+  "container.stake.availableUsd": "Solde disponible (USD)",
+  "container.stake.commitUsd": "Engagement trade (USD)",
+  "container.stake.amountInCurrency": "Montant engagé ({{currency}})",
+  "container.stake.ledgerUsdNote": "Le compte est en USD — les montants ci-dessous affichent l’équivalent USD.",
 
   "notifications.customer.fundingApprovedTitle": "Dépôt crédité",
   "notifications.customer.fundingApprovedBody": "Crédité.",

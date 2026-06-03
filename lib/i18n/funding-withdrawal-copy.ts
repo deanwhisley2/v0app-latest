@@ -323,6 +323,10 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.error.belowFixMinimum":
     "Minimum fixed allocation is {{min}} (net after insurance).",
   "container.error.belowCopyMinimum": "Minimum copy allocation is {{min}}.",
+  "container.stake.availableUsd": "Available balance (USD)",
+  "container.stake.commitUsd": "Trade commit (USD)",
+  "container.stake.amountInCurrency": "Stake amount ({{currency}})",
+  "container.stake.ledgerUsdNote": "Your account ledger is USD — amounts below show the USD equivalent.",
   "funding.container.extractToast": "{{amount}} moved to pocket (fee deducted).",
   "funding.container.transferToast": "{{amount}} transferred to main balance.",
   "funding.container.sessionToPocketToast":

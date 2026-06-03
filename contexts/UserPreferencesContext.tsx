@@ -21,7 +21,7 @@ import {
   localeForLanguage,
   markLanguageUserSet,
 } from "@/lib/user-preferences"
-import { formatMoneyAmount } from "@/lib/currency-display"
+import { formatMoneyAmount, isSupportedFiat } from "@/lib/currency-display"
 import { mergeCustomerPreferencesWithCorridor } from "@/lib/customer-display-currency"
 import { localeForCustomerCorridor } from "@/lib/customer-corridor-money"
 import { translateApp } from "@/lib/i18n/app-messages"
@@ -116,7 +116,10 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     if (partial.language) markLanguageUserSet()
     setPrefs((prev) => {
       const mergedPartial = { ...partial }
-      mergedPartial.currency = "USD"
+      if (partial.currency) {
+        const c = String(partial.currency).trim().toUpperCase()
+        mergedPartial.currency = isSupportedFiat(c) ? c : prev.currency
+      }
       const next = mergeCustomerPreferencesWithCorridor(
         parsePreferences({ ...prev, ...mergedPartial }),
         (partial.country ?? prev.country)?.trim().toUpperCase().slice(0, 2) || prev.country || null,

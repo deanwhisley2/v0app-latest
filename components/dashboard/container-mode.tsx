@@ -40,7 +40,7 @@ import { computePlatformLiveStats, PLATFORM_PROMO_MIN_MEMBERS } from "@/lib/plat
 import { Checkbox } from "@/components/ui/checkbox"
 import { DeskPairBadge } from "@/components/dashboard/desk-asset-mask"
 import { FixedTradeSimulation } from "@/components/dashboard/fixed-trade-simulation"
-import { corridorDisplayFiatForFunding } from "@/lib/customer-display-currency"
+import { accountBalanceCurrencyForStaking } from "@/lib/customer-display-currency"
 import { fixedTradeTierHint } from "@/lib/fix-trade-access"
 import { readJsonSafe, toastMutationError, toastMutationSuccess } from "@/lib/client/mutation-api-feedback"
 import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balance"
@@ -341,6 +341,8 @@ interface ContainerModeProps {
   } | null
   /** Parent can expand mobile desk / show badges when sessions recover from server. */
   onActiveSessionCountsChange?: (counts: { copy: number; fix: number }) => void
+  /** Nexus Main available balance (USD ledger) for stake preview. */
+  mainBalanceUsd?: number
 }
 
 function fallbackDeskTrader(traderId: string): MasterTrader {
@@ -371,9 +373,13 @@ export function ContainerMode({
   containerLiquidEarningsUsd = 0,
   withdrawalPolicyHint = null,
   onActiveSessionCountsChange,
+  mainBalanceUsd = 0,
 }: ContainerModeProps) {
-  const { formatUserMoney, country, locale, t } = useUserPreferences()
-  const fundingFiat = useMemo(() => corridorDisplayFiatForFunding(country), [country])
+  const { formatUserMoney, country, locale, t, currency } = useUserPreferences()
+  const stakeCurrency = useMemo(
+    () => accountBalanceCurrencyForStaking(country, currency),
+    [country, currency],
+  )
   const { addNotification } = useNexusNotifications()
   const [activeTab, setActiveTab] = useState<ContainerTab>(() => {
     if (typeof window === "undefined") return "dashboard"
@@ -390,9 +396,9 @@ export function ContainerMode({
   const [fixAmount, setFixAmount] = useState("1000")
 
   useEffect(() => {
-    setCopyAmount((v) => formatAmountInputLive(v, locale, fundingFiat))
-    setFixAmount((v) => formatAmountInputLive(v, locale, fundingFiat))
-  }, [locale, fundingFiat])
+    setCopyAmount((v) => formatAmountInputLive(v, locale, stakeCurrency))
+    setFixAmount((v) => formatAmountInputLive(v, locale, stakeCurrency))
+  }, [locale, stakeCurrency])
   const [fixPeriod, setFixPeriod] = useState<FixPeriod>(1)
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -621,7 +627,7 @@ export function ContainerMode({
 
   const fixProjectionPreview = useMemo(() => {
     if (activeTab !== "fix" || !selectedTrader) return null
-    const grossUsd = usdFromCustomerLocalInput(fixAmount, fundingFiat)
+    const grossUsd = usdFromCustomerLocalInput(fixAmount, stakeCurrency)
     if (grossUsd <= 0) return null
     const fees = fixInsuranceAndWithdrawFees(userLevel, selectedTrader.riskLevel)
     const { principalUsd, insuranceFeeUsd } = splitFixedTradeOpenCommitUsd(grossUsd, fees.insuranceFeeRate)
@@ -634,7 +640,17 @@ export function ContainerMode({
       insuranceFeeUsd,
       insuranceFeeRate: fees.insuranceFeeRate,
     }
-  }, [activeTab, selectedTrader, fixAmount, fixPeriod, fundingFiat, userLevel])
+  }, [activeTab, selectedTrader, fixAmount, fixPeriod, stakeCurrency, userLevel])
+
+  const copyCommitUsd = useMemo(
+    () => roundUsd2(usdFromCustomerLocalInput(copyAmount, stakeCurrency)),
+    [copyAmount, stakeCurrency],
+  )
+  const fixCommitUsd = useMemo(
+    () => roundUsd2(usdFromCustomerLocalInput(fixAmount, stakeCurrency)),
+    [fixAmount, stakeCurrency],
+  )
+  const deskCommitUsd = activeTab === "copy" ? copyCommitUsd : fixCommitUsd
 
   // Server-authoritative recovery: active copy/fixed sessions after login, refresh, device change, or runtime restart.
   useEffect(() => {
@@ -1087,7 +1103,7 @@ export function ContainerMode({
   const handleActivateCopy = (trader: MasterTrader) => {
     void (async () => {
       const raw = parseCustomerLocalAmountInput(copyAmount)
-      const amount = roundUsd2(localFiatUnitsToUsd(raw, fundingFiat))
+      const amount = roundUsd2(localFiatUnitsToUsd(raw, stakeCurrency))
       if (isNaN(raw) || raw <= 0 || !(amount > 0)) {
         toast.error(t("container.error.invalidLocalAmount"), { duration: 6000 })
         return
@@ -1121,7 +1137,7 @@ export function ContainerMode({
             stakeUsd: amount,
             amountInputLocal: raw,
             amountInputRaw: copyAmount,
-            inputCurrency: fundingFiat,
+            inputCurrency: stakeCurrency,
             traderPersonaId: trader.id,
           }),
         })
@@ -1293,7 +1309,7 @@ export function ContainerMode({
   const handleActivateFix = (trader: MasterTrader) => {
     void (async () => {
       const raw = parseCustomerLocalAmountInput(fixAmount)
-      const grossCommitUsd = roundUsd2(localFiatUnitsToUsd(raw, fundingFiat))
+      const grossCommitUsd = roundUsd2(localFiatUnitsToUsd(raw, stakeCurrency))
       if (isNaN(raw) || raw <= 0 || !(grossCommitUsd > 0)) {
         toast.error(t("container.error.invalidLocalAmount"), { duration: 6500 })
         return
@@ -2474,18 +2490,33 @@ export function ContainerMode({
 
             {/* Trade Settings */}
             <div className="space-y-4 border-t border-border pt-4">
+              <div className="rounded-lg border border-border/60 bg-muted/25 p-3 text-sm space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">{t("container.stake.availableUsd")}</span>
+                  <span className="font-mono font-semibold tabular-nums">{formatUserMoney(mainBalanceUsd)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">{t("container.stake.commitUsd")}</span>
+                  <span className="font-mono font-semibold tabular-nums text-primary">
+                    {deskCommitUsd > 0 ? formatUserMoney(deskCommitUsd) : "—"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{t("container.stake.ledgerUsdNote")}</p>
+              </div>
               {activeTab === "copy" ? (
                 <>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Allocation amount</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      {t("container.stake.amountInCurrency").replace("{{currency}}", stakeCurrency)}
+                    </label>
                     <SmartAmountInput
                       value={copyAmount}
                       onValueChange={setCopyAmount}
                       locale={locale}
-                      currency={fundingFiat}
+                      currency={stakeCurrency}
                       placeholder={formatLocalFiatAmount(
-                        convertFromUsd(copyMinUsdPolicy, fundingFiat),
-                        fundingFiat,
+                        convertFromUsd(copyMinUsdPolicy, stakeCurrency),
+                        stakeCurrency,
                         locale,
                       )}
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"
@@ -2502,10 +2533,10 @@ export function ContainerMode({
                       <li>
                         Force pull-out: {(COPY_TRADE_FORCE_CANCEL_FEE_RATE * 100).toFixed(1)}% cancel +{" "}
                         {(COPY_TRADE_WITHDRAW_FEE_RATE * 100).toFixed(1)}% withdrawal + market impact
-                        {usdFromCustomerLocalInput(copyAmount, fundingFiat) >= copyMinUsdPolicy
+                        {copyCommitUsd >= copyMinUsdPolicy
                           ? ` (illustrative net ≈ ${formatUserMoney(
                               estimateCopyForcePulloutUsd({
-                                stakeUsd: usdFromCustomerLocalInput(copyAmount, fundingFiat),
+                                stakeUsd: copyCommitUsd,
                                 floatingPnLUsd: 0,
                                 coinImpactFraction: 0.08,
                               }).netToMainUsd
@@ -2534,16 +2565,16 @@ export function ContainerMode({
                 <>
                   <div>
                     <label className="text-sm font-medium mb-2 block">
-                      Lock amount ({fundingFiat}) — local entry, USD ledger
+                      {t("container.stake.amountInCurrency").replace("{{currency}}", stakeCurrency)}
                     </label>
                     <SmartAmountInput
                       value={fixAmount}
                       onValueChange={setFixAmount}
                       locale={locale}
-                      currency={fundingFiat}
+                      currency={stakeCurrency}
                       placeholder={formatLocalFiatAmount(
-                        convertFromUsd(fixMinUsdPolicy, fundingFiat),
-                        fundingFiat,
+                        convertFromUsd(fixMinUsdPolicy, stakeCurrency),
+                        stakeCurrency,
                         locale,
                       )}
                       className="w-full rounded-lg border border-border bg-background px-4 py-2 font-mono"

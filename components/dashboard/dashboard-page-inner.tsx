@@ -4133,6 +4133,7 @@ export function DashboardPageInner() {
                 retailerCreditSeller={Boolean(op.snapshot?.profile?.retailerCreditSeller)}
                 retailerLiquidityOpsBlocked={retailerOpsBlocked}
                 containerLiquidEarningsUsd={containerWithdrawableEarnings}
+                mainBalanceUsd={mainBalance}
                 onActiveSessionCountsChange={handleContainerSessionCounts}
               />
             </ContainerDeskSection>

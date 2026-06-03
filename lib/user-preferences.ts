@@ -1,4 +1,4 @@
-import type { FiatCurrencyCode } from "@/lib/currency-display"
+import { isSupportedFiat, type FiatCurrencyCode } from "@/lib/currency-display"
 
 export const PREFERENCE_STORAGE_KEY = "nexus_user_preferences"
 /** Set when the user explicitly picks a language in Settings (do not auto-overwrite). */
@@ -62,9 +62,12 @@ export function parsePreferences(raw: unknown): UserPreferences {
       : DEFAULT_PREFERENCES.language
   const countryRaw = typeof o.country === "string" ? o.country.trim().toUpperCase() : ""
   const country = countryRaw.length === 2 && /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : undefined
+  const currencyRaw = typeof o.currency === "string" ? o.currency.trim().toUpperCase() : ""
+  const currency =
+    currencyRaw && isSupportedFiat(currencyRaw) ? (currencyRaw as FiatCurrencyCode) : DEFAULT_PREFERENCES.currency
   return {
     language,
-    currency: "USD",
+    currency,
     ...(country ? { country } : {}),
   }
 }
@@ -116,7 +119,9 @@ export function preferencesFromUserMetadata(meta: Record<string, unknown> | unde
     typeof countryRaw === "string" ? countryRaw.trim().toUpperCase().slice(0, 2) : ""
   return {
     ...(typeof language === "string" ? { language: normalizeAppLanguage(language) } : {}),
-    ...(typeof currency === "string" ? { currency: "USD" } : {}),
+    ...(typeof currency === "string" && isSupportedFiat(currency.trim().toUpperCase())
+      ? { currency: currency.trim().toUpperCase() as FiatCurrencyCode }
+      : {}),
     ...(country.length === 2 && /^[A-Z]{2}$/.test(country) ? { country } : {}),
   }
 }

@@ -1,5 +1,5 @@
 import { corridorCurrencyForCountry, operatingCountryByCode } from "@/lib/operating-countries"
-import type { FiatCurrencyCode } from "@/lib/currency-display"
+import { isSupportedFiat, type FiatCurrencyCode } from "@/lib/currency-display"
 import type { UserPreferences } from "@/lib/user-preferences"
 import { LANGUAGE_OPTIONS, normalizeAppLanguage, readLanguageUserSet } from "@/lib/user-preferences"
 
@@ -13,12 +13,25 @@ export function corridorDisplayFiatForFunding(
   return corridor ?? "USD"
 }
 
-/** Wallet/trade surfaces use USD only. */
-export function displayCurrencyForCustomer(
-  _fundingCountryCode: string | null | undefined,
-  _preferredCurrency?: string | null,
+/**
+ * Currency for staking copy/fixed trades — user preferred balance currency when supported,
+ * otherwise operating-country corridor fiat, else USD. Ledger remains USD.
+ */
+export function accountBalanceCurrencyForStaking(
+  fundingCountryCode: string | null | undefined,
+  preferredCurrency?: string | null,
 ): FiatCurrencyCode {
-  return "USD"
+  const pref = (preferredCurrency ?? "").trim().toUpperCase()
+  if (pref && isSupportedFiat(pref)) return pref as FiatCurrencyCode
+  return corridorDisplayFiatForFunding(fundingCountryCode)
+}
+
+/** Wallet headline display uses USD; stake entry uses {@link accountBalanceCurrencyForStaking}. */
+export function displayCurrencyForCustomer(
+  fundingCountryCode: string | null | undefined,
+  preferredCurrency?: string | null,
+): FiatCurrencyCode {
+  return accountBalanceCurrencyForStaking(fundingCountryCode, preferredCurrency)
 }
 
 export function corridorOverridesPreferredCurrency(
@@ -51,16 +64,18 @@ export function mergeCustomerPreferencesWithCorridor(
   return {
     ...prefs,
     ...(countryOk ? { country: countryOk } : {}),
-    currency: "USD",
+    currency: accountBalanceCurrencyForStaking(countryOk ?? null, prefs.currency),
     language,
   }
 }
 
-/** Platform display currency is always USD. */
+/** Account balance / stake currency options (corridor + USD). */
 export function customerCurrencyOptionsForCountry(
-  _fundingCountryCode: string | null | undefined,
+  fundingCountryCode: string | null | undefined,
 ): FiatCurrencyCode[] | null {
-  return ["USD"]
+  const corridor = corridorCurrencyForCountry(fundingCountryCode)
+  if (!corridor) return ["USD"]
+  return corridor === "USD" ? ["USD"] : [corridor, "USD"]
 }
 
 export function customerLanguageChoicesForCountry(
