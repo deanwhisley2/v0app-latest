@@ -34,7 +34,7 @@ type UserPreferencesContextValue = {
   country: string | null
   locale: string
   setPreferences: (p: Partial<UserPreferences>) => void
-  /** Ledger/API balances are **USD-normalized**; this converts to the user’s display fiat only. Never pass raw local input here. */
+  /** Ledger/API balances in USD — platform master display currency. */
   formatUserMoney: (amountUsd: number) => string
   /** Translate UI keys from `lib/i18n/app-messages.ts` (e.g. `nav.trade`). */
   t: (key: string) => string
@@ -116,16 +116,10 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     if (partial.language) markLanguageUserSet()
     setPrefs((prev) => {
       const mergedPartial = { ...partial }
-      const corridorCountry = (partial.country ?? prev.country)?.trim().toUpperCase().slice(0, 2)
-      if (corridorCountry === "KE") {
-        mergedPartial.language = "en"
-        if (partial.currency) {
-          mergedPartial.currency = "KES"
-        }
-      }
+      mergedPartial.currency = "USD"
       const next = mergeCustomerPreferencesWithCorridor(
         parsePreferences({ ...prev, ...mergedPartial }),
-        corridorCountry || prev.country || null,
+        (partial.country ?? prev.country)?.trim().toUpperCase().slice(0, 2) || prev.country || null,
       )
       writePreferencesToStorage(next)
       if (partial.language && user?.id) {
@@ -145,31 +139,13 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof document === "undefined") return
-    const htmlLang =
-      prefs.language === "sw"
-        ? "sw"
-        : prefs.language === "fr"
-          ? "fr"
-          : prefs.language === "ar"
-            ? "ar"
-            : prefs.language === "pt"
-              ? "pt"
-              : prefs.language === "ha"
-                ? "ha"
-                : prefs.language === "am"
-                  ? "am"
-                  : prefs.language === "zu"
-                    ? "zu"
-                    : prefs.language === "wo"
-                      ? "wo"
-                      : "en"
-    document.documentElement.lang = htmlLang
-    document.documentElement.dir = prefs.language === "ar" ? "rtl" : "ltr"
+    document.documentElement.lang = prefs.language === "fr" ? "fr" : "en"
+    document.documentElement.dir = "ltr"
   }, [prefs.language])
 
   const formatUserMoney = useCallback(
-    (amountUsd: number) => formatMoneyAmount(amountUsd, prefs.currency, locale),
-    [prefs.currency, locale]
+    (amountUsd: number) => formatMoneyAmount(amountUsd, "USD", locale),
+    [locale]
   )
 
   const t = useCallback(

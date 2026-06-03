@@ -29,7 +29,7 @@ import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
-import { CURRENCY_OPTIONS, LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
+import { LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
 import {
   isSupportedOperatingCountry,
   operatingCountriesByRegion,
@@ -51,7 +51,7 @@ const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
 
 export default function RegisterForm() {
   const router = useRouter()
-  const { language: ctxLang, currency: ctxCur, setPreferences, formatUserMoney } = useUserPreferences()
+  const { language: ctxLang, setPreferences, formatUserMoney } = useUserPreferences()
   const testimonialNotif = useAuthTestimonialNotifs({
     enabled: true,
     pageKey: "register",
@@ -69,7 +69,7 @@ export default function RegisterForm() {
   const [depositNumber, setDepositNumber] = useState("")
   const [withdrawalNumber, setWithdrawalNumber] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
-  const [currency, setCurrency] = useState<FiatCurrencyCode>(ctxCur as FiatCurrencyCode)
+  const currency: FiatCurrencyCode = "USD"
   const [referralCode, setReferralCode] = useState("")
   const [operatingCountry, setOperatingCountry] = useState("UG")
   const [error, setError] = useState<string | null>(null)
@@ -91,10 +91,6 @@ export default function RegisterForm() {
   useEffect(() => {
     setLanguage(ctxLang)
   }, [ctxLang])
-
-  useEffect(() => {
-    setCurrency((ctxCur as FiatCurrencyCode) || "USD")
-  }, [ctxCur])
 
   useEffect(() => {
     try {
@@ -350,45 +346,28 @@ export default function RegisterForm() {
 
           {step === 2 ? (
             <div className="space-y-4 animate-in fade-in duration-200" key="step2">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>{reg.language}</Label>
-                  <Select
-                    value={language}
-                    onValueChange={(v) => setLanguage(v as AppLanguage)}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger className={cn("w-full", inputClass)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGE_OPTIONS.map((o) => (
-                        <SelectItem key={o.code} value={o.code}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>{reg.currency}</Label>
-                  <Select
-                    value={currency}
-                    onValueChange={(v) => setCurrency(v as FiatCurrencyCode)}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger className={cn("w-full", inputClass)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCY_OPTIONS.map((o) => (
-                        <SelectItem key={o.code} value={o.code}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label>{reg.language}</Label>
+                <Select
+                  value={language}
+                  onValueChange={(v) => setLanguage(v as AppLanguage)}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger className={cn("w-full", inputClass)}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_OPTIONS.map((o) => (
+                      <SelectItem key={o.code} value={o.code}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Account balances and trading use USD. Local amounts appear only when you add funds or withdraw via
+                  mobile money.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>{reg.operatingCountry ?? "Operating country"}</Label>
@@ -401,7 +380,6 @@ export default function RegisterForm() {
                     if (code) {
                       const hint = suggestPreferencesForCountry(code)
                       if (hint.language) setLanguage(hint.language)
-                      if (hint.currency) setCurrency(hint.currency as FiatCurrencyCode)
                     }
                   }}
                   disabled={isSubmitting}

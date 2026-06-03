@@ -14,8 +14,8 @@ export { OPERATING_COUNTRY_OPTIONS, operatingCountriesByRegion } from "@/lib/ope
  */
 export function suggestPreferencesForCountry(iso2: string): Partial<UserPreferences> {
   const row = operatingCountryByCode(iso2)
-  if (!row) return {}
-  return { language: row.language, currency: row.currency }
+  if (!row) return { currency: "USD" }
+  return { language: row.language === "fr" ? "fr" : "en", currency: "USD" }
 }
 
 /** @deprecated Use OPERATING_COUNTRIES from lib/operating-countries — kept for imports. */

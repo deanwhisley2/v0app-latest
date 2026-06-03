@@ -172,7 +172,7 @@ export function SettingsScreen({
   }, [])
 
   const languageLabel = LANGUAGE_OPTIONS.find((o) => o.code === appLanguage)?.label ?? appLanguage
-  const currencyLabel = CURRENCY_OPTIONS.find((o) => o.code === appCurrency)?.label ?? appCurrency
+  const currencyLabel = "USD — US Dollar"
   const countryLabel = appCountry
     ? OPERATING_COUNTRY_OPTIONS.find((o) => o.code === appCountry)?.label ?? appCountry
     : "—"
@@ -456,40 +456,21 @@ export function SettingsScreen({
     )
   }
 
-  // Currency Selection
+  // Display currency (USD only — local fiat appears on Add Funds / Withdraw only)
   if (currentView === "currency") {
-    const corridorLocked = customerCurrencyOptionsForCountry(appCountry ?? null)
-    const currencyChoices =
-      corridorLocked != null
-        ? CURRENCY_OPTIONS.filter((opt) => corridorLocked.includes(opt.code as FiatCurrencyCode))
-        : CURRENCY_OPTIONS
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
-          <h3 className="mb-6 text-lg font-semibold">{t("settings.currencyTitle")}</h3>
-          {corridorLocked != null ? (
-            <p className="mb-4 text-sm text-muted-foreground">
-              {t("settings.currencyCorridorLocked").replace("{{currency}}", corridorLocked[0] ?? appCurrency)}
-            </p>
-          ) : null}
-          <div className="grid gap-2 sm:grid-cols-2">
-            {currencyChoices.map((opt) => (
-              <button
-                key={opt.code}
-                type="button"
-                onClick={() => {
-                  setPreferences({ currency: opt.code as FiatCurrencyCode })
-                  navigateBack()
-                }}
-                className={`flex items-center justify-between rounded-lg px-4 py-3 transition-colors ${
-                  appCurrency === opt.code ? "bg-primary/10 text-primary" : "bg-muted/30 hover:bg-muted/50"
-                }`}
-              >
-                <span className="font-medium">{opt.label}</span>
-                {appCurrency === opt.code && <Check className="h-5 w-5" />}
-              </button>
-            ))}
+          <h3 className="mb-4 text-lg font-semibold">{t("settings.currencyTitle")}</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            All balances, trading, earnings, referrals, and history are shown in{" "}
+            <strong className="text-foreground">USD</strong>. When you add funds or withdraw through
+            mobile money, you enter your local amount and we show the USD equivalent for your ledger.
+          </p>
+          <div className="mt-4 flex items-center justify-between rounded-lg bg-primary/10 px-4 py-3 text-primary">
+            <span className="font-medium">USD — US Dollar</span>
+            <Check className="h-5 w-5" />
           </div>
         </Card>
       </div>
@@ -499,19 +480,12 @@ export function SettingsScreen({
   // Language Selection
   if (currentView === "language") {
     const languageChoices = customerLanguageChoicesForCountry(appCountry ?? null)
-    const languageCorridorLocked = languageChoices.length === 1
     return (
       <div className="space-y-4">
         {renderBackButton()}
         <Card className="border-border bg-card p-6">
           <h3 className="mb-6 text-lg font-semibold">{t("settings.languageTitle")}</h3>
-          {languageCorridorLocked ? (
-            <p className="mb-4 text-sm text-muted-foreground">
-              Your operating country uses English only for account and funding screens.
-            </p>
-          ) : (
-            <p className="mb-4 text-sm text-muted-foreground">{t("settings.languageHint")}</p>
-          )}
+          <p className="mb-4 text-sm text-muted-foreground">{t("settings.languageHint")}</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {languageChoices.map((opt) => (
               <button

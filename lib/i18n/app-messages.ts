@@ -418,16 +418,8 @@ const wo: Partial<Record<string, string>> = {
   "settings.languageTitle": "Làkk",
 }
 
-const overlays: Record<AppLanguage, Partial<Record<string, string>> | undefined> = {
-  en: undefined,
+const overlays: Partial<Record<AppLanguage, Partial<Record<string, string>>>> = {
   fr,
-  sw,
-  ar,
-  pt,
-  ha,
-  am,
-  zu,
-  wo,
 }
 
 export function translateApp(lang: AppLanguage, key: string): string {

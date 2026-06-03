@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { operatingCountryByCode } from "@/lib/operating-countries"
 import { translateApp } from "@/lib/i18n/app-messages"
-import type { AppLanguage } from "@/lib/user-preferences"
+import { normalizeAppLanguage, type AppLanguage } from "@/lib/user-preferences"
 
 /** Resolve UI language for server-written customer notifications (profile corridor). */
 export async function resolveCustomerAppLanguage(
@@ -12,10 +12,7 @@ export async function resolveCustomerAppLanguage(
   const meta = authUser?.user?.user_metadata as Record<string, unknown> | undefined
   const pref = meta?.preferred_language ?? meta?.preferredLanguage
   if (typeof pref === "string" && pref.length >= 2) {
-    const code = pref.trim().toLowerCase() as AppLanguage
-    if (["en", "fr", "sw", "ar", "pt", "ha", "am", "zu", "wo"].includes(code)) {
-      return code
-    }
+    return normalizeAppLanguage(pref)
   }
 
   const { data: profile } = await admin
@@ -25,8 +22,8 @@ export async function resolveCustomerAppLanguage(
     .maybeSingle()
   const country = (profile as { funding_country_code?: string | null } | null)?.funding_country_code
   const cc = country?.trim().toUpperCase().slice(0, 2) ?? ""
-  if (cc === "KE") return "en"
-  return operatingCountryByCode(country)?.language ?? "en"
+  const row = operatingCountryByCode(country)
+  return row?.language === "fr" ? "fr" : "en"
 }
 
 export function customerNotifyT(lang: AppLanguage): (key: string) => string {

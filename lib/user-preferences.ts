@@ -4,19 +4,12 @@ export const PREFERENCE_STORAGE_KEY = "nexus_user_preferences"
 /** Set when the user explicitly picks a language in Settings (do not auto-overwrite). */
 export const LANGUAGE_USER_SET_KEY = "nexus_language_user_set"
 
-export type AppLanguage =
-  | "en"
-  | "sw"
-  | "fr"
-  | "ar"
-  | "pt"
-  | "ha"
-  | "am"
-  | "zu"
-  | "wo"
+/** Customer-selectable UI languages (Settings → Language). */
+export type AppLanguage = "en" | "fr"
 
 export interface UserPreferences {
   language: AppLanguage
+  /** Display preference — platform balances always show USD; local fiat only on funding/withdraw flows. */
   currency: FiatCurrencyCode | string
   /** ISO 3166-1 alpha-2 operating country (funding corridors, regional UX). Optional. */
   country?: string
@@ -24,15 +17,14 @@ export interface UserPreferences {
 
 export const LANGUAGE_OPTIONS: { code: AppLanguage; label: string }[] = [
   { code: "en", label: "English" },
-  { code: "sw", label: "Kiswahili" },
   { code: "fr", label: "Français" },
-  { code: "ar", label: "العربية" },
-  { code: "pt", label: "Português" },
-  { code: "ha", label: "Hausa" },
-  { code: "am", label: "አማርኛ" },
-  { code: "zu", label: "isiZulu" },
-  { code: "wo", label: "Wolof" },
 ]
+
+/** Map legacy stored/auth metadata languages to the supported pair. */
+export function normalizeAppLanguage(raw: string | null | undefined): AppLanguage {
+  const code = (raw ?? "").trim().toLowerCase()
+  return code === "fr" ? "fr" : "en"
+}
 
 export const CURRENCY_OPTIONS: { code: FiatCurrencyCode; label: string }[] = [
   { code: "USD", label: "USD — US Dollar" },
@@ -64,15 +56,15 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 export function parsePreferences(raw: unknown): UserPreferences {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_PREFERENCES }
   const o = raw as Record<string, unknown>
-  const language = typeof o.language === "string" ? (o.language as AppLanguage) : DEFAULT_PREFERENCES.language
-  const currency = typeof o.currency === "string" ? o.currency : DEFAULT_PREFERENCES.currency
+  const language =
+    typeof o.language === "string"
+      ? normalizeAppLanguage(o.language)
+      : DEFAULT_PREFERENCES.language
   const countryRaw = typeof o.country === "string" ? o.country.trim().toUpperCase() : ""
   const country = countryRaw.length === 2 && /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : undefined
-  const langOk = LANGUAGE_OPTIONS.some((l) => l.code === language)
-  const curOk = CURRENCY_OPTIONS.some((c) => c.code === currency)
   return {
-    language: langOk ? language : DEFAULT_PREFERENCES.language,
-    currency: curOk ? (currency as FiatCurrencyCode) : DEFAULT_PREFERENCES.currency,
+    language,
+    currency: "USD",
     ...(country ? { country } : {}),
   }
 }
@@ -123,23 +115,12 @@ export function preferencesFromUserMetadata(meta: Record<string, unknown> | unde
   const country =
     typeof countryRaw === "string" ? countryRaw.trim().toUpperCase().slice(0, 2) : ""
   return {
-    ...(typeof language === "string" ? { language: language as AppLanguage } : {}),
-    ...(typeof currency === "string" ? { currency } : {}),
+    ...(typeof language === "string" ? { language: normalizeAppLanguage(language) } : {}),
+    ...(typeof currency === "string" ? { currency: "USD" } : {}),
     ...(country.length === 2 && /^[A-Z]{2}$/.test(country) ? { country } : {}),
   }
 }
 
 export function localeForLanguage(lang: AppLanguage): string {
-  const map: Record<AppLanguage, string> = {
-    en: "en-US",
-    sw: "sw-TZ",
-    fr: "fr-SN",
-    ar: "ar-EG",
-    pt: "pt-MZ",
-    ha: "ha-NG",
-    am: "am-ET",
-    zu: "zu-ZA",
-    wo: "wo-SN",
-  }
-  return map[lang] ?? "en-US"
+  return lang === "fr" ? "fr-SN" : "en-US"
 }

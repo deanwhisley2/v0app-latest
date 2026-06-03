@@ -240,6 +240,6 @@ export function getAuthMessages(lang: AppLanguage): AuthMessages {
   return mergeAuth(en, overlays[lang])
 }
 
-export function isRtlAuthLanguage(lang: AppLanguage): boolean {
-  return lang === "ar"
+export function isRtlAuthLanguage(_lang: AppLanguage): boolean {
+  return false
 }

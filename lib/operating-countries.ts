@@ -12,7 +12,7 @@ export type OperatingCountryDef = {
 
 /** Canonical operating countries — funding corridors, signup, and IP enforcement. */
 export const OPERATING_COUNTRIES: readonly OperatingCountryDef[] = [
-  { code: "MZ", label: "Mozambique", region: "Southern Africa", currency: "MZN", language: "pt" },
+  { code: "MZ", label: "Mozambique", region: "Southern Africa", currency: "MZN", language: "en" },
   { code: "ZM", label: "Zambia", region: "Southern Africa", currency: "ZMW", language: "en" },
   { code: "ZW", label: "Zimbabwe", region: "Southern Africa", currency: "USD", language: "en" },
   { code: "BW", label: "Botswana", region: "Southern Africa", currency: "BWP", language: "en" },
@@ -27,18 +27,18 @@ export const OPERATING_COUNTRIES: readonly OperatingCountryDef[] = [
     language: "fr",
   },
   { code: "UG", label: "Uganda", region: "East Africa", currency: "UGX", language: "en" },
-  { code: "TZ", label: "Tanzania", region: "East Africa", currency: "TZS", language: "sw" },
+  { code: "TZ", label: "Tanzania", region: "East Africa", currency: "TZS", language: "en" },
   { code: "RW", label: "Rwanda", region: "East Africa", currency: "RWF", language: "en" },
-  { code: "SD", label: "Sudan", region: "North/East Africa", currency: "USD", language: "ar" },
+  { code: "SD", label: "Sudan", region: "North/East Africa", currency: "USD", language: "en" },
   { code: "NG", label: "Nigeria", region: "West Africa", currency: "NGN", language: "en" },
   { code: "GH", label: "Ghana", region: "West Africa", currency: "GHS", language: "en" },
   { code: "ZA", label: "South Africa", region: "Southern Africa", currency: "ZAR", language: "en" },
-  { code: "ET", label: "Ethiopia", region: "East Africa", currency: "ETB", language: "am" },
+  { code: "ET", label: "Ethiopia", region: "East Africa", currency: "ETB", language: "en" },
   { code: "SN", label: "Senegal", region: "West Africa", currency: "XOF", language: "fr" },
   { code: "CI", label: "Côte d’Ivoire", region: "West Africa", currency: "XOF", language: "fr" },
   { code: "BF", label: "Burkina Faso", region: "West Africa", currency: "XOF", language: "fr" },
   { code: "CM", label: "Cameroon", region: "Central Africa", currency: "XAF", language: "fr" },
-  { code: "EG", label: "Egypt", region: "North Africa", currency: "EGP", language: "ar" },
+  { code: "EG", label: "Egypt", region: "North Africa", currency: "EGP", language: "en" },
   { code: "MA", label: "Morocco", region: "North Africa", currency: "MAD", language: "fr" },
 ] as const
 

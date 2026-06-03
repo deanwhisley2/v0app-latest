@@ -1042,13 +1042,15 @@ export function DashboardPageInner() {
   const smartAmountLocale = locale || "en-US"
 
   const smartAmountCurrencyForFund = useMemo(() => {
-    if (showFundModal === "withdraw") return currency
+    if (showFundModal === "withdraw") {
+      return localMmCorridorFiat ?? "USD"
+    }
     if (showFundModal === "add" && l1FundSource === "crypto") return "USD"
     if (showFundModal === "add" && (l1FundSource === "local" || l1FundSource === "airtel" || l1FundSource === "mpesa_ke")) {
       return fundingAmountLabelCurrency
     }
-    return currency
-  }, [showFundModal, l1FundSource, currency, fundingAmountLabelCurrency])
+    return "USD"
+  }, [showFundModal, l1FundSource, fundingAmountLabelCurrency, localMmCorridorFiat])
 
   const handleFundAmountChange = useCallback(
     (raw: string) => {
@@ -1065,16 +1067,16 @@ export function DashboardPageInner() {
   const customerMinDepositDisplay = useMemo(() => {
     const cur =
       showFundModal === "withdraw"
-        ? currency
+        ? localMmCorridorFiat ?? "USD"
         : l1FundSource === "local" && localMmCorridorFiat
           ? localMmCorridorFiat
           : l1FundSource === "airtel" || l1FundSource === "mpesa_ke"
             ? fundingAmountLabelCurrency
             : l1FundSource === "crypto"
               ? "USD"
-              : currency
+              : "USD"
     return formatMinDepositForCustomer(cur, locale || "en-US")
-  }, [showFundModal, currency, l1FundSource, localMmCorridorFiat, fundingAmountLabelCurrency, locale])
+  }, [showFundModal, l1FundSource, localMmCorridorFiat, fundingAmountLabelCurrency, locale])
 
   const validateFundTxReferenceOnBlur = useCallback(async () => {
     const ref = fundTxReference.trim()

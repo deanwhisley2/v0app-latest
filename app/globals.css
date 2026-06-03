@@ -511,6 +511,11 @@ html:not(.nexus-pwa-ready) body {
     transform: none !important;
   }
 
+  html.nexus-mobile-low-gpu .nexus-fix-sim .animate-ping {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+
   html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="backdrop-blur"],
   html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="backdrop-filter"],
   html.nexus-mobile-low-gpu .nexus-mobile-stable [class*="blur-"],
