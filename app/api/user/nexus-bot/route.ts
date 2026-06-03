@@ -1,16 +1,47 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { NEXUS_AUTO_TRADE_PLANS } from "@/lib/nexus-bot/plans"
 import {
+  acknowledgeProfitCelebration,
   completeDueNexusBotSessions,
+  findPendingProfitCelebration,
   getAutoTradeGrantsMap,
   recordAttendanceVisit,
+  resolveUserDisplayPhase,
   syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
+import { userSessionPresentation } from "@/lib/nexus-bot/user-session-messaging"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
+import { NEXUS_AUTO_TRADE_PLANS } from "@/lib/nexus-bot/plans"
+
+function mapTradeSessionForUser(row: Record<string, unknown>) {
+  const ts = row.trade_sessions as { start_at?: string; end_at?: string } | null
+  const startAt = ts?.start_at ? String(ts.start_at) : ""
+  const endAt = ts?.end_at ? String(ts.end_at) : String(row.ends_at ?? "")
+  const status = String(row.status ?? "")
+  const phaseKey = resolveUserDisplayPhase({
+    status,
+    startAt,
+    endAt,
+    displayPhase: row.display_phase ? String(row.display_phase) : null,
+  })
+  const presentation = userSessionPresentation(phaseKey)
+  return {
+    id: String(row.id),
+    session_kind: String(row.session_kind ?? "signal"),
+    stake_usd: Number(row.stake_usd ?? 0),
+    status,
+    phaseKey,
+    headline: presentation.headline,
+    detail: presentation.detail,
+    start_at: startAt,
+    end_at: endAt,
+    participation_weight: Number(row.participation_weight ?? 1),
+    profit_released_usd: Number(row.profit_released_usd ?? 0),
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -25,6 +56,7 @@ export async function GET(request: Request) {
     const streak = await recordAttendanceVisit(admin, user.id)
     const grants = await getAutoTradeGrantsMap(admin, user.id)
     const availableUsd = await readNexusMainAvailableUsd(admin, user.id)
+    const pendingProfitCelebration = await findPendingProfitCelebration(admin, user.id)
 
     const now = new Date().toISOString()
     const { data: signals } = await admin
@@ -38,10 +70,10 @@ export async function GET(request: Request) {
     const { data: activeSessions } = await admin
       .from("nexus_bot_sessions")
       .select(
-        "id,session_kind,plan_key,stake_usd,strategy_title,confidence,ends_at,created_at,signal_code_id,status,display_phase,trade_session_id,trade_sessions(start_at,end_at,session_name,code)",
+        "id,session_kind,stake_usd,ends_at,created_at,status,display_phase,participation_weight,profit_released_usd,trade_session_id,trade_sessions(start_at,end_at)",
       )
       .eq("user_id", user.id)
-      .in("status", ["pending", "running", "active"])
+      .in("status", ["ready", "pending", "running", "active"])
       .order("created_at", { ascending: false })
       .limit(3)
 
@@ -68,7 +100,8 @@ export async function GET(request: Request) {
         windowOpensAt: s.window_opens_at,
         windowClosesAt: s.window_closes_at,
       })),
-      activeSessions: activeSessions ?? [],
+      activeSessions: (activeSessions ?? []).map((r) => mapTradeSessionForUser(r as Record<string, unknown>)),
+      pendingProfitCelebration,
       legacyCopyFixedRetired: true,
     })
   } catch (e) {
@@ -79,18 +112,29 @@ export async function GET(request: Request) {
   }
 }
 
-/** One-time per user: release copy/fixed locks into Nexus Main before Nexus Bot sessions. */
 export async function POST(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "mutate")
     if ("response" in auth) return auth.response
     const { user } = auth
-    const body = (await request.json().catch(() => ({}))) as { action?: string }
+    const body = (await request.json().catch(() => ({}))) as {
+      action?: string
+      sessionId?: string
+    }
+
+    const admin = createAdminClient()
+
+    if (body.action === "ack_profit_celebration") {
+      const sessionId = typeof body.sessionId === "string" ? body.sessionId : ""
+      if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 })
+      await acknowledgeProfitCelebration(admin, user.id, sessionId)
+      return NextResponse.json({ ok: true })
+    }
+
     if (body.action !== "release_legacy_container") {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
 
-    const admin = createAdminClient()
     const summary = await releaseLegacyContainerSessionsForUser(admin, user.id)
     const availableUsd = await readNexusMainAvailableUsd(admin, user.id)
     return NextResponse.json({ ok: true, summary, availableUsd })

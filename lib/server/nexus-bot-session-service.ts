@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-import { USER_SESSION_PHASES, type UserSessionPhase } from "@/lib/nexus-bot/trade-code"
+import { computeParticipationWeight } from "@/lib/nexus-bot/participation-weight"
+import {
+  closedTradeHistorySummary,
+  resolveTradeSessionPhaseKey,
+  type TradeSessionPhaseKey,
+} from "@/lib/nexus-bot/user-session-messaging"
 import {
   isNexusAutoTradePlanKey,
   normalizeSignalCode,
@@ -12,6 +17,7 @@ import {
   awardPerformancePoints,
   incrementCompletedSessions,
 } from "@/lib/server/performance-points"
+import { consumeTradeSessionVerification } from "@/lib/server/trade-session-verification"
 import { findActiveTradeSessionByCode } from "@/lib/server/trade-sessions"
 
 function hashSeed(input: string): number {
@@ -23,11 +29,21 @@ function hashSeed(input: string): number {
   return h >>> 0
 }
 
-/** Deterministic session profit — never shown to users as a formula. */
-export function tradeSessionProfitUsd(sessionId: string, stakeUsd: number): number {
+/** Base gross profit before participation weight — internal only. */
+export function tradeSessionBaseProfitUsd(sessionId: string, stakeUsd: number): number {
   const h = hashSeed(sessionId)
   const rate = 0.025 + (h % 31) / 1000
   return roundUsd2(stakeUsd * rate)
+}
+
+export function tradeSessionProfitUsd(
+  sessionId: string,
+  stakeUsd: number,
+  participationWeight = 1,
+): number {
+  const base = tradeSessionBaseProfitUsd(sessionId, stakeUsd)
+  const weight = Math.min(1, Math.max(0, participationWeight))
+  return roundUsd2(base * weight)
 }
 
 export function resolveUserDisplayPhase(params: {
@@ -36,24 +52,24 @@ export function resolveUserDisplayPhase(params: {
   endAt: string
   displayPhase?: string | null
   now?: Date
-}): UserSessionPhase {
-  if (params.displayPhase && USER_SESSION_PHASES.includes(params.displayPhase as UserSessionPhase)) {
-    return params.displayPhase as UserSessionPhase
+}): TradeSessionPhaseKey {
+  if (params.displayPhase) {
+    const key = params.displayPhase as TradeSessionPhaseKey
+    if (
+      [
+        "ready",
+        "waiting_window",
+        "active_analysing",
+        "active_strategy",
+        "capturing",
+        "completed",
+        "profit_released",
+      ].includes(key)
+    ) {
+      return key
+    }
   }
-  const now = params.now ?? new Date()
-  const start = new Date(params.startAt).getTime()
-  const end = new Date(params.endAt).getTime()
-  const t = now.getTime()
-  if (params.status === "completed") return "Trade completed"
-  if (params.status === "expired") return "Waiting for session"
-  if (t < start) return "Waiting for session"
-  if (t >= end) return "Capturing profit"
-  const progress = (t - start) / Math.max(1, end - start)
-  if (progress < 0.15) return "Analyzing market"
-  if (progress < 0.3) return "Preparing entry"
-  if (progress < 0.45) return "Trade active"
-  if (progress < 0.75) return "Managing position"
-  return "Capturing profit"
+  return resolveTradeSessionPhaseKey(params)
 }
 
 async function awardAttendancePoints(
@@ -181,9 +197,11 @@ export async function syncTradeSessionBotStates(
   const nowIso = now.toISOString()
   let q = admin
     .from("nexus_bot_sessions")
-    .select("id,user_id,status,trade_session_id,stake_usd,trade_sessions(start_at,end_at)")
+    .select(
+      "id,user_id,status,trade_session_id,stake_usd,participation_weight,trade_sessions(start_at,end_at)",
+    )
     .not("trade_session_id", "is", null)
-    .in("status", ["pending", "running", "active"])
+    .in("status", ["ready", "pending", "running", "active"])
   if (userId) q = q.eq("user_id", userId)
   const { data, error } = await q.limit(200)
   if (error) throw new Error(error.message)
@@ -194,12 +212,7 @@ export async function syncTradeSessionBotStates(
     const startMs = new Date(ts.start_at).getTime()
     const endMs = new Date(ts.end_at).getTime()
     const t = now.getTime()
-    const phase = resolveUserDisplayPhase({
-      status: String(row.status),
-      startAt: ts.start_at,
-      endAt: ts.end_at,
-      now,
-    })
+    const status = String(row.status)
 
     if (t >= endMs) {
       await completeTradeSessionBotRow(admin, {
@@ -207,35 +220,60 @@ export async function syncTradeSessionBotStates(
         userId: String(row.user_id),
         stakeUsd: Number(row.stake_usd ?? 0),
         tradeSessionId: String(row.trade_session_id),
+        participationWeight: Number(row.participation_weight ?? 1),
+        sessionStartAt: ts.start_at,
+        sessionEndAt: ts.end_at,
       })
       continue
     }
 
-    const nextStatus = t < startMs ? "pending" : "running"
-    if (String(row.status) !== nextStatus || phase) {
+    const nextStatus = t < startMs ? "ready" : "running"
+    const phase = resolveUserDisplayPhase({
+      status: nextStatus,
+      startAt: ts.start_at,
+      endAt: ts.end_at,
+      now,
+    })
+    if (status !== nextStatus || phase) {
       await admin
         .from("nexus_bot_sessions")
         .update({ status: nextStatus, display_phase: phase })
         .eq("id", row.id)
-        .in("status", ["pending", "running", "active"])
+        .in("status", ["ready", "pending", "running", "active"])
     }
   }
 
   await admin
     .from("nexus_bot_sessions")
-    .update({ status: "expired" })
+    .update({ status: "expired", display_phase: "completed" })
     .not("trade_session_id", "is", null)
-    .in("status", ["pending"])
+    .in("status", ["ready", "pending"])
     .lt("ends_at", nowIso)
 }
 
 async function completeTradeSessionBotRow(
   admin: SupabaseClient,
-  row: { id: string; userId: string; stakeUsd: number; tradeSessionId: string },
-): Promise<void> {
+  row: {
+    id: string
+    userId: string
+    stakeUsd: number
+    tradeSessionId: string
+    participationWeight: number
+    sessionStartAt: string
+    sessionEndAt: string
+  },
+): Promise<{ profitUsd: number } | null> {
   const now = new Date().toISOString()
   const stake = roundUsd2(row.stakeUsd)
-  const profit = tradeSessionProfitUsd(row.id, stake)
+  const weight =
+    row.participationWeight > 0
+      ? row.participationWeight
+      : computeParticipationWeight({
+          sessionStartAt: row.sessionStartAt,
+          sessionEndAt: row.sessionEndAt,
+          joinedAt: now,
+        })
+  const profit = tradeSessionProfitUsd(row.id, stake, weight)
   const totalCredit = roundUsd2(stake + profit)
 
   const { error: uErr } = await admin
@@ -243,16 +281,19 @@ async function completeTradeSessionBotRow(
     .update({
       status: "completed",
       settled_at: now,
-      display_phase: "Profit released",
+      display_phase: "profit_released",
       profit_released_usd: profit,
+      participation_weight: weight,
     })
     .eq("id", row.id)
-    .in("status", ["pending", "running", "active"])
-  if (uErr) return
+    .in("status", ["ready", "pending", "running", "active"])
+  if (uErr) return null
 
   if (totalCredit > 0) {
     await casCreditNexusMainOnly(admin, row.userId, totalCredit)
   }
+
+  const historySummary = closedTradeHistorySummary(profit)
 
   await recordFinancialEvent({
     userId: row.userId,
@@ -264,8 +305,15 @@ async function completeTradeSessionBotRow(
     status: "completed",
     actorType: "system",
     actorId: row.userId,
-    summary: "Trade session completed — capital and profit released to Nexus Main.",
-    metadata: { session_id: row.id, trade_session_id: row.tradeSessionId, profit_usd: profit },
+    relatedSessionId: row.id,
+    summary: historySummary,
+    metadata: {
+      session_id: row.id,
+      trade_session_id: row.tradeSessionId,
+      profit_usd: profit,
+      stake_returned_usd: stake,
+      participation_weight: weight,
+    },
   })
 
   await awardPerformancePoints(admin, {
@@ -277,12 +325,14 @@ async function completeTradeSessionBotRow(
     sessionReference: row.tradeSessionId,
   })
   await incrementCompletedSessions(admin, row.userId)
+  return { profitUsd: profit }
 }
 
 export async function activateTradeSessionBot(
   admin: SupabaseClient,
   params: {
     userId: string
+    verificationId: string
     code: string
     stakeUsd: number
     confirmed: boolean
@@ -291,15 +341,25 @@ export async function activateTradeSessionBot(
   sessionId: string
   endsAt: string
   startAt: string
-  displayPhase: UserSessionPhase
+  phaseKey: TradeSessionPhaseKey
+  participationWeight: number
   available_balance: number
 }> {
   if (!params.confirmed) throw new Error("CONFIRMATION_REQUIRED")
   const stake = roundUsd2(params.stakeUsd)
   if (!(stake > 0)) throw new Error("INVALID_STAKE")
 
-  const tradeSession = await findActiveTradeSessionByCode(admin, params.code)
-  if (!tradeSession) throw new Error("CODE_INVALID_OR_EXPIRED")
+  const verified = await consumeTradeSessionVerification(
+    admin,
+    params.userId,
+    params.verificationId,
+    params.code,
+  )
+
+  const tradeSession = await findActiveTradeSessionByCode(admin, verified.code)
+  if (!tradeSession || tradeSession.id !== verified.tradeSessionId) {
+    throw new Error("CODE_INVALID_OR_EXPIRED")
+  }
 
   const now = new Date()
   const endMs = new Date(tradeSession.endAt).getTime()
@@ -310,7 +370,7 @@ export async function activateTradeSessionBot(
     .select("id")
     .eq("user_id", params.userId)
     .eq("trade_session_id", tradeSession.id)
-    .in("status", ["pending", "running", "active"])
+    .in("status", ["ready", "pending", "running", "active"])
     .maybeSingle()
   if (existing) throw new Error("SESSION_ALREADY_JOINED")
 
@@ -318,21 +378,20 @@ export async function activateTradeSessionBot(
     .from("nexus_bot_sessions")
     .select("id")
     .eq("user_id", params.userId)
-    .in("status", ["pending", "running", "active"])
+    .in("status", ["ready", "pending", "running", "active"])
     .limit(1)
   if ((otherActive ?? []).length > 0) throw new Error("BOT_SESSION_ALREADY_ACTIVE")
 
   const reserved = await casReserveCopyTradeStake(admin, params.userId, stake)
   if (!reserved.ok) throw new Error("INSUFFICIENT_BALANCE")
 
-  const startMs = new Date(tradeSession.startAt).getTime()
-  const initialStatus = now.getTime() < startMs ? "pending" : "running"
-  const displayPhase = resolveUserDisplayPhase({
-    status: initialStatus,
-    startAt: tradeSession.startAt,
-    endAt: tradeSession.endAt,
-    now,
+  const queuedAt = now.toISOString()
+  const participationWeight = computeParticipationWeight({
+    sessionStartAt: tradeSession.startAt,
+    sessionEndAt: tradeSession.endAt,
+    joinedAt: queuedAt,
   })
+  const phaseKey: TradeSessionPhaseKey = "waiting_window"
 
   const { data: ins, error: insErr } = await admin
     .from("nexus_bot_sessions")
@@ -341,13 +400,20 @@ export async function activateTradeSessionBot(
       session_kind: "signal",
       trade_session_id: tradeSession.id,
       stake_usd: stake,
-      status: initialStatus,
-      strategy_title: tradeSession.displayLabel,
+      status: "ready",
+      strategy_title: "Trade Session",
       confidence: "High",
       ends_at: tradeSession.endAt,
-      display_phase: displayPhase,
-      user_confirmed_at: now.toISOString(),
-      metadata: { stake_reserved_usd: stake, trade_code: tradeSession.code },
+      display_phase: phaseKey,
+      code_verified_at: verified.verifiedAt,
+      queued_at: queuedAt,
+      user_confirmed_at: queuedAt,
+      participation_weight: participationWeight,
+      metadata: {
+        stake_reserved_usd: stake,
+        trade_code: tradeSession.code,
+        verification_id: params.verificationId,
+      },
     })
     .select("id")
     .single()
@@ -367,8 +433,15 @@ export async function activateTradeSessionBot(
     status: "pending",
     actorType: "user",
     actorId: params.userId,
-    summary: "Trade session activated — capital reserved for session period.",
-    metadata: { trade_session_id: tradeSession.id, session_id: ins.id },
+    relatedSessionId: String(ins.id),
+    summary: "Trade session allocation confirmed — capital reserved.",
+    metadata: {
+      trade_session_id: tradeSession.id,
+      session_id: ins.id,
+      participation_weight: participationWeight,
+      queued_at: queuedAt,
+      code_verified_at: verified.verifiedAt,
+    },
   })
 
   await awardPerformancePoints(admin, {
@@ -384,9 +457,49 @@ export async function activateTradeSessionBot(
     sessionId: String(ins.id),
     endsAt: tradeSession.endAt,
     startAt: tradeSession.startAt,
-    displayPhase,
+    phaseKey,
+    participationWeight,
     available_balance: reserved.available_balance,
   }
+}
+
+export async function findPendingProfitCelebration(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ sessionId: string; profitUsd: number; summary: string } | null> {
+  const { data } = await admin
+    .from("nexus_bot_sessions")
+    .select("id,profit_released_usd,profit_celebrated_at,settled_at")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .not("trade_session_id", "is", null)
+    .is("profit_celebrated_at", null)
+    .gt("profit_released_usd", 0)
+    .order("settled_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return null
+  const profitUsd = roundUsd2(Number(data.profit_released_usd ?? 0))
+  if (!(profitUsd > 0)) return null
+  return {
+    sessionId: String(data.id),
+    profitUsd,
+    summary: closedTradeHistorySummary(profitUsd),
+  }
+}
+
+export async function acknowledgeProfitCelebration(
+  admin: SupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  const { error } = await admin
+    .from("nexus_bot_sessions")
+    .update({ profit_celebrated_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .eq("user_id", userId)
+    .eq("status", "completed")
+  if (error) throw new Error(error.message)
 }
 
 export async function activateNexusBotSession(
@@ -409,7 +522,7 @@ export async function activateNexusBotSession(
     .from("nexus_bot_sessions")
     .select("id")
     .eq("user_id", params.userId)
-    .in("status", ["pending", "running", "active"])
+    .in("status", ["ready", "pending", "running", "active"])
     .limit(1)
   if ((active ?? []).length > 0) throw new Error("BOT_SESSION_ALREADY_ACTIVE")
 
