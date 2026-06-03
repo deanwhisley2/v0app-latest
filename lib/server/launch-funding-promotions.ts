@@ -1,9 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { applyFirstDepositBonus } from "@/lib/server/platform-incentives"
 
 /**
- * Legacy compatibility wrapper.
- * Promotions are replaced by stable platform incentive policy.
+ * Automatic funding promotions are disabled.
+ * Approved auto-incentives: startup capital (registration) + referral first-trade reward.
  */
 export async function applyLaunchFundingPromotions(
   sb: SupabaseClient,
@@ -11,14 +10,19 @@ export async function applyLaunchFundingPromotions(
   depositUsd: number,
   sourceRef: string,
 ): Promise<void> {
-  await applyFirstDepositBonus(sb, userId, depositUsd, sourceRef)
+  void sb
+  void userId
+  void depositUsd
+  void sourceRef
 }
 
-/** @deprecated Use applyLaunchFundingPromotions wrapper. */
+/** @deprecated First deposit bonus disabled — no-op for legacy callers. */
 export async function tryCreditReferrerFirstDepositBonus(
   sb: SupabaseClient,
   refereeUserId: string,
   depositAmountUsd: number,
 ): Promise<void> {
-  await applyFirstDepositBonus(sb, refereeUserId, depositAmountUsd, "legacy_retail_settlement")
+  void sb
+  void refereeUserId
+  void depositAmountUsd
 }

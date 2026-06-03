@@ -15,9 +15,12 @@ import { usePlatformLaunch } from "@/hooks/use-platform-launch"
 import { useStartupOnboarding } from "@/hooks/use-startup-onboarding"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { STARTUP_CAPITAL_USD_REWARD } from "@/lib/platform-launch-config"
+import {
+  clearNewMemberCampaignPromoDismiss,
+  dismissNewMemberCampaignPromo,
+  isNewMemberCampaignPromoDismissed,
+} from "@/lib/marketing/new-member-campaign-promo-dismiss"
 import { cn } from "@/lib/utils"
-
-const STORAGE_KEY = "nexus_new_member_campaign_promo_v1"
 
 const BULLET_KEYS = [
   "marketing.newMember.bulletIntelligence",
@@ -49,11 +52,7 @@ export function NewMemberCampaignPromoModal({ enabled = true }: NewMemberCampaig
 
   useEffect(() => {
     if (!promoOn) return
-    try {
-      if (localStorage.getItem(STORAGE_KEY) === "1") return
-    } catch {
-      /* private mode */
-    }
+    if (isNewMemberCampaignPromoDismissed()) return
     const id = window.requestAnimationFrame(() => setOpen(true))
     return () => window.cancelAnimationFrame(id)
   }, [promoOn])
@@ -72,11 +71,7 @@ export function NewMemberCampaignPromoModal({ enabled = true }: NewMemberCampaig
   )
 
   const dismiss = useCallback(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, "1")
-    } catch {
-      /* ignore */
-    }
+    dismissNewMemberCampaignPromo()
     setOpen(false)
   }, [])
 

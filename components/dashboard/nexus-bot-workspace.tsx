@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Bot, CheckCircle2, Lock, MessageCircle, Sparkles, Trophy, Zap } from "lucide-react"
+import { Bot, CheckCircle2, Lock, MessageCircle, Sparkles, Zap } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { supabase } from "@/lib/supabaseClient"
@@ -89,14 +89,6 @@ type ActiveSession = {
   earnings_withdrawable?: boolean
 }
 
-type LeaderboardRow = {
-  rank: number
-  username: string
-  points: number
-  completedSessions: number
-  streak: number
-}
-
 type ProfitCelebration = {
   sessionId: string
   profitUsd: number
@@ -122,8 +114,6 @@ export function NexusBotWorkspace({
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [grants, setGrants] = useState<Record<string, boolean>>({})
   const [streak, setStreak] = useState({ current: 0, longest: 0, visits: 0 })
-  const [weeklyBoard, setWeeklyBoard] = useState<LeaderboardRow[]>([])
-  const [myPoints, setMyPoints] = useState(0)
   const [celebration, setCelebration] = useState<ProfitCelebration | null>(null)
 
   const [codeInput, setCodeInput] = useState("")
@@ -191,10 +181,7 @@ export function NexusBotWorkspace({
     const token = session?.access_token
     if (!token) return
     const h = { Authorization: `Bearer ${token}` }
-    const [botRes, perfRes] = await Promise.all([
-      fetch("/api/user/nexus-bot", { headers: h, cache: "no-store" }),
-      fetch("/api/user/performance", { headers: h, cache: "no-store" }),
-    ])
+    const botRes = await fetch("/api/user/nexus-bot", { headers: h, cache: "no-store" })
     if (botRes.ok) {
       const j = (await botRes.json()) as {
         availableUsd?: number
@@ -227,14 +214,6 @@ export function NexusBotWorkspace({
         setCelebration(j.pendingProfitCelebration)
       }
       onActiveSessionCountsChange?.({ copy: 0, fix: active ? 1 : 0 })
-    }
-    if (perfRes.ok) {
-      const p = (await perfRes.json()) as {
-        weeklyBoard?: LeaderboardRow[]
-        myPoints?: number
-      }
-      setWeeklyBoard(p.weeklyBoard ?? [])
-      setMyPoints(Number(p.myPoints ?? 0))
     }
   }, [mainBalanceUsd, onActiveSessionCountsChange, resetFlow])
 
@@ -459,7 +438,7 @@ export function NexusBotWorkspace({
             <p className="mt-1 text-sm text-muted-foreground">
               Verify today&apos;s code, allocate capital, and join the live trade session queue.
             </p>
-            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               <div className="flex justify-between rounded-lg bg-background/80 px-3 py-2">
                 <span className="text-muted-foreground">Available (USD)</span>
                 <span className="font-mono font-semibold">{formatUserMoney(availableUsd)}</span>
@@ -470,47 +449,10 @@ export function NexusBotWorkspace({
                   {streak.current} day{streak.current === 1 ? "" : "s"} · best {streak.longest}
                 </span>
               </div>
-              <div className="flex justify-between rounded-lg bg-background/80 px-3 py-2">
-                <span className="text-muted-foreground">Performance points</span>
-                <span className="font-mono font-semibold">{myPoints}</span>
-              </div>
             </div>
           </div>
         </div>
       </Card>
-
-      {weeklyBoard.length > 0 ? (
-        <Card className="overflow-hidden p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-warning" aria-hidden />
-            <h3 className="font-semibold">Weekly performance board</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px] text-sm">
-              <thead>
-                <tr className="border-b border-border/60 text-left text-xs uppercase text-muted-foreground">
-                  <th className="pb-2 pr-3">Rank</th>
-                  <th className="pb-2 pr-3">Member</th>
-                  <th className="pb-2 pr-3">Points</th>
-                  <th className="pb-2 pr-3">Sessions</th>
-                  <th className="pb-2">Streak</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weeklyBoard.map((row) => (
-                  <tr key={row.rank} className="border-b border-border/30 last:border-0">
-                    <td className="py-2 pr-3 font-mono">#{row.rank}</td>
-                    <td className="py-2 pr-3">{row.username}</td>
-                    <td className="py-2 pr-3 font-mono font-semibold">{row.points}</td>
-                    <td className="py-2 pr-3 font-mono">{row.completedSessions}</td>
-                    <td className="py-2 font-mono">{row.streak}d</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : null}
 
       {activeSession ? (
         <Card className="overflow-hidden border-success/30 p-4">

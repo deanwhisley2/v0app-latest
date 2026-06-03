@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { getWeeklyLeaderboard } from "@/lib/server/performance-points"
-
 export async function GET(request: Request) {
   try {
     const auth = await bearerUserWithGovernance(request, "read")
     if ("response" in auth) return auth.response
     const { user } = auth
     const admin = createAdminClient()
-
-    const board = await getWeeklyLeaderboard(admin, 10)
 
     const { data: mine } = await admin
       .from("user_performance_points")
@@ -32,7 +28,6 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     return NextResponse.json({
-      weeklyBoard: board,
       myPoints: Number(mine?.points ?? 0),
       myCompletedSessions: Number(mine?.completed_sessions ?? 0),
       myStreak: Number(streakRow?.current_streak ?? 0),

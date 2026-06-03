@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { Trophy } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -39,6 +40,15 @@ type Stats = {
   totalReleasedProfitUsd: number
 }
 
+type LeaderboardRow = {
+  rank: number
+  userId: string
+  username: string
+  points: number
+  completedSessions: number
+  streak: number
+}
+
 export function AdminNexusBotPanel() {
   const [view, setView] = useState<"sessions" | "grants" | "legacy">("sessions")
   const [sessions, setSessions] = useState<TradeSessionRow[]>([])
@@ -72,6 +82,7 @@ export function AdminNexusBotPanel() {
     completedSessions: number
     events: Array<{ delta: number; reason: string; source: string; created_at: string }>
   } | null>(null)
+  const [weeklyBoard, setWeeklyBoard] = useState<LeaderboardRow[]>([])
 
   const tokenHeaders = async () => {
     const {
@@ -131,6 +142,7 @@ export function AdminNexusBotPanel() {
       setSessions(j.sessions ?? [])
       setUnregisteredCodes(j.unregisteredCodes ?? [])
       setStats(j.stats ?? null)
+      setWeeklyBoard(j.weeklyBoard ?? [])
     } finally {
       setSessionsLoading(false)
     }
@@ -657,6 +669,44 @@ export function AdminNexusBotPanel() {
               )}
             </div>
           </Card>
+
+          {weeklyBoard.length > 0 ? (
+            <Card className="overflow-hidden p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-warning" aria-hidden />
+                <h3 className="font-semibold">Weekly performance board</h3>
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Admin-only view — not shown to customers or retailer desks.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[360px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 text-left text-xs uppercase text-muted-foreground">
+                      <th className="pb-2 pr-3">Rank</th>
+                      <th className="pb-2 pr-3">Member</th>
+                      <th className="pb-2 pr-3">User ID</th>
+                      <th className="pb-2 pr-3">Points</th>
+                      <th className="pb-2 pr-3">Sessions</th>
+                      <th className="pb-2">Streak</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weeklyBoard.map((row) => (
+                      <tr key={row.rank} className="border-b border-border/30 last:border-0">
+                        <td className="py-2 pr-3 font-mono">#{row.rank}</td>
+                        <td className="py-2 pr-3">{row.username}</td>
+                        <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{row.userId.slice(0, 8)}…</td>
+                        <td className="py-2 pr-3 font-mono font-semibold">{row.points}</td>
+                        <td className="py-2 pr-3 font-mono">{row.completedSessions}</td>
+                        <td className="py-2 font-mono">{row.streak}d</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : null}
 
           <Card className="space-y-3 p-4">
             <h3 className="font-semibold">Member performance review</h3>

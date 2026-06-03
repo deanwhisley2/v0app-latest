@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import { DevLocalFetchGate } from "@/components/DevLocalFetchGate"
 import { createGuestUser, isGuestLoginEnabled } from "@/lib/free-entry"
+import { clearNewMemberCampaignPromoDismiss } from "@/lib/marketing/new-member-campaign-promo-dismiss"
 
 type AuthContextValue = {
   user: User | null
@@ -146,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
+      clearNewMemberCampaignPromoDismiss()
       if (!isDevLocalOnly()) {
         const { error } = await supabase.auth.signOut()
         if (error) return { error: new Error(error.message) }

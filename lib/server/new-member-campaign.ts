@@ -88,14 +88,18 @@ export function profileRowEligibleForNewMemberWelcome(
 }
 
 /**
- * Idempotent welcome bonus — registration, email verify, and login safety net.
- * Guarded by startup_bonus_received_at + profile.created_at >= eligible_after.
+ * Idempotent welcome bonus — registration only.
+ * Guarded by startup_bonus_received_at, platform_incentive_grants, and ledger reference id.
  */
 export async function grantNewMemberWelcomeBonus(
   admin: SupabaseClient,
   userId: string,
-  _source: NewMemberWelcomeGrantSource,
+  source: NewMemberWelcomeGrantSource,
 ): Promise<boolean> {
+  if (source !== "registration") {
+    console.warn("[new-member-campaign] skip non-registration grant source:", source, userId)
+    return false
+  }
   if (!(await isNewMemberCampaignActive())) {
     console.warn("[new-member-campaign] inactive — skip grant:", userId)
     return false

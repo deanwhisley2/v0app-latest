@@ -14,6 +14,7 @@ import {
   getTradeSessionParticipantCounts,
   terminateTradeSessionByAdmin,
 } from "@/lib/server/nexus-bot-session-service"
+import { getWeeklyLeaderboard } from "@/lib/server/performance-points"
 
 export async function GET(request: Request) {
   try {
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
     if (view === "active") q = q.eq("status", "active")
     if (view === "expired") q = q.eq("status", "expired")
 
-    const [{ data: sessions, error }, stats, { data: pool }] = await Promise.all([
+    const [{ data: sessions, error }, stats, { data: pool }, weeklyBoard] = await Promise.all([
       q,
       getTradeSessionAdminStats(admin),
       admin
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
         .is("trade_session_id", null)
         .order("created_at", { ascending: false })
         .limit(40),
+      getWeeklyLeaderboard(admin, 10),
     ])
     if (error) throw new Error(error.message)
 
@@ -95,6 +97,7 @@ export async function GET(request: Request) {
       stats,
       unregisteredCodes: pool ?? [],
       memberPoints,
+      weeklyBoard,
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Forbidden" }, { status: 403 })

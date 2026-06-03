@@ -7,9 +7,9 @@ import { appendUserAccountNotification } from "@/lib/server/user-account-notific
 import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 import { computeStartupBonusCampaignEndsAt } from "@/lib/server/startup-bonus-onboarding"
 
-const FIRST_DEPOSIT_BONUS_RATE = 0.2
 const REFERRAL_FIRST_TRADE_REWARD_USD = 0.26
 const STARTUP_CAPITAL_USD = 5.3
+const STARTUP_CAPITAL_INCENTIVE_TYPE = "startup_capital"
 
 function treasuryActorId(): string {
   const pool = adminRetailPoolUserId()
@@ -101,44 +101,18 @@ async function creditUserFromTreasury(
   return true
 }
 
-/** One-time 20% bonus on first successful deposit approval (referral-independent). */
+/** Disabled — onboarding incentive is startup capital only (admin grants handle future promos). */
 export async function applyFirstDepositBonus(
   admin: SupabaseClient,
   userId: string,
   depositUsd: number,
   sourceRef: string,
 ): Promise<void> {
-  if (!(depositUsd > 0)) return
-  const { data: prof, error: pErr } = await admin
-    .from("profiles")
-    .select("id,first_deposit_bonus_applied_at")
-    .eq("id", userId)
-    .maybeSingle()
-  if (pErr || !prof || prof.first_deposit_bonus_applied_at) return
-
-  const bonusUsd = roundUsd2(depositUsd * FIRST_DEPOSIT_BONUS_RATE)
-  if (!(bonusUsd > 0)) return
-  const refId = `first_deposit_bonus:${userId}`
-  const bonusFmt = await formatCustomerMoneyForUser(admin, userId, bonusUsd)
-
-  const ok = await creditUserFromTreasury(admin, {
-    userId,
-    amountUsd: bonusUsd,
-    referenceId: refId,
-    reason: `First deposit bonus 20% (${sourceRef})`,
-    notificationType: "first_deposit_bonus",
-    notificationTitle: "First Deposit Bonus Applied",
-    notificationBody: `First Deposit Bonus Applied (${bonusFmt}).`,
-    sourceKind: "first_deposit_bonus",
-  })
-  if (!ok) return
-
-  const now = new Date().toISOString()
-  await admin
-    .from("profiles")
-    .update({ first_deposit_bonus_applied_at: now, updated_at: now })
-    .eq("id", userId)
-    .is("first_deposit_bonus_applied_at", null)
+  void admin
+  void userId
+  void depositUsd
+  void sourceRef
+  return
 }
 
 /**
@@ -210,11 +184,14 @@ export async function grantNewMemberWelcomeBonusToProfile(
   if (pErr || !prof) return
   if (prof.startup_bonus_received_at) return
 
+  const referenceId = `startup_capital:${userId}`
+  if (await treasuryDebitReferenceExists(admin, referenceId)) return
+
   const bonusFmt = await formatCustomerMoneyForUser(admin, userId, bonusUsd)
   const ok = await creditUserFromTreasury(admin, {
     userId,
     amountUsd: bonusUsd,
-    referenceId: `startup_capital:${userId}`,
+    referenceId,
     reason: "New member welcome bonus (startup trading capital)",
     notificationType: "startup_trading_capital",
     notificationTitle: "New member welcome bonus credited",
@@ -224,6 +201,17 @@ export async function grantNewMemberWelcomeBonusToProfile(
   if (!ok) return
 
   const now = new Date().toISOString()
+  const { error: grantErr } = await admin.from("platform_incentive_grants").insert({
+    user_id: userId,
+    incentive_type: STARTUP_CAPITAL_INCENTIVE_TYPE,
+    amount_usd: bonusUsd,
+    ledger_reference_id: referenceId,
+    granted_at: now,
+  })
+  if (grantErr && grantErr.code !== "23505") {
+    console.warn("[platform-incentives] grant ledger insert failed:", userId, grantErr.message)
+  }
+
   await admin
     .from("profiles")
     .update({

@@ -8,7 +8,6 @@ import {
   recordSignupCorridorEvent,
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
-import { grantNewMemberWelcomeBonus } from "@/lib/server/new-member-campaign"
 
 /** Validates code from public.email_verifications (issued via Brevo). */
 
@@ -128,12 +127,6 @@ export async function POST(request: Request) {
       if (balanceInsertErr) {
         console.error("user_balances insert:", balanceInsertErr)
       }
-    }
-
-    try {
-      await grantNewMemberWelcomeBonus(admin, userId, "verify_code")
-    } catch (grantErr) {
-      console.error("[verify-code] welcome bonus:", grantErr)
     }
 
     await admin.from("email_verifications").delete().eq("user_id", userId)
