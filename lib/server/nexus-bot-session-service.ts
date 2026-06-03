@@ -261,12 +261,14 @@ async function completeTradeSessionBotRow(
     participationWeight: number
     sessionStartAt: string
     sessionEndAt: string
+    forceFullParticipation?: boolean
   },
 ): Promise<{ profitUsd: number } | null> {
   const now = new Date().toISOString()
   const stake = roundUsd2(row.stakeUsd)
-  const weight =
-    row.participationWeight > 0
+  const weight = row.forceFullParticipation
+    ? 1
+    : row.participationWeight > 0
       ? row.participationWeight
       : computeParticipationWeight({
           sessionStartAt: row.sessionStartAt,
@@ -313,6 +315,7 @@ async function completeTradeSessionBotRow(
       profit_usd: profit,
       stake_returned_usd: stake,
       participation_weight: weight,
+      ...(row.forceFullParticipation ? { settlement_mode: "full_session_target" } : {}),
     },
   })
 
@@ -500,6 +503,104 @@ export async function acknowledgeProfitCelebration(
     .eq("user_id", userId)
     .eq("status", "completed")
   if (error) throw new Error(error.message)
+}
+
+/** Admin-only: close session code early; all participants settled at full session weight. */
+export async function terminateTradeSessionByAdmin(
+  admin: SupabaseClient,
+  params: { tradeSessionId: string; actorId: string },
+): Promise<{
+  tradeSessionId: string
+  code: string
+  participantsSettled: number
+  totalProfitUsd: number
+  totalStakeUsd: number
+}> {
+  const { data: ts, error: tsErr } = await admin
+    .from("trade_sessions")
+    .select("id,code,status,start_at,end_at")
+    .eq("id", params.tradeSessionId)
+    .maybeSingle()
+  if (tsErr) throw new Error(tsErr.message)
+  if (!ts || String(ts.status) !== "active") throw new Error("SESSION_NOT_ACTIVE")
+
+  const now = new Date().toISOString()
+  const { data: rows, error: rowsErr } = await admin
+    .from("nexus_bot_sessions")
+    .select("id,user_id,stake_usd,participation_weight")
+    .eq("trade_session_id", params.tradeSessionId)
+    .in("status", ["ready", "pending", "running", "active"])
+  if (rowsErr) throw new Error(rowsErr.message)
+
+  let participantsSettled = 0
+  let totalProfitUsd = 0
+  let totalStakeUsd = 0
+
+  for (const row of rows ?? []) {
+    const result = await completeTradeSessionBotRow(admin, {
+      id: String(row.id),
+      userId: String(row.user_id),
+      stakeUsd: Number(row.stake_usd ?? 0),
+      tradeSessionId: params.tradeSessionId,
+      participationWeight: Number(row.participation_weight ?? 1),
+      sessionStartAt: String(ts.start_at),
+      sessionEndAt: String(ts.end_at),
+      forceFullParticipation: true,
+    })
+    if (result) {
+      participantsSettled += 1
+      totalProfitUsd += result.profitUsd
+      totalStakeUsd += roundUsd2(Number(row.stake_usd ?? 0))
+    }
+  }
+
+  const { error: expireErr } = await admin
+    .from("trade_sessions")
+    .update({
+      status: "expired",
+      expired_at: now,
+      admin_terminated_at: now,
+      admin_terminated_by: params.actorId,
+    })
+    .eq("id", params.tradeSessionId)
+    .eq("status", "active")
+  if (expireErr) throw new Error(expireErr.message)
+
+  await admin
+    .from("trade_session_verifications")
+    .update({ consumed_at: now })
+    .eq("trade_session_id", params.tradeSessionId)
+    .is("consumed_at", null)
+
+  return {
+    tradeSessionId: params.tradeSessionId,
+    code: String(ts.code),
+    participantsSettled,
+    totalProfitUsd: roundUsd2(totalProfitUsd),
+    totalStakeUsd: roundUsd2(totalStakeUsd),
+  }
+}
+
+export async function getTradeSessionParticipantCounts(
+  admin: SupabaseClient,
+  tradeSessionIds: string[],
+): Promise<Record<string, { active: number; completed: number }>> {
+  if (tradeSessionIds.length === 0) return {}
+  const { data, error } = await admin
+    .from("nexus_bot_sessions")
+    .select("trade_session_id,status")
+    .in("trade_session_id", tradeSessionIds)
+  if (error) throw new Error(error.message)
+  const out: Record<string, { active: number; completed: number }> = {}
+  for (const id of tradeSessionIds) out[id] = { active: 0, completed: 0 }
+  for (const r of data ?? []) {
+    const id = String(r.trade_session_id)
+    if (!out[id]) out[id] = { active: 0, completed: 0 }
+    const st = String(r.status)
+    if (["ready", "pending", "running", "active"].includes(st)) out[id].active += 1
+    if (st === "completed") out[id].completed += 1
+  }
+  return out
 }
 
 export async function activateNexusBotSession(

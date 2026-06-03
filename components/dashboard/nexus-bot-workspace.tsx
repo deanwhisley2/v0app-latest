@@ -39,6 +39,8 @@ type ActiveSession = {
   detail?: string
   start_at?: string
   end_at?: string
+  projected_profit_usd?: number
+  earnings_withdrawable?: boolean
 }
 
 type LeaderboardRow = {
@@ -424,6 +426,18 @@ export function NexusBotWorkspace({
           <p className="text-xs text-muted-foreground">
             Allocation {formatUserMoney(Number(activeSession.stake_usd))}
           </p>
+          {Number(activeSession.projected_profit_usd ?? 0) > 0 &&
+          !activeSession.earnings_withdrawable ? (
+            <p className="mt-2 text-sm">
+              Session earnings{" "}
+              <span className="font-mono font-semibold text-success">
+                +{formatUserMoney(Number(activeSession.projected_profit_usd))}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Visible during session · released to available balance when the session completes
+              </span>
+            </p>
+          ) : null}
           {activeSession.status === "ready" ? (
             <p className="mt-2 flex items-center gap-2 text-sm text-warning">
               <CheckCircle2 className="h-4 w-4 shrink-0" />

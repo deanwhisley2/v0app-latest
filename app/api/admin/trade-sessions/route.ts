@@ -10,6 +10,10 @@ import {
   humanizeTradeSessionError,
   registerTradeSession,
 } from "@/lib/server/trade-sessions"
+import {
+  getTradeSessionParticipantCounts,
+  terminateTradeSessionByAdmin,
+} from "@/lib/server/nexus-bot-session-service"
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +30,7 @@ export async function GET(request: Request) {
     let q = admin
       .from("trade_sessions")
       .select(
-        "id,code,session_name,session_slot,start_at,end_at,status,display_label,created_at,expired_at",
+        "id,code,session_name,session_slot,start_at,end_at,status,display_label,created_at,expired_at,admin_terminated_at",
       )
       .order("created_at", { ascending: false })
       .limit(80)
@@ -45,6 +49,14 @@ export async function GET(request: Request) {
         .limit(40),
     ])
     if (error) throw new Error(error.message)
+
+    const sessionIds = (sessions ?? []).map((s) => String(s.id))
+    const participantCounts = await getTradeSessionParticipantCounts(admin, sessionIds)
+    const sessionsWithCounts = (sessions ?? []).map((s) => ({
+      ...s,
+      participants: participantCounts[String(s.id)] ?? { active: 0, completed: 0 },
+      adminTerminated: Boolean(s.admin_terminated_at),
+    }))
 
     let memberPoints: {
       points: number
@@ -79,7 +91,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      sessions: sessions ?? [],
+      sessions: sessionsWithCounts,
       stats,
       unregisteredCodes: pool ?? [],
       memberPoints,
@@ -96,7 +108,7 @@ export async function POST(request: Request) {
     await requireLiquidityAdminLevel5(actor)
 
     const body = (await request.json().catch(() => ({}))) as {
-      action?: "generate" | "register"
+      action?: "generate" | "register" | "terminate"
       count?: number
       code?: string
       sessionName?: string
@@ -105,9 +117,27 @@ export async function POST(request: Request) {
       endAt?: string
       status?: "draft" | "active"
       displayLabel?: string
+      tradeSessionId?: string
     }
 
     const admin = createAdminClient()
+
+    if (body.action === "terminate") {
+      const tradeSessionId = String(body.tradeSessionId ?? "").trim()
+      if (!tradeSessionId) {
+        return NextResponse.json({ error: "tradeSessionId required" }, { status: 400 })
+      }
+      const out = await terminateTradeSessionByAdmin(admin, {
+        tradeSessionId,
+        actorId: actor.id,
+      })
+      return NextResponse.json({
+        ok: true,
+        terminated: true,
+        message: `Session ${out.code} closed — ${out.participantsSettled} participant(s) settled at full session target.`,
+        ...out,
+      })
+    }
 
     if (body.action === "generate") {
       const codes = await generateTradeCodes(admin, actor.id, Math.min(10, Number(body.count) || 3))

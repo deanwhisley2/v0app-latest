@@ -9,6 +9,7 @@ import {
   recordAttendanceVisit,
   resolveUserDisplayPhase,
   syncTradeSessionBotStates,
+  tradeSessionProfitUsd,
 } from "@/lib/server/nexus-bot-session-service"
 import { userSessionPresentation } from "@/lib/nexus-bot/user-session-messaging"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
@@ -28,18 +29,26 @@ function mapTradeSessionForUser(row: Record<string, unknown>) {
     displayPhase: row.display_phase ? String(row.display_phase) : null,
   })
   const presentation = userSessionPresentation(phaseKey)
+  const stake = Number(row.stake_usd ?? 0)
+  const weight = Number(row.participation_weight ?? 1)
+  const isOpen = ["ready", "pending", "running", "active"].includes(status)
+  const projectedProfitUsd = isOpen
+    ? tradeSessionProfitUsd(String(row.id), stake, weight)
+    : Number(row.profit_released_usd ?? 0)
   return {
     id: String(row.id),
     session_kind: String(row.session_kind ?? "signal"),
-    stake_usd: Number(row.stake_usd ?? 0),
+    stake_usd: stake,
     status,
     phaseKey,
     headline: presentation.headline,
     detail: presentation.detail,
     start_at: startAt,
     end_at: endAt,
-    participation_weight: Number(row.participation_weight ?? 1),
+    participation_weight: weight,
     profit_released_usd: Number(row.profit_released_usd ?? 0),
+    projected_profit_usd: projectedProfitUsd,
+    earnings_withdrawable: status === "completed",
   }
 }
 

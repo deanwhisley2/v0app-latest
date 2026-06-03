@@ -23,6 +23,9 @@ type TradeSessionRow = {
   status: string
   display_label: string | null
   created_at: string
+  admin_terminated_at?: string | null
+  adminTerminated?: boolean
+  participants?: { active: number; completed: number }
 }
 
 type Stats = {
@@ -255,6 +258,42 @@ export function AdminNexusBotPanel() {
     Boolean(startAt) &&
     Boolean(endAt) &&
     !busy
+
+  const terminateSession = async (session: TradeSessionRow) => {
+    const activeCount = session.participants?.active ?? 0
+    const ok = window.confirm(
+      `End session ${session.code} now?\n\n` +
+        `${activeCount} active participant(s) will be settled at full session target. ` +
+        `Users will see a normal completed trade — no early exit.`,
+    )
+    if (!ok) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const h = await tokenHeaders()
+      const res = await fetch("/api/admin/trade-sessions", {
+        method: "POST",
+        headers: h,
+        body: JSON.stringify({ action: "terminate", tradeSessionId: session.id }),
+      })
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        participantsSettled?: number
+        totalProfitUsd?: number
+      }
+      if (!res.ok) throw new Error(j.error ?? "Terminate failed")
+      setMsg(
+        j.message ??
+          `Session ended — ${j.participantsSettled ?? 0} settled, $${Number(j.totalProfitUsd ?? 0).toFixed(2)} profit released.`,
+      )
+      await loadSessions()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Terminate failed")
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const publishSignal = async () => {
     setBusy(true)
@@ -571,13 +610,31 @@ export function AdminNexusBotPanel() {
                               : "text-warning"
                         }`}
                       >
-                        {s.status}
+                        {s.adminTerminated ? "ended early" : s.status}
                       </span>
                     </div>
                     <p className="mt-1">{s.session_name}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatSessionClock(s.start_at)} – {formatSessionClock(s.end_at)} · {s.session_slot}
+                      {(s.participants?.active ?? 0) > 0
+                        ? ` · ${s.participants?.active} active`
+                        : ""}
+                      {(s.participants?.completed ?? 0) > 0
+                        ? ` · ${s.participants?.completed} completed`
+                        : ""}
                     </p>
+                    {s.status === "active" ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="mt-3 min-h-[44px] w-full touch-manipulation sm:w-auto"
+                        disabled={busy}
+                        onClick={() => void terminateSession(s)}
+                      >
+                        End session &amp; release earnings
+                      </Button>
+                    ) : null}
                   </div>
                 ))
               )}
