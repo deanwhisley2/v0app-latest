@@ -15,7 +15,11 @@ export function isTransactionHistoryNotification(
 ): boolean {
   const t = (accountType ?? "").toLowerCase()
   if (t === "crypto_deposit_credited") return true
+  if (t === "l5_funding_settled" || t.includes("l5_funding")) return true
   if (t.startsWith("funding") && /approved|credited|completed|added to your balance/i.test(blob(n))) {
+    return true
+  }
+  if (t === "funding_status" && /approved|credited|completed|successfully credited/i.test(blob(n))) {
     return true
   }
   if (t.includes("withdrawal") && /approved|completed|sent|processed/i.test(blob(n))) {
@@ -23,7 +27,11 @@ export function isTransactionHistoryNotification(
   }
   if (n.type === "trade") return true
   if (n.type === "financial") {
-    if (/credited|approved|completed|successfully added|funds added|deposit confirmed|balance updated/i.test(blob(n))) {
+    if (/deposit credited|successfully credited|credited to your balance|funds added|balance updated/i.test(blob(n))) {
+      return true
+    }
+    if (/submitted|awaiting|pending review|under review|held for/i.test(blob(n))) return false
+    if (/credited|approved|completed|successfully added|funds added|deposit confirmed/i.test(blob(n))) {
       return true
     }
     if (/rejected|failed|declined/i.test(blob(n))) return false

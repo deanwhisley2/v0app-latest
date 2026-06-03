@@ -16,6 +16,8 @@ import type {
   NexusNotificationItem,
   NexusNotificationType,
 } from "@/lib/nexus-notification-models"
+import { dispatchCustomerLedgerBump } from "@/lib/client/customer-ledger-sync"
+import { shouldCustomerLedgerBumpFromNotification } from "@/lib/notifications/ledger-bump-from-notification"
 import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
 import type { OperationalPreferencesV1 } from "@/lib/operational-preferences-types"
@@ -400,7 +402,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
     }
 
     void pullAccountNotifications()
-    const id = window.setInterval(pullAccountNotifications, 90_000)
+    const id = window.setInterval(pullAccountNotifications, 45_000)
     return () => {
       cancelled = true
       window.clearInterval(id)
@@ -444,6 +446,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
       const batch = realtimeBatchRef.current
       if (!batch.length) return
       realtimeBatchRef.current = []
+      const bumpLedger = batch.some(shouldCustomerLedgerBumpFromNotification)
       setInbox((prev) => {
         let merged = prev
         for (const item of batch) {
@@ -452,6 +455,7 @@ export function NexusNotificationsProvider({ children }: { children: ReactNode }
         if (sameInboxSignature(prev, merged)) return prev
         return merged
       })
+      if (bumpLedger) dispatchCustomerLedgerBump("account-notifications-realtime")
     }
 
     const scheduleRealtimeFlush = () => {

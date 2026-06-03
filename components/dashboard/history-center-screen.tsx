@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Clock, Loader2 } from "lucide-react"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
@@ -19,8 +19,28 @@ import {
   type FinancialEventReceiptRow,
   type WithdrawalReceiptRow,
 } from "@/lib/transactions/transaction-receipt-model"
+import { NEXUS_CUSTOMER_LEDGER_BUMP } from "@/lib/client/customer-ledger-sync"
 
 type FinancialEvent = FinancialEventReceiptRow
+
+type RetailFundRequestRow = {
+  id: string
+  amount: number
+  amount_usd_locked?: number | null
+  status: string
+  tx_reference: string
+  created_at: string
+}
+
+function fundRequestTitleKey(status: string): string {
+  const s = status.toLowerCase()
+  if (s === "approved" || s === "settled" || s === "completed") return "history.fundRequest.approved"
+  if (s === "rejected" || s === "declined" || s === "failed") return "history.fundRequest.rejected"
+  if (s === "pending" || s === "submitted" || s === "under_review" || s === "appealed") {
+    return "history.fundRequest.pending"
+  }
+  return "history.fundRequest.other"
+}
 
 export function HistoryCenterScreen() {
   const { t, currency, country, locale } = useUserPreferences()
@@ -28,7 +48,9 @@ export function HistoryCenterScreen() {
   const [events, setEvents] = useState<FinancialEvent[]>([])
   const [deposits, setDeposits] = useState<CryptoDepositReceiptRow[]>([])
   const [withdrawals, setWithdrawals] = useState<WithdrawalReceiptRow[]>([])
+  const [fundRequests, setFundRequests] = useState<RetailFundRequestRow[]>([])
   const [loading, setLoading] = useState(true)
+  const loadGenRef = useRef(0)
 
   const viewer = useMemo(
     () => ({
@@ -49,25 +71,31 @@ export function HistoryCenterScreen() {
     openNotification,
   } = useTransactionReceiptOpener(t, viewer)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const gen = ++loadGenRef.current
+    if (!opts?.silent) setLoading(true)
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) {
-        setEvents([])
-        setDeposits([])
-        setWithdrawals([])
+        if (gen === loadGenRef.current) {
+          setEvents([])
+          setDeposits([])
+          setWithdrawals([])
+          setFundRequests([])
+        }
         return
       }
       const h = { Authorization: `Bearer ${token}` }
-      const [evRes, depRes, wRes] = await Promise.all([
+      const [evRes, depRes, wRes, fundRes] = await Promise.all([
         fetch("/api/user/financial-events", { headers: h, cache: "no-store" }),
         fetch("/api/user/crypto-deposit", { headers: h, cache: "no-store" }),
         fetch("/api/user/withdrawal-requests", { headers: h, cache: "no-store" }),
+        fetch("/api/user/retailer-funding", { headers: h, cache: "no-store" }),
       ])
+      if (gen !== loadGenRef.current) return
       if (evRes.ok) {
         const j = (await evRes.json()) as { events?: FinancialEvent[] }
         setEvents(j.events ?? [])
@@ -80,13 +108,38 @@ export function HistoryCenterScreen() {
         const j = (await wRes.json()) as { requests?: WithdrawalReceiptRow[] }
         setWithdrawals(j.requests ?? [])
       }
+      if (fundRes.ok) {
+        const j = (await fundRes.json()) as { requests?: RetailFundRequestRow[] }
+        setFundRequests(j.requests ?? [])
+      }
     } finally {
-      setLoading(false)
+      if (gen === loadGenRef.current && !opts?.silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  useEffect(() => {
+    const onBump = () => {
+      void load({ silent: true })
+    }
+    window.addEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onBump)
+    return () => window.removeEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onBump)
+  }, [load])
+
+  useEffect(() => {
+    if (!accountInboxReady) return
+    void load({ silent: true })
+  }, [accountInboxReady, inbox.length, load])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return
+      void load({ silent: true })
+    }, 45_000)
+    return () => window.clearInterval(id)
   }, [load])
 
   const historyNotifs = useMemo(
@@ -130,6 +183,34 @@ export function HistoryCenterScreen() {
                     onOpen={() => openWithdrawal(w)}
                   />
                 ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {fundRequests.length > 0 ? (
+            <section className={`${INBOX_CARD} overflow-hidden`}>
+              <div className="border-b border-border/60 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  {t("history.section.addFunds")}
+                </p>
+              </div>
+              <ul className="divide-y divide-border/50">
+                {fundRequests.map((r) => {
+                  const usd =
+                    r.amount_usd_locked != null && Number.isFinite(Number(r.amount_usd_locked))
+                      ? Number(r.amount_usd_locked)
+                      : Number(r.amount)
+                  return (
+                    <TransactionHistoryRow
+                      key={r.id}
+                      title={t(fundRequestTitleKey(r.status))}
+                      subtitle={`$${usd.toFixed(2)} · ${String(r.tx_reference).slice(0, 8)}…`}
+                      timestamp={r.created_at}
+                      t={t}
+                      onOpen={() => {}}
+                    />
+                  )
+                })}
               </ul>
             </section>
           ) : null}
@@ -209,6 +290,7 @@ export function HistoryCenterScreen() {
           {!loading &&
           withdrawals.length === 0 &&
           deposits.length === 0 &&
+          fundRequests.length === 0 &&
           events.length === 0 &&
           historyNotifs.length === 0 ? (
             <p className="rounded-xl border border-border/60 bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">

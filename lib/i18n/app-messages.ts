@@ -36,8 +36,13 @@ const en: Record<string, string> = {
   "history.center.empty": "No activity recorded yet.",
   "history.section.withdrawals": "Withdrawals",
   "history.section.deposits": "Deposits",
+  "history.section.addFunds": "Add funds",
   "history.section.activity": "Activity log",
   "history.section.accountNotices": "Account records",
+  "history.fundRequest.approved": "Add funds · Approved",
+  "history.fundRequest.pending": "Add funds · Pending review",
+  "history.fundRequest.rejected": "Add funds · Not approved",
+  "history.fundRequest.other": "Add funds request",
   "history.center.openFromBell": "View full transaction history",
 
   "receipt.sheet.title": "Transaction receipt",

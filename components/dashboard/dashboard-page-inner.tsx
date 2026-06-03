@@ -118,6 +118,8 @@ import {
 } from "@/lib/currency-display"
 import { localizeFundingWithdrawalApiMessage } from "@/lib/i18n/localize-funding-withdrawal-api-message"
 import { refreshLiveBalanceBeforeAction } from "@/lib/client/refresh-live-balance"
+import { dispatchCustomerLedgerBump, NEXUS_CUSTOMER_LEDGER_BUMP } from "@/lib/client/customer-ledger-sync"
+import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
 import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
@@ -1175,42 +1177,75 @@ export function DashboardPageInner() {
     })()
   }, [authLoading, user, isGuestSession, router, signOut])
 
-  useEffect(() => {
+  const refreshMainBalances = useCallback(async () => {
     if (authLoading || !user || isGuestSession) return
-    ;(async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) return
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return
 
-      const res = await fetch("/api/user/balance", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return
+    const res = await fetch("/api/user/balance", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+    if (!res.ok) return
 
-      const json = (await res.json()) as {
-        available_balance?: number
-        current_stake?: number
-        retail_balance?: number
-        withdrawal_pending_balance?: number
-        total_earnings?: number
-        active_container_earnings?: number
-        active_container_earnings_resolved?: number
-        container_session_accrual_usd?: number
-        container_withdrawable_earnings?: number
-        lifetime_container_fees?: number
-      }
-      setMainBalance(Number(json.available_balance ?? 0))
-      setContainerLockedUsd(Number(json.current_stake ?? 0))
-      setRetailBalance(Number(json.retail_balance ?? 0))
-      setWithdrawalPendingBalance(Number(json.withdrawal_pending_balance ?? 0))
-      setTotalEarnings(Number(json.total_earnings ?? 0))
-      setActiveContainerEarnings(Number(json.active_container_earnings ?? 0))
-      setContainerWithdrawableEarnings(Number(json.container_withdrawable_earnings ?? 0))
-      setContainerFeesPaid(Number(json.lifetime_container_fees ?? 0))
-    })()
+    const json = (await res.json()) as {
+      available_balance?: number
+      current_stake?: number
+      retail_balance?: number
+      withdrawal_pending_balance?: number
+      total_earnings?: number
+      active_container_earnings?: number
+      active_container_earnings_resolved?: number
+      container_session_accrual_usd?: number
+      container_withdrawable_earnings?: number
+      lifetime_container_fees?: number
+    }
+    setMainBalance(Number(json.available_balance ?? 0))
+    setContainerLockedUsd(Number(json.current_stake ?? 0))
+    setRetailBalance(Number(json.retail_balance ?? 0))
+    setWithdrawalPendingBalance(Number(json.withdrawal_pending_balance ?? 0))
+    setTotalEarnings(Number(json.total_earnings ?? 0))
+    setActiveContainerEarnings(Number(json.active_container_earnings ?? 0))
+    setContainerWithdrawableEarnings(Number(json.container_withdrawable_earnings ?? 0))
+    setContainerFeesPaid(Number(json.lifetime_container_fees ?? 0))
   }, [authLoading, user, isGuestSession])
+
+  useEffect(() => {
+    void refreshMainBalances()
+  }, [refreshMainBalances])
+
+  useOperationalRealtime({
+    enabled: Boolean(user?.id) && !isGuestSession && !authLoading,
+    role: "trading_user",
+    userId: user?.id ?? null,
+    onRetailerFundRequests: () => {
+      void refreshMainBalances()
+      dispatchCustomerLedgerBump("retailer_fund_requests")
+    },
+    onWithdrawals: () => {
+      void refreshMainBalances()
+      dispatchCustomerLedgerBump("withdrawal_requests")
+    },
+    onAccountNotifications: () => {
+      void refreshMainBalances()
+      dispatchCustomerLedgerBump("user_account_notifications")
+    },
+    onContainerEvents: () => {
+      void refreshMainBalances()
+      dispatchCustomerLedgerBump("container_balance_events")
+    },
+  })
+
+  useEffect(() => {
+    const onLedgerBump = () => {
+      void refreshMainBalances()
+    }
+    window.addEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onLedgerBump)
+    return () => window.removeEventListener(NEXUS_CUSTOMER_LEDGER_BUMP, onLedgerBump)
+  }, [refreshMainBalances])
 
   useEffect(() => {
     if (authLoading || !user || isGuestSession || !level5Operational) return
