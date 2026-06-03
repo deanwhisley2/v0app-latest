@@ -17,6 +17,7 @@ import { VERIFY_STEPS_USER } from "@/lib/nexus-bot/user-session-messaging"
 import { cn } from "@/lib/utils"
 
 const LEGACY_RELEASE_KEY = "nexus_bot_legacy_released_v1"
+const SIGNAL_GROUP_HREF = "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf"
 
 type BotTab = "signal" | "auto"
 type FlowStep = 1 | 2 | 3 | 4 | 5
@@ -426,15 +427,17 @@ export function NexusBotWorkspace({
               </span>
             </p>
           ) : null}
-          {activeSession.status === "ready" ? (
+          {activeSession.status === "booked" || activeSession.status === "ready" ? (
             <p className="mt-2 flex items-center gap-2 text-sm text-warning">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Waiting for execution window
+              Trade booked successfully · Waiting for session start
             </p>
           ) : null}
-          <div className="mt-4">
-            <FixedTradeSimulation sessionId={activeSession.id} deskSalt={activeSession.id} />
-          </div>
+          {!["booked", "ready", "pending"].includes(activeSession.status ?? "") ? (
+            <div className="mt-4">
+              <FixedTradeSimulation sessionId={activeSession.id} deskSalt={activeSession.id} />
+            </div>
+          ) : null}
         </Card>
       ) : null}
 
@@ -532,11 +535,8 @@ export function NexusBotWorkspace({
               {verifiedSession && flowStep >= 3 ? (
                 <>
                   <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-sm">
-                    <p className="font-semibold text-success">Trade Session Ready</p>
-                    <p className="text-muted-foreground">Code verified · Strategy verified</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Select your capital allocation, then activate Nexus Bot to join the queue.
-                    </p>
+                    <p className="font-semibold text-success">Code verified</p>
+                    <p className="text-muted-foreground">Select capital, then activate Nexus Bot to book your trade.</p>
                   </div>
 
                   <div className="space-y-2">
@@ -601,7 +601,19 @@ export function NexusBotWorkspace({
                       disabled={busy || !activateConfirm}
                       onClick={() => void activateTradeSession()}
                     >
-                      {busy ? "Confirming allocation…" : "Activate Nexus Bot"}
+                      {busy ? "Booking trade…" : "Activate Nexus Bot"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 min-h-[44px] w-full gap-2 touch-manipulation text-sm"
+                      asChild
+                    >
+                      <a href={SIGNAL_GROUP_HREF} target="_blank" rel="noopener noreferrer">
+                        <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+                        Haven&apos;t received today&apos;s signal? Check Active Signal
+                      </a>
                     </Button>
                   </div>
                 </>
@@ -609,9 +621,21 @@ export function NexusBotWorkspace({
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Your trade session is queued. Capital is reserved until the session completes.
+              Your trade is booked. Capital is reserved until the session completes.
             </p>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-[44px] w-full gap-2 touch-manipulation text-sm"
+            asChild
+          >
+            <a href={SIGNAL_GROUP_HREF} target="_blank" rel="noopener noreferrer">
+              <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+              Haven&apos;t received today&apos;s signal? Check Active Signal
+            </a>
+          </Button>
         </Card>
       ) : (
         <Card className="space-y-4 p-4">

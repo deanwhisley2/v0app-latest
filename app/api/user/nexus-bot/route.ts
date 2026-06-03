@@ -11,7 +11,7 @@ import {
   syncTradeSessionBotStates,
   tradeSessionProfitUsd,
 } from "@/lib/server/nexus-bot-session-service"
-import { userSessionPresentation } from "@/lib/nexus-bot/user-session-messaging"
+import { userSessionPresentation, TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
@@ -31,7 +31,7 @@ function mapTradeSessionForUser(row: Record<string, unknown>) {
   const presentation = userSessionPresentation(phaseKey)
   const stake = Number(row.stake_usd ?? 0)
   const weight = Number(row.participation_weight ?? 1)
-  const isOpen = ["ready", "pending", "running", "active"].includes(status)
+  const isOpen = (TRADE_SESSION_OPEN_STATUSES as readonly string[]).includes(status)
   const projectedProfitUsd = isOpen
     ? tradeSessionProfitUsd(String(row.id), stake, weight)
     : Number(row.profit_released_usd ?? 0)
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
         "id,session_kind,stake_usd,ends_at,created_at,status,display_phase,participation_weight,profit_released_usd,trade_session_id,trade_sessions(start_at,end_at)",
       )
       .eq("user_id", user.id)
-      .in("status", ["ready", "pending", "running", "active"])
+      .in("status", [...TRADE_SESSION_OPEN_STATUSES])
       .order("created_at", { ascending: false })
       .limit(3)
 

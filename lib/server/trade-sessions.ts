@@ -221,7 +221,7 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
   let totalProfit = 0
   let participantCount = 0
   for (const r of participants.data ?? []) {
-    if (["pending", "running", "active", "completed"].includes(String(r.status))) {
+    if (["booked", "pending", "running", "active", "completed"].includes(String(r.status))) {
       participantCount += 1
       totalStake += Number(r.stake_usd ?? 0)
       totalProfit += Number(r.profit_released_usd ?? 0)

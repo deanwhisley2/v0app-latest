@@ -60,14 +60,15 @@ export async function POST(request: Request) {
     })
 
     const presentation = userSessionPresentation(out.phaseKey)
+    const booked = out.status === "booked"
 
     return NextResponse.json({
       ok: true,
       sessionId: out.sessionId,
       phaseKey: out.phaseKey,
-      headline: presentation.headline,
-      detail: presentation.detail,
-      status: "ready",
+      headline: booked ? "Trade booked successfully" : presentation.headline,
+      detail: booked ? "Waiting for session start" : presentation.detail,
+      status: out.status,
       stakeUsd,
       participationWeight: out.participationWeight,
       availableUsd: out.available_balance,

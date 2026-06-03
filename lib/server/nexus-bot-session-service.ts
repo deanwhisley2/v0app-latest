@@ -4,6 +4,7 @@ import { computeParticipationWeight } from "@/lib/nexus-bot/participation-weight
 import {
   closedTradeHistorySummary,
   resolveTradeSessionPhaseKey,
+  TRADE_SESSION_OPEN_STATUSES,
   type TradeSessionPhaseKey,
 } from "@/lib/nexus-bot/user-session-messaging"
 import {
@@ -57,6 +58,7 @@ export function resolveUserDisplayPhase(params: {
     const key = params.displayPhase as TradeSessionPhaseKey
     if (
       [
+        "booked",
         "ready",
         "waiting_window",
         "active_analysing",
@@ -201,7 +203,7 @@ export async function syncTradeSessionBotStates(
       "id,user_id,status,trade_session_id,stake_usd,participation_weight,trade_sessions(start_at,end_at)",
     )
     .not("trade_session_id", "is", null)
-    .in("status", ["ready", "pending", "running", "active"])
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
   if (userId) q = q.eq("user_id", userId)
   const { data, error } = await q.limit(200)
   if (error) throw new Error(error.message)
@@ -227,7 +229,7 @@ export async function syncTradeSessionBotStates(
       continue
     }
 
-    const nextStatus = t < startMs ? "ready" : "running"
+    const nextStatus = t < startMs ? "booked" : "running"
     const phase = resolveUserDisplayPhase({
       status: nextStatus,
       startAt: ts.start_at,
@@ -239,7 +241,7 @@ export async function syncTradeSessionBotStates(
         .from("nexus_bot_sessions")
         .update({ status: nextStatus, display_phase: phase })
         .eq("id", row.id)
-        .in("status", ["ready", "pending", "running", "active"])
+        .in("status", [...TRADE_SESSION_OPEN_STATUSES])
     }
   }
 
@@ -247,7 +249,7 @@ export async function syncTradeSessionBotStates(
     .from("nexus_bot_sessions")
     .update({ status: "expired", display_phase: "completed" })
     .not("trade_session_id", "is", null)
-    .in("status", ["ready", "pending"])
+    .in("status", ["booked", "ready", "pending"])
     .lt("ends_at", nowIso)
 }
 
@@ -288,7 +290,7 @@ async function completeTradeSessionBotRow(
       participation_weight: weight,
     })
     .eq("id", row.id)
-    .in("status", ["ready", "pending", "running", "active"])
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
   if (uErr) return null
 
   if (totalCredit > 0) {
@@ -344,6 +346,7 @@ export async function activateTradeSessionBot(
   sessionId: string
   endsAt: string
   startAt: string
+  status: string
   phaseKey: TradeSessionPhaseKey
   participationWeight: number
   available_balance: number
@@ -373,7 +376,7 @@ export async function activateTradeSessionBot(
     .select("id")
     .eq("user_id", params.userId)
     .eq("trade_session_id", tradeSession.id)
-    .in("status", ["ready", "pending", "running", "active"])
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
     .maybeSingle()
   if (existing) throw new Error("SESSION_ALREADY_JOINED")
 
@@ -381,7 +384,7 @@ export async function activateTradeSessionBot(
     .from("nexus_bot_sessions")
     .select("id")
     .eq("user_id", params.userId)
-    .in("status", ["ready", "pending", "running", "active"])
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
     .limit(1)
   if ((otherActive ?? []).length > 0) throw new Error("BOT_SESSION_ALREADY_ACTIVE")
 
@@ -389,12 +392,22 @@ export async function activateTradeSessionBot(
   if (!reserved.ok) throw new Error("INSUFFICIENT_BALANCE")
 
   const queuedAt = now.toISOString()
+  const startMs = new Date(tradeSession.startAt).getTime()
+  const initialStatus = now.getTime() < startMs ? "booked" : "running"
   const participationWeight = computeParticipationWeight({
     sessionStartAt: tradeSession.startAt,
     sessionEndAt: tradeSession.endAt,
     joinedAt: queuedAt,
   })
-  const phaseKey: TradeSessionPhaseKey = "waiting_window"
+  const phaseKey: TradeSessionPhaseKey =
+    initialStatus === "booked"
+      ? "booked"
+      : resolveTradeSessionPhaseKey({
+          status: "running",
+          startAt: tradeSession.startAt,
+          endAt: tradeSession.endAt,
+          now,
+        })
 
   const { data: ins, error: insErr } = await admin
     .from("nexus_bot_sessions")
@@ -403,7 +416,7 @@ export async function activateTradeSessionBot(
       session_kind: "signal",
       trade_session_id: tradeSession.id,
       stake_usd: stake,
-      status: "ready",
+      status: initialStatus,
       strategy_title: "Trade Session",
       confidence: "High",
       ends_at: tradeSession.endAt,
@@ -416,6 +429,9 @@ export async function activateTradeSessionBot(
         stake_reserved_usd: stake,
         trade_code: tradeSession.code,
         verification_id: params.verificationId,
+        scheduled_start_at: tradeSession.startAt,
+        scheduled_end_at: tradeSession.endAt,
+        activated_at: queuedAt,
       },
     })
     .select("id")
@@ -437,7 +453,7 @@ export async function activateTradeSessionBot(
     actorType: "user",
     actorId: params.userId,
     relatedSessionId: String(ins.id),
-    summary: "Trade session allocation confirmed — capital reserved.",
+    summary: "Trade booked successfully — capital reserved until session completes.",
     metadata: {
       trade_session_id: tradeSession.id,
       session_id: ins.id,
@@ -460,6 +476,7 @@ export async function activateTradeSessionBot(
     sessionId: String(ins.id),
     endsAt: tradeSession.endAt,
     startAt: tradeSession.startAt,
+    status: initialStatus,
     phaseKey,
     participationWeight,
     available_balance: reserved.available_balance,
@@ -529,7 +546,7 @@ export async function terminateTradeSessionByAdmin(
     .from("nexus_bot_sessions")
     .select("id,user_id,stake_usd,participation_weight")
     .eq("trade_session_id", params.tradeSessionId)
-    .in("status", ["ready", "pending", "running", "active"])
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
   if (rowsErr) throw new Error(rowsErr.message)
 
   let participantsSettled = 0
@@ -597,7 +614,7 @@ export async function getTradeSessionParticipantCounts(
     const id = String(r.trade_session_id)
     if (!out[id]) out[id] = { active: 0, completed: 0 }
     const st = String(r.status)
-    if (["ready", "pending", "running", "active"].includes(st)) out[id].active += 1
+    if (["booked", "ready", "pending", "running", "active"].includes(st)) out[id].active += 1
     if (st === "completed") out[id].completed += 1
   }
   return out
@@ -623,7 +640,7 @@ export async function activateNexusBotSession(
     .from("nexus_bot_sessions")
     .select("id")
     .eq("user_id", params.userId)
-    .in("status", ["ready", "pending", "running", "active"])
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
     .limit(1)
   if ((active ?? []).length > 0) throw new Error("BOT_SESSION_ALREADY_ACTIVE")
 

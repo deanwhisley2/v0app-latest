@@ -3,12 +3,21 @@ export type TradeSessionPhaseKey =
   | "verify"
   | "capital_pending"
   | "ready"
+  | "booked"
   | "waiting_window"
   | "active_analysing"
   | "active_strategy"
   | "capturing"
   | "completed"
   | "profit_released"
+
+export const TRADE_SESSION_OPEN_STATUSES = [
+  "booked",
+  "ready",
+  "pending",
+  "running",
+  "active",
+] as const
 
 export const VERIFY_STEPS_USER = [
   "Verifying trade code",
@@ -24,21 +33,23 @@ export function userSessionPresentation(phase: TradeSessionPhaseKey): {
     case "verify":
       return { headline: "Verification", detail: "Verifying trade code" }
     case "capital_pending":
-      return { headline: "Trade Session Ready", detail: "Code verified · Strategy verified" }
+      return { headline: "Code Verified", detail: "Select capital to continue" }
     case "ready":
-      return { headline: "Ready", detail: "Trade allocation confirmed" }
+      return { headline: "Trade Booked", detail: "Waiting for session start" }
+    case "booked":
+      return { headline: "Trade Booked", detail: "Waiting for session start" }
     case "waiting_window":
-      return { headline: "Trade Session Ready", detail: "Waiting for execution window" }
+      return { headline: "Trade Booked", detail: "Waiting for session start" }
     case "active_analysing":
-      return { headline: "Trade Session Active", detail: "Nexus Bot analysing market conditions" }
+      return { headline: "Session Started", detail: "Nexus Bot analysing market conditions" }
     case "active_strategy":
-      return { headline: "Trade Session Active", detail: "Strategy active" }
+      return { headline: "Bot Trading", detail: "Strategy active" }
     case "capturing":
-      return { headline: "Trade Session Active", detail: "Capturing session results" }
+      return { headline: "Bot Trading", detail: "Capturing session results" }
     case "completed":
-      return { headline: "Completed", detail: "Session completed" }
+      return { headline: "Session Completed", detail: "Session completed" }
     case "profit_released":
-      return { headline: "Completed", detail: "Profits transferred to available earnings" }
+      return { headline: "Profits Released", detail: "Profits transferred to available earnings" }
     default:
       return { headline: "Trade Session", detail: "Processing" }
   }
@@ -57,9 +68,11 @@ export function resolveTradeSessionPhaseKey(params: {
 
   if (params.status === "completed") return "profit_released"
   if (params.status === "expired" || params.status === "cancelled") return "completed"
-  if (params.status === "ready" || params.status === "pending") return "waiting_window"
+  if (params.status === "booked" || params.status === "ready" || params.status === "pending") {
+    return "booked"
+  }
   if (t >= end) return "capturing"
-  if (t < start) return "waiting_window"
+  if (t < start) return "booked"
 
   const progress = (t - start) / Math.max(1, end - start)
   if (progress < 0.35) return "active_analysing"

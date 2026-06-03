@@ -2,8 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
 import { findActiveTradeSessionByCode } from "@/lib/server/trade-sessions"
 
-const VERIFY_TTL_MS = 30 * 60_000
-
 export async function verifyTradeSessionCode(
   admin: SupabaseClient,
   userId: string,
@@ -26,7 +24,8 @@ export async function verifyTradeSessionCode(
   const endMs = new Date(session.endAt).getTime()
   if (endMs <= now.getTime()) throw new Error("SESSION_EXPIRED")
 
-  const expiresAt = new Date(Math.min(endMs, now.getTime() + VERIFY_TTL_MS)).toISOString()
+  // Valid through session end so users can pre-book hours before start.
+  const expiresAt = new Date(endMs).toISOString()
   const verifiedAt = now.toISOString()
 
   await admin
@@ -35,6 +34,30 @@ export async function verifyTradeSessionCode(
     .eq("user_id", userId)
     .eq("trade_session_id", session.id)
     .is("consumed_at", null)
+
+  const { data: existingOpen } = await admin
+    .from("trade_session_verifications")
+    .select("id,verified_at,expires_at")
+    .eq("user_id", userId)
+    .eq("trade_session_id", session.id)
+    .is("consumed_at", null)
+    .maybeSingle()
+
+  if (existingOpen) {
+    const { data: refreshed, error: refreshErr } = await admin
+      .from("trade_session_verifications")
+      .update({ verified_at: verifiedAt, expires_at: expiresAt, code })
+      .eq("id", existingOpen.id)
+      .select("id,verified_at,expires_at")
+      .single()
+    if (refreshErr) throw new Error(refreshErr.message)
+    return {
+      verificationId: String(refreshed.id),
+      verifiedAt: String(refreshed.verified_at),
+      expiresAt: String(refreshed.expires_at),
+      session: { id: session.id, startAt: session.startAt, endAt: session.endAt },
+    }
+  }
 
   const { data: row, error } = await admin
     .from("trade_session_verifications")
@@ -48,23 +71,6 @@ export async function verifyTradeSessionCode(
     .select("id,verified_at,expires_at")
     .single()
   if (error) {
-    if (error.code === "23505") {
-      const { data: existing } = await admin
-        .from("trade_session_verifications")
-        .select("id,verified_at,expires_at")
-        .eq("user_id", userId)
-        .eq("trade_session_id", session.id)
-        .is("consumed_at", null)
-        .maybeSingle()
-      if (existing) {
-        return {
-          verificationId: String(existing.id),
-          verifiedAt: String(existing.verified_at),
-          expiresAt: String(existing.expires_at),
-          session: { id: session.id, startAt: session.startAt, endAt: session.endAt },
-        }
-      }
-    }
     throw new Error(error.message)
   }
 
