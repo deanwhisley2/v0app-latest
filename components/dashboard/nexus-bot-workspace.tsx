@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bot, CheckCircle2, Lock, MessageCircle, Sparkles, Trophy, Zap } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -18,6 +18,56 @@ import { cn } from "@/lib/utils"
 
 const LEGACY_RELEASE_KEY = "nexus_bot_legacy_released_v1"
 const SIGNAL_GROUP_HREF = "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf"
+const TRADE_FLOW_PERSIST_KEY = "nexus_bot_trade_flow_v1"
+
+type PersistedTradeFlow = {
+  code: string
+  verificationId: string
+  verifiedAt: string
+  stakeTier: number | "max"
+}
+
+function readPersistedTradeFlow(): PersistedTradeFlow | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = sessionStorage.getItem(TRADE_FLOW_PERSIST_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as PersistedTradeFlow
+    if (!parsed.code || !parsed.verificationId) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writePersistedTradeFlow(flow: PersistedTradeFlow | null) {
+  if (typeof window === "undefined") return
+  try {
+    if (!flow) sessionStorage.removeItem(TRADE_FLOW_PERSIST_KEY)
+    else sessionStorage.setItem(TRADE_FLOW_PERSIST_KEY, JSON.stringify(flow))
+  } catch {
+    /* ignore */
+  }
+}
+
+function SignalGroupLink({ className }: { className?: string }) {
+  return (
+    <a
+      href={SIGNAL_GROUP_HREF}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 text-[11px] leading-snug text-muted-foreground underline-offset-2 hover:text-primary hover:underline touch-manipulation",
+        className,
+      )}
+    >
+      <MessageCircle className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate">
+        Missed today&apos;s signal? <span className="font-medium text-foreground/80">Check Active Signal</span>
+      </span>
+    </a>
+  )
+}
 
 type BotTab = "signal" | "auto"
 type FlowStep = 1 | 2 | 3 | 4 | 5
@@ -103,6 +153,25 @@ export function NexusBotWorkspace({
     return stakeTier
   }, [stakeTier, availableUsd])
 
+  const activateReady = Boolean(verifiedSession) && signalCommitUsd > 0 && !busy
+  const canActivate = activateReady && activateConfirm
+
+  const persistTradeFlow = useCallback(
+    (patch: Partial<PersistedTradeFlow> & { code?: string; verificationId?: string }) => {
+      const current = readPersistedTradeFlow()
+      const code = patch.code ?? current?.code ?? codeInput
+      const verificationId = patch.verificationId ?? current?.verificationId ?? verifiedSession?.verificationId
+      if (!code || !verificationId) return
+      writePersistedTradeFlow({
+        code,
+        verificationId,
+        verifiedAt: patch.verifiedAt ?? current?.verifiedAt ?? verifiedSession?.verifiedAt ?? new Date().toISOString(),
+        stakeTier: patch.stakeTier ?? stakeTier,
+      })
+    },
+    [codeInput, stakeTier, verifiedSession],
+  )
+
   const resetFlow = useCallback(() => {
     setFlowStep(1)
     setVerifiedSession(null)
@@ -110,7 +179,10 @@ export function NexusBotWorkspace({
     setVerifyError(null)
     setActivateError(null)
     setActivateConfirm(false)
+    writePersistedTradeFlow(null)
   }, [])
+
+  const hadActiveSessionRef = useRef(false)
 
   const load = useCallback(async () => {
     const {
@@ -134,8 +206,14 @@ export function NexusBotWorkspace({
       setAvailableUsd(Number(j.availableUsd ?? mainBalanceUsd))
       const active = (j.activeSessions ?? [])[0] ?? null
       setActiveSession(active)
-      if (active) setFlowStep(5)
-      else resetFlow()
+      if (active) {
+        hadActiveSessionRef.current = true
+        setFlowStep(5)
+        writePersistedTradeFlow(null)
+      } else if (hadActiveSessionRef.current) {
+        hadActiveSessionRef.current = false
+        resetFlow()
+      }
       const g: Record<string, boolean> = {}
       for (const p of j.autoTradePlans ?? []) g[p.key] = Boolean(p.granted)
       setGrants(g)
@@ -159,6 +237,20 @@ export function NexusBotWorkspace({
       setMyPoints(Number(p.myPoints ?? 0))
     }
   }, [mainBalanceUsd, onActiveSessionCountsChange, resetFlow])
+
+  useEffect(() => {
+    const persisted = readPersistedTradeFlow()
+    if (persisted) {
+      setCodeInput(persisted.code)
+      setVerifiedSession({
+        verificationId: persisted.verificationId,
+        verifiedAt: persisted.verifiedAt,
+      })
+      setStakeTier(persisted.stakeTier)
+      setVerifySteps([...VERIFY_STEPS_USER])
+      setFlowStep(4)
+    }
+  }, [])
 
   useEffect(() => {
     void (async () => {
@@ -196,7 +288,9 @@ export function NexusBotWorkspace({
         setLoading(false)
       }
     })()
-  }, [load])
+    // Boot load only — balance refreshes must not wipe an in-progress verify/activate flow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!activeSession) return
@@ -264,7 +358,13 @@ export function NexusBotWorkspace({
         verificationId: out.verificationId,
         verifiedAt: out.verifiedAt,
       })
-      setFlowStep(3)
+      persistTradeFlow({
+        code: codeInput,
+        verificationId: out.verificationId,
+        verifiedAt: out.verifiedAt,
+        stakeTier,
+      })
+      setFlowStep(4)
     } catch (e) {
       setVerifyError(e instanceof Error ? e.message : "Verification failed")
       setVerifySteps([])
@@ -488,7 +588,7 @@ export function NexusBotWorkspace({
                     key={n}
                     className={cn(
                       "rounded-full px-3 py-1 font-medium",
-                      flowStep >= n || (n === 4 && flowStep >= 3)
+                      flowStep >= n || (n === 4 && flowStep >= 4)
                         ? "bg-primary/15 text-primary"
                         : "bg-muted text-muted-foreground",
                     )}
@@ -560,7 +660,11 @@ export function NexusBotWorkspace({
                         <button
                           key={usd}
                           type="button"
-                          onClick={() => setStakeTier(usd)}
+                          onClick={() => {
+                            setStakeTier(usd)
+                            setFlowStep(4)
+                            persistTradeFlow({ stakeTier: usd })
+                          }}
                           className={cn(
                             "min-h-[44px] rounded-lg px-4 py-2 font-mono text-sm font-semibold touch-manipulation",
                             stakeTier === usd ? "bg-primary text-primary-foreground" : "bg-muted",
@@ -571,7 +675,11 @@ export function NexusBotWorkspace({
                       ))}
                       <button
                         type="button"
-                        onClick={() => setStakeTier("max")}
+                        onClick={() => {
+                          setStakeTier("max")
+                          setFlowStep(4)
+                          persistTradeFlow({ stakeTier: "max" })
+                        }}
                         className={cn(
                           "min-h-[44px] rounded-lg px-4 py-2 font-mono text-sm font-semibold touch-manipulation",
                           stakeTier === "max" ? "bg-primary text-primary-foreground" : "bg-muted",
@@ -585,6 +693,11 @@ export function NexusBotWorkspace({
                       <span className="font-mono font-semibold text-foreground">
                         {formatUserMoney(signalCommitUsd)}
                       </span>
+                      {signalCommitUsd <= 0 ? (
+                        <span className="mt-1 block text-destructive">
+                          Add Nexus Main balance before activating.
+                        </span>
+                      ) : null}
                     </p>
                   </div>
 
@@ -592,41 +705,58 @@ export function NexusBotWorkspace({
                     <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                       Step 4 · Activate Nexus Bot
                     </p>
-                    <label className="flex items-start gap-2 text-sm">
-                      <Checkbox
-                        checked={activateConfirm}
-                        onCheckedChange={(v) => setActivateConfirm(v === true)}
-                      />
-                      <span>
-                        I authorize Nexus Bot to manage the selected capital for this session. Only
-                        session profits become available for release when the window closes.
+                    <button
+                      type="button"
+                      aria-pressed={activateConfirm}
+                      className={cn(
+                        "flex min-h-[48px] w-full items-start gap-3 rounded-xl border px-3 py-3 text-left text-sm touch-manipulation",
+                        activateConfirm
+                          ? "border-primary/40 bg-primary/10 ring-1 ring-primary/20"
+                          : "border-border/70 bg-muted/20",
+                      )}
+                      onClick={() => setActivateConfirm((v) => !v)}
+                    >
+                      <span
+                        className={cn(
+                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                          activateConfirm
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-muted-foreground/40 bg-background",
+                        )}
+                        aria-hidden
+                      >
+                        {activateConfirm ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
                       </span>
-                    </label>
+                      <span>
+                        I authorize Nexus Bot to manage the selected capital for this session. Session
+                        profits release when the trade completes.
+                      </span>
+                    </button>
                     {activateError ? (
                       <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                         {activateError}
                       </p>
                     ) : null}
+                    {!activateConfirm && activateReady ? (
+                      <p className="text-xs text-muted-foreground">
+                        Tap the confirmation above to enable Activate Nexus Bot.
+                      </p>
+                    ) : null}
                     <Button
                       type="button"
-                      className="min-h-[52px] w-full touch-manipulation text-base font-semibold"
-                      disabled={busy || !activateConfirm}
+                      className={cn(
+                        "min-h-[52px] w-full touch-manipulation text-base font-semibold transition-all",
+                        canActivate && "shadow-[0_0_24px_rgba(16,185,129,0.35)] ring-2 ring-success/40",
+                        activateReady && !activateConfirm && "opacity-60",
+                      )}
+                      disabled={!canActivate}
                       onClick={() => void activateTradeSession()}
                     >
                       {busy ? "Booking trade…" : "Activate Nexus Bot"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 min-h-[44px] w-full gap-2 touch-manipulation text-sm"
-                      asChild
-                    >
-                      <a href={SIGNAL_GROUP_HREF} target="_blank" rel="noopener noreferrer">
-                        <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
-                        Haven&apos;t received today&apos;s signal? Check Active Signal
-                      </a>
-                    </Button>
+                    <div className="pt-1 text-center">
+                      <SignalGroupLink />
+                    </div>
                   </div>
                 </>
               ) : null}
@@ -636,18 +766,9 @@ export function NexusBotWorkspace({
               Your trade is booked. Capital is reserved until the session completes.
             </p>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-[44px] w-full gap-2 touch-manipulation text-sm"
-            asChild
-          >
-            <a href={SIGNAL_GROUP_HREF} target="_blank" rel="noopener noreferrer">
-              <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
-              Haven&apos;t received today&apos;s signal? Check Active Signal
-            </a>
-          </Button>
+          <div className="border-t border-border/40 pt-3 text-center">
+            <SignalGroupLink />
+          </div>
         </Card>
       ) : (
         <Card className="space-y-4 p-4">

@@ -104,7 +104,6 @@ export async function consumeTradeSessionVerification(
   if (error) throw new Error(error.message)
   if (!row || row.consumed_at) throw new Error("VERIFICATION_INVALID")
   if (normalizeTradeCode(String(row.code)) !== code) throw new Error("VERIFICATION_CODE_MISMATCH")
-  if (new Date(String(row.expires_at)).getTime() <= Date.now()) throw new Error("VERIFICATION_EXPIRED")
 
   const { data: ts, error: tsErr } = await admin
     .from("trade_sessions")
@@ -114,10 +113,16 @@ export async function consumeTradeSessionVerification(
   if (tsErr) throw new Error(tsErr.message)
   if (!ts || ts.status !== "active") throw new Error("CODE_INVALID_OR_EXPIRED")
 
+  const endMs = new Date(String(ts.end_at)).getTime()
+  if (endMs <= Date.now()) throw new Error("SESSION_EXPIRED")
+
   const consumedAt = new Date().toISOString()
   const { error: uErr } = await admin
     .from("trade_session_verifications")
-    .update({ consumed_at: consumedAt })
+    .update({
+      consumed_at: consumedAt,
+      expires_at: String(ts.end_at),
+    })
     .eq("id", row.id)
     .is("consumed_at", null)
   if (uErr) throw new Error(uErr.message)

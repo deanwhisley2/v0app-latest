@@ -20,6 +20,9 @@ export async function POST(request: Request) {
     await expireDueTradeSessions(admin)
 
     const out = await verifyTradeSessionCode(admin, user.id, code)
+    const now = Date.now()
+    const startMs = new Date(out.session.startAt).getTime()
+    const preBook = startMs > now
 
     return NextResponse.json({
       ok: true,
@@ -27,12 +30,16 @@ export async function POST(request: Request) {
       verificationId: out.verificationId,
       verifiedAt: out.verifiedAt,
       expiresAt: out.expiresAt,
+      preBookAllowed: true,
+      preBook,
       session: {
         id: out.session.id,
       },
       steps: [...VERIFY_STEPS_USER],
-      headline: "Trade Session Ready",
-      detail: "Code verified · Strategy verified",
+      headline: "Code verified",
+      detail: preBook
+        ? "Select capital and activate Nexus Bot to book your trade before the session starts."
+        : "Select capital and activate Nexus Bot to join this session.",
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Internal error"
