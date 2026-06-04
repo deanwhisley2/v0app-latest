@@ -2,7 +2,9 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { findAuthUserIdByEmail } from "@/lib/auth-users"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
+import { confirmAuthEmailForPhonePasswordLogin } from "@/lib/server/register-auth-access"
 
 type LoginBody = {
   email?: string
@@ -33,10 +35,32 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const resolvedEmail = (await resolveIdentifierToEmail(admin, identifier)) ?? identifier
   const supabase = await createRouteHandlerSupabaseClient()
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: resolvedEmail,
-    password,
-  })
+
+  async function signIn() {
+    return supabase.auth.signInWithPassword({
+      email: resolvedEmail,
+      password,
+    })
+  }
+
+  let { data, error } = await signIn()
+
+  if (
+    error &&
+    /email not confirmed|confirm your email/i.test(error.message) &&
+    resolvedEmail.includes("@")
+  ) {
+    try {
+      const userId = await findAuthUserIdByEmail(admin, resolvedEmail)
+      if (userId && (await confirmAuthEmailForPhonePasswordLogin(admin, userId))) {
+        const retry = await signIn()
+        data = retry.data
+        error = retry.error
+      }
+    } catch (e) {
+      console.warn("[auth/login] email_confirm retry:", e instanceof Error ? e.message : e)
+    }
+  }
 
   if (error) {
     const msg = error.message

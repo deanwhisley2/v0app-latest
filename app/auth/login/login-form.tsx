@@ -89,7 +89,7 @@ export default function LoginForm() {
       if (emailParam) setIdentifier(emailParam)
       if (params.get("verify_later") === "1") {
         setSuccess(
-          "Account created. Sign in with your password to continue. You can verify your email anytime from Settings.",
+          "Account created. Sign in with the phone number and password you registered with. You can verify your email anytime from Settings.",
         )
       }
     } catch {
@@ -191,7 +191,7 @@ export default function LoginForm() {
         setError(
           loginMode === "magic"
             ? "Enter the full email address for your account."
-            : "No account matches that phone or username. Sign in with your full email address (the one you registered with).",
+            : "No account matches that phone number. Use the same phone you entered at registration, or your full email if you added one.",
         )
         return
       }

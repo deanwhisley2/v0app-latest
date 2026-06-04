@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { findAuthUserIdByEmail } from "@/lib/auth-users"
+import { phoneAuthEmailFromDigits } from "@/lib/server/register-auth-access"
 
 type AdminClient = SupabaseClient
 
@@ -49,19 +51,37 @@ export async function resolveIdentifierToEmail(
   if (!identifier) return null
   if (isEmailLike(identifier)) return identifier.toLowerCase()
 
-  // 1) Try exact phone match variants.
+  // 1) Try exact phone match variants (profile email may be null until inbox verify).
   for (const phoneCandidate of normalizePhoneCandidates(identifier)) {
     const { data: phoneRows, error: phoneErr } = await admin
       .from("profiles")
-      .select("email")
+      .select("id, email")
       .eq("phone", phoneCandidate)
       .limit(2)
     if (phoneErr) {
       console.error("resolveIdentifierToEmail phone lookup:", phoneErr)
       continue
     }
-    const phoneEmails = uniqueEmails((phoneRows ?? []) as Array<{ email: string | null }>)
-    if (phoneEmails.length === 1) return phoneEmails[0]
+    const rows = (phoneRows ?? []) as Array<{ id: string; email: string | null }>
+    if (rows.length !== 1) continue
+
+    const profEmail = (rows[0].email ?? "").trim().toLowerCase()
+    if (profEmail) return profEmail
+
+    const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(rows[0].id)
+    if (authErr) {
+      console.error("resolveIdentifierToEmail auth user:", authErr)
+      continue
+    }
+    const authEmail = authUser.user?.email?.trim().toLowerCase()
+    if (authEmail) return authEmail
+  }
+
+  const digits = identifier.replace(/\D/g, "")
+  if (digits.length >= 9 && digits.length <= 15) {
+    const internal = phoneAuthEmailFromDigits(digits)
+    const uid = await findAuthUserIdByEmail(admin, internal)
+    if (uid) return internal
   }
 
   // 2) Email local-part prefix (e.g. "kisumu" -> kisumusahil8@gmail.com when unique).

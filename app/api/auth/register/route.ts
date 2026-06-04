@@ -29,6 +29,11 @@ import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { createAuthSessionForEmail } from "@/lib/server/email-verification-session"
 import { trackLoginSession } from "@/lib/server/login-session"
 import { markProfilePendingVerificationEmail } from "@/lib/server/pending-verification-email"
+import {
+  authEmailConfirmedAtRegister,
+  confirmAuthEmailForPhonePasswordLogin,
+} from "@/lib/server/register-auth-access"
+import { syncRegisterProfileContact } from "@/lib/server/register-profile-sync"
 
 type RegisterBody = {
   email?: string
@@ -128,7 +133,7 @@ export async function POST(request: Request) {
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: authEmail,
     password,
-    email_confirm: !requiresEmailVerification,
+    email_confirm: authEmailConfirmedAtRegister(requiresEmailVerification, phone),
     user_metadata: userMetadata,
   })
 
@@ -163,6 +168,11 @@ export async function POST(request: Request) {
           { status: 400 },
         )
       }
+      await syncRegisterProfileContact(admin, existingId, {
+        phone,
+        full_name,
+        funding_country_code,
+      })
       if (requiresEmailVerification && emailRaw) {
         const pendingEmail = emailRaw.toLowerCase()
         await markProfilePendingVerificationEmail(admin, existingId, pendingEmail, userMetadata)
@@ -170,6 +180,9 @@ export async function POST(request: Request) {
         if (!issued.ok) {
           return NextResponse.json({ error: issued.error }, { status: 400 })
         }
+      }
+      if (phone) {
+        await confirmAuthEmailForPhonePasswordLogin(admin, existingId)
       }
       await grantRegisterWelcomeBonus(admin, existingId)
       return NextResponse.json({
@@ -188,6 +201,11 @@ export async function POST(request: Request) {
 
   const newUserId = created.user?.id
   if (newUserId) {
+    await syncRegisterProfileContact(admin, newUserId, {
+      phone,
+      full_name,
+      funding_country_code,
+    })
     if (requiresEmailVerification && resolved.displayEmail) {
       await markProfilePendingVerificationEmail(
         admin,
