@@ -29,7 +29,7 @@ export function OptionalSecurityReminderBanner({ onOpenSettings }: Props) {
       const token = session?.access_token
       if (!token) return
       const { profile } = await fetchSecurityProfilePassive(token)
-      if (profile?.hasMinimumSecurity && profile.suggestsOptionalEnhancements) {
+      if (profile?.fundingReminder || (profile?.hasMinimumSecurity && profile.suggestsOptionalEnhancements)) {
         setVisible(true)
       }
     })()

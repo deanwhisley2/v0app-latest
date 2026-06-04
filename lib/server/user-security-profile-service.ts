@@ -12,10 +12,13 @@ import {
   verifySecurityCode,
 } from "@/lib/nexus-security-code"
 import {
+  hasFundingPayoutDetails,
   hasMinimumPayoutLine,
   hasMinimumSecurity,
+  hasSecurityPin,
   suggestsOptionalSecurityEnhancements,
 } from "@/lib/nexus-security-minimum"
+import { buildSecuritySetupProgress } from "@/lib/security-setup-progress"
 import {
   lineReady,
   resolveLineFromPayoutId,
@@ -216,20 +219,43 @@ export function defaultWithdrawPayoutOptionId(
   return opts[0]?.id ?? null
 }
 
-function rowToPublic(row: UserSecurityProfileRow | null): PublicSecurityProfile {
+function rowToPublic(
+  row: UserSecurityProfileRow | null,
+  account?: { phone?: string | null; is_verified?: boolean | null },
+): PublicSecurityProfile {
   const enriched = row ? enrichRowWithdrawalMirrors(row) : null
-  const hasSecurityCode = Boolean(enriched?.security_code_hash)
-  const minimumPayoutLine = enriched ? hasMinimumPayoutLine(enriched) : false
+  const hasSecurityCode = enriched ? hasSecurityPin(enriched) : false
+  const minimumPayoutLine = enriched ? hasFundingPayoutDetails(enriched) : false
   const minimumSecurity = enriched ? hasMinimumSecurity(enriched) : false
   const withdrawOpts = buildWithdrawPayoutOptions(enriched)
   const cooldownUntil = row?.cooldown_until ?? null
   const inCooldown = cooldownUntil ? new Date(cooldownUntil).getTime() > Date.now() : false
+  const setupProgress = enriched
+    ? buildSecuritySetupProgress({
+        row: enriched,
+        phone: account?.phone,
+        emailVerified: account?.is_verified === true,
+      })
+    : buildSecuritySetupProgress({ row: {}, phone: account?.phone, emailVerified: account?.is_verified === true })
+  const setupCompletedCount = setupProgress.filter((i) => i.complete).length
+  const setupTotalCount = setupProgress.length
+  const needsFundingSetup = !minimumPayoutLine
+  const needsSecurityPin = !hasSecurityCode
   return {
     hasSecurityCode,
     hasMinimumSecurity: minimumSecurity,
     hasTransactionNumber: minimumPayoutLine,
     hasMinimumPayoutLine: minimumPayoutLine,
-    needsSetup: !minimumSecurity,
+    needsSetup: needsFundingSetup,
+    needsSecurityPin,
+    needsFundingSetup,
+    setupProgress,
+    setupCompletedCount,
+    setupTotalCount,
+    fundingReminder:
+      hasSecurityCode && needsFundingSetup
+        ? "Complete your payment details to enable deposits and withdrawals."
+        : null,
     suggestsOptionalEnhancements: enriched ? suggestsOptionalSecurityEnhancements(enriched) : false,
     payoutMethod: (enriched?.payout_method as NexusPayoutMethod) ?? "mobile_money",
     depositNumberMasked: enriched?.deposit_number
@@ -278,7 +304,15 @@ export async function getPublicSecurityProfile(
   userId: string,
 ): Promise<PublicSecurityProfile> {
   const row = await getOrCreateSecurityProfile(admin, userId)
-  return rowToPublic(row)
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("phone, is_verified")
+    .eq("id", userId)
+    .maybeSingle()
+  return rowToPublic(row, {
+    phone: typeof prof?.phone === "string" ? prof.phone : null,
+    is_verified: prof?.is_verified === true,
+  })
 }
 
 export function rowToSetupFields(row: UserSecurityProfileRow | null): SecurityProfileSetupFields {
@@ -347,6 +381,36 @@ export async function setupSecurityProfile(
     throw new Error("Security profile already configured.")
   }
 
+  const mtnDep = normalizeDepositNumber(params.mtnDepositNumber ?? "")
+  const airtelDep = normalizeDepositNumber(params.airtelDepositNumber ?? "")
+  const mtnWd = normalizeWithdrawalNumber(params.mtnWithdrawalNumber ?? "")
+  const airtelWd = normalizeWithdrawalNumber(params.airtelWithdrawalNumber ?? "")
+  const mtnDepOk = mtnDep.length >= 8
+  const airtelDepOk = airtelDep.length >= 8
+  const mtnWdOk = mtnWd.length >= 8
+  const airtelWdOk = airtelWd.length >= 8
+  const anyNumber = mtnDepOk || airtelDepOk || mtnWdOk || airtelWdOk
+
+  if (!anyNumber) {
+    if (row.security_code_hash) {
+      throw new Error("Security PIN is already set. Add payout details below.")
+    }
+    if (!isValidSecurityCodeFormat(params.securityCode)) {
+      throw new Error("Security code must be exactly 6 digits.")
+    }
+    const now = new Date().toISOString()
+    const { error } = await admin
+      .from("user_security_profiles")
+      .update({
+        security_code_hash: hashSecurityCode(params.securityCode),
+        security_code_set_at: now,
+        updated_at: now,
+      })
+      .eq("user_id", params.userId)
+    if (error) throw error
+    return getPublicSecurityProfile(admin, params.userId)
+  }
+
   const completingIncomplete = Boolean(row.security_code_hash && !hasNumbers)
   if (!completingIncomplete && !isValidSecurityCodeFormat(params.securityCode)) {
     throw new Error("Security code must be exactly 6 digits.")
@@ -358,14 +422,6 @@ export async function setupSecurityProfile(
     }
   }
 
-  const mtnDep = normalizeDepositNumber(params.mtnDepositNumber ?? "")
-  const airtelDep = normalizeDepositNumber(params.airtelDepositNumber ?? "")
-  const mtnWd = normalizeWithdrawalNumber(params.mtnWithdrawalNumber ?? "")
-  const airtelWd = normalizeWithdrawalNumber(params.airtelWithdrawalNumber ?? "")
-  const mtnDepOk = mtnDep.length >= 8
-  const airtelDepOk = airtelDep.length >= 8
-  const mtnWdOk = mtnWd.length >= 8
-  const airtelWdOk = airtelWd.length >= 8
   if (!mtnDepOk && !airtelDepOk && !mtnWdOk && !airtelWdOk) {
     throw new Error("Enter at least one valid MTN or Airtel number (8+ digits).")
   }

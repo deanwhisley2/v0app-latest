@@ -47,7 +47,7 @@ const REGISTER_JOELIN_CHIPS = [
   { label: "Registration steps", prompt: "What happens step by step after I submit this registration form?" },
   { label: "Email verification", prompt: "Why do I need to verify my email and how long does it take?" },
   { label: "Referral field", prompt: "How does the referral id or signup link help me or my inviter?" },
-  { label: "Security code", prompt: "What is the Nexus Security Code and why is it required at signup?" },
+  { label: "Security PIN later", prompt: "When do I set my Nexus Security PIN and payout details after signup?" },
   { label: "Currency choice", prompt: "How should I choose my display currency on Nexus Pro?" },
   { label: "Wallet basics", prompt: "Explain Nexus Main wallet vs Container mode at a simple level for a new user." },
   { label: "Trust & fees", prompt: "What should a new member know about deposits and Container Mode fees?" },
@@ -70,10 +70,6 @@ export default function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
-  const [securityCode, setSecurityCode] = useState("")
-  const [securityCodeConfirm, setSecurityCodeConfirm] = useState("")
-  const [depositNumber, setDepositNumber] = useState("")
-  const [withdrawalNumber, setWithdrawalNumber] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const currency: FiatCurrencyCode = "USD"
   const [referralCode, setReferralCode] = useState("")
@@ -89,10 +85,9 @@ export default function RegisterForm() {
   const steps = useMemo(
     () => [
       { id: 1, label: authT.register.stepPersonal },
-      { id: 2, label: authT.register.stepRegion },
-      { id: 3, label: authT.register.stepSecurity },
+      { id: 2, label: "Password & region" },
     ],
-    [authT]
+    [authT],
   )
 
   useEffect(() => {
@@ -113,7 +108,7 @@ export default function RegisterForm() {
 
   useEffect(() => {
     const pending = getPendingEmailVerification()
-    if (pending?.email) {
+    if (pending?.email && pending.email.includes("@") && !pending.email.endsWith("@accounts.nexuspro.it.com")) {
       router.replace("/auth/verify")
     }
   }, [router])
@@ -121,25 +116,19 @@ export default function RegisterForm() {
   function validateStep(s: number): string | null {
     if (s === 1) {
       if (!fullName.trim()) return "Enter your full name."
-      if (!phone.trim()) return "Enter your phone number."
-      if (!email.trim() || !email.includes("@")) return "Enter a valid email."
+      const hasPhone = phone.trim().replace(/\D/g, "").length >= 9
+      const hasEmail = email.trim().includes("@") && email.includes(".")
+      if (!hasPhone && !hasEmail) return "Enter a phone number, email address, or both."
+      if (email.trim() && !hasEmail) return "Enter a valid email or leave it blank."
+      if (phone.trim() && !hasPhone) return "Enter a valid phone number (at least 9 digits)."
       return null
     }
     if (s === 2) {
       if (!operatingCountry || !isSupportedOperatingCountry(operatingCountry)) {
         return authT.register.countryRequired ?? "Select your operating country."
       }
-      return null
-    }
-    if (s === 3) {
       if (password.length < 6) return reg.passwordHint
       if (password !== confirmPassword) return "Passwords do not match."
-      if (securityCode.length !== 6) return "Enter a 6-digit Nexus Security Code."
-      if (securityCode !== securityCodeConfirm) return "Security codes do not match."
-      if (!depositNumber.trim() || depositNumber.trim().length < 8) return "Enter your deposit mobile money number."
-      if (!withdrawalNumber.trim() || withdrawalNumber.trim().length < 8) {
-        return "Enter your withdrawal payout number."
-      }
       return null
     }
     return null
@@ -175,7 +164,7 @@ export default function RegisterForm() {
       }
     }
     setError(null)
-    setStep((s) => Math.min(3, s + 1))
+    setStep((s) => Math.min(2, s + 1))
   }
 
   function goBack() {
@@ -185,7 +174,7 @@ export default function RegisterForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const err = validateStep(3)
+    const err = validateStep(2)
     if (err) {
       setError(err)
       return
@@ -217,31 +206,40 @@ export default function RegisterForm() {
           ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
           ...(referralCode.trim() ? { referral_code: referralCode.trim() } : {}),
           ...(campaignSlug.trim() ? { campaign_slug: campaignSlug.trim() } : {}),
-          security_code: securityCode,
-          deposit_number: depositNumber,
-          withdrawal_number: withdrawalNumber,
         }),
       })
 
-      const ct = res.headers.get("content-type") ?? ""
-      if (ct.includes("application/json")) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string }
-        if (!res.ok) {
-          setError(json.error || "Registration failed")
-          return
-        }
-      } else if (!res.ok) {
-        setError("Registration failed")
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string
+        requiresEmailVerification?: boolean
+        email?: string
+        session?: boolean
+      }
+      if (!res.ok) {
+        setError(json.error || "Registration failed")
         return
       }
 
-      setPendingEmailVerification({
-        email: trimmedEmail,
-        ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
-      })
-      recordVerificationResendSent()
-      router.replace("/auth/verify")
-      router.refresh()
+      if (json.session) {
+        window.location.replace("/dashboard")
+        return
+      }
+
+      if (json.requiresEmailVerification) {
+        const verifyEmail = json.email ?? trimmedEmail
+        if (verifyEmail) {
+          setPendingEmailVerification({
+            email: verifyEmail,
+            ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
+          })
+          recordVerificationResendSent()
+          router.replace("/auth/verify")
+          router.refresh()
+          return
+        }
+      }
+
+      window.location.replace("/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -291,11 +289,9 @@ export default function RegisterForm() {
 
         <NewMemberCampaignRegisterStrip />
 
-        <EmailDeliverabilityNotice className="mb-2" />
-
         <form
           className="space-y-4"
-          onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}
+          onSubmit={step === 2 ? handleSubmit : (e) => e.preventDefault()}
           noValidate
         >
           {step === 1 ? (
@@ -322,14 +318,19 @@ export default function RegisterForm() {
                   inputMode="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  required
                   disabled={isSubmitting}
                   placeholder="+256 7XX XXX XXX"
                   className={inputClass}
                 />
+                {phone.trim() ? (
+                  <p className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+                    Please use a phone number that belongs to you and that you can remember. This number may be used
+                    to help recover your account until a verified email is added.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="register-email">{reg.email}</Label>
+                <Label htmlFor="register-email">{reg.email} (optional)</Label>
                 <Input
                   id="register-email"
                   type="email"
@@ -337,11 +338,18 @@ export default function RegisterForm() {
                   inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
                   disabled={isSubmitting}
                   placeholder="you@example.com"
                   className={inputClass}
                 />
+                {!email.trim() ? (
+                  <p className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                    Adding and verifying an email address is strongly recommended for account recovery and security.
+                    You can continue without email.
+                  </p>
+                ) : (
+                  <EmailDeliverabilityNotice className="mt-0" />
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="register-referral">{reg.referralCodeOptional ?? "Referral ID (optional)"}</Label>
@@ -362,6 +370,37 @@ export default function RegisterForm() {
 
           {step === 2 ? (
             <div className="space-y-4 animate-in fade-in duration-200" key="step2">
+              <PasswordField
+                id="register-password"
+                label={reg.password}
+                autoComplete="new-password"
+                value={password}
+                onChange={setPassword}
+                required
+                minLength={6}
+                disabled={isSubmitting}
+                inputClassName={inputClass}
+                hint={
+                  <>
+                    <PasswordStrengthMeter password={password} language={language} />
+                    <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
+                  </>
+                }
+              />
+              <PasswordField
+                id="register-confirm-password"
+                label={authT.register.confirmPassword}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                required
+                minLength={6}
+                disabled={isSubmitting}
+                inputClassName={inputClass}
+              />
+              <p className="text-xs text-muted-foreground">
+                Set your 6-digit Security PIN and payment details later in Settings → Security & Recovery.
+              </p>
               <div className="space-y-2">
                 <Label>{reg.language}</Label>
                 <Select
@@ -428,79 +467,6 @@ export default function RegisterForm() {
             </div>
           ) : null}
 
-          {step === 3 ? (
-            <div className="space-y-4 animate-in fade-in duration-200" key="step3">
-              <PasswordField
-                id="register-password"
-                label={reg.password}
-                autoComplete="new-password"
-                value={password}
-                onChange={setPassword}
-                required
-                minLength={6}
-                disabled={isSubmitting}
-                inputClassName={inputClass}
-                hint={
-                  <>
-                    <PasswordStrengthMeter password={password} language={language} />
-                    <p className="text-xs text-muted-foreground">{reg.passwordHint}</p>
-                  </>
-                }
-              />
-              <PasswordField
-                id="register-confirm-password"
-                label={authT.register.confirmPassword}
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                required
-                minLength={6}
-                disabled={isSubmitting}
-                inputClassName={inputClass}
-              />
-              <div className="space-y-3 rounded-xl border border-dashed border-border bg-muted/20 p-3">
-                <p className="text-xs font-semibold text-foreground">Nexus Security Code (required)</p>
-                <p className="text-xs text-muted-foreground">
-                  6-digit code for recovery and payout protection. Never share it. It is not shown again after setup.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-xs">Security code</Label>
-                    <Input
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={securityCode}
-                      onChange={(e) => setSecurityCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      className={inputClass}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Confirm code</Label>
-                    <Input
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={securityCodeConfirm}
-                      onChange={(e) => setSecurityCodeConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      className={inputClass}
-                      autoComplete="off"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Deposit number (add funds)</Label>
-                  <Input value={depositNumber} onChange={(e) => setDepositNumber(e.target.value)} className={inputClass} placeholder="+256…" />
-                </div>
-                <div>
-                  <Label className="text-xs">Withdrawal number (receive payouts)</Label>
-                  <Input value={withdrawalNumber} onChange={(e) => setWithdrawalNumber(e.target.value)} className={inputClass} placeholder="+256…" />
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {error ? (
             <p className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive" role="alert">
               {error}
@@ -520,7 +486,7 @@ export default function RegisterForm() {
                 {authT.register.back}
               </Button>
             ) : null}
-            {step < 3 ? (
+            {step < 2 ? (
               <Button type="button" className="min-h-12 flex-1 gap-1 font-semibold" disabled={isSubmitting} onClick={goNext}>
                 {authT.register.next}
                 <ChevronRight className="h-4 w-4" aria-hidden />
@@ -539,7 +505,6 @@ export default function RegisterForm() {
             )}
           </div>
 
-          {step === 3 ? <EmailDeliverabilityNotice /> : null}
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -563,7 +528,7 @@ export default function RegisterForm() {
         initialMessages={[
           {
             role: "assistant",
-            text: "Hi — I’m the Nexus assistant. Ask me about verification, your Nexus Security Code, referrals, currency & language, or what to expect after you create your account.",
+            text: "Hi — I’m the Nexus assistant. Ask me about optional email, phone signup, Security PIN in Settings, referrals, or what to expect after you create your account.",
           },
         ]}
         chips={REGISTER_JOELIN_CHIPS}

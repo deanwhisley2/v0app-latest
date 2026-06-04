@@ -6,19 +6,16 @@ import {
   notifyReferrerNewReferee,
 } from "@/lib/server/launch-notifications"
 import { attributeRegistrationToCampaign } from "@/lib/server/marketing-campaigns"
-import { setupSecurityProfile } from "@/lib/server/user-security-profile-service"
 import { referralCodeForUserId } from "@/lib/referral-code"
 import { isReferralAttributionBlocked } from "@/lib/server/referral-attribution-guard"
 
 export type RegisterPostSignupParams = {
   userId: string
-  email: string
+  authEmail: string
+  phone: string | null
   fundingCountryCode: string
   referralInvite: string
   campaignSlug: string
-  securityCode: string
-  depositNumber: string
-  withdrawalNumber: string
   userMetadata: Record<string, unknown>
 }
 
@@ -29,9 +26,13 @@ export function runRegisterPostSignup(
 ): void {
   void (async () => {
     const nowIso = new Date().toISOString()
-    const { userId, fundingCountryCode, referralInvite, campaignSlug } = params
+    const { userId, fundingCountryCode, referralInvite, campaignSlug, phone, authEmail } = params
 
     try {
+      const profilePatch: Record<string, unknown> = { updated_at: nowIso }
+      if (phone) profilePatch.phone = phone
+      if (authEmail) profilePatch.email = authEmail
+
       let referredByUserId: string | null = null
       if (referralInvite.length >= 4) {
         const { data: refProfile } = await admin
@@ -50,8 +51,8 @@ export function runRegisterPostSignup(
         const seed = attempt === 0 ? userId : `${userId}:${attempt}`
         const myReferralCode = referralCodeForUserId(seed)
         const patch: Record<string, unknown> = {
+          ...profilePatch,
           referral_code: myReferralCode,
-          updated_at: nowIso,
         }
         if (referredByUserId) patch.referred_by = referredByUserId
 
@@ -79,11 +80,6 @@ export function runRegisterPostSignup(
       }
       void notifyLaunchWelcome(admin, userId, fundingCountryCode)
 
-      const welcomeGranted = await grantNewMemberWelcomeBonus(admin, userId, "registration")
-      if (!welcomeGranted) {
-        console.warn("[register-post] welcome bonus not granted:", userId)
-      }
-
       if (campaignSlug.length >= 8) {
         try {
           await attributeRegistrationToCampaign({ userId, campaignSlug })
@@ -93,21 +89,6 @@ export function runRegisterPostSignup(
             campErr instanceof Error ? campErr.message : campErr,
           )
         }
-      }
-
-      try {
-        await setupSecurityProfile(admin, {
-          userId,
-          securityCode: params.securityCode,
-          mtnDepositNumber: params.depositNumber,
-          mtnWithdrawalNumber: params.withdrawalNumber,
-          payoutMethod: "mobile_money",
-        })
-      } catch (secErr) {
-        console.warn(
-          "[register-post] security profile:",
-          secErr instanceof Error ? secErr.message : String(secErr),
-        )
       }
 
       const { error: metaStripErr } = await admin.auth.admin.updateUserById(userId, {
@@ -125,4 +106,22 @@ export function runRegisterPostSignup(
       )
     }
   })()
+}
+
+/** Grant startup capital on the registration request path (user-visible immediately). */
+export async function grantRegisterWelcomeBonus(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  try {
+    const granted = await grantNewMemberWelcomeBonus(admin, userId, "registration")
+    if (!granted) {
+      console.warn("[register] welcome bonus not granted:", userId)
+    }
+  } catch (grantErr) {
+    console.warn(
+      "[register] welcome bonus:",
+      grantErr instanceof Error ? grantErr.message : String(grantErr),
+    )
+  }
 }

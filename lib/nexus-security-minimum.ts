@@ -31,8 +31,18 @@ export function hasMinimumPayoutLine(row: SecurityPayoutFields): boolean {
   return hasAnyNetworkPayoutLine(row)
 }
 
+export function hasSecurityPin(row: SecurityPayoutFields): boolean {
+  return Boolean(row.security_code_hash)
+}
+
+/** Deposits and withdrawals require at least one payout line with number + registered name. */
+export function hasFundingPayoutDetails(row: SecurityPayoutFields): boolean {
+  return hasMinimumPayoutLine(row)
+}
+
+/** Full funding gate: PIN plus complete payout line(s). */
 export function hasMinimumSecurity(row: SecurityPayoutFields): boolean {
-  return Boolean(row.security_code_hash) && hasMinimumPayoutLine(row)
+  return hasSecurityPin(row) && hasFundingPayoutDetails(row)
 }
 
 /** True when minimum is met but optional payout rails are still empty. */

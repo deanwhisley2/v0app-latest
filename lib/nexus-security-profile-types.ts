@@ -25,12 +25,26 @@ export type RegisteredPayoutOption = {
   accountNames: string | null
 }
 
+export type SecuritySetupProgressItem = {
+  key: string
+  label: string
+  complete: boolean
+}
+
 export type PublicSecurityProfile = {
   hasSecurityCode: boolean
   /** PIN + at least one mobile-money line with registered names. */
   hasMinimumSecurity: boolean
-  /** True when minimum security is not yet complete (blocks funding/trade/withdraw). */
+  /** True when payout lines are incomplete — blocks Add Funds / Withdraw only. */
   needsSetup: boolean
+  /** True when 6-digit PIN is not set. */
+  needsSecurityPin: boolean
+  /** True when no complete payout line (number + registered name). */
+  needsFundingSetup: boolean
+  setupProgress: SecuritySetupProgressItem[]
+  setupCompletedCount: number
+  setupTotalCount: number
+  fundingReminder: string | null
   /** @deprecated Use hasMinimumPayoutLine — kept for API compat. */
   hasTransactionNumber: boolean
   hasMinimumPayoutLine: boolean

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabaseClient"
 import type { PublicSecurityProfile } from "@/lib/nexus-security-profile-types"
 import { cn } from "@/lib/utils"
+import { SecuritySetupProgressTracker } from "@/components/auth/security-setup-progress-tracker"
+import Link from "next/link"
 
 const UserSecuritySetupForm = dynamic(
   () => import("@/components/dashboard/user-security-setup-form").then((m) => m.UserSecuritySetupForm),
@@ -77,7 +79,9 @@ export function DepositWithdrawDetailsPanel() {
     void load()
   }, [load, refreshKey])
 
-  const setupComplete = Boolean(profile && !profile.needsSetup)
+  const canUseFunding = Boolean(
+    profile && profile.hasSecurityCode && profile.hasMinimumPayoutLine && !profile.needsFundingSetup,
+  )
 
   const payoutSummary = useMemo(() => {
     if (!profile) return []
@@ -118,10 +122,35 @@ export function DepositWithdrawDetailsPanel() {
           <ArrowDownUp className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Minimum for Add Funds, trading, and Withdraw: 6-digit PIN plus one mobile money number with registered names.
-          Extra payout methods are optional. Changes after setup go through Security Appeal review.
+          Add Funds and Withdraw require your Security PIN plus at least one payout line with both the number and
+          registered account holder name. Trading does not require payout details.
         </p>
       </div>
+
+      {profile ? (
+        <SecuritySetupProgressTracker
+          items={profile.setupProgress}
+          completedCount={profile.setupCompletedCount}
+          totalCount={profile.setupTotalCount}
+        />
+      ) : null}
+
+      {profile?.fundingReminder ? (
+        <p className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+          {profile.fundingReminder}
+        </p>
+      ) : null}
+
+      {!canUseFunding ? (
+        <Card className="border-border bg-muted/20 p-5">
+          <p className="text-sm text-muted-foreground">
+            Complete Security PIN and payment details below to unlock deposit and withdrawal panels on the dashboard.
+          </p>
+          <Button type="button" variant="outline" className="mt-3 min-h-11 w-full touch-manipulation" asChild>
+            <Link href="/dashboard/security">Open Security & Recovery</Link>
+          </Button>
+        </Card>
+      ) : null}
 
       {error ? (
         <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -129,7 +158,7 @@ export function DepositWithdrawDetailsPanel() {
         </p>
       ) : null}
 
-      {setupComplete ? (
+      {canUseFunding ? (
         <GlassSection
           title="Registered details"
           description="Numbers and wallets on file for deposits and withdrawals."
@@ -173,10 +202,10 @@ export function DepositWithdrawDetailsPanel() {
         </GlassSection>
       )}
 
-      {!setupComplete ? (
+      {!canUseFunding ? (
         <GlassSection
-          title="Add new detail"
-          description="Set your 6-digit Nexus Security PIN and at least one mobile money number for deposits and withdrawals."
+          title="Security setup"
+          description="Set your PIN and payout details here. Each payment method needs the number and registered account holder name."
         >
           <UserSecuritySetupForm variant="settings" onComplete={() => setRefreshKey((n) => n + 1)} />
         </GlassSection>

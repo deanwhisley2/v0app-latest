@@ -39,8 +39,8 @@ export function SecuritySetupGateDialog({ open, onClose, onUpdateDetailsNow, det
           </p>
         ) : null}
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          To add funds, trade, or withdraw, set your 6-digit Nexus Security PIN and register at least one mobile money
-          number with the account holder name(s). A second number or crypto wallet can be added later.
+          Deposits and withdrawals need your Security PIN plus at least one payout method with both the number and the
+          registered account holder name. You can keep browsing and trading while you finish this in Settings.
         </p>
         <div className="mt-5 flex flex-col gap-2">
           <Button type="button" className="w-full touch-manipulation" onClick={() => onUpdateDetailsNow()}>

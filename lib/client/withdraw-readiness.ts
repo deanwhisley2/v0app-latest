@@ -46,8 +46,8 @@ export function assessWithdrawReadiness(
   const block = messageFromProfile(profile)
   if (block) {
     const showSecurityGate =
-      profile.needsSetup ||
-      (!profile.hasSecurityCode && !profile.inCooldown) ||
+      profile.needsFundingSetup ||
+      profile.needsSecurityPin ||
       (!profile.hasMinimumPayoutLine && !profile.hasWithdrawalPayoutLine)
     return { ok: false, message: block, showSecurityGate }
   }

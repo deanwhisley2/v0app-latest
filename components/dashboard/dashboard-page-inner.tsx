@@ -2322,10 +2322,13 @@ export function DashboardPageInner() {
         setSelectedWithdrawPayoutId(defaultWithdrawPayoutOptionId(readiness.profile))
       } else {
         const { profile, error } = await fetchSecurityProfileForAction(token)
-        if (!profile || profile.needsSetup) {
+        if (!profile || profile.needsFundingSetup || profile.needsSecurityPin) {
           const msg =
             error ??
-            "Set your 6-digit Nexus Security PIN and register at least one mobile money number with account holder name(s) before adding funds."
+            profile?.fundingReminder ??
+            (profile?.needsSecurityPin
+              ? "Set your 6-digit Nexus Security PIN in Settings before adding funds."
+              : "Complete your payment details (number and registered account name) in Settings before adding funds.")
           setSecurityGateDetail(msg)
           setSecurityGateOpen(true)
           showToast(msg, "error")

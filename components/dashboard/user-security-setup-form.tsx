@@ -169,17 +169,27 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
   }
 
   const submitSetup = async () => {
-    if (code.length !== 6 || code !== codeConfirm) {
-      setError("Enter matching 6-digit security codes.")
-      return
-    }
     const mtnDepOk = lineOk(mtnNumber, mtnNames)
     const mtnWdOk = !mtnSame && lineOk(mtnWithdrawNumber, mtnWithdrawNames)
     const airtelDepOk = lineOk(airtelNumber, airtelNames)
     const airtelWdOk = !airtelSame && lineOk(airtelWithdrawNumber, airtelWithdrawNames)
-    if (!mtnDepOk && !mtnWdOk && !airtelDepOk && !airtelWdOk) {
-      setError("Enter at least one MTN or Airtel number (8+ digits) with the registered account name.")
+    const anyPayout = mtnDepOk || mtnWdOk || airtelDepOk || airtelWdOk
+    const pinOk = code.length === 6 && code === codeConfirm
+
+    if (!anyPayout && !hasExistingPin && !pinOk) {
+      setError("Enter your 6-digit Security PIN, or add a payout number with the registered account holder name.")
       return
+    }
+    if (!anyPayout && hasExistingPin) {
+      setError("Add at least one payout number with the registered account holder name.")
+      return
+    }
+    if (anyPayout && !hasExistingPin && !pinOk) {
+      setError("Enter matching 6-digit security codes before saving payout details.")
+      return
+    }
+    if (!anyPayout && !hasExistingPin && pinOk) {
+      /* PIN-only save — payout lines added later */
     }
     if (payoutMethod === "crypto_trc20" && !isValidTrc20UsdtAddress(cryptoWallet)) {
       setError("Enter a valid USDT TRC20 (TRON) wallet address.")
