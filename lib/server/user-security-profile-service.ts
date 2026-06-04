@@ -12,6 +12,7 @@ import {
   verifySecurityCode,
 } from "@/lib/nexus-security-code"
 import {
+  EMAIL_VERIFICATION_REMINDER,
   hasFundingPayoutDetails,
   hasMinimumPayoutLine,
   hasMinimumSecurity,
@@ -241,6 +242,8 @@ function rowToPublic(
   const setupTotalCount = setupProgress.length
   const needsFundingSetup = !minimumPayoutLine
   const needsSecurityPin = !hasSecurityCode
+  const emailVerificationReminder =
+    account?.is_verified === false ? EMAIL_VERIFICATION_REMINDER : null
   return {
     hasSecurityCode,
     hasMinimumSecurity: minimumSecurity,
@@ -256,6 +259,7 @@ function rowToPublic(
       hasSecurityCode && needsFundingSetup
         ? "Complete your payment details to enable deposits and withdrawals."
         : null,
+    emailVerificationReminder,
     suggestsOptionalEnhancements: enriched ? suggestsOptionalSecurityEnhancements(enriched) : false,
     payoutMethod: (enriched?.payout_method as NexusPayoutMethod) ?? "mobile_money",
     depositNumberMasked: enriched?.deposit_number

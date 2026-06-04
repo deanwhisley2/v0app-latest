@@ -11,7 +11,9 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
+import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
 import { useVerificationResendCooldown } from "@/hooks/use-verification-resend-cooldown"
+import { supabase } from "@/lib/supabaseClient"
 import {
   clearPendingEmailVerification,
   getPendingEmailVerification,
@@ -99,6 +101,27 @@ export function EmailVerificationPendingScreen({
   const handleChangeEmail = () => {
     clearPendingEmailVerification()
     window.location.href = "/auth/register"
+  }
+
+  const handleSkipForNow = async () => {
+    setError("")
+    setInfoMsg("")
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session?.user) {
+        clearPendingEmailVerification()
+        window.location.replace("/dashboard")
+        return
+      }
+    } catch {
+      /* fall through to login */
+    }
+    clearPendingEmailVerification()
+    const params = new URLSearchParams({ verify_later: "1" })
+    if (email) params.set("email", email)
+    window.location.href = `/auth/login?${params.toString()}`
   }
 
   const handleResend = async () => {
@@ -213,8 +236,10 @@ export function EmailVerificationPendingScreen({
             </p>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-            <p className="text-sm font-medium text-foreground">Please check:</p>
+          <EmailDeliverabilityNotice collapsibleOnMobile={false} />
+
+          <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 px-4 py-3">
+            <p className="text-sm font-medium text-foreground">Also check:</p>
             <ul className="space-y-1.5 text-sm text-muted-foreground">
               {FOLDER_CHECKS.map((label) => (
                 <li key={label} className="flex items-center gap-2">
@@ -258,6 +283,14 @@ export function EmailVerificationPendingScreen({
                 `Resend available in ${secondsLeft}s`
               )}
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11 w-full"
+              onClick={() => void handleSkipForNow()}
+            >
+              Skip for now
+            </Button>
             <Button type="button" variant="ghost" className="min-h-11 w-full text-muted-foreground" onClick={handleChangeEmail}>
               Change email
             </Button>
@@ -265,6 +298,7 @@ export function EmailVerificationPendingScreen({
 
           <p className="text-center text-xs text-muted-foreground">
             You can leave this page to check your email — when you return, this screen will still be here for 24 hours.
+            Email verification improves recovery; it does not block trading once you sign in.
           </p>
         </div>
         <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
@@ -282,6 +316,8 @@ export function EmailVerificationPendingScreen({
             6-digit code sent to <strong className="text-primary">{email}</strong>
           </p>
         </div>
+
+        <EmailDeliverabilityNotice collapsibleOnMobile={false} />
 
         <div className="sr-only">
           <LabelledEmail value={email} onChange={setEmail} />
@@ -349,6 +385,15 @@ export function EmailVerificationPendingScreen({
             }}
           >
             Back
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-10 w-full text-sm"
+            disabled={loading}
+            onClick={() => void handleSkipForNow()}
+          >
+            Skip for now
           </Button>
           <Button type="button" variant="ghost" className="min-h-10 w-full text-sm text-muted-foreground" onClick={handleChangeEmail}>
             Change email

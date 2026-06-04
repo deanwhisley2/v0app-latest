@@ -60,3 +60,6 @@ export function suggestsOptionalSecurityEnhancements(row: SecurityPayoutFields):
 
 export const OPTIONAL_SECURITY_REMINDER =
   "Your account security is active. For better recovery protection, consider adding a backup payout method."
+
+export const EMAIL_VERIFICATION_REMINDER =
+  "Verify your email address to improve account security and recovery options."

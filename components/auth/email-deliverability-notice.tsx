@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 const SPAM_ACK_KEY = "nexus_email_spam_folder_ack"
 
 export const EMAIL_DELIVERABILITY_HINT =
-  "Codes and verification emails may arrive in Spam, Junk, Promotions, or Updates — not only your Inbox."
+  "Not receiving your verification email? Please check your Spam, Junk, Promotions, or Updates folders. Some email providers may filter automated verification messages."
 
 type Props = {
   className?: string

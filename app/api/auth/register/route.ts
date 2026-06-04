@@ -248,6 +248,35 @@ export async function POST(request: Request) {
     if (!issued.ok) {
       return NextResponse.json({ error: issued.error }, { status: issued.status ?? 400 })
     }
+
+    if (phone) {
+      const sessionResult = await createAuthSessionForEmail(authEmail)
+      if (sessionResult.ok) {
+        try {
+          const { createRouteHandlerSupabaseClient } = await import("@/lib/supabase/route-handler")
+          const supabase = await createRouteHandlerSupabaseClient()
+          const { data: sessionData } = await supabase.auth.getSession()
+          const accessToken = sessionData.session?.access_token
+          if (accessToken) {
+            await trackLoginSession({
+              userId: sessionResult.userId,
+              bearerToken: accessToken,
+              userAgent: userAgent ?? "",
+              ipAddress: ip,
+            })
+          }
+        } catch (e) {
+          console.warn("[register] email+phone session track:", e instanceof Error ? e.message : e)
+        }
+        return NextResponse.json({
+          ok: true,
+          requiresEmailVerification: true,
+          email: emailRaw.toLowerCase(),
+          session: true,
+        })
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       requiresEmailVerification: true,

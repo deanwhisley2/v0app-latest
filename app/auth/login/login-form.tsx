@@ -84,6 +84,14 @@ export default function LoginForm() {
     try {
       const saved = localStorage.getItem(REMEMBER_KEY)
       if (saved) setIdentifier(saved)
+      const params = new URLSearchParams(window.location.search)
+      const emailParam = params.get("email")?.trim()
+      if (emailParam) setIdentifier(emailParam)
+      if (params.get("verify_later") === "1") {
+        setSuccess(
+          "Account created. Sign in with your password to continue. You can verify your email anytime from Settings.",
+        )
+      }
     } catch {
       /* ignore */
     }
@@ -210,18 +218,10 @@ export default function LoginForm() {
       const loginJson = (await loginRes.json().catch(() => ({}))) as {
         ok?: boolean
         error?: string
-        code?: string
-        email?: string
+        emailVerificationPending?: boolean
       }
 
       if (!loginRes.ok) {
-        if (loginJson.code === "EMAIL_NOT_VERIFIED") {
-          setError("Verify your email before signing in.")
-          const unverifiedEmail = (loginJson.email ?? emailForAuth).trim()
-          setPendingEmailVerification({ email: unverifiedEmail })
-          router.replace("/auth/verify")
-          return
-        }
         const msg = loginJson.error ?? `Sign-in failed (${loginRes.status})`
         if (msg.toLowerCase().includes("invalid login credentials")) {
           setError(
@@ -243,6 +243,17 @@ export default function LoginForm() {
         else localStorage.removeItem(REMEMBER_KEY)
       } catch {
         /* ignore */
+      }
+
+      if (loginJson.emailVerificationPending) {
+        try {
+          const unverifiedEmail = emailForAuth.trim()
+          if (unverifiedEmail.includes("@")) {
+            setPendingEmailVerification({ email: unverifiedEmail })
+          }
+        } catch {
+          /* ignore */
+        }
       }
 
       markFreshLoginLanding()

@@ -33,6 +33,13 @@ import {
   recordVerificationResendSent,
   setPendingEmailVerification,
 } from "@/lib/auth/pending-email-verification"
+import {
+  clearRegisterDraft,
+  getRegisterDraft,
+  getRegisterDraftPassword,
+  patchRegisterDraft,
+  setRegisterDraftPassword,
+} from "@/lib/auth/register-draft"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
@@ -110,8 +117,41 @@ export default function RegisterForm() {
     const pending = getPendingEmailVerification()
     if (pending?.email && pending.email.includes("@") && !pending.email.endsWith("@accounts.nexuspro.it.com")) {
       router.replace("/auth/verify")
+      return
     }
-  }, [router])
+    const draft = getRegisterDraft()
+    if (draft) {
+      setStep(draft.step)
+      setEmail(draft.email)
+      setPhone(draft.phone)
+      setFullName(draft.full_name)
+      setLanguage((draft.language as AppLanguage) || ctxLang)
+      if (draft.operating_country) setOperatingCountry(draft.operating_country)
+      setReferralCode(draft.referral_code)
+      setCampaignSlug(draft.campaign_slug)
+      const pw = getRegisterDraftPassword()
+      if (pw) {
+        setPassword(pw.password)
+        setConfirmPassword(pw.confirmPassword)
+      }
+    }
+  }, [router, ctxLang])
+
+  useEffect(() => {
+    patchRegisterDraft({
+      step: step as 1 | 2,
+      email,
+      phone,
+      full_name: fullName,
+      language,
+      operating_country: operatingCountry,
+      referral_code: referralCode,
+      campaign_slug: campaignSlug,
+    })
+    if (step === 2 && (password || confirmPassword)) {
+      setRegisterDraftPassword(password, confirmPassword)
+    }
+  }, [step, email, phone, fullName, language, operatingCountry, referralCode, campaignSlug, password, confirmPassword])
 
   function validateStep(s: number): string | null {
     if (s === 1) {
@@ -220,11 +260,6 @@ export default function RegisterForm() {
         return
       }
 
-      if (json.session) {
-        window.location.replace("/dashboard")
-        return
-      }
-
       if (json.requiresEmailVerification) {
         const verifyEmail = json.email ?? trimmedEmail
         if (verifyEmail) {
@@ -233,10 +268,22 @@ export default function RegisterForm() {
             ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
           })
           recordVerificationResendSent()
+          clearRegisterDraft()
+          if (json.session) {
+            router.replace("/auth/verify")
+            router.refresh()
+            return
+          }
           router.replace("/auth/verify")
           router.refresh()
           return
         }
+      }
+
+      clearRegisterDraft()
+      if (json.session) {
+        window.location.replace("/dashboard")
+        return
       }
 
       window.location.replace("/dashboard")

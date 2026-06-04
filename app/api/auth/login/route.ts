@@ -3,7 +3,6 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
-import { userCanAccessWithoutEmailVerification } from "@/lib/server/pending-verification-email"
 
 type LoginBody = {
   email?: string
@@ -49,25 +48,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No session returned. Try again or contact support." }, { status: 500 })
   }
 
+  let emailVerificationPending = false
   try {
-    const canAccess = await userCanAccessWithoutEmailVerification(admin, data.user.id)
-    if (!canAccess) {
-      const pending =
-        typeof data.user.user_metadata?.pending_verification_email === "string"
-          ? data.user.user_metadata.pending_verification_email
-          : resolvedEmail
-      return NextResponse.json(
-        {
-          error: "Verify your email with the 6-digit code we sent before signing in.",
-          code: "EMAIL_NOT_VERIFIED",
-          email: pending,
-        },
-        { status: 403 },
-      )
-    }
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("is_verified")
+      .eq("id", data.user.id)
+      .maybeSingle()
+    emailVerificationPending = prof?.is_verified !== true
   } catch (e) {
-    console.warn("[auth/login] profile gate:", e instanceof Error ? e.message : e)
+    console.warn("[auth/login] profile read:", e instanceof Error ? e.message : e)
   }
 
-  return NextResponse.json({ ok: true, userId: data.user.id })
+  return NextResponse.json({
+    ok: true,
+    userId: data.user.id,
+    ...(emailVerificationPending ? { emailVerificationPending: true } : {}),
+  })
 }

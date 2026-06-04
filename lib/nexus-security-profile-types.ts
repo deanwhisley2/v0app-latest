@@ -45,6 +45,8 @@ export type PublicSecurityProfile = {
   setupCompletedCount: number
   setupTotalCount: number
   fundingReminder: string | null
+  /** Non-blocking — shown when email is not verified. */
+  emailVerificationReminder: string | null
   /** @deprecated Use hasMinimumPayoutLine — kept for API compat. */
   hasTransactionNumber: boolean
   hasMinimumPayoutLine: boolean

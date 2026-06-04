@@ -185,31 +185,6 @@ export async function verifyLoginCodeAndCreateSession(
 
   const email = row.email.trim()
 
-  const { data: profile, error: profErr } = await admin
-    .from("profiles")
-    .select("is_verified, phone")
-    .eq("id", row.user_id)
-    .maybeSingle()
-
-  if (profErr) {
-    console.warn("[login-code] profile check:", profErr.message)
-  } else if (profile?.is_verified === false) {
-    const { data: sec } = await admin
-      .from("user_security_profiles")
-      .select("security_code_hash")
-      .eq("id", row.user_id)
-      .maybeSingle()
-    const hasPhone = Boolean(String(profile?.phone ?? "").trim())
-    const hasPin = Boolean(sec?.security_code_hash)
-    if (!hasPhone && !hasPin) {
-      return {
-        ok: false,
-        error: "Verify your email before signing in.",
-        status: 403,
-      }
-    }
-  }
-
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email,

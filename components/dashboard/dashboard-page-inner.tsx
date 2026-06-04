@@ -98,6 +98,7 @@ import {
   purgeChromeUnsafeSessionState,
 } from "@/lib/mobile/chrome-android-safe-mode"
 import { HistoryCenterScreen } from "@/components/dashboard/history-center-screen"
+import { EmailVerificationReminderBanner } from "@/components/dashboard/email-verification-reminder-banner"
 import { OptionalSecurityReminderBanner } from "@/components/dashboard/optional-security-reminder-banner"
 import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
 import { fetchSecurityProfileForAction } from "@/lib/nexus-security-profile-client"
@@ -4207,7 +4208,8 @@ export function DashboardPageInner() {
       </div>
 
       {!isGuestSession && (
-        <div className="mx-auto max-w-[1600px] px-4 pb-1">
+        <div className="mx-auto max-w-[1600px] space-y-2 px-4 pb-1">
+          <EmailVerificationReminderBanner />
           <OptionalSecurityReminderBanner
             onOpenSettings={() => {
               setChatHubFocus(null)
