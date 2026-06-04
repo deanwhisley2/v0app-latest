@@ -71,6 +71,7 @@ export default function RegisterForm() {
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
   const currency: FiatCurrencyCode = "USD"
   const [referralCode, setReferralCode] = useState("")
+  const [campaignSlug, setCampaignSlug] = useState("")
   const [operatingCountry, setOperatingCountry] = useState("UG")
   const [error, setError] = useState<string | null>(null)
   const [corridorWarning, setCorridorWarning] = useState<string | null>(null)
@@ -97,6 +98,8 @@ export default function RegisterForm() {
       const sp = new URLSearchParams(window.location.search)
       const r = sp.get("ref")
       if (r) setReferralCode(r.trim())
+      const c = sp.get("campaign")
+      if (c) setCampaignSlug(c.trim())
     } catch {
       /* ignore */
     }
@@ -200,6 +203,7 @@ export default function RegisterForm() {
           preferred_currency: currency,
           ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
           ...(referralCode.trim() ? { referral_code: referralCode.trim() } : {}),
+          ...(campaignSlug.trim() ? { campaign_slug: campaignSlug.trim() } : {}),
           security_code: securityCode,
           deposit_number: depositNumber,
           withdrawal_number: withdrawalNumber,

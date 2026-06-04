@@ -17,8 +17,10 @@ import {
   Landmark,
   AlertTriangle,
   Bot,
+  Megaphone,
 } from "lucide-react"
 import { AdminNexusBotPanel } from "@/components/dashboard/admin-nexus-bot-panel"
+import { AdminPromotionsPanel } from "@/components/dashboard/admin-promotions-panel"
 import { useAuth } from "@/contexts/AuthContext"
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
 import { supabase } from "@/lib/supabaseClient"
@@ -817,7 +819,7 @@ export function AdminOperationalAssets({
 }) {
   const { user: authUser } = useAuth()
   const [sub, setSub] = useState<
-    "approval" | "users" | "retailers" | "history" | "support" | "nexusbot"
+    "approval" | "users" | "retailers" | "history" | "support" | "nexusbot" | "promotions"
   >("approval")
   const [supportFeedTick, setSupportFeedTick] = useState(0)
   const [supportUnreadCount, setSupportUnreadCount] = useState(0)
@@ -1353,6 +1355,7 @@ export function AdminOperationalAssets({
             { id: "retailers" as const, label: "Retailers", icon: Building2 },
             { id: "history" as const, label: "History", icon: History },
             { id: "nexusbot" as const, label: "Trades", icon: Bot },
+            { id: "promotions" as const, label: "Promotions", icon: Megaphone },
           ] as const
         ).map((tab) => (
           <button
@@ -1370,6 +1373,8 @@ export function AdminOperationalAssets({
       </div>
 
       {sub === "nexusbot" ? <AdminNexusBotPanel /> : null}
+
+      {sub === "promotions" ? <AdminPromotionsPanel /> : null}
 
       {sub === "support" && (
         <AdminSupportChatPanel

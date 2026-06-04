@@ -22,6 +22,8 @@ import {
   recordSignupCorridorEvent,
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
+import { attributeRegistrationToCampaign } from "@/lib/server/marketing-campaigns"
+import { normalizeCampaignSlugInput } from "@/lib/marketing/campaign-slug"
 
 /** Supabase rejects a second signUp for the same email even if the first account never completed in-app verification. */
 function isAuthDuplicateSignupError(err: { message?: string | null; code?: string | null }): boolean {
@@ -43,6 +45,8 @@ type RegisterBody = {
   /** ISO 3166-1 alpha-2 — persisted to profiles.funding_country_code when valid */
   funding_country_code?: string
   referral_code?: string
+  /** Public promo slug from /promo/{slug} or ?campaign= */
+  campaign_slug?: string
   security_code?: string
   deposit_number?: string
   withdrawal_number?: string
@@ -80,6 +84,9 @@ export async function POST(request: Request) {
   )
   const referralInvite = normalizeReferralCodeInput(
     typeof body.referral_code === "string" ? body.referral_code : ""
+  )
+  const campaignSlug = normalizeCampaignSlugInput(
+    typeof body.campaign_slug === "string" ? body.campaign_slug : ""
   )
   const security_code = typeof body.security_code === "string" ? body.security_code.trim() : ""
   const deposit_number = typeof body.deposit_number === "string" ? body.deposit_number.trim() : ""
@@ -253,6 +260,20 @@ export async function POST(request: Request) {
       const welcomeGranted = await grantNewMemberWelcomeBonus(admin, newUserId, "registration")
       if (!welcomeGranted) {
         console.warn("[register] welcome bonus not granted:", newUserId)
+      }
+
+      if (campaignSlug.length >= 8) {
+        try {
+          await attributeRegistrationToCampaign({
+            userId: newUserId,
+            campaignSlug,
+          })
+        } catch (campErr) {
+          console.warn(
+            "[register] campaign attribution:",
+            campErr instanceof Error ? campErr.message : campErr,
+          )
+        }
       }
 
       try {
