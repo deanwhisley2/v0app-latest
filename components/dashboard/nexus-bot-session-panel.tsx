@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { CheckCircle2, Lock } from "lucide-react"
 import { FixedTradeSimulation } from "@/components/dashboard/fixed-trade-simulation"
 import {
+  sessionEarningsLockedLabel,
   sessionProgressMeterBlocks,
   sessionProgressPct,
   visibleSessionActivities,
@@ -49,6 +50,7 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
 
   const activities = useMemo(() => visibleSessionActivities(progressPct), [progressPct])
   const meter = useMemo(() => sessionProgressMeterBlocks(progressPct), [progressPct])
+  const lockedLabel = useMemo(() => sessionEarningsLockedLabel(progressPct), [progressPct])
 
   const isPreStart = session.status === "booked" || session.status === "ready"
   const isLive =
@@ -77,7 +79,7 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
           <p className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             Session earnings
-            <span className="text-muted-foreground">· Locked until session close</span>
+            <span className="text-muted-foreground">· {lockedLabel}</span>
           </p>
           {isLive ? (
             <>
@@ -114,7 +116,12 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
 
       {isLive ? (
         <div className={cn("mt-4")}>
-          <FixedTradeSimulation sessionId={session.id} deskSalt={session.id} />
+          <FixedTradeSimulation
+            sessionId={session.id}
+            deskSalt={session.id}
+            sessionStartAt={session.session_start_at}
+            sessionEndAt={session.session_end_at}
+          />
         </div>
       ) : null}
     </>
