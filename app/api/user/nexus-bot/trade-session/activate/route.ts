@@ -81,6 +81,8 @@ export async function POST(request: Request) {
       SESSION_ALREADY_JOINED: "You have already joined this session.",
       CODE_INVALID_OR_EXPIRED: "This trade code is not active or has expired.",
       SESSION_EXPIRED: "This session window has ended.",
+      SESSION_NO_EARNINGS_REMAINING:
+        "This session has no remaining earnings allocation. Join an active session earlier.",
       CONFIRMATION_REQUIRED: "Confirm activation to continue.",
       VERIFICATION_INVALID: "Verify the trade code again before activating.",
       VERIFICATION_EXPIRED: "Verification expired — verify the code again.",

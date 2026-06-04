@@ -11,6 +11,16 @@ export const TRADE_SESSION_POLICY_DAYS = 30
 
 const RECONCILE_EPSILON_USD = 0.02
 
+/** Minimum visible settlement for active-session late joins (debited from reserve only). */
+export const TRADE_SESSION_MIN_VISIBLE_SETTLEMENT_USD = 0.01
+export const TRADE_SESSION_RESERVE_SOURCE = "monthly_reserve_v1"
+
+export type SessionParticipationPayout = {
+  payoutUsd: number
+  allocatedUsd: number
+  minFloorApplied: boolean
+}
+
 export type ReserveDaySchedule = {
   dailyUsd: number
   morningUsd: number
@@ -316,6 +326,39 @@ export async function ensureUserTradeSessionReserve(
   return row
 }
 
+/** Proportional slot share capped by remaining reserve; minimum floor when weight > 0. */
+export function computeSessionParticipationPayoutUsd(params: {
+  slotGrossUsd: number
+  participationWeight: number
+  remainingReserveUsd: number
+}): SessionParticipationPayout {
+  const weight = Math.min(1, Math.max(0, params.participationWeight))
+  const slotGross = roundUsd2(params.slotGrossUsd)
+  const remaining = roundUsd2(params.remainingReserveUsd)
+  const allocatedUsd = roundUsd2(slotGross * weight)
+
+  if (weight <= 0) {
+    return { payoutUsd: 0, allocatedUsd: 0, minFloorApplied: false }
+  }
+  if (!(slotGross > 0) || !(remaining > 0)) {
+    return { payoutUsd: 0, allocatedUsd, minFloorApplied: false }
+  }
+
+  const capped = roundUsd2(Math.min(allocatedUsd, remaining))
+  if (capped > 0) {
+    return { payoutUsd: capped, allocatedUsd, minFloorApplied: false }
+  }
+
+  const floor = roundUsd2(
+    Math.min(TRADE_SESSION_MIN_VISIBLE_SETTLEMENT_USD, remaining, slotGross),
+  )
+  return {
+    payoutUsd: floor > 0 ? floor : 0,
+    allocatedUsd,
+    minFloorApplied: floor > 0,
+  }
+}
+
 export function projectSessionPayoutUsd(
   reserve: UserTradeSessionReserveRow,
   sessionStartAt: string,
@@ -324,9 +367,11 @@ export function projectSessionPayoutUsd(
 ): number {
   const dayIndex = dayIndexInPeriod(sessionStartAt, reserve.period_key)
   const slotGross = slotGrossUsdFromSchedule(reserve.schedule, dayIndex, sessionSlot)
-  const weight = Math.min(1, Math.max(0, participationWeight))
-  const raw = roundUsd2(slotGross * weight)
-  return roundUsd2(Math.min(raw, reserve.remaining_reserve_usd))
+  return computeSessionParticipationPayoutUsd({
+    slotGrossUsd: slotGross,
+    participationWeight,
+    remainingReserveUsd: reserve.remaining_reserve_usd,
+  }).payoutUsd
 }
 
 async function slotLedgerExists(
@@ -393,8 +438,14 @@ export async function settleTradeSessionParticipation(
     capitalUsd: number
     participationWeight: number
     forceFullParticipation?: boolean
+    joinedAt?: string | null
   },
-): Promise<{ profitUsd: number; reserve: UserTradeSessionReserveRow }> {
+): Promise<{
+  profitUsd: number
+  reserve: UserTradeSessionReserveRow
+  allocatedUsd: number
+  minFloorApplied: boolean
+}> {
   const weight = params.forceFullParticipation
     ? 1
     : Math.min(1, Math.max(0, params.participationWeight))
@@ -412,7 +463,12 @@ export async function settleTradeSessionParticipation(
       .eq("user_id", params.userId)
       .eq("trade_session_id", params.tradeSessionId)
       .maybeSingle()
-    return { profitUsd: roundUsd2(Number(data?.payout_usd ?? 0)), reserve }
+    return {
+      profitUsd: roundUsd2(Number(data?.payout_usd ?? 0)),
+      reserve,
+      allocatedUsd: 0,
+      minFloorApplied: false,
+    }
   }
 
   let reserve = await ensureUserTradeSessionReserve(
@@ -424,7 +480,11 @@ export async function settleTradeSessionParticipation(
 
   const dayIndex = dayIndexInPeriod(params.sessionStartAt, reserve.period_key)
   const slotGross = slotGrossUsdFromSchedule(reserve.schedule, dayIndex, params.sessionSlot)
-  const payoutUsd = roundUsd2(Math.min(roundUsd2(slotGross * weight), reserve.remaining_reserve_usd))
+  const { payoutUsd, allocatedUsd, minFloorApplied } = computeSessionParticipationPayoutUsd({
+    slotGrossUsd: slotGross,
+    participationWeight: weight,
+    remainingReserveUsd: reserve.remaining_reserve_usd,
+  })
   const debitUsd = payoutUsd
 
   const { error: insErr } = await admin.from("user_trade_session_slot_ledger").insert({
@@ -435,8 +495,11 @@ export async function settleTradeSessionParticipation(
     session_slot: normalizeSessionSlot(params.sessionSlot),
     slot_gross_usd: slotGross,
     participation_weight: weight,
+    allocated_profit_usd: allocatedUsd,
     payout_usd: payoutUsd,
     outcome: "earned",
+    joined_at: params.joinedAt ?? null,
+    reserve_source: TRADE_SESSION_RESERVE_SOURCE,
   })
   if (insErr) {
     if (insErr.code === "23505") {
@@ -446,13 +509,18 @@ export async function settleTradeSessionParticipation(
         .eq("user_id", params.userId)
         .eq("trade_session_id", params.tradeSessionId)
         .maybeSingle()
-      return { profitUsd: roundUsd2(Number(data?.payout_usd ?? 0)), reserve }
+      return {
+        profitUsd: roundUsd2(Number(data?.payout_usd ?? 0)),
+        reserve,
+        allocatedUsd: 0,
+        minFloorApplied: false,
+      }
     }
     throw new Error(insErr.message)
   }
 
   reserve = await applyReserveDebit(admin, reserve, debitUsd, "earned", payoutUsd)
-  return { profitUsd: payoutUsd, reserve }
+  return { profitUsd: payoutUsd, reserve, allocatedUsd, minFloorApplied }
 }
 
 export async function forfeitMissedTradeSessionSlot(

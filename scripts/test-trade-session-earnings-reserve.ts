@@ -2,14 +2,16 @@ import {
   assertReserveConservation,
   buildReserveSchedule,
   computeMonthlyReserveAmounts,
+  computeSessionParticipationPayoutUsd,
   periodKeyFromDate,
   projectSessionPayoutUsd,
   resolveTradeSessionMonthlyTargetPct,
   scheduleSlotTotalUsd,
-  settleTradeSessionParticipation,
   slotGrossUsdFromSchedule,
+  TRADE_SESSION_MIN_VISIBLE_SETTLEMENT_USD,
   TRADE_SESSION_PLATFORM_FEE_RATE,
 } from "../lib/server/trade-session-earnings-reserve"
+import { computeParticipationWeight } from "../lib/nexus-bot/participation-weight"
 import { roundUsd2 } from "../lib/nexus-financial-policy"
 
 function assert(cond: boolean, msg: string) {
@@ -88,10 +90,39 @@ function testProjectedPayoutUsesReserveNotStakeRate() {
   console.log("✓ payout derived from reserve slot (not stake percentage hack)")
 }
 
+function testLateJoinMinimumFloor() {
+  const { payoutUsd, minFloorApplied } = computeSessionParticipationPayoutUsd({
+    slotGrossUsd: 0.03,
+    participationWeight: 0.125,
+    remainingReserveUsd: 10,
+  })
+  assert(payoutUsd === TRADE_SESSION_MIN_VISIBLE_SETTLEMENT_USD, "late join floor $0.01")
+  assert(minFloorApplied, "floor flag set")
+  console.log("✓ late join minimum visible settlement from reserve")
+}
+
+function testEndedSessionZeroWeight() {
+  const w = computeParticipationWeight({
+    sessionStartAt: "2026-06-01T08:00:00.000Z",
+    sessionEndAt: "2026-06-01T16:00:00.000Z",
+    joinedAt: "2026-06-01T16:00:00.000Z",
+  })
+  assert(w === 0, "join at end → 0 weight")
+  const { payoutUsd } = computeSessionParticipationPayoutUsd({
+    slotGrossUsd: 5,
+    participationWeight: w,
+    remainingReserveUsd: 5,
+  })
+  assert(payoutUsd === 0, "zero weight → zero payout")
+  console.log("✓ ended session participation yields no earnings")
+}
+
 async function main() {
   testMonthlyReserveExample()
   testConservationAfterEarnAndForfeit()
   testProjectedPayoutUsesReserveNotStakeRate()
+  testLateJoinMinimumFloor()
+  testEndedSessionZeroWeight()
   console.log("test-trade-session-earnings-reserve: OK")
 }
 

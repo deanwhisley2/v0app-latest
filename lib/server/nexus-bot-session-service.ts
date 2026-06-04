@@ -24,7 +24,9 @@ import {
   ensureUserTradeSessionReserve,
   previewSessionPayoutFromCapital,
   processTradeSessionForfeitures,
+  projectSessionPayoutUsd,
   settleTradeSessionParticipation,
+  TRADE_SESSION_RESERVE_SOURCE,
 } from "@/lib/server/trade-session-earnings-reserve"
 
 export type { UserTradeSessionReserveRow } from "@/lib/server/trade-session-earnings-reserve"
@@ -183,7 +185,7 @@ export async function syncTradeSessionBotStates(
   let q = admin
     .from("nexus_bot_sessions")
     .select(
-      "id,user_id,status,trade_session_id,stake_usd,participation_weight,trade_sessions(start_at,end_at,session_slot)",
+      "id,user_id,status,trade_session_id,stake_usd,participation_weight,queued_at,trade_sessions(start_at,end_at,session_slot)",
     )
     .not("trade_session_id", "is", null)
     .in("status", [...TRADE_SESSION_OPEN_STATUSES])
@@ -208,6 +210,7 @@ export async function syncTradeSessionBotStates(
         stakeUsd: Number(row.stake_usd ?? 0),
         tradeSessionId: String(row.trade_session_id),
         participationWeight: Number(row.participation_weight ?? 1),
+        joinedAt: row.queued_at ? String(row.queued_at) : null,
         sessionStartAt: ts.start_at,
         sessionEndAt: ts.end_at,
         sessionSlot: String(ts.session_slot ?? "morning"),
@@ -261,6 +264,7 @@ async function completeTradeSessionBotRow(
     stakeUsd: number
     tradeSessionId: string
     participationWeight: number
+    joinedAt?: string | null
     sessionStartAt: string
     sessionEndAt: string
     sessionSlot: string
@@ -269,6 +273,7 @@ async function completeTradeSessionBotRow(
 ): Promise<{ profitUsd: number } | null> {
   const now = new Date().toISOString()
   const stake = roundUsd2(row.stakeUsd)
+  const joinedAt = row.joinedAt ?? now
   const weight = row.forceFullParticipation
     ? 1
     : row.participationWeight > 0
@@ -276,10 +281,14 @@ async function completeTradeSessionBotRow(
       : computeParticipationWeight({
           sessionStartAt: row.sessionStartAt,
           sessionEndAt: row.sessionEndAt,
-          joinedAt: now,
+          joinedAt,
         })
 
-  const { profitUsd } = await settleTradeSessionParticipation(admin, {
+  if (!row.forceFullParticipation && weight <= 0) {
+    return { profitUsd: 0 }
+  }
+
+  const settlement = await settleTradeSessionParticipation(admin, {
     userId: row.userId,
     tradeSessionId: row.tradeSessionId,
     sessionStartAt: row.sessionStartAt,
@@ -287,7 +296,9 @@ async function completeTradeSessionBotRow(
     capitalUsd: stake,
     participationWeight: weight,
     forceFullParticipation: row.forceFullParticipation,
+    joinedAt,
   })
+  const { profitUsd, allocatedUsd, minFloorApplied } = settlement
   const totalCredit = roundUsd2(stake + profitUsd)
 
   const { error: uErr } = await admin
@@ -324,10 +335,15 @@ async function completeTradeSessionBotRow(
     metadata: {
       session_id: row.id,
       trade_session_id: row.tradeSessionId,
+      joined_at: joinedAt,
+      participation_weight: weight,
+      allocated_profit_usd: allocatedUsd,
+      released_profit_usd: profitUsd,
+      reserve_source: TRADE_SESSION_RESERVE_SOURCE,
       profit_usd: profitUsd,
       stake_returned_usd: stake,
-      participation_weight: weight,
-      earnings_source: "monthly_reserve_v1",
+      earnings_source: TRADE_SESSION_RESERVE_SOURCE,
+      min_floor_applied: minFloorApplied,
       ...(row.forceFullParticipation ? { settlement_mode: "full_session_target" } : {}),
     },
   })
@@ -410,6 +426,26 @@ export async function activateTradeSessionBot(
     sessionEndAt: tradeSession.endAt,
     joinedAt: queuedAt,
   })
+  if (participationWeight <= 0) {
+    throw new Error("SESSION_EXPIRED")
+  }
+
+  const reserve = await ensureUserTradeSessionReserve(
+    admin,
+    params.userId,
+    stake,
+    new Date(tradeSession.startAt),
+  )
+  const projectedProfitUsd = projectSessionPayoutUsd(
+    reserve,
+    tradeSession.startAt,
+    tradeSession.sessionSlot,
+    participationWeight,
+  )
+  if (!(projectedProfitUsd > 0)) {
+    throw new Error("SESSION_NO_EARNINGS_REMAINING")
+  }
+
   const phaseKey: TradeSessionPhaseKey =
     initialStatus === "booked"
       ? "booked"
@@ -453,8 +489,6 @@ export async function activateTradeSessionBot(
     throw new Error(insErr.message)
   }
 
-  await ensureUserTradeSessionReserve(admin, params.userId, stake, new Date(tradeSession.startAt))
-
   await recordFinancialEvent({
     userId: params.userId,
     eventType: "nexus_trade_session_open",
@@ -471,6 +505,8 @@ export async function activateTradeSessionBot(
       trade_session_id: tradeSession.id,
       session_id: ins.id,
       participation_weight: participationWeight,
+      projected_profit_usd: projectedProfitUsd,
+      reserve_source: TRADE_SESSION_RESERVE_SOURCE,
       queued_at: queuedAt,
       code_verified_at: verified.verifiedAt,
     },
@@ -557,7 +593,7 @@ export async function terminateTradeSessionByAdmin(
   const now = new Date().toISOString()
   const { data: rows, error: rowsErr } = await admin
     .from("nexus_bot_sessions")
-    .select("id,user_id,stake_usd,participation_weight")
+    .select("id,user_id,stake_usd,participation_weight,queued_at")
     .eq("trade_session_id", params.tradeSessionId)
     .in("status", [...TRADE_SESSION_OPEN_STATUSES])
   if (rowsErr) throw new Error(rowsErr.message)
@@ -573,6 +609,7 @@ export async function terminateTradeSessionByAdmin(
       stakeUsd: Number(row.stake_usd ?? 0),
       tradeSessionId: params.tradeSessionId,
       participationWeight: Number(row.participation_weight ?? 1),
+      joinedAt: row.queued_at ? String(row.queued_at) : null,
       sessionStartAt: String(ts.start_at),
       sessionEndAt: String(ts.end_at),
       sessionSlot: String(ts.session_slot ?? "morning"),
