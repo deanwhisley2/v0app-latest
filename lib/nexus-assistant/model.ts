@@ -4,6 +4,8 @@ import {
   CONTAINER_ILLUSTRATIVE_MICRO_USD30,
   NEXUS_PRODUCT_NAME,
   containerCustomerEarningsStory,
+  NEXUS_EARNINGS_POCKET_FLOW,
+  NEXUS_COPY_TRADE_GUIDE,
   LEVEL_HINT,
   NEXUS_FUNDING_AND_RETAIL_DESK_HINT,
   NEXUS_WALLET_AND_WITHDRAWAL_RULES,
@@ -367,7 +369,31 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
   }
 
   if (hasAny(q, ["bullish trade", "bullish trades", "what are bullish"])) {
-    return [NEXUS_BULLISH_TRADES_EXPLAINER, "", CONTAINER_WITHDRAWAL_SUMMARY].join("\n")
+    return [NEXUS_BULLISH_TRADES_EXPLAINER, "", NEXUS_EARNINGS_POCKET_FLOW, "", CONTAINER_WITHDRAWAL_SUMMARY].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "pocket",
+      "pocket balance",
+      "transfer to main",
+      "transfer to nexus",
+      "container liquid",
+      "withdrawable earnings",
+      "move earnings",
+    ])
+  ) {
+    return [
+      NEXUS_EARNINGS_POCKET_FLOW,
+      "",
+      "Wallet home: Pocket balance shows session earnings. Tap Transfer to main balance when you want them on Nexus Main for new trades or withdrawal.",
+      "",
+      CONTAINER_WITHDRAWAL_SUMMARY,
+    ].join("\n")
+  }
+
+  if (hasAny(q, ["copy trade", "copy session", "copy cycle", "24 hour", "24h copy"])) {
+    return [NEXUS_COPY_TRADE_GUIDE, "", NEXUS_EARNINGS_POCKET_FLOW].join("\n")
   }
 
   if (
@@ -554,15 +580,17 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     ])
   ) {
     return [
-      "Container mode is where you run the fixed-term flows shown in the Wallstreet tab — pick a master profile, choose your lock length, and read the stake rules on the card before you confirm.",
+      "Container mode is where you run copy (~24h) or fixed-term desks from the trading workspace — read stake and fee rules on the card before you confirm.",
       "",
       containerCustomerEarningsStory(),
       "",
+      NEXUS_EARNINGS_POCKET_FLOW,
+      "",
       CONTAINER_WITHDRAWAL_SUMMARY,
       "",
-      "Practical rhythm: open Container daily to watch scheduled accrual and any withdrawal windows the UI unlocks — that’s the “every day” habit successful users build (checking progress, not chasing hype).",
+      "Practical rhythm: check Container for accrual while sessions run; when one completes, confirm earnings in Pocket, then transfer to Nexus Main only when you are ready.",
       "",
-      "Funding rule: fixed locks spend from Nexus Main only — if Main can’t cover stake plus upfront fees, reduce size or add funds first.",
+      "Funding rule: opening trades spends from Nexus Main — if Main can’t cover stake plus upfront fees, reduce size or Add Funds first.",
       "",
       focusSymbol
         ? `You currently have ${focusSymbol} on the desk — you can still run Container flows; the coin context and container pick are independent, so follow whichever plan matches your risk plan.`

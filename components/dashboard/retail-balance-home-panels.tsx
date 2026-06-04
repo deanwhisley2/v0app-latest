@@ -16,7 +16,13 @@ import { HomeOverviewGuide } from "@/components/dashboard/home-overview-guide"
 import { Button } from "@/components/ui/button"
 import { PROCESSING_COPY } from "@/lib/nexus-financial-policy"
 import { cn } from "@/lib/utils"
-import { NX_BTN_ACCENT, NX_BTN_PRIMARY, NX_GROWTH_BADGE, NX_PANEL } from "@/lib/nexus-ui-surfaces"
+import {
+  NX_BTN_ADD_FUNDS,
+  NX_BTN_PRIMARY,
+  NX_BTN_WITHDRAW,
+  NX_GROWTH_BADGE,
+  NX_PANEL,
+} from "@/lib/nexus-ui-surfaces"
 
 export type WithdrawalEligibilityHint = {
   minUsd: number
@@ -174,13 +180,13 @@ export function RetailBalanceHomePanels({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t border-border/50 px-5 py-4 sm:px-6">
-          <Button type="button" size="lg" className={cn("w-full", NX_BTN_ACCENT)} onClick={onAddFunds}>
-            <Plus className="h-4 w-4 shrink-0" aria-hidden />
+        <div className="grid grid-cols-2 gap-3 border-t border-border px-5 py-4 sm:px-6">
+          <Button type="button" size="lg" className={cn("w-full text-base", NX_BTN_ADD_FUNDS)} onClick={onAddFunds}>
+            <Plus className="h-5 w-5 shrink-0" aria-hidden />
             {t("funding.button.addFunds")}
           </Button>
-          <Button type="button" size="lg" variant="outline" className="min-h-12 w-full font-semibold" onClick={onWithdraw}>
-            <ArrowDownLeft className="h-4 w-4 shrink-0" aria-hidden />
+          <Button type="button" size="lg" className={cn("w-full text-base", NX_BTN_WITHDRAW)} onClick={onWithdraw}>
+            <ArrowDownLeft className="h-5 w-5 shrink-0" aria-hidden />
             {t("funding.button.withdraw")}
           </Button>
         </div>

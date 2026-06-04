@@ -208,9 +208,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.modal.maxLine": "Maximum: full withdrawable Nexus Main balance (~{{max}}).",
   "container.fix.releaseRulesTitle": "Trade performance release",
   "container.fix.releaseRulesBody":
-    "Move trade performance gains to your pocket when you are ready. A small release fee may apply. Your main lock stays in place until the plan ends or you choose early exit.",
+    "During a fixed lock, move bullish-trade gains to Pocket when the release button is available (small fee may apply). When the session completes, remaining earnings also land in Pocket.",
   "container.fix.pocketWithdrawCap":
-    "You can withdraw available Nexus Main balance on your schedule (once per 12 hours). Money still inside an active trade lock stays allocated until that trade ends.",
+    "Transfer Pocket → Nexus Main on your dashboard when you want to trade or withdraw. Nexus Main cash-out follows the 12-hour rule. Active trade locks stay allocated until the session ends.",
   "container.fix.unreleasedLabel": "Ready to release",
   "container.fix.availableToRelease": "Available now",
   "container.promo.title": "Grow with Container mode",
@@ -222,9 +222,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.welcome.title": "Welcome to Container mode",
   "container.welcome.summary": "Follow expert traders — quick copy sessions or longer fixed plans.",
   "container.welcome.copyLine":
-    "Copy moves faster (about 24 hours). Markets can swing more — good for active traders who accept higher movement.",
+    "Copy runs about 24 hours. When it completes, stake returns to Nexus Main and earnings go to Pocket — transfer to Main when ready.",
   "container.welcome.fixLine":
-    "Fixed keeps your lock for the full term. Trade performance can be released to pocket along the way.",
+    "Fixed keeps your lock for the full term. Release bullish trades to Pocket along the way; session-end earnings also stay in Pocket until you transfer.",
   "container.welcome.level": "Your level: {{level}} · {{name}}",
   "container.copy.risk.title": "Copy sessions — faster pace",
   "container.copy.risk.summary": "Shorter cycles · more market movement · different from fixed plans.",
@@ -234,7 +234,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "container.copy.risk.detail3":
     "Optional auto-adjust aims for a modest growth target before you cash out — shown for guidance until the desk confirms.",
   "container.fix.rules.summary":
-    "Release trade performance gains to pocket anytime. Your locked amount stays in the trade until maturity or early exit.",
+    "Earnings go to Pocket (releases during the lock, plus the remainder when the session completes). Transfer to Nexus Main manually — never automatic.",
   "container.fix.rules.detail1":
     "Your lock supports the coin pair on your card. Performance builds as the plan progresses.",
   "container.fix.rules.detail2":
@@ -294,7 +294,7 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "home.overview.eyebrow": "Workspace guide",
   "home.overview.title": "Nexus Main overview",
   "home.overview.subtitle": "Fund your account, manage balances, and open Container trades from one place.",
-  "home.overview.compactLine": "Fund → Container → withdraw on your schedule",
+  "home.overview.compactLine": "Fund → Trade → Pocket → transfer to Main → withdraw",
   "home.overview.stepFund": "Add funds",
   "home.overview.stepFundHint": "Crypto or local mobile money",
   "home.overview.stepContainer": "Container",

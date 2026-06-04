@@ -2996,7 +2996,7 @@ export function DashboardPageInner() {
                   <button
                     type="button"
                     onClick={() => void tryOpenFundModal("add")}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success/90 sm:flex-none"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-emerald-600/40 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-700 sm:flex-none"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -3006,7 +3006,7 @@ export function DashboardPageInner() {
                   <button
                     type="button"
                     onClick={() => void tryOpenFundModal("withdraw")}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/80 sm:flex-none"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-foreground/25 bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted sm:flex-none"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
@@ -3150,7 +3150,7 @@ export function DashboardPageInner() {
                 ) : null}
 
                                 {l1FundSource === "local" && localMmWizardStep === 1 ? (
-                  <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3 sm:p-4">
+                  <div className="space-y-3 rounded-lg border-2 border-border bg-card p-3 sm:p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-foreground">{t("funding.local.step1Title")}</p>
                       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
@@ -3174,7 +3174,7 @@ export function DashboardPageInner() {
                           readOnly={fundingCountryLocked}
                           placeholder="UG"
                           autoComplete="country"
-                          className={`w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm uppercase ${fundingCountryLocked ? "cursor-default opacity-80" : ""}`}
+                          className={`w-full rounded-md border-2 border-border bg-card px-3 py-2.5 text-sm font-medium uppercase text-foreground ${fundingCountryLocked ? "cursor-default bg-muted/60" : ""}`}
                         />
                       </div>
                       <div>
@@ -3190,7 +3190,7 @@ export function DashboardPageInner() {
                               applyRegisteredFundPayer(fundPayerProfile, net)
                             }
                           }}
-                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                          className="w-full rounded-md border-2 border-border bg-card px-3 py-2.5 text-sm font-medium text-foreground"
                         >
                           <option value="">{t("funding.network.select")}</option>
                           {localMmNetworkOptions.map((net) => (
@@ -3214,9 +3214,9 @@ export function DashboardPageInner() {
                             fundingAmountLabelCurrency,
                             locale || "en-US",
                           )}
-                          className="w-full rounded-md border border-border bg-background px-3 py-2.5 font-mono text-sm"
+                          className="w-full rounded-md border-2 border-border bg-card px-3 py-2.5 font-mono text-sm text-foreground"
                         />
-                        <p className="mt-1 text-[10px] text-muted-foreground">
+                        <p className="mt-1 text-[11px] font-medium text-muted-foreground">
                           {t("funding.amount.minimumLine").replace(
                             "{{amount}}",
                             formatLocalFiatAmount(
@@ -3239,7 +3239,7 @@ export function DashboardPageInner() {
                               onChange={(e) => setFundPayerPhone(e.target.value)}
                               placeholder={t("funding.placeholder.phoneExample")}
                               autoComplete="tel"
-                              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                              className="w-full rounded-md border-2 border-border bg-card px-3 py-2.5 text-sm text-foreground"
                             />
                           </div>
                           <div>
@@ -3252,7 +3252,7 @@ export function DashboardPageInner() {
                               onChange={(e) => setFundPayerName(e.target.value)}
                               placeholder={t("funding.placeholder.fullName")}
                               autoComplete="name"
-                              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                              className="w-full rounded-md border-2 border-border bg-card px-3 py-2.5 text-sm text-foreground"
                             />
                           </div>
                         </>
@@ -3262,7 +3262,7 @@ export function DashboardPageInner() {
                       type="button"
                       disabled={loadingQualifiedRetailers}
                       onClick={() => void handleLoadQualifiedRetailers()}
-                      className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
+                      className="w-full rounded-lg border-2 border-primary/30 bg-primary py-3.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/90 disabled:opacity-50"
                     >
                       {loadingQualifiedRetailers ? t("funding.findingRetailers") : t("funding.continueFindRetailers")}
                     </button>
@@ -3270,7 +3270,7 @@ export function DashboardPageInner() {
                 ) : null}
 
                 {l1FundSource === "local" && localMmWizardStep === 2 ? (
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-2 sm:space-y-3 sm:p-3">
+                  <div className="space-y-2 rounded-lg border-2 border-border bg-card p-2 sm:space-y-3 sm:p-3 shadow-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"

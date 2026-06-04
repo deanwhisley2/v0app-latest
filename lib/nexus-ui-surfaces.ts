@@ -38,11 +38,19 @@ export const NX_GROWTH_BADGE =
 
 /** Primary money action — emerald */
 export const NX_BTN_PRIMARY =
-  "min-h-11 rounded-xl bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+  "min-h-12 rounded-xl bg-primary font-semibold text-primary-foreground shadow-md ring-1 ring-primary/30 hover:bg-primary/90 active:scale-[0.99]"
+
+/** Add Funds — high-contrast success */
+export const NX_BTN_ADD_FUNDS =
+  "min-h-12 rounded-xl border-2 border-emerald-600/40 bg-emerald-600 font-semibold text-white shadow-md hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500/50 dark:bg-emerald-600"
+
+/** Withdraw — visible outline (not washed out) */
+export const NX_BTN_WITHDRAW =
+  "min-h-12 rounded-xl border-2 border-foreground/25 bg-card font-semibold text-foreground shadow-sm hover:border-primary/40 hover:bg-muted active:scale-[0.99]"
 
 /** Premium highlight — gold, use sparingly */
 export const NX_BTN_ACCENT =
-  "min-h-11 rounded-xl bg-accent/90 font-semibold text-accent-foreground shadow-sm hover:bg-accent/80"
+  "min-h-12 rounded-xl bg-accent font-semibold text-accent-foreground shadow-md ring-1 ring-accent/25 hover:bg-accent/90 active:scale-[0.99]"
 
 export function nexusPanel(className?: string) {
   return cn(NX_PANEL, NX_PANEL_PAD, className)

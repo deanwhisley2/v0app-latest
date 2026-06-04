@@ -72,7 +72,7 @@ export const frNotificationsOverlay: Record<string, string> = {
   "notifications.trade.scheduleActiveTitle": "Actif",
   "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}} mois",
   "notifications.trade.copyCycleTitle": "Terminé",
-  "notifications.trade.copyCycleMessage": "Principal +{{mainAdd}} · Poche +{{pocketAdd}}",
+  "notifications.trade.copyCycleMessage": "Principal vers Nexus +{{mainAdd}} · Gains en poche +{{pocketAdd}}",
   "notifications.trade.copySettlementFailTitle": "Échoué",
   "notifications.trade.copySettlementFailMessage": "Clôture incomplète. Actualisez ou forcez le retrait.",
   "notifications.container.dayProgressShort": "Jour {{current}}/{{total}}",

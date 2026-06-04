@@ -78,7 +78,7 @@ type Props = {
 
 const CARD_TRIGGER =
   "flex w-full min-h-[52px] items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all sm:min-h-0 sm:px-4 sm:py-3"
-const CARD_INACTIVE = "border-border bg-muted/30 hover:bg-muted/50"
+const CARD_INACTIVE = "border-2 border-border bg-card hover:border-primary/30 hover:bg-muted/40"
 const LABEL_ROW = "flex min-w-0 flex-1 items-center gap-2"
 const NETWORK_BADGE = "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
 
@@ -425,7 +425,7 @@ export function FundingPaymentPanel({
         ) : null}
       </div>
 
-      <details className="mt-2 rounded-lg border border-border/60 bg-muted/20">
+      <details className="mt-2 rounded-lg border border-border bg-muted/50">
         <summary className="cursor-pointer select-none px-2 py-1.5 text-[10px] font-medium text-muted-foreground">
           {t("funding.payment.cryptoOptionalStatus")}
         </summary>
@@ -499,7 +499,7 @@ export function FundingPaymentPanel({
 
   const localExpanded =
     activeSource === "local" && (
-      <p className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-2.5 py-2 text-[10px] leading-snug text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border bg-muted/50 px-2.5 py-2 text-[11px] leading-snug text-foreground/80">
         {t("funding.payment.localAccordionHint")}
       </p>
     )

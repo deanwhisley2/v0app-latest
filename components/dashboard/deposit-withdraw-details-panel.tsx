@@ -30,7 +30,7 @@ function GlassSection({
   return (
     <Card
       className={cn(
-        "border-border/80 bg-card/95 p-5 shadow-sm backdrop-blur-sm dark:bg-card/90",
+        "border-border bg-card p-5 shadow-sm",
         className,
       )}
     >
