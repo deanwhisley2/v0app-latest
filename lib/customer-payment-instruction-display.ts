@@ -6,12 +6,10 @@
 /** Name customers should use when paying via Airtel menu (instruction copy). */
 export const CUSTOMER_AIRTEL_MENU_DISPLAY_NAME = "Nexus Pro2"
 
-/** Map instruction-surface payee text; desk summary cards keep raw registry values. */
+/** Map instruction-surface payee text (must already be network-scoped from payment route resolution). */
 export function customerInstructionPayeeDisplay(raw: string | null | undefined): string {
   const trimmed = String(raw ?? "").trim()
   if (!trimmed) return CUSTOMER_AIRTEL_MENU_DISPLAY_NAME
-  if (/nankwanga|azizza/i.test(trimmed)) return trimmed
-  if (/pegasus\s*technologies/i.test(trimmed)) return CUSTOMER_AIRTEL_MENU_DISPLAY_NAME
   return trimmed
 }
 

@@ -1,9 +1,5 @@
+import { resolvePaymentRouteForNetwork } from "@/lib/payment-route-resolution"
 import type { RetailerPaymentLine } from "@/lib/retailer-payment-templates"
-import {
-  parseKeMpesaMobileDesk,
-  parseUgAirtelMerchantDesk,
-  parseUgMtnMobileDesk,
-} from "@/lib/retailer-payment-templates"
 
 /** Show only payment lines matching the customer's selected network (never mix MTN + Airtel on one card). */
 export function filterDeskPaymentLinesForNetwork(
@@ -58,25 +54,22 @@ export function formatDeskPaymentLinesSummary(
     .filter(Boolean)
 }
 
-/** Payee name for the selected network only — never the full multi-network desk string. */
+/** Payee name for the selected network only — never reused from another route on the desk. */
 export function deskPayeeDisplayForNetwork(
   paymentNumbers: unknown,
   mobileNetwork: string,
   registeredPayeeNames?: string | null,
 ): string | null {
-  const net = mobileNetwork.trim().toUpperCase()
-  const filtered = filterDeskPaymentLinesForNetwork(paymentNumbers, mobileNetwork)
-  if (net === "MTN") {
-    return parseUgMtnMobileDesk(filtered, registeredPayeeNames)?.payeeName ?? null
-  }
-  if (net === "AIRTEL") {
-    return parseUgAirtelMerchantDesk(filtered, registeredPayeeNames)?.payeeName ?? null
-  }
-  if (/MPESA/i.test(net)) {
-    const mpesa = parseKeMpesaMobileDesk(filtered)
-    return mpesa?.lines[0]?.payeeName ?? null
-  }
-  const first = filtered[0]
-  if (!first) return registeredPayeeNames?.trim() || null
-  return registeredPayeeNames?.trim() || null
+  const route = resolvePaymentRouteForNetwork(paymentNumbers, mobileNetwork, registeredPayeeNames)
+  if (!route?.valid) return null
+  return route.registeredPayeeName || null
+}
+
+/** When invalid, returns null and callers should hide payment instructions. */
+export function deskPaymentRouteForNetwork(
+  paymentNumbers: unknown,
+  mobileNetwork: string,
+  registeredPayeeNames?: string | null,
+) {
+  return resolvePaymentRouteForNetwork(paymentNumbers, mobileNetwork, registeredPayeeNames)
 }

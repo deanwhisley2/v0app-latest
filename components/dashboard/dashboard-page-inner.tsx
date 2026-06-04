@@ -136,6 +136,7 @@ import { RegisteredPayerPicker } from "@/components/dashboard/registered-payer-p
 import { NetworkPaymentCardHeader } from "@/components/dashboard/network-payment-card-header"
 import {
   deskPayeeDisplayForNetwork,
+  deskPaymentRouteForNetwork,
   filterDeskPaymentLinesForNetwork,
   formatDeskPaymentLinesSummary,
 } from "@/lib/retailer-desk-network-display"
@@ -1144,8 +1145,17 @@ export function DashboardPageInner() {
     if (!localMmSelectedDesk || fundMobileNetwork === "MTN" || localMmMpesaKenya) return null
     if (localMmFundingCountry !== "UG") return null
     const filtered = filterDeskPaymentLinesForNetwork(localMmSelectedDesk.payment_numbers, fundMobileNetwork)
-    return parseUgAirtelMerchantDesk(filtered, localMmSelectedDesk.registered_payee_names)
+    return parseUgAirtelMerchantDesk(filtered, null)
   }, [localMmSelectedDesk, fundMobileNetwork, localMmMpesaKenya, localMmFundingCountry])
+
+  const localMmPaymentRoute = useMemo(() => {
+    if (!localMmSelectedDesk) return null
+    return deskPaymentRouteForNetwork(
+      localMmSelectedDesk.payment_numbers,
+      fundMobileNetwork,
+      localMmSelectedDesk.registered_payee_names,
+    )
+  }, [localMmSelectedDesk, fundMobileNetwork])
 
   useEffect(() => {
     if (isGuestSession || !authReady || authLoading) return
@@ -3412,7 +3422,13 @@ export function DashboardPageInner() {
 
                     {qualifiedRetailers.length > 0 || officialCorridorFallback ? (
                       <div className="max-w-full space-y-2 overflow-x-hidden border-t border-border/60 pt-2 sm:space-y-3 sm:pt-3">
-                        {localMmSelectedDesk ? (
+                        {localMmSelectedDesk && (!localMmPaymentRoute || !localMmPaymentRoute.valid) ? (
+                          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+                            <p className="font-medium">{t("funding.payment.routeValidationFailedTitle")}</p>
+                            <p className="mt-1">{t("funding.payment.routeValidationFailedBody")}</p>
+                          </div>
+                        ) : null}
+                        {localMmSelectedDesk && localMmPaymentRoute?.valid ? (
                           <>
                             <NetworkPaymentCardHeader
                               network={fundMobileNetwork}
@@ -3480,7 +3496,8 @@ export function DashboardPageInner() {
                               t={t}
                             />
                           </>
-                        ) : localMmSelectedOfficial ? (
+                        ) : null}
+                        {localMmSelectedOfficial ? (
                           <div className="space-y-1 rounded-md border border-sky-600/40 bg-sky-500/10 p-3 text-[11px] sm:text-xs dark:text-sky-50">
                             <p className="font-semibold text-sky-900 dark:text-sky-100">{t("funding.officialReceiveTitle")}</p>
                             <p>

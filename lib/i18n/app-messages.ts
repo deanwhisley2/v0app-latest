@@ -108,6 +108,9 @@ const en: Record<string, string> = {
   "withdrawal.payoutLockedHint": "Payout details are locked from your Security profile. Change them only via Security Appeal.",
   "funding.card.payeeNumber": "Payee number",
   "funding.card.payeeName": "Payee name",
+  "funding.payment.routeValidationFailedTitle": "Payment details unavailable",
+  "funding.payment.routeValidationFailedBody":
+    "This payment route could not be verified for the selected network. Choose another desk or contact support before sending money.",
   "funding.card.yourNumber": "Your number",
   "funding.card.yourName": "Your name",
   "receipt.timeline.withdrawalApproved": "Withdrawal approved",

@@ -10,6 +10,10 @@ import {
   loadActiveCorridorDesksForProfiles,
   pickCorridorForCountry,
 } from "@/lib/server/retailer-corridor-desks"
+import {
+  logPaymentRouteValidationFailure,
+  resolvePaymentRouteForNetwork,
+} from "@/lib/payment-route-resolution"
 import { applyPaymentRotationToDeskRow } from "@/lib/server/retailer-payment-rotation"
 
 export type CorridorQualificationParams = {
@@ -124,6 +128,20 @@ export async function collectQualifiedRetailDesks(
     if (!retailerDeskSupportsNetwork(row.payment_numbers, mobileNetwork, customerCountry)) continue
 
     const rid = String((row as { id: string }).id)
+    const routeCheck = resolvePaymentRouteForNetwork(
+      row.payment_numbers,
+      mobileNetwork,
+      (row as { registered_payee_names?: string | null }).registered_payee_names,
+    )
+    if (!routeCheck?.valid) {
+      if (routeCheck) {
+        logPaymentRouteValidationFailure("retailer_qualification_blocked", routeCheck, {
+          retailerProfileId: rid,
+          userId: uid,
+        })
+      }
+      continue
+    }
     const { spendable } = await retailerSpendableLiquidity(admin, uid, rid)
     if (spendable < amount) continue
 

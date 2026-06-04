@@ -13,6 +13,8 @@ export type RetailerPaymentLine = {
   payment_type?: string
   merchant_id?: string
   merchant_name?: string
+  /** Per-route registered payee (independent from other networks on the same desk). */
+  payee_name?: string
   ussd_prefix?: string
 }
 
@@ -48,7 +50,7 @@ const DEFAULT_AIRTEL_MERCHANT_NAME = "Nexus Pro2"
 
 export function parseUgAirtelMerchantDesk(
   paymentNumbers: unknown,
-  registeredPayeeNames: string | null | undefined,
+  _registeredPayeeNames?: string | null | undefined,
 ): UgAirtelMerchantTemplate | null {
   const rows = Array.isArray(paymentNumbers) ? (paymentNumbers as RetailerPaymentLine[]) : []
   for (const row of rows) {
@@ -57,12 +59,14 @@ export function parseUgAirtelMerchantDesk(
     if (pt === "airtel_merchant_ug" || lab.includes("airtel")) {
       const merchantId = String(row.merchant_id ?? row.value ?? "").trim()
       if (merchantId) {
+        const merchantName = String(row.merchant_name ?? DEFAULT_AIRTEL_MERCHANT_NAME).trim()
+        const payeeName = String(row.payee_name ?? merchantName).trim() || merchantName
         return {
           kind: "ug_airtel_merchant",
           merchantId,
-          merchantName: String(row.merchant_name ?? DEFAULT_AIRTEL_MERCHANT_NAME).trim(),
-          payeeName: String(registeredPayeeNames ?? ESKNEXUSPRO_PAYEE_BRAND).trim(),
-          ussdPrefix: DEFAULT_AIRTEL_USSD,
+          merchantName,
+          payeeName,
+          ussdPrefix: String(row.ussd_prefix ?? DEFAULT_AIRTEL_USSD).trim() || DEFAULT_AIRTEL_USSD,
         }
       }
     }
@@ -81,10 +85,12 @@ export function parseUgMtnMobileDesk(
     if (pt === "mtn_mobile_ug" || lab.includes("mtn")) {
       const msisdn = String(row.value ?? "").trim()
       if (msisdn) {
+        const linePayee = String(row.payee_name ?? "").trim()
+        const deskPayee = String(registeredPayeeNames ?? "").trim()
         return {
           kind: "ug_mtn_mobile",
           msisdn,
-          payeeName: String(registeredPayeeNames ?? ESKNEXUSPRO_REGISTERED_PAYEE).trim(),
+          payeeName: linePayee || deskPayee || ESKNEXUSPRO_REGISTERED_PAYEE,
           payeeBrand: ESKNEXUSPRO_PAYEE_BRAND,
           ussdPrefix: String(row.ussd_prefix ?? ESKNEXUSPRO_MTN_USSD_PREFIX).trim() || ESKNEXUSPRO_MTN_USSD_PREFIX,
         }
