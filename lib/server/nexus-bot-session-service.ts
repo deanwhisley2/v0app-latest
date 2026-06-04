@@ -20,32 +20,15 @@ import {
 } from "@/lib/server/performance-points"
 import { consumeTradeSessionVerification } from "@/lib/server/trade-session-verification"
 import { findActiveTradeSessionByCode } from "@/lib/server/trade-sessions"
+import {
+  ensureUserTradeSessionReserve,
+  previewSessionPayoutFromCapital,
+  processTradeSessionForfeitures,
+  settleTradeSessionParticipation,
+} from "@/lib/server/trade-session-earnings-reserve"
 
-function hashSeed(input: string): number {
-  let h = 2166136261
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
-
-/** Base gross profit before participation weight — internal only. */
-export function tradeSessionBaseProfitUsd(sessionId: string, stakeUsd: number): number {
-  const h = hashSeed(sessionId)
-  const rate = 0.025 + (h % 31) / 1000
-  return roundUsd2(stakeUsd * rate)
-}
-
-export function tradeSessionProfitUsd(
-  sessionId: string,
-  stakeUsd: number,
-  participationWeight = 1,
-): number {
-  const base = tradeSessionBaseProfitUsd(sessionId, stakeUsd)
-  const weight = Math.min(1, Math.max(0, participationWeight))
-  return roundUsd2(base * weight)
-}
+export type { UserTradeSessionReserveRow } from "@/lib/server/trade-session-earnings-reserve"
+export { previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
 
 export function resolveUserDisplayPhase(params: {
   status: string
@@ -200,7 +183,7 @@ export async function syncTradeSessionBotStates(
   let q = admin
     .from("nexus_bot_sessions")
     .select(
-      "id,user_id,status,trade_session_id,stake_usd,participation_weight,trade_sessions(start_at,end_at)",
+      "id,user_id,status,trade_session_id,stake_usd,participation_weight,trade_sessions(start_at,end_at,session_slot)",
     )
     .not("trade_session_id", "is", null)
     .in("status", [...TRADE_SESSION_OPEN_STATUSES])
@@ -208,8 +191,10 @@ export async function syncTradeSessionBotStates(
   const { data, error } = await q.limit(200)
   if (error) throw new Error(error.message)
 
+  const endedTradeSessions = new Set<string>()
+
   for (const row of data ?? []) {
-    const ts = row.trade_sessions as { start_at?: string; end_at?: string } | null
+    const ts = row.trade_sessions as { start_at?: string; end_at?: string; session_slot?: string } | null
     if (!ts?.start_at || !ts?.end_at) continue
     const startMs = new Date(ts.start_at).getTime()
     const endMs = new Date(ts.end_at).getTime()
@@ -225,7 +210,9 @@ export async function syncTradeSessionBotStates(
         participationWeight: Number(row.participation_weight ?? 1),
         sessionStartAt: ts.start_at,
         sessionEndAt: ts.end_at,
+        sessionSlot: String(ts.session_slot ?? "morning"),
       })
+      endedTradeSessions.add(String(row.trade_session_id))
       continue
     }
 
@@ -251,6 +238,19 @@ export async function syncTradeSessionBotStates(
     .not("trade_session_id", "is", null)
     .in("status", ["booked", "ready", "pending"])
     .lt("ends_at", nowIso)
+
+  for (const tradeSessionId of endedTradeSessions) {
+    const ts = (data ?? []).find((r) => String(r.trade_session_id) === tradeSessionId)?.trade_sessions as
+      | { start_at?: string; session_slot?: string }
+      | null
+      | undefined
+    if (!ts?.start_at) continue
+    await processTradeSessionForfeitures(admin, {
+      id: tradeSessionId,
+      session_slot: String(ts.session_slot ?? "morning"),
+      start_at: ts.start_at,
+    })
+  }
 }
 
 async function completeTradeSessionBotRow(
@@ -263,6 +263,7 @@ async function completeTradeSessionBotRow(
     participationWeight: number
     sessionStartAt: string
     sessionEndAt: string
+    sessionSlot: string
     forceFullParticipation?: boolean
   },
 ): Promise<{ profitUsd: number } | null> {
@@ -277,8 +278,17 @@ async function completeTradeSessionBotRow(
           sessionEndAt: row.sessionEndAt,
           joinedAt: now,
         })
-  const profit = tradeSessionProfitUsd(row.id, stake, weight)
-  const totalCredit = roundUsd2(stake + profit)
+
+  const { profitUsd } = await settleTradeSessionParticipation(admin, {
+    userId: row.userId,
+    tradeSessionId: row.tradeSessionId,
+    sessionStartAt: row.sessionStartAt,
+    sessionSlot: row.sessionSlot,
+    capitalUsd: stake,
+    participationWeight: weight,
+    forceFullParticipation: row.forceFullParticipation,
+  })
+  const totalCredit = roundUsd2(stake + profitUsd)
 
   const { error: uErr } = await admin
     .from("nexus_bot_sessions")
@@ -286,7 +296,7 @@ async function completeTradeSessionBotRow(
       status: "completed",
       settled_at: now,
       display_phase: "profit_released",
-      profit_released_usd: profit,
+      profit_released_usd: profitUsd,
       participation_weight: weight,
     })
     .eq("id", row.id)
@@ -297,7 +307,7 @@ async function completeTradeSessionBotRow(
     await casCreditNexusMainOnly(admin, row.userId, totalCredit)
   }
 
-  const historySummary = closedTradeHistorySummary(profit)
+  const historySummary = closedTradeHistorySummary(profitUsd)
 
   await recordFinancialEvent({
     userId: row.userId,
@@ -314,9 +324,10 @@ async function completeTradeSessionBotRow(
     metadata: {
       session_id: row.id,
       trade_session_id: row.tradeSessionId,
-      profit_usd: profit,
+      profit_usd: profitUsd,
       stake_returned_usd: stake,
       participation_weight: weight,
+      earnings_source: "monthly_reserve_v1",
       ...(row.forceFullParticipation ? { settlement_mode: "full_session_target" } : {}),
     },
   })
@@ -330,7 +341,7 @@ async function completeTradeSessionBotRow(
     sessionReference: row.tradeSessionId,
   })
   await incrementCompletedSessions(admin, row.userId)
-  return { profitUsd: profit }
+  return { profitUsd: profitUsd }
 }
 
 export async function activateTradeSessionBot(
@@ -442,6 +453,8 @@ export async function activateTradeSessionBot(
     throw new Error(insErr.message)
   }
 
+  await ensureUserTradeSessionReserve(admin, params.userId, stake, new Date(tradeSession.startAt))
+
   await recordFinancialEvent({
     userId: params.userId,
     eventType: "nexus_trade_session_open",
@@ -535,7 +548,7 @@ export async function terminateTradeSessionByAdmin(
 }> {
   const { data: ts, error: tsErr } = await admin
     .from("trade_sessions")
-    .select("id,code,status,start_at,end_at")
+    .select("id,code,status,start_at,end_at,session_slot")
     .eq("id", params.tradeSessionId)
     .maybeSingle()
   if (tsErr) throw new Error(tsErr.message)
@@ -562,6 +575,7 @@ export async function terminateTradeSessionByAdmin(
       participationWeight: Number(row.participation_weight ?? 1),
       sessionStartAt: String(ts.start_at),
       sessionEndAt: String(ts.end_at),
+      sessionSlot: String(ts.session_slot ?? "morning"),
       forceFullParticipation: true,
     })
     if (result) {
@@ -588,6 +602,12 @@ export async function terminateTradeSessionByAdmin(
     .update({ consumed_at: now })
     .eq("trade_session_id", params.tradeSessionId)
     .is("consumed_at", null)
+
+  await processTradeSessionForfeitures(admin, {
+    id: params.tradeSessionId,
+    session_slot: String(ts.session_slot ?? "morning"),
+    start_at: String(ts.start_at),
+  })
 
   return {
     tradeSessionId: params.tradeSessionId,

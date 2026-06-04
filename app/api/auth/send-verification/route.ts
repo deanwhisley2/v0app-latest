@@ -11,7 +11,7 @@ import {
 import { isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
 
-/** Brevo sends the message; codes live in public.email_verifications (service role). */
+/** App sends the message via Cyberpersons; codes live in public.email_verifications (service role). */
 
 export async function POST(req: Request) {
   const blocked = externalApisBlockedResponse()

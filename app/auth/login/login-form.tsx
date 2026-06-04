@@ -41,6 +41,8 @@ export default function LoginForm() {
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [loginMode, setLoginMode] = useState<"password" | "magic">("password")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [resetSuccess, setResetSuccess] = useState(false)
@@ -90,9 +92,24 @@ export default function LoginForm() {
     router.refresh()
   }, [router, reenterGuestMode])
 
+  async function handleMagicLinkRequest(emailForAuth: string) {
+    const res = await fetch("/api/auth/request-magic-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: emailForAuth.trim() }),
+    })
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string }
+    if (!res.ok) {
+      setError(json.error ?? "Could not send sign-in link.")
+      return
+    }
+    setSuccess(json.message ?? "Check your email for a sign-in link.")
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setSuccess(null)
     if (isDevLocalOnly()) {
       goGuestDashboard()
       return
@@ -132,6 +149,11 @@ export default function LoginForm() {
           return
         }
         emailForAuth = resolveData.email
+      }
+
+      if (loginMode === "magic") {
+        await handleMagicLinkRequest(emailForAuth)
+        return
       }
 
       const loginRes = await fetch("/api/auth/login", {
@@ -257,10 +279,45 @@ export default function LoginForm() {
           </p>
         ) : null}
 
+        <div className="mb-4 flex rounded-lg border border-border p-1 text-sm">
+          <button
+            type="button"
+            className={`min-h-10 flex-1 rounded-md px-2 font-medium transition-colors ${
+              loginMode === "password"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => {
+              setLoginMode("password")
+              setSuccess(null)
+              setError(null)
+            }}
+            disabled={isSubmitting}
+          >
+            Password
+          </button>
+          <button
+            type="button"
+            className={`min-h-10 flex-1 rounded-md px-2 font-medium transition-colors ${
+              loginMode === "magic"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => {
+              setLoginMode("magic")
+              setSuccess(null)
+              setError(null)
+            }}
+            disabled={isSubmitting}
+          >
+            Email link
+          </button>
+        </div>
+
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">
             <Label htmlFor="login-identifier" className="text-sm font-medium">
-              {t.login.identifier}
+              {loginMode === "magic" ? "Email address" : t.login.identifier}
             </Label>
             <Input
               id="login-identifier"
@@ -269,7 +326,7 @@ export default function LoginForm() {
               inputMode="email"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder={t.login.identifierPlaceholder}
+              placeholder={loginMode === "magic" ? "you@example.com" : t.login.identifierPlaceholder}
               required
               disabled={isSubmitting}
               className={inputClass}
@@ -277,34 +334,42 @@ export default function LoginForm() {
             />
           </div>
 
-          <PasswordField
-            id="login-password"
-            label={t.login.password}
-            autoComplete="current-password"
-            value={password}
-            onChange={setPassword}
-            required
-            disabled={isSubmitting}
-            inputClassName={inputClass}
-            aria-invalid={!!error}
-          />
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
-              <Checkbox
-                checked={rememberMe}
-                onCheckedChange={(v) => setRememberMe(v === true)}
+          {loginMode === "password" ? (
+            <>
+              <PasswordField
+                id="login-password"
+                label={t.login.password}
+                autoComplete="current-password"
+                value={password}
+                onChange={setPassword}
+                required
                 disabled={isSubmitting}
+                inputClassName={inputClass}
+                aria-invalid={!!error}
               />
-              {t.login.rememberMe}
-            </label>
-            <Link
-              href="/auth/recovery"
-              className="inline-flex min-h-[44px] items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
-            >
-              {t.login.forgotPassword}
-            </Link>
-          </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+                  <Checkbox
+                    checked={rememberMe}
+                    onCheckedChange={(v) => setRememberMe(v === true)}
+                    disabled={isSubmitting}
+                  />
+                  {t.login.rememberMe}
+                </label>
+                <Link
+                  href="/auth/recovery"
+                  className="inline-flex min-h-[44px] items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {t.login.forgotPassword}
+                </Link>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              We will email you a one-time link. No password needed. The link expires in 15 minutes.
+            </p>
+          )}
 
           {sessionCleared ? (
             <p className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100" role="status">
@@ -321,6 +386,11 @@ export default function LoginForm() {
               Password updated. Sign in with your new password.
             </p>
           ) : null}
+          {success ? (
+            <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
+              {success}
+            </p>
+          ) : null}
           {error ? (
             <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
               {error}
@@ -331,8 +401,10 @@ export default function LoginForm() {
             {isSubmitting ? (
               <>
                 <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden />
-                {t.login.signingIn}
+                {loginMode === "magic" ? "Sending link…" : t.login.signingIn}
               </>
+            ) : loginMode === "magic" ? (
+              "Email me a sign-in link"
             ) : (
               t.login.accessDashboard
             )}

@@ -1,7 +1,7 @@
 import { randomInt } from "crypto"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
-import { sendVerificationEmail } from "@/lib/brevo"
+import { sendVerificationEmail } from "@/lib/cyberpersons-email"
 
 const VERIFY_TTL_MS = 15 * 60 * 1000
 const SEND_COOLDOWN_MS = 120 * 1000
@@ -24,7 +24,7 @@ export type IssueVerificationResult =
   | { ok: false; error: string; status?: number }
 
 /**
- * Stores a code in public.email_verifications (service role) and sends it via Brevo API.
+ * Stores a code in public.email_verifications (service role) and sends it via Cyberpersons Email API.
  */
 export async function issueEmailVerificationCode(
   emailRaw: string

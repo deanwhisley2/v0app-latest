@@ -9,7 +9,7 @@ import {
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
 
-/** Validates code from public.email_verifications (issued via Brevo). */
+/** Validates code from public.email_verifications (issued via Cyberpersons transactional email). */
 
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()

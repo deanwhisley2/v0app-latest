@@ -4,6 +4,7 @@ import {
   isValidTradeCodeFormat,
   normalizeTradeCode,
 } from "@/lib/nexus-bot/trade-code"
+import { processTradeSessionForfeitures } from "@/lib/server/trade-session-earnings-reserve"
 
 export type RegisteredTradeSession = {
   sessionId: string
@@ -190,7 +191,7 @@ export async function expireDueTradeSessions(admin: SupabaseClient): Promise<num
   const now = new Date().toISOString()
   const { data, error } = await admin
     .from("trade_sessions")
-    .select("id")
+    .select("id,session_slot,start_at")
     .eq("status", "active")
     .lt("end_at", now)
   if (error) throw new Error(error.message)
@@ -201,7 +202,14 @@ export async function expireDueTradeSessions(admin: SupabaseClient): Promise<num
       .update({ status: "expired", expired_at: now })
       .eq("id", row.id)
       .eq("status", "active")
-    if (!uErr) n += 1
+    if (!uErr) {
+      n += 1
+      await processTradeSessionForfeitures(admin, {
+        id: String(row.id),
+        session_slot: String(row.session_slot ?? "morning"),
+        start_at: String(row.start_at),
+      })
+    }
   }
   return n
 }

@@ -65,9 +65,14 @@ export async function GET() {
     }
   }
 
-  /** Optional: registration / password flows need Brevo; core app shell works without. */
+  /** Optional: registration / password flows need transactional email; core app shell works without. */
   const optionalServices = {
-    brevo_api_configured: Boolean(process.env.BREVO_API_KEY?.trim()),
+    cyberpersons_email_api_configured: Boolean(process.env.CYBERPERSONS_EMAIL_API_KEY?.trim()),
+    smtp_magic_link_configured: Boolean(
+      (process.env.SMTP_HOST?.trim() || process.env.CYBERPERSONS_SMTP_HOST?.trim()) &&
+        (process.env.SMTP_USER?.trim() || process.env.CYBERPERSONS_SMTP_USER?.trim()) &&
+        (process.env.SMTP_PASSWORD?.trim() || process.env.CYBERPERSONS_SMTP_PASSWORD?.trim()),
+    ),
     next_public_site_url: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
   }
 
@@ -106,7 +111,9 @@ export async function GET() {
       health_basic: "/api/health",
       site_url: "Set NEXT_PUBLIC_SITE_URL (e.g. https://nexuspro.it.com) for auth links and metadata.",
       transactional_email:
-        "Set BREVO_API_KEY (and optional BREVO_SENDER_*) in production env if sign-up verification emails must be delivered.",
+        "Set CYBERPERSONS_EMAIL_API_KEY (and optional CYBERPERSONS_SENDER_*) for registration codes; set SMTP_* for passwordless magic-link login.",
+      magic_link_login:
+        "POST /api/auth/request-magic-link and POST /api/auth/verify-magic-link require SMTP_HOST, SMTP_USER, SMTP_PASSWORD (Cyberpersons: mail.cyberpersons.com:587).",
     },
   })
 }

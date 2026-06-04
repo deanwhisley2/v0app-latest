@@ -49,7 +49,7 @@ type RegisterBody = {
 }
 
 /**
- * Supabase Auth signUp + Brevo verification email (see public.email_verifications).
+ * Supabase Auth signUp + Cyberpersons verification email (see public.email_verifications).
  * Disable “Confirm email” in Supabase Auth to avoid duplicate mails from Auth SMTP.
  */
 export async function POST(request: Request) {

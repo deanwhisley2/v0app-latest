@@ -3,7 +3,7 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
-import { sendPasswordRecoveryEmail } from "@/lib/brevo"
+import { sendPasswordRecoveryEmail } from "@/lib/cyberpersons-email"
 import { getPublicSiteOrigin } from "@/lib/site-public-url"
 
 type Body = { identifier?: string }
@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     })
 
     if (resetError) {
-      // Fallback: still use Supabase recovery token/link, but deliver by Brevo.
-      console.warn("recovery resetPasswordForEmail failed; trying Brevo fallback:", resetError.message)
+      // Fallback: deliver recovery link via Cyberpersons when Supabase SMTP send fails.
+      console.warn("recovery resetPasswordForEmail failed; trying Cyberpersons fallback:", resetError.message)
       const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
         type: "recovery",
         email,

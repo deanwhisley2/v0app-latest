@@ -10,7 +10,7 @@
 ## Auth / data plane (codebase reality)
 
 - App still uses **Supabase Auth** (`auth.users`, sessions) **and** Supabase Postgres for **`profiles`**, **`email_verifications`**, **`user_balances`**, **`bot_trade_records`** via JS client + service role.
-- **Brevo** sends verification email; codes stored in **`public.email_verifications`**; **`profiles.is_verified`** updated on verify.
+- **Cyberpersons** (REST API) sends verification email; codes stored in **`public.email_verifications`**; **`profiles.is_verified`** updated on verify.
 - Schema source of truth: `supabase/trading_platform_schema.sql`, `supabase/fix_profiles_registration.sql` (trigger `on_auth_user_created` → `profiles`).
 
 ## Architecture ideas discussed

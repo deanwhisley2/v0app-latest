@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full production stack audit: Brevo → Supabase → app → cron → CompreFace → deploy path.
+# Full production stack audit: Cyberpersons email → Supabase → app → cron → CompreFace → deploy path.
 # Exit 0 only if all required checks pass.
 set -euo pipefail
 
@@ -30,7 +30,7 @@ c=d.get('checks',{})
 o=d.get('optional_services',{})
 for k in ('next_public_supabase_url','supabase_service_role_configured','next_public_supabase_anon_configured','database_ping'):
     print('PASS launch.'+k if c.get(k) else 'FAIL launch.'+k)
-for k in ('brevo_api_configured','next_public_site_url'):
+for k in ('cyberpersons_email_api_configured','smtp_magic_link_configured','next_public_site_url'):
     print('PASS optional.'+k if o.get(k) else 'FAIL optional.'+k)
 " | while read -r line; do
   [[ "$line" == PASS* ]] && pass "${line#PASS }" || fail_msg "${line#FAIL }"
@@ -66,9 +66,10 @@ for path in verify-crypto-deposits treasury-reconcile process-fixed-trade-maturi
   check "cron_\$path" "[[ \"\$code\" == 200 ]]"
 done
 
-BREVO=\$(grep '^BREVO_API_KEY=' "\$ENV" | tail -1 | cut -d= -f2-)
-code=\$(curl -sS -o /dev/null -w "%{http_code}" https://api.brevo.com/v3/account -H "api-key: \$BREVO" || echo 000)
-check "brevo_api" "[[ \"\$code\" == 200 ]]"
+CP_KEY=\$(grep '^CYBERPERSONS_EMAIL_API_KEY=' "\$ENV" | tail -1 | cut -d= -f2-)
+check "cyberpersons_key_set" "[[ -n \"\$CP_KEY\" ]]"
+launch_cp=\$(curl -sS --max-time 15 "http://127.0.0.1:3000/api/health/launch" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('optional_services',{}).get('cyberpersons_email_api_configured') else '0')" 2>/dev/null || echo 0)
+check "cyberpersons_launch_flag" "[[ \"\$launch_cp\" == 1 ]]"
 
 exit \$fail
 REMOTE
