@@ -4,10 +4,9 @@ import { findAuthUserIdByEmail } from "@/lib/auth-users"
 import { sendVerificationEmail } from "@/lib/cyberpersons-email"
 
 const VERIFY_TTL_MS = 15 * 60 * 1000
-const SEND_COOLDOWN_MS = 120 * 1000
+export const EMAIL_VERIFICATION_SEND_COOLDOWN_MS = 60 * 1000
 
-const COOLDOWN_ERROR =
-  "Please wait 120 seconds before requesting another code."
+const COOLDOWN_ERROR = "Please wait 60 seconds before requesting another code."
 
 const sendChains = new Map<string, Promise<unknown>>()
 
@@ -21,7 +20,7 @@ function enqueueVerificationSend<T>(emailKey: string, fn: () => Promise<T>): Pro
 export type IssueVerificationResult =
   | { ok: true; ambiguous: true }
   | { ok: true; ambiguous?: false }
-  | { ok: false; error: string; status?: number }
+  | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 
 /**
  * Stores a code in public.email_verifications (service role) and sends it via Cyberpersons Email API.
@@ -59,8 +58,16 @@ export async function issueEmailVerificationCode(
     const lastCreated = lastRows?.[0]?.created_at
     if (lastCreated) {
       const elapsed = Date.now() - new Date(lastCreated).getTime()
-      if (elapsed < SEND_COOLDOWN_MS) {
-        return { ok: false, error: COOLDOWN_ERROR, status: 429 }
+      if (elapsed < EMAIL_VERIFICATION_SEND_COOLDOWN_MS) {
+        const retryAfterSeconds = Math.ceil(
+          (EMAIL_VERIFICATION_SEND_COOLDOWN_MS - elapsed) / 1000,
+        )
+        return {
+          ok: false,
+          error: COOLDOWN_ERROR,
+          status: 429,
+          retryAfterSeconds,
+        }
       }
     }
 

@@ -85,8 +85,13 @@ export async function POST(req: Request) {
 
   if (!result.ok) {
     return NextResponse.json(
-      { error: result.error },
-      { status: result.status ?? 400 }
+      {
+        error: result.error,
+        ...(result.retryAfterSeconds
+          ? { retryAfterSeconds: result.retryAfterSeconds }
+          : {}),
+      },
+      { status: result.status ?? 400 },
     )
   }
 

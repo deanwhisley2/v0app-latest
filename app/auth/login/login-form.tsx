@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
 import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
+import { setPendingEmailVerification } from "@/lib/auth/pending-email-verification"
 
 const REMEMBER_KEY = "nexus_auth_remember_id"
 const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? ""
@@ -216,9 +217,9 @@ export default function LoginForm() {
       if (!loginRes.ok) {
         if (loginJson.code === "EMAIL_NOT_VERIFIED") {
           setError("Verify your email before signing in.")
-          router.replace(
-            `/auth/verify?email=${encodeURIComponent(loginJson.email ?? emailForAuth.trim())}`,
-          )
+          const unverifiedEmail = (loginJson.email ?? emailForAuth).trim()
+          setPendingEmailVerification({ email: unverifiedEmail })
+          router.replace("/auth/verify")
           return
         }
         const msg = loginJson.error ?? `Sign-in failed (${loginRes.status})`

@@ -15,6 +15,12 @@ import {
 } from "@/components/ui/input-otp"
 import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
 import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
+import { useVerificationResendCooldown } from "@/hooks/use-verification-resend-cooldown"
+import {
+  clearPendingEmailVerification,
+  getPendingEmailVerification,
+  setPendingEmailVerification,
+} from "@/lib/auth/pending-email-verification"
 
 type EmailVerificationProps = {
   initialEmail?: string
@@ -28,13 +34,18 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
   /** Inline errors only after user actions — never shown on initial load. */
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
+  const { secondsLeft, canResend, markSent, applyServerRetryAfter } = useVerificationResendCooldown()
 
   useEffect(() => {
     toast.dismiss()
   }, [])
 
   useEffect(() => {
-    if (initialEmail) setEmail(initialEmail)
+    const resolved = initialEmail.trim() || getPendingEmailVerification()?.email || ""
+    if (resolved) {
+      setEmail(resolved)
+      setPendingEmailVerification({ email: resolved })
+    }
   }, [initialEmail])
 
   async function handleResend() {
@@ -51,11 +62,19 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: trimmed }),
       })
-      const json = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        retryAfterSeconds?: number
+      }
       if (!res.ok) {
+        if (res.status === 429 && json.retryAfterSeconds) {
+          applyServerRetryAfter(json.retryAfterSeconds)
+        }
         setInlineError(json.error || "Could not send code")
         return
       }
+      markSent()
       toast.success(json.message || "Check your inbox for the code.")
       setEmailSentDialogOpen(true)
     } catch {
@@ -91,9 +110,8 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         setInlineError(json.error || "Invalid or expired code.")
         return
       }
-      toast.success(json.message || "Verified. Sign in enabled.")
-      router.replace("/auth/login")
-      router.refresh()
+      clearPendingEmailVerification()
+      window.location.replace("/dashboard")
     } catch {
       setInlineError("Network error")
     } finally {
@@ -167,10 +185,14 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         type="button"
         variant="outline"
         className="min-h-11 w-full"
-        disabled={busy !== null}
+        disabled={busy !== null || !canResend}
         onClick={() => void handleResend()}
       >
-        {busy === "resend" ? "Sending…" : "Send verification email"}
+        {busy === "resend"
+          ? "Sending…"
+          : canResend
+            ? "Send verification email"
+            : `Resend available in ${secondsLeft}s`}
       </Button>
 
       <EmailDeliverabilityNotice />

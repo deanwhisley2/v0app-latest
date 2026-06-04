@@ -28,7 +28,11 @@ import { NewMemberCampaignRegisterStrip } from "@/components/marketing/new-membe
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
 import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
-import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
+import {
+  getPendingEmailVerification,
+  recordVerificationResendSent,
+  setPendingEmailVerification,
+} from "@/lib/auth/pending-email-verification"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
@@ -78,8 +82,6 @@ export default function RegisterForm() {
   const [error, setError] = useState<string | null>(null)
   const [corridorWarning, setCorridorWarning] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
-  const [goVerifyAfterDialog, setGoVerifyAfterDialog] = useState(false)
 
   const authT = getAuthMessages(language)
   const reg = getRegisterMessages(language)
@@ -108,6 +110,13 @@ export default function RegisterForm() {
       /* ignore */
     }
   }, [])
+
+  useEffect(() => {
+    const pending = getPendingEmailVerification()
+    if (pending?.email) {
+      router.replace("/auth/verify")
+    }
+  }, [router])
 
   function validateStep(s: number): string | null {
     if (s === 1) {
@@ -226,16 +235,13 @@ export default function RegisterForm() {
         return
       }
 
-      try {
-        sessionStorage.setItem("nexus_pending_verify_email", trimmedEmail)
-        if (operatingCountry) {
-          sessionStorage.setItem("nexus_pending_verify_country", operatingCountry)
-        }
-      } catch {
-        /* ignore */
-      }
-      setGoVerifyAfterDialog(true)
-      setEmailSentDialogOpen(true)
+      setPendingEmailVerification({
+        email: trimmedEmail,
+        ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
+      })
+      recordVerificationResendSent()
+      router.replace("/auth/verify")
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -535,18 +541,6 @@ export default function RegisterForm() {
 
           {step === 3 ? <EmailDeliverabilityNotice /> : null}
         </form>
-
-        <EmailSentSuccessDialog
-          open={emailSentDialogOpen}
-          onOpenChange={(open) => {
-            setEmailSentDialogOpen(open)
-            if (!open && goVerifyAfterDialog) {
-              setGoVerifyAfterDialog(false)
-              router.replace("/auth/verify")
-              router.refresh()
-            }
-          }}
-        />
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {authT.register.alreadyHave}{" "}

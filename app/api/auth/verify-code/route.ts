@@ -8,6 +8,9 @@ import {
   recordSignupCorridorEvent,
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
+import { createAuthSessionForEmail } from "@/lib/server/email-verification-session"
+import { trackLoginSession } from "@/lib/server/login-session"
+import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
 /** Validates code from public.email_verifications (issued via Cyberpersons transactional email). */
 
@@ -131,7 +134,39 @@ export async function POST(request: Request) {
 
     await admin.from("email_verifications").delete().eq("user_id", userId)
 
-    return NextResponse.json({ ok: true, message: "Email verified. Sign in enabled." })
+    const sessionResult = await createAuthSessionForEmail(emailNormalized)
+    if (!sessionResult.ok) {
+      return NextResponse.json({ error: sessionResult.error }, { status: sessionResult.status })
+    }
+
+    try {
+      const supabase = await createRouteHandlerSupabaseClient()
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (accessToken) {
+        const gate = await trackLoginSession({
+          userId: sessionResult.userId,
+          bearerToken: accessToken,
+          userAgent: request.headers.get("user-agent") ?? "",
+          ipAddress: ip,
+        })
+        if (!gate.allowed) {
+          await supabase.auth.signOut()
+          return NextResponse.json(
+            { error: gate.reason ?? "Sign-in blocked on this device." },
+            { status: 403 },
+          )
+        }
+      }
+    } catch (e) {
+      console.warn("[verify-code] session track:", e instanceof Error ? e.message : e)
+    }
+
+    return NextResponse.json({
+      ok: true,
+      session: true,
+      message: "Email verified. Taking you to your dashboard.",
+    })
   } catch (e) {
     console.error("verify-code:", e)
     const msg = e instanceof Error ? e.message : "Internal error"
