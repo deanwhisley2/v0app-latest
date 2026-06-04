@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,7 +26,6 @@ type EmailVerificationProps = {
 }
 
 export function EmailVerification({ initialEmail = "" }: EmailVerificationProps) {
-  const router = useRouter()
   const [email, setEmail] = useState(initialEmail)
   const [code, setCode] = useState("")
   const [busy, setBusy] = useState<"verify" | "resend" | null>(null)
