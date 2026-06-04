@@ -43,6 +43,9 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loginMode, setLoginMode] = useState<"password" | "magic">("password")
+  const [loginCodeSent, setLoginCodeSent] = useState(false)
+  const [loginCodeEmail, setLoginCodeEmail] = useState("")
+  const [loginCode, setLoginCode] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [resetSuccess, setResetSuccess] = useState(false)
@@ -92,7 +95,21 @@ export default function LoginForm() {
     router.refresh()
   }, [router, reenterGuestMode])
 
-  async function handleMagicLinkRequest(emailForAuth: string) {
+  async function resolveEmailForAuth(rawIdentifier: string): Promise<string | null> {
+    const trimmed = rawIdentifier.trim()
+    if (!trimmed) return null
+    if (trimmed.includes("@")) return trimmed
+    const resolveRes = await fetch("/api/auth/resolve-identifier", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmed }),
+    })
+    const resolveData = (await resolveRes.json().catch(() => ({}))) as { email?: string }
+    if (!resolveRes.ok || !resolveData.email) return null
+    return resolveData.email
+  }
+
+  async function handleLoginCodeRequest(emailForAuth: string) {
     const res = await fetch("/api/auth/request-magic-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,10 +117,35 @@ export default function LoginForm() {
     })
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string }
     if (!res.ok) {
-      setError(json.error ?? "Could not send sign-in link.")
+      setError(json.error ?? "Could not send sign-in code.")
       return
     }
-    setSuccess(json.message ?? "Check your email for a sign-in link.")
+    setLoginCodeEmail(emailForAuth.trim())
+    setLoginCodeSent(true)
+    setLoginCode("")
+    setSuccess(json.message ?? "Enter the 6-digit code from your email below.")
+  }
+
+  async function handleLoginCodeVerify(emailForAuth: string, code: string) {
+    const res = await fetch("/api/auth/verify-magic-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: emailForAuth.trim(), code: code.trim() }),
+    })
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+    if (!res.ok || !json.ok) {
+      setError(json.error ?? "Invalid or expired code.")
+      return
+    }
+    try {
+      if (rememberMe) localStorage.setItem(REMEMBER_KEY, identifier.trim())
+      else localStorage.removeItem(REMEMBER_KEY)
+    } catch {
+      /* ignore */
+    }
+    markFreshLoginLanding()
+    window.location.assign(postLoginPath)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -131,28 +173,26 @@ export default function LoginForm() {
         return
       }
 
-      let emailForAuth = rawIdentifier
-      if (!rawIdentifier.includes("@")) {
-        const resolveRes = await fetch("/api/auth/resolve-identifier", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier: rawIdentifier }),
-        })
-        const resolveData = (await resolveRes.json().catch(() => ({}))) as {
-          email?: string
-          error?: string
-        }
-        if (!resolveRes.ok || !resolveData.email) {
-          setError(
-            "No account matches that phone or username. Sign in with your full email address (the one you registered with).",
-          )
-          return
-        }
-        emailForAuth = resolveData.email
+      const emailForAuth = await resolveEmailForAuth(rawIdentifier)
+      if (!emailForAuth) {
+        setError(
+          loginMode === "magic"
+            ? "Enter the full email address for your account."
+            : "No account matches that phone or username. Sign in with your full email address (the one you registered with).",
+        )
+        return
       }
 
       if (loginMode === "magic") {
-        await handleMagicLinkRequest(emailForAuth)
+        if (loginCodeSent) {
+          if (!/^\d{6}$/.test(loginCode)) {
+            setError("Enter the 6-digit code from your email.")
+            return
+          }
+          await handleLoginCodeVerify(loginCodeEmail || emailForAuth, loginCode)
+        } else {
+          await handleLoginCodeRequest(emailForAuth)
+        }
         return
       }
 
@@ -289,6 +329,8 @@ export default function LoginForm() {
             }`}
             onClick={() => {
               setLoginMode("password")
+              setLoginCodeSent(false)
+              setLoginCode("")
               setSuccess(null)
               setError(null)
             }}
@@ -305,12 +347,14 @@ export default function LoginForm() {
             }`}
             onClick={() => {
               setLoginMode("magic")
+              setLoginCodeSent(false)
+              setLoginCode("")
               setSuccess(null)
               setError(null)
             }}
             disabled={isSubmitting}
           >
-            Email link
+            Email code
           </button>
         </div>
 
@@ -366,9 +410,48 @@ export default function LoginForm() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              We will email you a one-time link. No password needed. The link expires in 15 minutes.
-            </p>
+            <>
+              <p className="text-sm text-muted-foreground">
+                {loginCodeSent
+                  ? "Enter the 6-digit code we sent to your email. It expires in 15 minutes."
+                  : "We will email you a 6-digit sign-in code. No password or link required."}
+              </p>
+              {loginCodeSent ? (
+                <div className="space-y-2">
+                  <Label htmlFor="login-code" className="text-sm font-medium">
+                    Sign-in code
+                  </Label>
+                  <Input
+                    id="login-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={loginCode}
+                    onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    required
+                    disabled={isSubmitting}
+                    className={`${inputClass} text-center text-2xl tracking-[0.35em] font-semibold`}
+                    aria-invalid={!!error}
+                  />
+                  <button
+                    type="button"
+                    className="text-sm text-primary underline-offset-4 hover:underline"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      setLoginCodeSent(false)
+                      setLoginCode("")
+                      setSuccess(null)
+                      setError(null)
+                    }}
+                  >
+                    Use a different email
+                  </button>
+                </div>
+              ) : null}
+            </>
           )}
 
           {sessionCleared ? (
@@ -401,10 +484,14 @@ export default function LoginForm() {
             {isSubmitting ? (
               <>
                 <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden />
-                {loginMode === "magic" ? "Sending link…" : t.login.signingIn}
+                {loginMode === "magic"
+                  ? loginCodeSent
+                    ? "Signing in…"
+                    : "Sending code…"
+                  : t.login.signingIn}
               </>
             ) : loginMode === "magic" ? (
-              "Email me a sign-in link"
+              loginCodeSent ? "Sign in with code" : "Send sign-in code"
             ) : (
               t.login.accessDashboard
             )}

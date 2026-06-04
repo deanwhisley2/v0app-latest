@@ -1,35 +1,32 @@
-import { createHash, randomBytes, timingSafeEqual } from "crypto"
+import { createHash, randomInt, timingSafeEqual } from "crypto"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
-import { getPublicSiteOrigin } from "@/lib/site-public-url"
-import { sendSmtpMail } from "@/lib/server/smtp-mail"
+import { sendLoginCodeEmail } from "@/lib/login-code-email"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
-const TOKEN_BYTES = 32
 const TTL_MS = 15 * 60 * 1000
 const SEND_COOLDOWN_MS = 120 * 1000
 const GENERIC_SENT_MESSAGE =
-  "If an account exists for this email, we sent a sign-in link. Check your inbox and spam folder."
+  "If an account exists for this email, we sent a 6-digit sign-in code. Check your inbox (and spam) and enter it on the login page."
 
 const sendChains = new Map<string, Promise<unknown>>()
 
-function enqueueMagicLinkSend<T>(emailKey: string, fn: () => Promise<T>): Promise<T> {
+function enqueueLoginCodeSend<T>(emailKey: string, fn: () => Promise<T>): Promise<T> {
   const prev = sendChains.get(emailKey) ?? Promise.resolve()
   const next = prev.then(() => fn())
   sendChains.set(emailKey, next.then(() => {}).catch(() => {}))
   return next as Promise<T>
 }
 
-export function hashMagicLinkToken(rawToken: string): string {
-  return createHash("sha256").update(rawToken, "utf8").digest("hex")
+export function hashLoginCode(rawCode: string): string {
+  const normalized = rawCode.replace(/\D/g, "").padStart(6, "0").slice(-6)
+  return createHash("sha256").update(normalized, "utf8").digest("hex")
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+function normalizeLoginCodeInput(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "")
+  if (digits.length !== 6) return null
+  return digits
 }
 
 function maskEmail(email: string): string {
@@ -40,45 +37,11 @@ function maskEmail(email: string): string {
   return `${safeLocal}@${domain}`
 }
 
-async function sendMagicLinkEmail(params: {
-  to: string
-  fullName: string
-  magicUrl: string
-}): Promise<void> {
-  const safeName = escapeHtml(params.fullName.trim() || "Valued Customer")
-  const safeUrl = escapeHtml(params.magicUrl)
-
-  await sendSmtpMail({
-    to: params.to,
-    subject: "Sign in to Nexus Pro",
-    html: `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); padding: 28px; text-align: center; border-radius: 10px 10px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 26px;">Nexus Pro</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0;">Secure sign-in link</p>
-  </div>
-  <div style="background: #fff; padding: 28px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
-    <h2 style="color: #333; margin-top: 0;">Sign in without a password</h2>
-    <p>Hello <strong>${safeName}</strong>,</p>
-    <p>Click the button below to open your dashboard. This link expires in <strong>15 minutes</strong> and works once.</p>
-    <p style="text-align:center; margin: 24px 0;">
-      <a href="${safeUrl}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:14px 24px; border-radius:8px; font-weight:600;">
-        Sign in to Nexus Pro
-      </a>
-    </p>
-    <p style="word-break:break-all; font-size:12px; color:#666;">Or copy this link:<br>${safeUrl}</p>
-    <p style="color:#666; font-size:14px;">If you did not request this, ignore this email.</p>
-  </div>
-</body></html>`,
-    text: `Sign in to Nexus Pro\n\nOpen this link (expires in 15 minutes, one-time use):\n${params.magicUrl}\n\nIf you did not request this, ignore this email.`,
-  })
-}
-
 export type RequestMagicLinkResult =
   | { ok: true; message: string; maskedEmail?: string }
   | { ok: false; error: string; status: number }
 
+/** @deprecated name kept for API route — sends a 6-digit login code (no URL). */
 export async function requestMagicLink(params: {
   emailRaw: string
   requestUrl: string
@@ -91,7 +54,7 @@ export async function requestMagicLink(params: {
   }
   const emailKey = trimmed.toLowerCase()
 
-  return enqueueMagicLinkSend(emailKey, async () => {
+  return enqueueLoginCodeSend(emailKey, async () => {
     const admin = createAdminClient()
     const userId = await findAuthUserIdByEmail(admin, trimmed)
 
@@ -107,7 +70,7 @@ export async function requestMagicLink(params: {
       .limit(1)
 
     if (lastErr) {
-      console.error("[magic-link] cooldown read:", lastErr.message)
+      console.error("[login-code] cooldown read:", lastErr.message)
       return { ok: false, error: "Could not process request.", status: 500 }
     }
 
@@ -117,14 +80,14 @@ export async function requestMagicLink(params: {
       if (elapsed < SEND_COOLDOWN_MS) {
         return {
           ok: false,
-          error: "Please wait 120 seconds before requesting another link.",
+          error: "Please wait 120 seconds before requesting another code.",
           status: 429,
         }
       }
     }
 
-    const rawToken = randomBytes(TOKEN_BYTES).toString("base64url")
-    const tokenHash = hashMagicLinkToken(rawToken)
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0")
+    const codeHash = hashLoginCode(code)
     const expiresAt = new Date(Date.now() + TTL_MS).toISOString()
 
     await admin.from("auth_magic_link_tokens").delete().eq("user_id", userId)
@@ -132,19 +95,16 @@ export async function requestMagicLink(params: {
     const { error: insertError } = await admin.from("auth_magic_link_tokens").insert({
       user_id: userId,
       email: emailKey,
-      token_hash: tokenHash,
+      token_hash: codeHash,
       expires_at: expiresAt,
       request_ip: params.requestIp,
       user_agent: params.userAgent,
     })
 
     if (insertError) {
-      console.error("[magic-link] insert:", insertError.message)
-      return { ok: false, error: "Could not store sign-in token.", status: 500 }
+      console.error("[login-code] insert:", insertError.message)
+      return { ok: false, error: "Could not store sign-in code.", status: 500 }
     }
-
-    const siteBase = getPublicSiteOrigin(params.requestUrl)
-    const magicUrl = `${siteBase}/auth/magic?token=${encodeURIComponent(rawToken)}`
 
     const { data: prof } = await admin
       .from("profiles")
@@ -154,7 +114,7 @@ export async function requestMagicLink(params: {
     const displayName = prof?.full_name?.trim() || "Valued Customer"
 
     try {
-      await sendMagicLinkEmail({ to: trimmed, fullName: displayName, magicUrl })
+      await sendLoginCodeEmail(trimmed, code, displayName)
     } catch (e) {
       await admin.from("auth_magic_link_tokens").delete().eq("user_id", userId)
       const msg = e instanceof Error ? e.message : "Failed to send email"
@@ -173,45 +133,54 @@ export type VerifyMagicLinkResult =
   | { ok: true; userId: string }
   | { ok: false; error: string; status: number }
 
-export async function verifyMagicLinkAndCreateSession(rawToken: string): Promise<VerifyMagicLinkResult> {
-  const token = rawToken.trim()
-  if (!token || token.length < 16) {
-    return { ok: false, error: "Invalid or missing sign-in link.", status: 400 }
+export async function verifyLoginCodeAndCreateSession(
+  emailRaw: string,
+  codeRaw: string,
+): Promise<VerifyMagicLinkResult> {
+  const emailKey = emailRaw.trim().toLowerCase()
+  if (!emailKey.includes("@")) {
+    return { ok: false, error: "Enter the email you used to request the code.", status: 400 }
   }
 
-  const tokenHash = hashMagicLinkToken(token)
+  const code = normalizeLoginCodeInput(codeRaw)
+  if (!code) {
+    return { ok: false, error: "Enter the 6-digit code from your email.", status: 400 }
+  }
+
+  const codeHash = hashLoginCode(code)
   const admin = createAdminClient()
 
   const { data: row, error: fetchErr } = await admin
     .from("auth_magic_link_tokens")
     .select("id, user_id, email, expires_at, consumed_at, token_hash")
-    .eq("token_hash", tokenHash)
+    .eq("email", emailKey)
+    .eq("token_hash", codeHash)
     .maybeSingle()
 
   if (fetchErr) {
-    console.error("[magic-link] fetch:", fetchErr.message)
-    return { ok: false, error: "Could not verify link.", status: 500 }
+    console.error("[login-code] fetch:", fetchErr.message)
+    return { ok: false, error: "Could not verify code.", status: 500 }
   }
 
   if (!row) {
-    return { ok: false, error: "This sign-in link is invalid or has expired.", status: 401 }
+    return { ok: false, error: "Invalid or expired code. Request a new code.", status: 401 }
+  }
+
+  if (row.consumed_at) {
+    return { ok: false, error: "This code was already used. Request a new code.", status: 401 }
+  }
+
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    return { ok: false, error: "This code has expired. Request a new code.", status: 401 }
   }
 
   const storedHash = Buffer.from(row.token_hash, "hex")
-  const providedHash = Buffer.from(tokenHash, "hex")
+  const providedHash = Buffer.from(codeHash, "hex")
   if (
     storedHash.length !== providedHash.length ||
     !timingSafeEqual(storedHash, providedHash)
   ) {
-    return { ok: false, error: "This sign-in link is invalid or has expired.", status: 401 }
-  }
-
-  if (row.consumed_at) {
-    return { ok: false, error: "This sign-in link was already used.", status: 401 }
-  }
-
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    return { ok: false, error: "This sign-in link has expired.", status: 401 }
+    return { ok: false, error: "Invalid or expired code. Request a new code.", status: 401 }
   }
 
   const email = row.email.trim()
@@ -223,7 +192,7 @@ export async function verifyMagicLinkAndCreateSession(rawToken: string): Promise
     .maybeSingle()
 
   if (profErr) {
-    console.warn("[magic-link] profile check:", profErr.message)
+    console.warn("[login-code] profile check:", profErr.message)
   } else if (profile?.is_verified === false) {
     return {
       ok: false,
@@ -238,7 +207,7 @@ export async function verifyMagicLinkAndCreateSession(rawToken: string): Promise
   })
 
   if (linkError || !linkData?.properties?.hashed_token) {
-    console.error("[magic-link] generateLink:", linkError?.message)
+    console.error("[login-code] generateLink:", linkError?.message)
     return { ok: false, error: "Could not start session.", status: 500 }
   }
 
@@ -249,22 +218,28 @@ export async function verifyMagicLinkAndCreateSession(rawToken: string): Promise
   })
 
   if (verifyError || !authData.session?.user) {
-    console.error("[magic-link] verifyOtp:", verifyError?.message)
+    console.error("[login-code] verifyOtp:", verifyError?.message)
     return { ok: false, error: "Could not complete sign-in.", status: 500 }
   }
 
   const consumedAt = new Date().toISOString()
-  const { error: consumeErr } = await admin
+  await admin
     .from("auth_magic_link_tokens")
     .update({ consumed_at: consumedAt })
     .eq("id", row.id)
     .is("consumed_at", null)
 
-  if (consumeErr) {
-    console.warn("[magic-link] consume update:", consumeErr.message)
-  }
-
   await admin.from("auth_magic_link_tokens").delete().eq("user_id", row.user_id).is("consumed_at", null)
 
   return { ok: true, userId: authData.session.user.id }
+}
+
+/** Legacy token-in-URL verify — redirects users to enter code on login instead. */
+export async function verifyMagicLinkAndCreateSession(rawToken: string): Promise<VerifyMagicLinkResult> {
+  void rawToken
+  return {
+    ok: false,
+    error: "Sign-in links are no longer used. Enter the 6-digit code from your email on the login page.",
+    status: 400,
+  }
 }

@@ -113,7 +113,7 @@ export async function GET() {
       transactional_email:
         "Set CYBERPERSONS_EMAIL_API_KEY (and optional CYBERPERSONS_SENDER_*) for registration codes; set SMTP_* for passwordless magic-link login.",
       magic_link_login:
-        "POST /api/auth/request-magic-link and POST /api/auth/verify-magic-link require SMTP_HOST, SMTP_USER, SMTP_PASSWORD (Cyberpersons: mail.cyberpersons.com:587).",
+        "Passwordless login: POST /api/auth/request-magic-link (6-digit code email) and POST /api/auth/verify-magic-link with { email, code }. Uses CYBERPERSONS_EMAIL_API_KEY or SMTP_*.",
     },
   })
 }

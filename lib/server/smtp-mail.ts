@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "crypto"
 import nodemailer, { type Transporter } from "nodemailer"
 
 let cachedTransport: Transporter | null = null
@@ -64,17 +65,30 @@ export async function sendSmtpMail(params: {
   subject: string
   html: string
   text: string
+  /** Used for Message-ID / logging — e.g. login_code, verification */
+  purpose?: string
 }): Promise<void> {
   const cfg = smtpConfigFromEnv()
   if (!cfg) throw new Error("SMTP is not configured")
 
   const transport = getTransport()
+  const domain = cfg.fromEmail.split("@")[1] ?? "nexuspro.it.com"
+  const messageId = `<${createHash("sha256").update(randomBytes(16)).digest("hex").slice(0, 24)}@${domain}>`
+
   await transport.sendMail({
     from: `"${cfg.fromName}" <${cfg.fromEmail}>`,
+    sender: `"${cfg.fromName}" <${cfg.fromEmail}>`,
     to: params.to.trim(),
     subject: params.subject,
-    html: params.html,
     text: params.text,
+    html: params.html,
     replyTo: cfg.fromEmail,
+    headers: {
+      "Message-ID": messageId,
+      "X-Mailer": "Nexus Pro Transactional",
+      "Auto-Submitted": "auto-generated",
+      "X-Auto-Response-Suppress": "All",
+      ...(params.purpose ? { "X-Entity-Ref-ID": params.purpose } : {}),
+    },
   })
 }

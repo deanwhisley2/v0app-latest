@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
-import { verifyMagicLinkAndCreateSession } from "@/lib/server/magic-link-auth"
+import { verifyLoginCodeAndCreateSession } from "@/lib/server/magic-link-auth"
 import { getRequestIpAddress, trackLoginSession } from "@/lib/server/login-session"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
-type Body = { token?: string }
+type Body = { email?: string; code?: string; token?: string }
 
 /**
  * POST /api/auth/verify-magic-link
- * Consumes a one-time token and writes Supabase auth cookies (SSR session).
+ * Verifies 6-digit email code and writes Supabase auth cookies (SSR session).
  */
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -21,12 +21,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const token = typeof body.token === "string" ? body.token : ""
-  if (!token) {
-    return NextResponse.json({ error: "token is required" }, { status: 400 })
+  const email = typeof body.email === "string" ? body.email.trim() : ""
+  const code = typeof body.code === "string" ? body.code : ""
+
+  if (!email || !code) {
+    return NextResponse.json(
+      { error: "email and code are required." },
+      { status: 400 },
+    )
   }
 
-  const result = await verifyMagicLinkAndCreateSession(token)
+  const result = await verifyLoginCodeAndCreateSession(email, code)
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error },

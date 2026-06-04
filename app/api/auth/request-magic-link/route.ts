@@ -8,7 +8,7 @@ type Body = { email?: string }
 
 /**
  * POST /api/auth/request-magic-link
- * Sends a one-time sign-in link via SMTP (nodemailer). Anti-enumeration: same response when email unknown.
+ * Sends a 6-digit sign-in code (Cyberpersons REST or SMTP). Anti-enumeration: same response when email unknown.
  */
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
