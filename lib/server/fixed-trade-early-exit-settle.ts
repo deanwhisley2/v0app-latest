@@ -12,8 +12,15 @@ export type FixedTradeEarlyExitResult = {
     totalModeledEarnedUsd: number
     cumulativeReleasedUsd: number
     unreleasedEarnedUsd: number
+    mainCreditUsd: number
+    liquidCreditUsd: number
+    earningsFeeUsd: number
   }
-  balances: { available_balance: number; current_stake: number }
+  balances: {
+    available_balance: number
+    current_stake: number
+    container_withdrawable_earnings: number
+  }
   sessionId: string
   transactionRef: string
 }
@@ -27,6 +34,9 @@ function mapRpcSettlement(rpc: Record<string, unknown>): FixedTradeEarlyExitResu
     insuranceExitFromPrincipalUsd: num("insurance_exit_from_principal_usd"),
     netPrincipalReturnedUsd: num("net_principal_returned_usd"),
     totalCreditedToMainUsd: num("total_credited_to_main_usd"),
+    mainCreditUsd: num("main_credit_usd"),
+    liquidCreditUsd: num("liquid_credit_usd"),
+    earningsFeeUsd: num("earnings_fee_usd"),
     totalModeledEarnedUsd: num("total_modeled_earned_usd"),
     cumulativeReleasedUsd: num("cumulative_released_usd"),
     unreleasedEarnedUsd: num("unreleased_earned_usd"),
@@ -80,6 +90,7 @@ export async function settleFixedTradeEarlyExitForUser(
     balances: {
       available_balance: roundUsd2(Number(rpc.available_balance ?? 0)),
       current_stake: roundUsd2(Number(rpc.current_stake ?? 0)),
+      container_withdrawable_earnings: roundUsd2(Number(rpc.container_withdrawable_earnings ?? 0)),
     },
     sessionId,
     transactionRef: String(rpc.transaction_ref ?? ""),

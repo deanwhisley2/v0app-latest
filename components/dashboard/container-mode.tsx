@@ -1468,6 +1468,9 @@ export function ContainerMode({
           sessionEarnedUsd?: number
           netPrincipalReturnedUsd?: number
           totalCreditedToMainUsd?: number
+          mainCreditUsd?: number
+          liquidCreditUsd?: number
+          earningsFeeUsd?: number
         }
       }
       if (!res.ok || out?.success === false) {
@@ -1477,9 +1480,12 @@ export function ContainerMode({
 
       setActiveFixTrades((prev) => prev.filter((t) => t.traderId !== traderId))
       const s = out.settlement
+      const mainCred = Number(s?.mainCreditUsd ?? s?.totalCreditedToMainUsd ?? 0)
+      const pocketCred = Number(s?.liquidCreditUsd ?? 0)
       toastMutationSuccess(
-        `Early exit settled. Credited to Nexus Main: ${formatUserMoney(s?.totalCreditedToMainUsd ?? 0)} ` +
-          `(full earned ${formatUserMoney(s?.sessionEarnedUsd ?? 0)} + net principal after penalties).`,
+        pocketCred > 0
+          ? `Early exit settled. Principal to Nexus Main: ${formatUserMoney(mainCred)}. Earnings to pocket: ${formatUserMoney(pocketCred)} — transfer to Nexus when ready.`
+          : `Early exit settled. Credited to Nexus Main: ${formatUserMoney(mainCred)}.`,
       )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Early exit failed", { duration: 6500 })

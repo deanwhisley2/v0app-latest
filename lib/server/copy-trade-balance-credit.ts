@@ -17,6 +17,19 @@ export function splitCopySettlementMainVsLiquid(netUsd: number, stakeUsd: number
   return { mainCredit, liquidCredit }
 }
 
+/**
+ * After session completion: stake/principal → Nexus Main; net earnings → pocket only.
+ * Pocket → Main is always user-initiated (container-earnings transfer_to_main).
+ */
+export async function creditPrincipalToMainAndEarningsToPocket(
+  admin: SupabaseClient,
+  userId: string,
+  principalUsd: number,
+  earningsUsd: number,
+): Promise<{ available_balance: number; container_withdrawable_earnings: number }> {
+  return applyCopyTradeSettlementCredits(admin, userId, principalUsd, earningsUsd)
+}
+
 export async function applyCopyTradeSettlementCredits(
   admin: SupabaseClient,
   userId: string,

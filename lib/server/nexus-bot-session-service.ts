@@ -12,6 +12,7 @@ import {
   normalizeSignalCode,
   type NexusSignalSlot,
 } from "@/lib/nexus-bot/plans"
+import { creditPrincipalToMainAndEarningsToPocket } from "@/lib/server/copy-trade-balance-credit"
 import { casCreditNexusMainOnly, casReserveCopyTradeStake } from "@/lib/server/nexus-main-enforcement"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import {
@@ -299,7 +300,7 @@ async function completeTradeSessionBotRow(
     joinedAt,
   })
   const { profitUsd, allocatedUsd, minFloorApplied } = settlement
-  const totalCredit = roundUsd2(stake + profitUsd)
+  const earningsUsd = roundUsd2(profitUsd)
 
   const { error: uErr } = await admin
     .from("nexus_bot_sessions")
@@ -314,8 +315,8 @@ async function completeTradeSessionBotRow(
     .in("status", [...TRADE_SESSION_OPEN_STATUSES])
   if (uErr) return null
 
-  if (totalCredit > 0) {
-    await casCreditNexusMainOnly(admin, row.userId, totalCredit)
+  if (stake > 0 || earningsUsd > 0) {
+    await creditPrincipalToMainAndEarningsToPocket(admin, row.userId, stake, earningsUsd)
   }
 
   const historySummary = closedTradeHistorySummary(profitUsd)
@@ -324,9 +325,14 @@ async function completeTradeSessionBotRow(
     userId: row.userId,
     eventType: "nexus_trade_session_complete",
     category: "container",
-    amount: totalCredit,
+    amount: roundUsd2(stake + earningsUsd),
     balanceSource: "nexus_bot_session",
-    balanceDestination: "available_balance",
+    balanceDestination:
+      earningsUsd > 0 && stake > 0
+        ? "available_balance,container_withdrawable_earnings"
+        : earningsUsd > 0
+          ? "container_withdrawable_earnings"
+          : "available_balance",
     status: "completed",
     actorType: "system",
     actorId: row.userId,
@@ -342,8 +348,11 @@ async function completeTradeSessionBotRow(
       reserve_source: TRADE_SESSION_RESERVE_SOURCE,
       profit_usd: profitUsd,
       stake_returned_usd: stake,
+      earnings_to_pocket_usd: earningsUsd,
+      principal_to_main_usd: stake,
       earnings_source: TRADE_SESSION_RESERVE_SOURCE,
       min_floor_applied: minFloorApplied,
+      pocket_manual_transfer_required: earningsUsd > 0,
       ...(row.forceFullParticipation ? { settlement_mode: "full_session_target" } : {}),
     },
   })

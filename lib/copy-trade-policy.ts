@@ -64,7 +64,7 @@ export function estimateCopyAutoAdjustExitUsd(stakeUsd: number): {
   return { grossUsd, withdrawFeeUsd, netToMainUsd }
 }
 
-/** Scheduled 24h completion: full stake → Main; gross earnings − fee → Container Liquid. */
+/** Scheduled 24h completion: stake → Nexus Main; net earnings − fee → pocket (manual transfer to Main). */
 export function scheduledCopyCycleSettlementUsd(stakeUsd: number, targetGrossProfitUsd: number): {
   stakeReturnMainUsd: number
   grossProfitUsd: number

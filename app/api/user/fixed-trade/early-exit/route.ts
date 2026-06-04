@@ -40,6 +40,9 @@ export async function POST(request: Request) {
         cumulativeReleasedUsd: result.settlement.cumulativeReleasedUsd,
         netPrincipalReturnedUsd: result.settlement.netPrincipalReturnedUsd,
         totalCreditedToMainUsd: result.settlement.totalCreditedToMainUsd,
+        mainCreditUsd: result.settlement.mainCreditUsd,
+        liquidCreditUsd: result.settlement.liquidCreditUsd,
+        earningsFeeUsd: result.settlement.earningsFeeUsd,
       },
       balances: result.balances,
     })

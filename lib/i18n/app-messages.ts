@@ -237,7 +237,7 @@ const en: Record<string, string> = {
   "notifications.trade.scheduleActiveTitle": "Active",
   "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}} mo",
   "notifications.trade.copyCycleTitle": "Completed",
-  "notifications.trade.copyCycleMessage": "Main +{{mainAdd}} · Pocket +{{pocketAdd}}",
+  "notifications.trade.copyCycleMessage": "Principal to Nexus +{{mainAdd}} · Earnings to pocket +{{pocketAdd}}",
   "notifications.trade.copySettlementFailTitle": "Failed",
   "notifications.trade.copySettlementFailMessage": "Close incomplete. Refresh or force pull-out.",
 
