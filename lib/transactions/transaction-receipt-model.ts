@@ -3,6 +3,10 @@
  */
 
 import {
+  formatUsdForCustomerDisplay,
+  type CustomerMoneyContext,
+} from "@/lib/customer-facing-money"
+import {
   parseWithdrawalIntentFromRow,
   resolveLocalCashPayoutUsd,
 } from "@/lib/formatting/withdrawal-amount-display"
@@ -96,6 +100,11 @@ function metaObj(metadata: unknown): Record<string, unknown> {
 
 function fmtUsd(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function fmtLedgerUsd(n: number, display?: CustomerMoneyContext): string {
+  if (display) return formatUsdForCustomerDisplay(n, display)
+  return fmtUsd(n)
 }
 
 function fmtLocal(amount: number, currency: string): string {
@@ -202,7 +211,10 @@ export function resolveWithdrawalStatusKeys(row: WithdrawalReceiptRow): {
   }
 }
 
-export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionReceipt {
+export function buildWithdrawalReceipt(
+  row: WithdrawalReceiptRow,
+  display?: CustomerMoneyContext,
+): TransactionReceipt {
   const brand = inferWithdrawalBrand(row.metadata)
   const kind = inferWithdrawalKind(brand)
   const statusKeys = resolveWithdrawalStatusKeys(row)
@@ -242,15 +254,15 @@ export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionRe
   const payoutRail = typeof m.payout_rail === "string" ? m.payout_rail : typeof snap?.payout_rail === "string" ? String(snap.payout_rail) : null
 
   const fields: ReceiptField[] = [
-    { labelKey: "receipt.field.amount", value: fmtUsd(settlement.grossAmount) },
+    { labelKey: "receipt.field.amount", value: fmtLedgerUsd(settlement.grossAmount, display) },
     {
       labelKey: "receipt.field.fee",
       value:
         settlement.processingFeeAmount > 0
-          ? fmtUsd(settlement.processingFeeAmount)
+          ? fmtLedgerUsd(settlement.processingFeeAmount, display)
           : "—",
     },
-    { labelKey: "receipt.field.received", value: fmtUsd(settlement.payoutAmount) },
+    { labelKey: "receipt.field.received", value: fmtLedgerUsd(settlement.payoutAmount, display) },
   ]
 
   if (localCash) {
@@ -296,8 +308,8 @@ export function buildWithdrawalReceipt(row: WithdrawalReceiptRow): TransactionRe
 
   const shareLines = [
     statusKeys.headerTitleKey,
-    `Amount: ${fmtUsd(settlement.grossAmount)}`,
-    `Received: ${fmtUsd(settlement.payoutAmount)}`,
+    `Amount: ${fmtLedgerUsd(settlement.grossAmount, display)}`,
+    `Received: ${fmtLedgerUsd(settlement.payoutAmount, display)}`,
     `Ref: ${row.transaction_ref}`,
     `Date: ${row.created_at}`,
   ]
@@ -323,7 +335,10 @@ export function withdrawalTimelineLabelKey(row: WithdrawalReceiptRow): string {
   return resolveWithdrawalStatusKeys(row).timelineLabelKey
 }
 
-export function buildCryptoDepositReceipt(row: CryptoDepositReceiptRow): TransactionReceipt {
+export function buildCryptoDepositReceipt(
+  row: CryptoDepositReceiptRow,
+  display?: CustomerMoneyContext,
+): TransactionReceipt {
   const status = String(row.status ?? "").toLowerCase()
   let tone: ReceiptStatusTone = "processing"
   let statusLabelKey = "receipt.status.processing"
@@ -353,8 +368,8 @@ export function buildCryptoDepositReceipt(row: CryptoDepositReceiptRow): Transac
       : Number(row.amount_usd)
 
   const fields: ReceiptField[] = [
-    { labelKey: "receipt.field.amount", value: fmtUsd(Number(row.amount_usd)) },
-    { labelKey: "receipt.field.received", value: fmtUsd(credited) },
+    { labelKey: "receipt.field.amount", value: fmtLedgerUsd(Number(row.amount_usd), display) },
+    { labelKey: "receipt.field.received", value: fmtLedgerUsd(credited, display) },
     { labelKey: "receipt.field.network", value: "USDT · TRC20" },
     {
       labelKey: "receipt.field.txHash",
@@ -382,7 +397,7 @@ export function buildCryptoDepositReceipt(row: CryptoDepositReceiptRow): Transac
     fields,
     timestamp: row.credited_at ?? row.created_at,
     reference: shortRef(row.tx_hash, 10, 8),
-    shareText: [`${headerTitleKey}`, `Amount: ${fmtUsd(Number(row.amount_usd))}`, `Tx: ${row.tx_hash}`].join("\n"),
+    shareText: [`${headerTitleKey}`, `Amount: ${fmtLedgerUsd(Number(row.amount_usd), display)}`, `Tx: ${row.tx_hash}`].join("\n"),
   }
 }
 
@@ -398,6 +413,7 @@ export function buildFinancialEventFallbackReceipt(
   row: FinancialEventReceiptRow,
   title: string,
   detailLine: string,
+  display?: CustomerMoneyContext,
 ): TransactionReceipt {
   const status = String(row.status ?? "").toLowerCase()
   const tone: ReceiptStatusTone =
@@ -406,7 +422,10 @@ export function buildFinancialEventFallbackReceipt(
       : status === "pending"
         ? "pending"
         : "success"
-  const amt = row.gross_amount != null && Number.isFinite(row.gross_amount) ? fmtUsd(Number(row.gross_amount)) : "—"
+  const amt =
+    row.gross_amount != null && Number.isFinite(row.gross_amount)
+      ? fmtLedgerUsd(Number(row.gross_amount), display)
+      : "—"
   return {
     id: row.id,
     kind: "generic",
@@ -425,7 +444,10 @@ export function buildFinancialEventFallbackReceipt(
   }
 }
 
-export function buildFinancialEventReceipt(row: FinancialEventReceiptRow): TransactionReceipt | null {
+export function buildFinancialEventReceipt(
+  row: FinancialEventReceiptRow,
+  display?: CustomerMoneyContext,
+): TransactionReceipt | null {
   const cat = String(row.category ?? "").toLowerCase()
   const ev = String(row.event_type ?? "").toLowerCase()
   const status = String(row.status ?? "").toLowerCase()
@@ -460,7 +482,10 @@ export function buildFinancialEventReceipt(row: FinancialEventReceiptRow): Trans
     tone = "success"
   }
 
-  const amt = row.gross_amount != null && Number.isFinite(row.gross_amount) ? fmtUsd(Number(row.gross_amount)) : "—"
+  const amt =
+    row.gross_amount != null && Number.isFinite(row.gross_amount)
+      ? fmtLedgerUsd(Number(row.gross_amount), display)
+      : "—"
   const fields: ReceiptField[] = [{ labelKey: "receipt.field.amount", value: amt }]
   if (row.summary?.trim()) {
     fields.push({ labelKey: "receipt.field.details", value: row.summary.trim() })
@@ -537,6 +562,7 @@ export function buildNotificationFallbackReceipt(
   n: NexusNotificationItem,
   title: string,
   summary: string,
+  display?: CustomerMoneyContext,
 ): TransactionReceipt {
   const nt = (n.accountNotificationType ?? "").toLowerCase()
   let kind: ReceiptKind = "generic"
@@ -575,7 +601,10 @@ export function buildNotificationFallbackReceipt(
 
   const fields: ReceiptField[] = [{ labelKey: "receipt.field.summary", value: summary }]
   if (n.customerAmountUsd != null && n.customerAmountUsd > 0) {
-    fields.unshift({ labelKey: "receipt.field.amount", value: fmtUsd(n.customerAmountUsd) })
+    fields.unshift({
+      labelKey: "receipt.field.amount",
+      value: fmtLedgerUsd(n.customerAmountUsd, display),
+    })
   }
 
   const statusLabelKey =

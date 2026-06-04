@@ -46,7 +46,7 @@ function fundRequestTitleKey(status: string): string {
 }
 
 export function HistoryCenterScreen() {
-  const { t, currency, country, locale } = useUserPreferences()
+  const { t, currency, country, locale, formatUserMoney } = useUserPreferences()
   const { inbox, accountInboxReady } = useNexusNotifications()
   const [events, setEvents] = useState<FinancialEvent[]>([])
   const [deposits, setDeposits] = useState<CryptoDepositReceiptRow[]>([])
@@ -234,7 +234,7 @@ export function HistoryCenterScreen() {
                   <TransactionHistoryRow
                     key={w.id}
                     title={t(withdrawalTimelineLabelKey(w))}
-                    subtitle={`$${Number(w.amount).toFixed(2)} · ${w.transaction_ref.slice(0, 8)}…`}
+                    subtitle={`${formatUserMoney(Number(w.amount))} · ${w.transaction_ref.slice(0, 8)}…`}
                     timestamp={w.created_at}
                     t={t}
                     onOpen={() => openWithdrawal(w)}
@@ -267,7 +267,7 @@ export function HistoryCenterScreen() {
                     <TransactionHistoryRow
                       key={r.id}
                       title={t(fundRequestTitleKey(r.status))}
-                      subtitle={`$${usd.toFixed(2)} · ${String(r.tx_reference).slice(0, 8)}…`}
+                      subtitle={`${formatUserMoney(usd)} · ${String(r.tx_reference).slice(0, 8)}…`}
                       timestamp={r.created_at}
                       t={t}
                       onOpen={() => {}}
@@ -290,7 +290,7 @@ export function HistoryCenterScreen() {
                   <TransactionHistoryRow
                     key={d.id}
                     title={t(depositTimelineLabelKey(d))}
-                    subtitle={`$${Number(d.amount_usd).toFixed(2)} · ${d.tx_hash.slice(0, 8)}…`}
+                    subtitle={`${formatUserMoney(Number(d.amount_usd))} · ${d.tx_hash.slice(0, 8)}…`}
                     timestamp={d.created_at}
                     t={t}
                     onOpen={() => openDeposit(d)}
@@ -309,7 +309,7 @@ export function HistoryCenterScreen() {
               </div>
               <ul className="divide-y divide-border/50">
                 {events.map((e) => {
-                  const presented = presentFinancialEventForCustomer(e)
+                  const presented = presentFinancialEventForCustomer(e, viewer)
                   return (
                     <TransactionHistoryRow
                       key={e.id}

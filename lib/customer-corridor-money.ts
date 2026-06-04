@@ -188,7 +188,9 @@ export function rewriteNotificationAmountsForCorridor(
   }
 
   const formatted = formatMoneyAmount(usd, display, locale)
-  if (!foreignChunk.test(text)) return text
-
-  return text.replace(foreignChunk, formatted)
+  const usdDollarChunk = /\$\s*[\d][\d,.\s\u00a0\u202f]*/g
+  let out = text
+  if (foreignChunk.test(out)) out = out.replace(foreignChunk, formatted)
+  if (usdDollarChunk.test(out)) out = out.replace(usdDollarChunk, formatted)
+  return out
 }

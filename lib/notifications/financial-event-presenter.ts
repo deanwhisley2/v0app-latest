@@ -1,6 +1,8 @@
+import { formatUsdForCustomerDisplay, buildCustomerMoneyContext } from "@/lib/customer-facing-money"
 import { fixedTradeActivityTitle } from "@/lib/notifications/fixed-trade-activity-labels"
 import { mapCustomerNotification } from "@/lib/notifications/notification-mapper"
 import { isInternalNotificationCopy, sanitizeCustomerNotificationText } from "@/lib/notifications/customer-notification-language"
+import type { NotificationViewerCorridor } from "@/lib/customer-corridor-money"
 
 export type PresentedFinancialEvent = {
   title: string
@@ -25,28 +27,40 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: "Blocked",
 }
 
-function formatUsd(amount: number | null): string {
-  if (amount == null || !Number.isFinite(amount)) return ""
-  return `$${Number(amount).toFixed(2)}`
+function formatActivityAmount(
+  amount: number | null,
+  viewer?: NotificationViewerCorridor,
+): string {
+  if (amount == null || !Number.isFinite(amount) || amount <= 0) return ""
+  if (!viewer?.fundingCountryCode && !viewer?.displayCurrency) return ""
+  const ctx = buildCustomerMoneyContext({
+    fundingCountryCode: viewer.fundingCountryCode ?? null,
+    preferredCurrency: viewer.displayCurrency ?? null,
+    language: viewer.language,
+  })
+  return formatUsdForCustomerDisplay(amount, ctx)
 }
 
 /**
  * Customer-safe copy for History → Activity rows (container_balance_events.summary).
  */
-export function presentFinancialEventForCustomer(row: {
-  summary: string | null
-  event_type: string
-  category: string
-  status: string
-  gross_amount: number | null
-}): PresentedFinancialEvent {
+export function presentFinancialEventForCustomer(
+  row: {
+    summary: string | null
+    event_type: string
+    category: string
+    status: string
+    gross_amount: number | null
+  },
+  viewer?: NotificationViewerCorridor,
+): PresentedFinancialEvent {
   const fallback = "Account activity recorded."
   const rawSummary = (row.summary ?? "").trim()
   const syntheticType = `${row.category}_${row.event_type}`.toLowerCase()
   const fixedTitle = fixedTradeActivityTitle(row.event_type)
   const cat = CATEGORY_LABEL[row.category] ?? "Activity"
   const status = STATUS_LABEL[row.status] ?? row.status.replace(/_/g, " ")
-  const amt = formatUsd(row.gross_amount)
+  const amt = formatActivityAmount(row.gross_amount, viewer)
   const detailParts = [cat, status, amt].filter(Boolean)
 
   if (fixedTitle) {
@@ -61,6 +75,14 @@ export function presentFinancialEventForCustomer(row: {
       amount_usd: row.gross_amount,
       settled_amount_usd: row.gross_amount,
     },
+    viewer: viewer
+      ? {
+          fundingCountryCode: viewer.fundingCountryCode ?? null,
+          preferredCurrency: viewer.displayCurrency ?? null,
+          locale: viewer.locale,
+          language: viewer.language,
+        }
+      : undefined,
   })
 
   const title = sanitizeCustomerNotificationText(mapped?.title ?? rawSummary, fallback)

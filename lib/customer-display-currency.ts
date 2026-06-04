@@ -26,7 +26,7 @@ export function accountBalanceCurrencyForStaking(
   return corridorDisplayFiatForFunding(fundingCountryCode)
 }
 
-/** Wallet headline display uses USD; stake entry uses {@link accountBalanceCurrencyForStaking}. */
+/** Customer wallet, trade panels, and history display — corridor fiat from country + preference. */
 export function displayCurrencyForCustomer(
   fundingCountryCode: string | null | undefined,
   preferredCurrency?: string | null,

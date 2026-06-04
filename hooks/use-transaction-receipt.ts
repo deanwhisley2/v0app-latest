@@ -18,6 +18,7 @@ import {
   type TransactionReceipt,
   type WithdrawalReceiptRow,
 } from "@/lib/transactions/transaction-receipt-model"
+import { buildCustomerMoneyContext } from "@/lib/customer-facing-money"
 import { presentFinancialEventForCustomer } from "@/lib/notifications/financial-event-presenter"
 import { presentNotification } from "@/lib/notifications/notification-inbox-presenter"
 import type { NotificationViewerCorridor } from "@/lib/customer-corridor-money"
@@ -28,6 +29,18 @@ export function useTransactionReceiptOpener(
 ) {
   const [receipt, setReceipt] = useState<TransactionReceipt | null>(null)
   const [open, setOpen] = useState(false)
+
+  const display = useMemo(
+    () =>
+      viewer
+        ? buildCustomerMoneyContext({
+            fundingCountryCode: viewer.fundingCountryCode ?? null,
+            preferredCurrency: viewer.displayCurrency ?? null,
+            language: viewer.language,
+          })
+        : undefined,
+    [viewer],
+  )
 
   const closeReceipt = useCallback(() => {
     setOpen(false)
@@ -41,36 +54,36 @@ export function useTransactionReceiptOpener(
 
   const openWithdrawal = useCallback(
     (row: WithdrawalReceiptRow) => {
-      showReceipt(buildWithdrawalReceipt(row))
+      showReceipt(buildWithdrawalReceipt(row, display))
     },
-    [showReceipt],
+    [display, showReceipt],
   )
 
   const openDeposit = useCallback(
     (row: CryptoDepositReceiptRow) => {
-      showReceipt(buildCryptoDepositReceipt(row))
+      showReceipt(buildCryptoDepositReceipt(row, display))
     },
-    [showReceipt],
+    [display, showReceipt],
   )
 
   const openFinancialEvent = useCallback(
     (row: FinancialEventReceiptRow) => {
-      const built = buildFinancialEventReceipt(row)
+      const built = buildFinancialEventReceipt(row, display)
       if (built) {
         showReceipt(built)
         return
       }
-      const p = presentFinancialEventForCustomer(row)
-      showReceipt(buildFinancialEventFallbackReceipt(row, p.title, p.detailLine))
+      const p = presentFinancialEventForCustomer(row, viewer)
+      showReceipt(buildFinancialEventFallbackReceipt(row, p.title, p.detailLine, display))
     },
-    [showReceipt],
+    [display, showReceipt, viewer],
   )
 
   const openNotification = useCallback(
     async (n: NexusNotificationItem) => {
       if (!isFinancialReceiptNotification(n)) {
         const p = presentNotification(n, t, viewer)
-        showReceipt(buildNotificationFallbackReceipt(n, p.title, p.summary))
+        showReceipt(buildNotificationFallbackReceipt(n, p.title, p.summary, display))
         return
       }
 
@@ -83,7 +96,7 @@ export function useTransactionReceiptOpener(
       if (token && link?.requestId && (link.sourceKind === "withdrawal_request" || link.requestId)) {
         const row = await fetchWithdrawalForReceipt(link.requestId, token)
         if (row) {
-          showReceipt(buildWithdrawalReceipt(row))
+          showReceipt(buildWithdrawalReceipt(row, display))
           return
         }
       }
@@ -91,15 +104,15 @@ export function useTransactionReceiptOpener(
       if (token && link?.sourceId && link.sourceKind?.includes("crypto_deposit")) {
         const row = await fetchDepositForReceipt(link.sourceId, token)
         if (row) {
-          showReceipt(buildCryptoDepositReceipt(row))
+          showReceipt(buildCryptoDepositReceipt(row, display))
           return
         }
       }
 
       const p = presentNotification(n, t, viewer)
-      showReceipt(buildNotificationFallbackReceipt(n, p.title, p.detail || p.summary))
+      showReceipt(buildNotificationFallbackReceipt(n, p.title, p.detail || p.summary, display))
     },
-    [showReceipt, t, viewer],
+    [display, showReceipt, t, viewer],
   )
 
   return useMemo(

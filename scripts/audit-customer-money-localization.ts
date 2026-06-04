@@ -45,6 +45,16 @@ function main() {
   const ug = buildCustomerMoneyContext({ fundingCountryCode: "UG", language: "en" })
   const ugFmt = formatUsdForCustomerDisplay(5, ug)
   assert(/UGX/i.test(ugFmt) || /\d/.test(ugFmt), `UG display: ${ugFmt}`)
+  const ug650 = formatUsdForCustomerDisplay(650, ug)
+  assert(/UGX/i.test(ug650), `UG $650 → UGX: ${ug650}`)
+  assert(!/\$650/.test(ug650), `UG must not show USD symbol: ${ug650}`)
+
+  const ke = buildCustomerMoneyContext({ fundingCountryCode: "KE", language: "en" })
+  const ke650 = formatUsdForCustomerDisplay(650, ke)
+  assert(/KES/i.test(ke650), `KE $650 → KES: ${ke650}`)
+
+  const cd650 = formatUsdForCustomerDisplay(650, cdEn)
+  assert(/CDF|FC/i.test(cd650), `CD $650 → CDF: ${cd650}`)
 
   const cdfFr = formatAmountInputLive("150000", "fr-CD", "CDF")
   assert(/\d/.test(cdfFr) && cdfFr.replace(/\D/g, "").includes("150000"), `CDF fr live format: ${cdfFr}`)

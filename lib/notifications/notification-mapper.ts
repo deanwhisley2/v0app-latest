@@ -6,6 +6,8 @@ import {
   buildFundingSubmittedCustomerCopy,
   isInternalNotificationCopy,
 } from "@/lib/notifications/customer-notification-language"
+import { formatMoneyAmount } from "@/lib/currency-display"
+import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import type { AppLanguage } from "@/lib/user-preferences"
 
 export type MappedCustomerNotification = {
@@ -21,9 +23,21 @@ function blob(title: string, body: string): string {
   return `${title} ${body}`.toLowerCase()
 }
 
-function formatUsd(amountUsd: number): string {
+function formatCustomerAmountUsd(
+  amountUsd: number,
+  viewer?: {
+    fundingCountryCode?: string | null
+    preferredCurrency?: string | null
+    locale?: string
+  },
+): string {
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) return ""
-  return `$${amountUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  const currency = displayCurrencyForCustomer(
+    viewer?.fundingCountryCode ?? null,
+    viewer?.preferredCurrency ?? null,
+  )
+  const locale = viewer?.locale ?? "en-US"
+  return formatMoneyAmount(amountUsd, currency, locale)
 }
 
 /**
@@ -55,9 +69,9 @@ export function mapCustomerNotification(params: {
   const amountUsd = Number(meta?.amount_usd ?? meta?.settled_amount_usd ?? NaN)
   const amountInputLocal = Number(meta?.amount_input_local ?? NaN)
   const inputCurrency = typeof meta?.input_currency === "string" ? meta.input_currency : null
-  const usdFmt = Number.isFinite(amountUsd) && amountUsd > 0 ? formatUsd(amountUsd) : ""
-
   const viewer = params.viewer
+  const amountFmt =
+    Number.isFinite(amountUsd) && amountUsd > 0 ? formatCustomerAmountUsd(amountUsd, viewer) : ""
 
   if (isInternalNotificationCopy(rawTitle) || isInternalNotificationCopy(rawBody)) {
     const mapped = mapInternalOpsNotification(combined, {
@@ -93,8 +107,8 @@ export function mapCustomerNotification(params: {
         body: "Someone registered with your referral link. Rewards apply after they fund and trade.",
       }
     }
-    const bonusBody = usdFmt
-      ? `A promotional bonus of ${usdFmt} has been credited to your account.`
+    const bonusBody = amountFmt
+      ? `A promotional bonus of ${amountFmt} has been credited to your account.`
       : "A promotional bonus has been credited to your account."
     if (/20%|first deposit|referee|welcome bonus/i.test(combined)) {
       return { title: "Bonus credited", body: bonusBody }
@@ -113,8 +127,8 @@ export function mapCustomerNotification(params: {
     if (t.includes("approved") || /approved|processed|sent|completed/i.test(combined)) {
       return {
         title: "Withdrawal approved",
-        body: usdFmt
-          ? `Your withdrawal of ${usdFmt} has been approved and is being sent to your payout method.`
+        body: amountFmt
+          ? `Your withdrawal of ${amountFmt} has been approved and is being sent to your payout method.`
           : "Your withdrawal request has been approved and is being processed.",
       }
     }
@@ -126,8 +140,8 @@ export function mapCustomerNotification(params: {
     }
     return {
       title: "Withdrawal received",
-      body: usdFmt
-        ? `We received your withdrawal request for ${usdFmt}. You will be notified when it is processed.`
+      body: amountFmt
+        ? `We received your withdrawal request for ${amountFmt}. You will be notified when it is processed.`
         : "We received your withdrawal request. You will be notified when it is processed.",
     }
   }
@@ -137,15 +151,15 @@ export function mapCustomerNotification(params: {
     if (t.includes("credited") || /credited|confirmed/i.test(combined)) {
       return {
         title: "Deposit credited",
-        body: usdFmt
-          ? `Your crypto deposit of ${usdFmt} has been credited to your balance.`
+        body: amountFmt
+          ? `Your crypto deposit of ${amountFmt} has been credited to your balance.`
           : "Your crypto deposit has been credited to your balance.",
       }
     }
     return {
       title: "Deposit received",
-      body: usdFmt
-        ? `Your crypto deposit of ${usdFmt} is being confirmed.`
+      body: amountFmt
+        ? `Your crypto deposit of ${amountFmt} is being confirmed.`
         : "Your crypto deposit is being confirmed.",
     }
   }
@@ -203,8 +217,8 @@ export function mapCustomerNotification(params: {
       if (/settled|completed|finished|closed/i.test(combined)) {
         return {
           title: "Copy trade completed",
-          body: usdFmt
-            ? `Your copy trade session has been settled successfully. ${usdFmt} was added to your balance.`
+          body: amountFmt
+            ? `Your copy trade session has been settled successfully. ${amountFmt} was added to your balance.`
             : "Your copy trade session has been settled successfully.",
         }
       }
@@ -219,8 +233,8 @@ export function mapCustomerNotification(params: {
       if (/finished|completed|matured|closed|session completed/i.test(combined)) {
         return {
           title: "Fixed trade session completed",
-          body: usdFmt
-            ? `Your fixed trade session has completed. ${usdFmt} is now available per your program terms.`
+          body: amountFmt
+            ? `Your fixed trade session has completed. ${amountFmt} is now available per your program terms.`
             : "Your fixed trade session has completed. Funds are available per your program terms.",
         }
       }
@@ -238,23 +252,23 @@ export function mapCustomerNotification(params: {
     if (/stake reserved|copy[- ]?trade stake/i.test(combined)) {
       return {
         title: "Copy trade started",
-        body: usdFmt
-          ? `Your copy trade session has started with ${usdFmt} allocated.`
+        body: amountFmt
+          ? `Your copy trade session has started with ${amountFmt} allocated.`
           : "Your copy trade session has started.",
       }
     }
     if (/container liquid|transferred into|earnings transferred|release|added to your balance|fixed[- ]?trade earnings/i.test(combined)) {
       return {
         title: "Fixed trade earnings credited",
-        body: usdFmt
-          ? `Fixed trade earnings of ${usdFmt} have been credited to your balance.`
+        body: amountFmt
+          ? `Fixed trade earnings of ${amountFmt} have been credited to your balance.`
           : "Fixed trade earnings have been credited to your balance.",
       }
     }
-    if (usdFmt) {
+    if (amountFmt) {
       return {
         title: "Trading update",
-        body: `Trading earnings of ${usdFmt} have been added to your balance.`,
+        body: `Trading earnings of ${amountFmt} have been added to your balance.`,
       }
     }
     return {
@@ -301,13 +315,14 @@ function mapInternalOpsNotification(
   },
 ): MappedCustomerNotification | null {
   const { amountUsd, amountInputLocal, inputCurrency, viewer } = ctx
-  const usdFmt = Number.isFinite(amountUsd) && amountUsd > 0 ? formatUsd(amountUsd) : ""
+  const amountFmt =
+    Number.isFinite(amountUsd) && amountUsd > 0 ? formatCustomerAmountUsd(amountUsd, viewer) : ""
 
   if (/launch promotion|first.deposit bonus|referral reward/i.test(combined)) {
     return {
       title: "Bonus credited",
-      body: usdFmt
-        ? `A promotional bonus of ${usdFmt} has been credited to your account.`
+      body: amountFmt
+        ? `A promotional bonus of ${amountFmt} has been credited to your account.`
         : "A promotional bonus has been credited to your account.",
     }
   }
@@ -353,8 +368,8 @@ function mapInternalOpsNotification(
   if (/container liquid|earnings transferred|internal_transfer|withdrawable_to_main/i.test(combined)) {
     return {
       title: "Fixed trade earnings credited",
-      body: usdFmt
-        ? `Fixed trade earnings of ${usdFmt} have been credited to your balance.`
+      body: amountFmt
+        ? `Fixed trade earnings of ${amountFmt} have been credited to your balance.`
         : "Fixed trade earnings have been credited to your balance.",
     }
   }

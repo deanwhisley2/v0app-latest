@@ -34,7 +34,7 @@ type UserPreferencesContextValue = {
   country: string | null
   locale: string
   setPreferences: (p: Partial<UserPreferences>) => void
-  /** Ledger/API balances in USD — platform master display currency. */
+  /** Ledger/API amounts in USD → corridor fiat for customer UI only. */
   formatUserMoney: (amountUsd: number) => string
   /** Translate UI keys from `lib/i18n/app-messages.ts` (e.g. `nav.trade`). */
   t: (key: string) => string
@@ -147,8 +147,8 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   }, [prefs.language])
 
   const formatUserMoney = useCallback(
-    (amountUsd: number) => formatMoneyAmount(amountUsd, "USD", locale),
-    [locale]
+    (amountUsd: number) => formatMoneyAmount(amountUsd, prefs.currency, locale),
+    [prefs.currency, locale]
   )
 
   const t = useCallback(
