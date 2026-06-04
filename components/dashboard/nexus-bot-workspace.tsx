@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { FixedTradeSimulation } from "@/components/dashboard/fixed-trade-simulation"
+import { NexusBotSessionPanel } from "@/components/dashboard/nexus-bot-session-panel"
 import { TradeSessionProfitCelebration } from "@/components/dashboard/trade-session-profit-celebration"
 import { NEXUS_AUTO_TRADE_PLANS, NEXUS_SIGNAL_STAKE_TIERS_USD } from "@/lib/nexus-bot/plans"
 import { buildOperationsWhatsAppHref } from "@/lib/nexus-operations-whatsapp"
@@ -85,8 +85,12 @@ type ActiveSession = {
   phaseKey?: string
   headline?: string
   detail?: string
-  projected_profit_usd?: number
   earnings_withdrawable?: boolean
+  profit_released_usd?: number
+  session_start_at?: string | null
+  session_end_at?: string | null
+  session_progress_pct?: number
+  earnings_locked?: boolean
 }
 
 type ProfitCelebration = {
@@ -466,32 +470,7 @@ export function NexusBotWorkspace({
               </p>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Allocation {formatUserMoney(Number(activeSession.stake_usd))}
-          </p>
-          {Number(activeSession.projected_profit_usd ?? 0) > 0 &&
-          !activeSession.earnings_withdrawable ? (
-            <p className="mt-2 text-sm">
-              Session earnings{" "}
-              <span className="font-mono font-semibold text-success">
-                +{formatUserMoney(Number(activeSession.projected_profit_usd))}
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                Visible during session · released to available balance when the session completes
-              </span>
-            </p>
-          ) : null}
-          {activeSession.status === "booked" || activeSession.status === "ready" ? (
-            <p className="mt-2 flex items-center gap-2 text-sm text-warning">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Trade booked successfully · Waiting for session start
-            </p>
-          ) : null}
-          {!["booked", "ready", "pending"].includes(activeSession.status ?? "") ? (
-            <div className="mt-4">
-              <FixedTradeSimulation sessionId={activeSession.id} deskSalt={activeSession.id} />
-            </div>
-          ) : null}
+          <NexusBotSessionPanel session={activeSession} formatMoney={formatUserMoney} />
         </Card>
       ) : null}
 

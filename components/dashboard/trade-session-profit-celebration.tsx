@@ -51,9 +51,10 @@ export function TradeSessionProfitCelebration({
           ))}
         </div>
         <p className="text-xs font-semibold uppercase tracking-widest text-success">Session complete</p>
-        <p className="mt-2 text-3xl font-bold text-success">{formatMoney(profitUsd)}</p>
+        <p className="mt-3 text-sm font-medium text-foreground">Released earnings</p>
+        <p className="mt-1 text-3xl font-bold text-success">+{formatMoney(profitUsd)}</p>
         <p className="mt-2 text-sm text-muted-foreground">{summary}</p>
-        <p className="mt-1 text-xs text-muted-foreground">Profits transferred to available earnings</p>
+        <p className="mt-1 text-xs text-muted-foreground">Credited to your available balance</p>
         <button
           type="button"
           className="mt-5 min-h-[44px] w-full rounded-xl bg-success px-4 py-2 text-sm font-semibold text-success-foreground touch-manipulation"

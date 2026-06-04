@@ -11,6 +11,7 @@ import {
   syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
 import { loadUserReserveForPeriod, periodKeyFromDate, previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
+import { sessionProgressPct } from "@/lib/nexus-bot/session-earnings-ux"
 import { userSessionPresentation, TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
@@ -46,6 +47,7 @@ function mapTradeSessionForUser(
         existingReserve: reserve,
       })
     : Number(row.profit_released_usd ?? 0)
+  const earningsWithdrawable = status === "completed"
   return {
     id: String(row.id),
     session_kind: String(row.session_kind ?? "signal"),
@@ -56,8 +58,14 @@ function mapTradeSessionForUser(
     detail: presentation.detail,
     participation_weight: weight,
     profit_released_usd: Number(row.profit_released_usd ?? 0),
-    projected_profit_usd: projectedProfitUsd,
-    earnings_withdrawable: status === "completed",
+    earnings_withdrawable: earningsWithdrawable,
+    session_start_at: startAt || null,
+    session_end_at: endAt || null,
+    session_progress_pct: isOpen && startAt && endAt ? sessionProgressPct({ startAt, endAt }) : 0,
+    earnings_locked: isOpen,
+    ...(isOpen
+      ? {}
+      : { projected_profit_usd: projectedProfitUsd }),
   }
 }
 
