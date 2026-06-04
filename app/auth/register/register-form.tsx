@@ -27,6 +27,8 @@ import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-mo
 import { NewMemberCampaignRegisterStrip } from "@/components/marketing/new-member-campaign-register-strip"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
+import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
@@ -76,6 +78,8 @@ export default function RegisterForm() {
   const [error, setError] = useState<string | null>(null)
   const [corridorWarning, setCorridorWarning] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
+  const [goVerifyAfterDialog, setGoVerifyAfterDialog] = useState(false)
 
   const authT = getAuthMessages(language)
   const reg = getRegisterMessages(language)
@@ -230,8 +234,8 @@ export default function RegisterForm() {
       } catch {
         /* ignore */
       }
-      router.replace("/auth/verify")
-      router.refresh()
+      setGoVerifyAfterDialog(true)
+      setEmailSentDialogOpen(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -280,6 +284,8 @@ export default function RegisterForm() {
         <RegisterStepIndicator steps={steps} current={step} />
 
         <NewMemberCampaignRegisterStrip />
+
+        <EmailDeliverabilityNotice className="mb-2" />
 
         <form
           className="space-y-4"
@@ -526,7 +532,21 @@ export default function RegisterForm() {
               </Button>
             )}
           </div>
+
+          {step === 3 ? <EmailDeliverabilityNotice /> : null}
         </form>
+
+        <EmailSentSuccessDialog
+          open={emailSentDialogOpen}
+          onOpenChange={(open) => {
+            setEmailSentDialogOpen(open)
+            if (!open && goVerifyAfterDialog) {
+              setGoVerifyAfterDialog(false)
+              router.replace("/auth/verify")
+              router.refresh()
+            }
+          }}
+        />
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {authT.register.alreadyHave}{" "}

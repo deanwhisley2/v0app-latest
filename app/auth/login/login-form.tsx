@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label"
 import { PasswordField } from "@/components/auth/password-field"
 import { Checkbox } from "@/components/ui/checkbox"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
+import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
 
 const REMEMBER_KEY = "nexus_auth_remember_id"
 const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? ""
@@ -47,6 +49,7 @@ export default function LoginForm() {
   const [loginCodeEmail, setLoginCodeEmail] = useState("")
   const [loginCode, setLoginCode] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
 
   const [resetSuccess, setResetSuccess] = useState(false)
   const [sessionCleared, setSessionCleared] = useState(false)
@@ -124,6 +127,7 @@ export default function LoginForm() {
     setLoginCodeSent(true)
     setLoginCode("")
     setSuccess(json.message ?? "Enter the 6-digit code from your email below.")
+    setEmailSentDialogOpen(true)
   }
 
   async function handleLoginCodeVerify(emailForAuth: string, code: string) {
@@ -358,6 +362,8 @@ export default function LoginForm() {
           </button>
         </div>
 
+        <EmailDeliverabilityNotice className="mb-4" />
+
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">
             <Label htmlFor="login-identifier" className="text-sm font-medium">
@@ -496,7 +502,13 @@ export default function LoginForm() {
               t.login.accessDashboard
             )}
           </Button>
+
+          {loginMode === "magic" && !loginCodeSent ? (
+            <EmailDeliverabilityNotice />
+          ) : null}
         </form>
+
+        <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
 
         {isGuestLoginEnabled() ? (
           <div className="mt-5 space-y-2 border-t border-border pt-5">

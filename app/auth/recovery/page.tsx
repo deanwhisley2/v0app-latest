@@ -7,6 +7,8 @@ import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
 
 const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
 
@@ -16,6 +18,8 @@ export default function RecoveryPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
+  const [afterSendPath, setAfterSendPath] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -47,7 +51,8 @@ export default function RecoveryPage() {
       const email = typeof data.email === "string" ? data.email : ""
       const qs = new URLSearchParams({ sent: "1" })
       if (email) qs.set("email", email)
-      router.push(`/auth/reset-password?${qs.toString()}`)
+      setAfterSendPath(`/auth/reset-password?${qs.toString()}`)
+      setEmailSentDialogOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not send reset code.")
     } finally {
@@ -64,6 +69,8 @@ export default function RecoveryPage() {
           no links. Enter the code on the next screen to set a new password.
         </p>
       </header>
+
+      <EmailDeliverabilityNotice className="mb-4" />
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <div className="space-y-2">
@@ -90,7 +97,20 @@ export default function RecoveryPage() {
         <Button type="submit" className="min-h-12 w-full text-base font-semibold" disabled={isSubmitting}>
           {isSubmitting ? "Sending code…" : "Send reset code"}
         </Button>
+
+        <EmailDeliverabilityNotice />
       </form>
+
+      <EmailSentSuccessDialog
+        open={emailSentDialogOpen}
+        onOpenChange={(open) => {
+          setEmailSentDialogOpen(open)
+          if (!open && afterSendPath) {
+            router.push(afterSendPath)
+            setAfterSendPath(null)
+          }
+        }}
+      />
 
       <p className="mt-5 text-center text-sm text-muted-foreground">
         <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">

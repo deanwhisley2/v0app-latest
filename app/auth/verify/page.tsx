@@ -8,6 +8,9 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp"
+import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
+import { Button } from "@/components/ui/button"
 
 function VerifyContent() {
   const searchParams = useSearchParams()
@@ -20,6 +23,7 @@ function VerifyContent() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
+  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
 
   useEffect(() => {
     const fromQuery = searchParams.get("email")?.trim() ?? ""
@@ -115,6 +119,7 @@ function VerifyContent() {
         setError(data.error ?? "Failed to resend code.")
       } else {
         setInfoMsg(data.message ?? "New code sent! Check your email.")
+        setEmailSentDialogOpen(true)
       }
     } catch {
       setError("Network error. Please try again.")
@@ -157,6 +162,8 @@ function VerifyContent() {
               Enter the 6-digit code sent to{" "}
               <strong className="text-primary">{email}</strong>
             </p>
+
+            <EmailDeliverabilityNotice />
 
             {error && (
               <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-center text-sm text-destructive">
@@ -201,16 +208,18 @@ function VerifyContent() {
               </button>
             </form>
 
-            <button
+            <Button
               type="button"
+              variant="outline"
+              className="min-h-11 w-full"
               onClick={() => void handleResend()}
               disabled={resendLoading || loading}
-              className="w-full text-center text-sm text-primary hover:underline disabled:text-muted-foreground"
             >
-              {resendLoading
-                ? "Sending..."
-                : "Didn't receive a code? Click here to resend"}
-            </button>
+              {resendLoading ? "Sending…" : "Send verification email"}
+            </Button>
+
+            <EmailDeliverabilityNotice className="mt-0" />
+
             <p className="text-center text-sm text-muted-foreground">
               <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
                 Back to sign in
@@ -226,6 +235,8 @@ function VerifyContent() {
           </div>
         )}
       </div>
+
+      <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
     </div>
   )
 }

@@ -13,6 +13,8 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp"
+import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
 
 type EmailVerificationProps = {
   initialEmail?: string
@@ -25,6 +27,7 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
   const [busy, setBusy] = useState<"verify" | "resend" | null>(null)
   /** Inline errors only after user actions — never shown on initial load. */
   const [inlineError, setInlineError] = useState<string | null>(null)
+  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
 
   useEffect(() => {
     toast.dismiss()
@@ -54,6 +57,7 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         return
       }
       toast.success(json.message || "Check your inbox for the code.")
+      setEmailSentDialogOpen(true)
     } catch {
       setInlineError("Network error")
     } finally {
@@ -98,7 +102,10 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
   }
 
   return (
+    <>
     <form className="space-y-6" onSubmit={handleVerify}>
+      <EmailDeliverabilityNotice />
+
       <div className="space-y-2">
         <Label htmlFor="verify-email">Email</Label>
         <Input
@@ -159,12 +166,14 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
       <Button
         type="button"
         variant="outline"
-        className="w-full"
+        className="min-h-11 w-full"
         disabled={busy !== null}
         onClick={() => void handleResend()}
       >
-        {busy === "resend" ? "Sending…" : "Resend code"}
+        {busy === "resend" ? "Sending…" : "Send verification email"}
       </Button>
+
+      <EmailDeliverabilityNotice />
 
       <p className="text-center text-sm text-muted-foreground">
         <Link href="/auth/login" className="underline-offset-4 hover:underline">
@@ -176,5 +185,7 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         </Link>
       </p>
     </form>
+    <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
+    </>
   )
 }
