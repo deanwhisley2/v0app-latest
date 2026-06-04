@@ -2,17 +2,9 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
-import { mergeSafeUserMetadata } from "@/lib/server/auth-jwt-metadata"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { setupSecurityProfile } from "@/lib/server/user-security-profile-service"
-import { normalizeReferralCodeInput, referralCodeForUserId } from "@/lib/referral-code"
-import { getPublicSiteOrigin } from "@/lib/site-public-url"
+import { normalizeReferralCodeInput } from "@/lib/referral-code"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
-import { isReferralAttributionBlocked } from "@/lib/server/referral-attribution-guard"
-import {
-  notifyLaunchWelcome,
-  notifyReferrerNewReferee,
-} from "@/lib/server/launch-notifications"
 import { grantNewMemberWelcomeBonus } from "@/lib/server/new-member-campaign"
 import { isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
@@ -22,18 +14,12 @@ import {
   recordSignupCorridorEvent,
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
-import { attributeRegistrationToCampaign } from "@/lib/server/marketing-campaigns"
 import { normalizeCampaignSlugInput } from "@/lib/marketing/campaign-slug"
-
-/** Supabase rejects a second signUp for the same email even if the first account never completed in-app verification. */
-function isAuthDuplicateSignupError(err: { message?: string | null; code?: string | null }): boolean {
-  const raw = `${err.code ?? ""} ${err.message ?? ""}`.toLowerCase()
-  if (raw.includes("user_already_exists")) return true
-  if (raw.includes("already registered")) return true
-  if (raw.includes("already been registered")) return true
-  if (raw.includes("email address") && raw.includes("already")) return true
-  return false
-}
+import { runRegisterPostSignup } from "@/lib/server/register-post-signup"
+import {
+  friendlyRegisterAuthError,
+  isAuthDuplicateSignupError,
+} from "@/lib/server/register-auth-errors"
 
 type RegisterBody = {
   email?: string
@@ -42,10 +28,8 @@ type RegisterBody = {
   phone?: string
   preferred_language?: string
   preferred_currency?: string
-  /** ISO 3166-1 alpha-2 — persisted to profiles.funding_country_code when valid */
   funding_country_code?: string
   referral_code?: string
-  /** Public promo slug from /promo/{slug} or ?campaign= */
   campaign_slug?: string
   security_code?: string
   deposit_number?: string
@@ -53,8 +37,8 @@ type RegisterBody = {
 }
 
 /**
- * Supabase Auth signUp + Cyberpersons verification email (see public.email_verifications).
- * Disable “Confirm email” in Supabase Auth to avoid duplicate mails from Auth SMTP.
+ * Admin createUser (no Supabase confirmation email wait) + Cyberpersons verification code.
+ * Disable “Confirm email” in Supabase Auth so Auth SMTP does not run on signup.
  */
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -68,8 +52,7 @@ export async function POST(request: Request) {
 
   const email = typeof body.email === "string" ? body.email.trim() : ""
   const password = typeof body.password === "string" ? body.password : ""
-  const full_name =
-    typeof body.full_name === "string" ? body.full_name.trim() : ""
+  const full_name = typeof body.full_name === "string" ? body.full_name.trim() : ""
   const phone = typeof body.phone === "string" ? body.phone.trim() : ""
   const preferred_language =
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
@@ -83,10 +66,10 @@ export async function POST(request: Request) {
     preferred_currency_raw || null,
   )
   const referralInvite = normalizeReferralCodeInput(
-    typeof body.referral_code === "string" ? body.referral_code : ""
+    typeof body.referral_code === "string" ? body.referral_code : "",
   )
   const campaignSlug = normalizeCampaignSlugInput(
-    typeof body.campaign_slug === "string" ? body.campaign_slug : ""
+    typeof body.campaign_slug === "string" ? body.campaign_slug : "",
   )
   const security_code = typeof body.security_code === "string" ? body.security_code.trim() : ""
   const deposit_number = typeof body.deposit_number === "string" ? body.deposit_number.trim() : ""
@@ -134,35 +117,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Withdrawal number is required." }, { status: 400 })
   }
 
-  const supabase = await createRouteHandlerSupabaseClient()
-  const origin = getPublicSiteOrigin(request.url)
-  const emailRedirectTo = `${origin}/auth/verify`
+  const admin = createAdminClient()
+  const emailNormalized = email.toLowerCase()
+  const userMetadata: Record<string, unknown> = {
+    full_name,
+    phone,
+    security_profile_required: true,
+    ...(preferred_language ? { preferred_language } : {}),
+    ...(preferred_currency ? { preferred_currency } : {}),
+  }
 
-  const nowIso = new Date().toISOString()
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email,
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email: emailNormalized,
     password,
-    options: {
-      emailRedirectTo,
-      data: {
-        full_name,
-        phone,
-        security_profile_required: true,
-        ...(preferred_language ? { preferred_language } : {}),
-        ...(preferred_currency ? { preferred_currency } : {}),
-      },
-    },
+    email_confirm: false,
+    user_metadata: userMetadata,
   })
 
-  if (signUpError) {
-    if (!isAuthDuplicateSignupError(signUpError)) {
-      return NextResponse.json({ error: signUpError.message }, { status: 400 })
+  if (createError) {
+    if (!isAuthDuplicateSignupError(createError)) {
+      return NextResponse.json(
+        { error: friendlyRegisterAuthError(createError.message) },
+        { status: 400 },
+      )
     }
     try {
-      const admin = createAdminClient()
       const existingId = await findAuthUserIdByEmail(admin, email)
       if (!existingId) {
-        return NextResponse.json({ error: signUpError.message }, { status: 400 })
+        return NextResponse.json(
+          { error: friendlyRegisterAuthError(createError.message) },
+          { status: 400 },
+        )
       }
       const { data: profRow } = await admin
         .from("profiles")
@@ -175,14 +160,14 @@ export async function POST(request: Request) {
             error:
               "This email is already registered. Sign in with your password, or use Forgot password if you need a reset.",
           },
-          { status: 400 }
+          { status: 400 },
         )
       }
       const issued = await issueEmailVerificationCode(email)
       if (!issued.ok) {
         return NextResponse.json(
           { error: issued.error },
-          { status: issued.status ?? 400 }
+          { status: issued.status ?? 400 },
         )
       }
       try {
@@ -196,124 +181,40 @@ export async function POST(request: Request) {
           grantErr instanceof Error ? grantErr.message : String(grantErr),
         )
       }
+      const supabase = await createRouteHandlerSupabaseClient()
       await supabase.auth.signOut()
       return NextResponse.json({ ok: true })
     } catch (e) {
       console.warn("[register] duplicate-email resend path:", e instanceof Error ? e.message : String(e))
-      return NextResponse.json({ error: signUpError.message }, { status: 400 })
+      return NextResponse.json(
+        { error: friendlyRegisterAuthError(createError.message) },
+        { status: 400 },
+      )
     }
   }
 
-  const newUserId = signUpData.user?.id
+  const newUserId = created.user?.id
   if (newUserId) {
-    try {
-      const admin = createAdminClient()
-
-      let referredByUserId: string | null = null
-      if (referralInvite.length >= 4) {
-        const { data: refProfile } = await admin
-          .from("profiles")
-          .select("id")
-          .eq("referral_code", referralInvite)
-          .maybeSingle()
-        const rid = refProfile?.id as string | undefined
-        if (rid && rid !== newUserId) {
-          const blocked = await isReferralAttributionBlocked(admin, rid)
-          if (!blocked) referredByUserId = rid
-        }
-      }
-
-      const countryForProfile = funding_country_code
-
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const seed = attempt === 0 ? newUserId : `${newUserId}:${attempt}`
-        const myReferralCode = referralCodeForUserId(seed)
-        const patch: Record<string, unknown> = {
-          referral_code: myReferralCode,
-          updated_at: nowIso,
-        }
-        if (referredByUserId) patch.referred_by = referredByUserId
-
-        const { error: refErr } = await admin.from("profiles").update(patch).eq("id", newUserId)
-        if (!refErr) break
-        const msg = (refErr.message ?? "").toLowerCase()
-        if (!msg.includes("unique") && !msg.includes("duplicate")) {
-          console.warn("[register] referral profile update:", refErr.message)
-          break
-        }
-      }
-
-      if (countryForProfile) {
-        const { error: fcErr } = await admin
-          .from("profiles")
-          .update({ funding_country_code: countryForProfile, updated_at: nowIso })
-          .eq("id", newUserId)
-        if (fcErr) {
-          console.warn("[register] funding_country_code profile update:", fcErr.message)
-        }
-      }
-
-      if (referredByUserId) {
-        void notifyReferrerNewReferee(admin, referredByUserId, newUserId)
-      }
-      void notifyLaunchWelcome(admin, newUserId, countryForProfile)
-      const welcomeGranted = await grantNewMemberWelcomeBonus(admin, newUserId, "registration")
-      if (!welcomeGranted) {
-        console.warn("[register] welcome bonus not granted:", newUserId)
-      }
-
-      if (campaignSlug.length >= 8) {
-        try {
-          await attributeRegistrationToCampaign({
-            userId: newUserId,
-            campaignSlug,
-          })
-        } catch (campErr) {
-          console.warn(
-            "[register] campaign attribution:",
-            campErr instanceof Error ? campErr.message : campErr,
-          )
-        }
-      }
-
-      try {
-        await setupSecurityProfile(admin, {
-          userId: newUserId,
-          securityCode: security_code,
-          mtnDepositNumber: deposit_number,
-          mtnWithdrawalNumber: withdrawal_number,
-          payoutMethod: "mobile_money",
-        })
-      } catch (secErr) {
-        console.warn(
-          "[register] security profile setup:",
-          secErr instanceof Error ? secErr.message : String(secErr),
-        )
-      }
-
-      const meta = (signUpData.user?.user_metadata ?? {}) as Record<string, unknown>
-      const { error: metaStripErr } = await admin.auth.admin.updateUserById(newUserId, {
-        user_metadata: mergeSafeUserMetadata(meta, {
-          security_profile_required: true,
-        }),
-      })
-      if (metaStripErr) {
-        console.warn("[register] user_metadata sanitize:", metaStripErr.message)
-      }
-    } catch (e) {
-      console.warn("[register] post-signup profile/metadata:", e instanceof Error ? e.message : String(e))
-    }
+    runRegisterPostSignup(admin, {
+      userId: newUserId,
+      email: emailNormalized,
+      fundingCountryCode: funding_country_code,
+      referralInvite,
+      campaignSlug,
+      securityCode: security_code,
+      depositNumber: deposit_number,
+      withdrawalNumber: withdrawal_number,
+      userMetadata,
+    })
   }
 
   const issued = await issueEmailVerificationCode(email)
   if (!issued.ok) {
     return NextResponse.json(
       { error: issued.error },
-      { status: issued.status ?? 400 }
+      { status: issued.status ?? 400 },
     )
   }
-
-  await supabase.auth.signOut()
 
   return NextResponse.json({ ok: true })
 }
