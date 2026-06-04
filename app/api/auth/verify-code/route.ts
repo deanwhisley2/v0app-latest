@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
 import { createAuthSessionForEmail } from "@/lib/server/email-verification-session"
+import { commitVerifiedProfileEmail } from "@/lib/server/pending-verification-email"
 import { trackLoginSession } from "@/lib/server/login-session"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
@@ -91,15 +92,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid or expired code" }, { status: 400 })
     }
 
-    const { error: profileErr } = await admin
-      .from("profiles")
-      .update({ is_verified: true })
-      .eq("id", userId)
-
-    if (profileErr) {
-      console.error("profiles update:", profileErr)
-      return NextResponse.json({ error: "Could not activate account" }, { status: 500 })
-    }
+    await commitVerifiedProfileEmail(admin, userId, emailNormalized)
 
     const { error: confirmErr } = await admin.auth.admin.updateUserById(userId, {
       email_confirm: true,

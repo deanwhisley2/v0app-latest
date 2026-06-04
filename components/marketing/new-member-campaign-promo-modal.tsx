@@ -16,7 +16,6 @@ import { useStartupOnboarding } from "@/hooks/use-startup-onboarding"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { STARTUP_CAPITAL_USD_REWARD } from "@/lib/platform-launch-config"
 import {
-  clearNewMemberCampaignPromoDismiss,
   dismissNewMemberCampaignPromo,
   isNewMemberCampaignPromoDismissed,
 } from "@/lib/marketing/new-member-campaign-promo-dismiss"
@@ -138,7 +137,10 @@ export function NewMemberCampaignPromoModal({ enabled = true }: NewMemberCampaig
             ))}
           </div>
         </div>
-        <DialogFooter className="border-t border-border/80 bg-muted/30 px-4 py-3 sm:px-6">
+        <DialogFooter className="flex-col gap-2 border-t border-border/80 bg-muted/30 px-4 py-3 sm:px-6 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={dismiss}>
+            {t("marketing.newMember.onboardSkipForNow")}
+          </Button>
           <Button type="button" className="w-full sm:w-auto" onClick={dismiss}>
             {t("marketing.newMember.modalContinue")}
           </Button>

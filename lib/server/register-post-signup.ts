@@ -31,7 +31,6 @@ export function runRegisterPostSignup(
     try {
       const profilePatch: Record<string, unknown> = { updated_at: nowIso }
       if (phone) profilePatch.phone = phone
-      if (authEmail) profilePatch.email = authEmail
 
       let referredByUserId: string | null = null
       if (referralInvite.length >= 4) {

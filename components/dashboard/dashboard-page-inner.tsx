@@ -1164,20 +1164,7 @@ export function DashboardPageInner() {
     }
   }, [authReady, authLoading, user, isGuestSession, router])
 
-  useEffect(() => {
-    if (authLoading || !user || isGuestSession) return
-    ;(async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("is_verified")
-        .eq("id", user.id)
-        .maybeSingle()
-      if (data?.is_verified === false) {
-        router.replace(`/auth/verify?email=${encodeURIComponent(user.email ?? "")}`)
-        await signOut()
-      }
-    })()
-  }, [authLoading, user, isGuestSession, router, signOut])
+  /* Email verification is optional when phone + Security PIN exist — no forced sign-out here. */
 
   const refreshMainBalances = useCallback(async () => {
     if (authLoading || !user || isGuestSession) return

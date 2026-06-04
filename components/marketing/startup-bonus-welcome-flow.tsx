@@ -1,6 +1,6 @@
 "use client"
 
-import { Sparkles, TrendingUp, Shield, Rocket } from "lucide-react"
+import { Sparkles, TrendingUp, Shield, Rocket, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -20,6 +20,7 @@ type StartupBonusWelcomeFlowProps = {
   amountLabel: string
   openingTrade: boolean
   onDismissStep: () => void
+  onMaybeLater: () => void
   onReleaseBullish: () => void
   onOpenSecuritySetup: () => void
   onOpenHowToTrade: () => void
@@ -30,6 +31,7 @@ export function StartupBonusWelcomeFlow({
   amountLabel,
   openingTrade,
   onDismissStep,
+  onMaybeLater,
   onReleaseBullish,
   onOpenSecuritySetup,
   onOpenHowToTrade,
@@ -59,7 +61,12 @@ export function StartupBonusWelcomeFlow({
   const Icon = icons[step]
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (!next ? onDismissStep() : undefined)}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onMaybeLater()
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         className={cn(
@@ -67,8 +74,16 @@ export function StartupBonusWelcomeFlow({
           "bg-gradient-to-b from-card via-card to-background shadow-xl",
         )}
       >
-        <div className="border-b border-border/80 bg-gradient-to-r from-primary/15 via-primary/5 to-emerald-500/10 px-4 py-4 sm:px-6">
-          <DialogHeader className="gap-2 text-left">
+        <div className="relative border-b border-border/80 bg-gradient-to-r from-primary/15 via-primary/5 to-emerald-500/10 px-4 py-4 sm:px-6">
+          <button
+            type="button"
+            onClick={onMaybeLater}
+            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Close startup capital guide"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+          <DialogHeader className="gap-2 pr-8 text-left">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {t("marketing.newMember.onboardProgress")
                 .replace("{{step}}", String(step))
@@ -110,6 +125,9 @@ export function StartupBonusWelcomeFlow({
                 <TrendingUp className="mr-2 h-4 w-4" aria-hidden />
                 {t("marketing.newMember.howToTradeButton")}
               </Button>
+              <Button type="button" variant="ghost" className="w-full touch-manipulation" onClick={onMaybeLater}>
+                {t("marketing.newMember.onboardSkipForNow")}
+              </Button>
             </>
           ) : null}
           {step === 2 ? (
@@ -122,7 +140,7 @@ export function StartupBonusWelcomeFlow({
               >
                 {openingTrade ? t("marketing.newMember.activateOpening") : t("marketing.newMember.releaseBullish")}
               </Button>
-              <Button type="button" variant="ghost" className="w-full touch-manipulation" onClick={onDismissStep}>
+              <Button type="button" variant="ghost" className="w-full touch-manipulation" onClick={onMaybeLater}>
                 {t("marketing.newMember.onboardSkipForNow")}
               </Button>
             </>
@@ -132,7 +150,7 @@ export function StartupBonusWelcomeFlow({
               <Button type="button" className="w-full touch-manipulation" onClick={onOpenSecuritySetup}>
                 {t("marketing.newMember.onboardStep3Cta")}
               </Button>
-              <Button type="button" variant="ghost" className="w-full touch-manipulation" onClick={onDismissStep}>
+              <Button type="button" variant="ghost" className="w-full touch-manipulation" onClick={onMaybeLater}>
                 {t("marketing.newMember.onboardSkipForNow")}
               </Button>
             </>

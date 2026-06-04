@@ -7,17 +7,22 @@ import { StartupBonusWelcomeFlow } from "@/components/marketing/startup-bonus-we
 import { useStartupOnboarding } from "@/hooks/use-startup-onboarding"
 import { openStartupFixedTrade } from "@/lib/client/open-startup-fixed-trade"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import {
+  dismissStartupCapitalBanner,
+  isStartupCapitalBannerDismissed,
+  isStartupOnboardingDoneThisSession,
+  markStartupOnboardingDoneThisSession,
+} from "@/lib/marketing/campaign-session-dismiss"
 
-const FLOW_DONE_KEY = "nexus_startup_onboarding_v1_done"
 const FLOW_STEP_KEY = "nexus_startup_onboarding_v1_step"
 
 type FlowStep = 1 | 2 | 3
 
 function readFlowStep(): FlowStep | null {
   if (typeof window === "undefined") return null
+  if (isStartupCapitalBannerDismissed() || isStartupOnboardingDoneThisSession()) return null
   try {
-    if (localStorage.getItem(FLOW_DONE_KEY) === "1") return null
-    const raw = localStorage.getItem(FLOW_STEP_KEY)
+    const raw = sessionStorage.getItem(FLOW_STEP_KEY)
     if (raw === "2" || raw === "3") return Number(raw) as FlowStep
     return 1
   } catch {
@@ -25,14 +30,13 @@ function readFlowStep(): FlowStep | null {
   }
 }
 
-function persistFlowStep(step: FlowStep | null, done = false) {
+function persistFlowStep(step: FlowStep | null) {
   try {
-    if (done) {
-      localStorage.setItem(FLOW_DONE_KEY, "1")
-      localStorage.removeItem(FLOW_STEP_KEY)
+    if (!step) {
+      sessionStorage.removeItem(FLOW_STEP_KEY)
       return
     }
-    if (step) localStorage.setItem(FLOW_STEP_KEY, String(step))
+    sessionStorage.setItem(FLOW_STEP_KEY, String(step))
   } catch {
     /* private mode */
   }
@@ -42,7 +46,6 @@ type StartupBonusOnboardingOrchestratorProps = {
   enabled?: boolean
   onGoToTrading: () => void
   onOpenSecuritySetup: () => void
-  /** When set, opens the activation step (Release Bullish). */
   requestActivateStep?: number
   onActivateStepHandled?: () => void
 }
@@ -66,12 +69,17 @@ export function StartupBonusOnboardingOrchestrator({
     [data.recommendedCommitUsd, data.startupCapitalLockedUsd, formatUserMoney],
   )
 
-  const shouldEngage = enabled && !loading && data.hasStartupBonus && data.showCampaignPromo
+  const shouldEngage =
+    enabled &&
+    !loading &&
+    data.hasStartupBonus &&
+    data.showCampaignPromo &&
+    !isStartupCapitalBannerDismissed()
 
   useEffect(() => {
     if (!shouldEngage || flowBooted) return
     if (data.hasFixedTrade) {
-      persistFlowStep(null, true)
+      markStartupOnboardingDoneThisSession()
       setFlowBooted(true)
       return
     }
@@ -92,36 +100,36 @@ export function StartupBonusOnboardingOrchestrator({
     onActivateStepHandled?.()
   }, [requestActivateStep, shouldEngage, onActivateStepHandled])
 
-  const advanceFlow = useCallback(
-    (next: FlowStep | null, done = false) => {
-      if (done) {
-        persistFlowStep(null, true)
-        setFlowStep(null)
-        return
-      }
-      if (next) {
-        persistFlowStep(next)
-        setFlowStep(next)
-      }
-    },
-    [],
-  )
+  const dismissForSession = useCallback(() => {
+    dismissStartupCapitalBanner()
+    persistFlowStep(null)
+    setFlowStep(null)
+  }, [])
+
+  const advanceFlow = useCallback((next: FlowStep | null, done = false) => {
+    if (done) {
+      markStartupOnboardingDoneThisSession()
+      persistFlowStep(null)
+      setFlowStep(null)
+      return
+    }
+    if (next) {
+      persistFlowStep(next)
+      setFlowStep(next)
+    }
+  }, [])
 
   const handleDismissStep = useCallback(() => {
     if (flowStep === 1) {
       advanceFlow(2)
       return
     }
-    if (flowStep === 2) {
-      persistFlowStep(null, true)
-      setFlowStep(null)
-      return
-    }
-    if (flowStep === 3) {
-      persistFlowStep(null, true)
-      setFlowStep(null)
-    }
-  }, [advanceFlow, flowStep])
+    dismissForSession()
+  }, [advanceFlow, dismissForSession, flowStep])
+
+  const handleMaybeLater = useCallback(() => {
+    dismissForSession()
+  }, [dismissForSession])
 
   const handleReleaseBullish = useCallback(async () => {
     if (openingTrade) return
@@ -169,10 +177,9 @@ export function StartupBonusOnboardingOrchestrator({
   }, [data.hasFixedTrade, onGoToTrading])
 
   const handleOpenSecurityFromFlow = useCallback(() => {
-    persistFlowStep(null, true)
-    setFlowStep(null)
+    advanceFlow(null, true)
     onOpenSecuritySetup()
-  }, [onOpenSecuritySetup])
+  }, [advanceFlow, onOpenSecuritySetup])
 
   if (!shouldEngage) return null
 
@@ -183,6 +190,7 @@ export function StartupBonusOnboardingOrchestrator({
         amountLabel={amountLabel}
         openingTrade={openingTrade}
         onDismissStep={handleDismissStep}
+        onMaybeLater={handleMaybeLater}
         onReleaseBullish={() => void handleReleaseBullish()}
         onOpenSecuritySetup={handleOpenSecurityFromFlow}
         onOpenHowToTrade={() => setHowToOpen(true)}

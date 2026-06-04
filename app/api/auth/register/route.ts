@@ -28,6 +28,7 @@ import {
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { createAuthSessionForEmail } from "@/lib/server/email-verification-session"
 import { trackLoginSession } from "@/lib/server/login-session"
+import { markProfilePendingVerificationEmail } from "@/lib/server/pending-verification-email"
 
 type RegisterBody = {
   email?: string
@@ -163,9 +164,11 @@ export async function POST(request: Request) {
         )
       }
       if (requiresEmailVerification && emailRaw) {
+        const pendingEmail = emailRaw.toLowerCase()
+        await markProfilePendingVerificationEmail(admin, existingId, pendingEmail, userMetadata)
         const issued = await issueEmailVerificationCode(emailRaw)
         if (!issued.ok) {
-          return NextResponse.json({ error: issued.error }, { status: issued.status ?? 400 })
+          return NextResponse.json({ error: issued.error }, { status: 400 })
         }
       }
       await grantRegisterWelcomeBonus(admin, existingId)
@@ -185,6 +188,14 @@ export async function POST(request: Request) {
 
   const newUserId = created.user?.id
   if (newUserId) {
+    if (requiresEmailVerification && resolved.displayEmail) {
+      await markProfilePendingVerificationEmail(
+        admin,
+        newUserId,
+        resolved.displayEmail,
+        userMetadata,
+      )
+    }
     await grantRegisterWelcomeBonus(admin, newUserId)
     runRegisterPostSignup(admin, {
       userId: newUserId,

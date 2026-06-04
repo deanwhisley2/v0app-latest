@@ -1,6 +1,6 @@
 "use client"
 
-import { Flame, Sparkles, Star, TrendingUp } from "lucide-react"
+import { Flame, Sparkles, Star, TrendingUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,7 @@ type StartupBonusCampaignPanelProps = {
   hasFixedTrade: boolean
   onHowToTrade: () => void
   onStartTrading: () => void
+  onDismiss: () => void
   className?: string
 }
 
@@ -24,6 +25,7 @@ export function StartupBonusCampaignPanel({
   hasFixedTrade,
   onHowToTrade,
   onStartTrading,
+  onDismiss,
   className,
 }: StartupBonusCampaignPanelProps) {
   const { t } = useUserPreferences()
@@ -39,7 +41,16 @@ export function StartupBonusCampaignPanel({
     >
       <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-500/10 blur-2xl nexus-mobile-low-gpu:hidden" />
 
-      <div className="relative flex flex-wrap items-start justify-between gap-3">
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-card/90 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+        aria-label="Dismiss live campaign banner"
+      >
+        <X className="h-4 w-4" aria-hidden />
+      </button>
+
+      <div className="relative flex flex-wrap items-start justify-between gap-3 pr-10">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">

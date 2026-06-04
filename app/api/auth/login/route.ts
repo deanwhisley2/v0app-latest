@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
+import { userCanAccessWithoutEmailVerification } from "@/lib/server/pending-verification-email"
 
 type LoginBody = {
   email?: string
@@ -23,14 +25,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const email = typeof body.email === "string" ? body.email.trim() : ""
+  const identifier = typeof body.email === "string" ? body.email.trim() : ""
   const password = typeof body.password === "string" ? body.password : ""
-  if (!email || !password) {
-    return NextResponse.json({ error: "Email and password are required." }, { status: 400 })
+  if (!identifier || !password) {
+    return NextResponse.json({ error: "Email or phone and password are required." }, { status: 400 })
   }
 
+  const admin = createAdminClient()
+  const resolvedEmail = (await resolveIdentifierToEmail(admin, identifier)) ?? identifier
   const supabase = await createRouteHandlerSupabaseClient()
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: resolvedEmail,
+    password,
+  })
 
   if (error) {
     const msg = error.message
@@ -43,22 +50,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const admin = createAdminClient()
-    const { data: profile, error: profErr } = await admin
-      .from("profiles")
-      .select("is_verified")
-      .eq("id", data.user.id)
-      .maybeSingle()
-
-    if (profErr) {
-      console.warn("[auth/login] profiles check:", profErr.message)
-    } else if (profile?.is_verified === false) {
-      await supabase.auth.signOut()
+    const canAccess = await userCanAccessWithoutEmailVerification(admin, data.user.id)
+    if (!canAccess) {
+      const pending =
+        typeof data.user.user_metadata?.pending_verification_email === "string"
+          ? data.user.user_metadata.pending_verification_email
+          : resolvedEmail
       return NextResponse.json(
         {
-          error: "Verify your email before signing in.",
+          error: "Verify your email with the 6-digit code we sent before signing in.",
           code: "EMAIL_NOT_VERIFIED",
-          email,
+          email: pending,
         },
         { status: 403 },
       )

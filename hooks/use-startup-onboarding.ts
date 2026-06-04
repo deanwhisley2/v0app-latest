@@ -13,6 +13,7 @@ export type StartupOnboardingSnapshot = {
   starterFixUnlock: boolean
   starterFixPersonaId: string
   showCampaignPromo: boolean
+  campaignContentRevision: string
 }
 
 const EMPTY: StartupOnboardingSnapshot = {
@@ -25,6 +26,7 @@ const EMPTY: StartupOnboardingSnapshot = {
   starterFixUnlock: false,
   starterFixPersonaId: "fix_l1_t1",
   showCampaignPromo: false,
+  campaignContentRevision: "",
 }
 
 export function useStartupOnboarding(enabled = true) {
@@ -67,6 +69,7 @@ export function useStartupOnboarding(enabled = true) {
         starterFixUnlock: Boolean(json.starterFixUnlock),
         starterFixPersonaId: json.starterFixPersonaId ?? "fix_l1_t1",
         showCampaignPromo: Boolean(json.showCampaignPromo),
+        campaignContentRevision: String(json.campaignContentRevision ?? ""),
       }
       setData(next)
       setError(null)

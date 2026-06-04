@@ -15,6 +15,7 @@ type Props = {
 
 export function OptionalSecurityReminderBanner({ onOpenSettings }: Props) {
   const [visible, setVisible] = useState(false)
+  const [message, setMessage] = useState(OPTIONAL_SECURITY_REMINDER)
 
   useEffect(() => {
     try {
@@ -29,7 +30,11 @@ export function OptionalSecurityReminderBanner({ onOpenSettings }: Props) {
       const token = session?.access_token
       if (!token) return
       const { profile } = await fetchSecurityProfilePassive(token)
-      if (profile?.fundingReminder || (profile?.hasMinimumSecurity && profile.suggestsOptionalEnhancements)) {
+      if (profile?.fundingReminder) {
+        setMessage(profile.fundingReminder)
+        setVisible(true)
+      } else if (profile?.hasMinimumSecurity && profile.suggestsOptionalEnhancements) {
+        setMessage(OPTIONAL_SECURITY_REMINDER)
         setVisible(true)
       }
     })()
@@ -51,7 +56,7 @@ export function OptionalSecurityReminderBanner({ onOpenSettings }: Props) {
       className="mx-auto mb-2 flex max-w-[1600px] items-start gap-3 rounded-xl border border-primary/25 bg-primary/8 px-4 py-3 text-sm text-foreground"
       role="status"
     >
-      <p className="flex-1 leading-relaxed text-muted-foreground">{OPTIONAL_SECURITY_REMINDER}</p>
+      <p className="flex-1 leading-relaxed text-muted-foreground">{message}</p>
       <div className="flex shrink-0 items-center gap-1">
         {onOpenSettings ? (
           <Button type="button" variant="outline" size="sm" className="touch-manipulation" onClick={onOpenSettings}>

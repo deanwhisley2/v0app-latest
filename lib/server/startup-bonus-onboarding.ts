@@ -16,6 +16,7 @@ export type StartupBonusOnboardingStatus = {
   starterFixUnlock: boolean
   starterFixPersonaId: string
   showCampaignPromo: boolean
+  campaignContentRevision: string
 }
 
 function campaignEndsAtFromReceived(receivedAt: string): string {
@@ -84,6 +85,13 @@ export async function buildStartupBonusOnboardingStatus(
     ) &&
     welcome?.enabled !== false
 
+  const campaignContentRevision = [
+    welcome?.enabled === false ? "off" : "on",
+    welcome?.usd_reward ?? "",
+    welcome?.eligible_after ?? "",
+    launch.active ? "active" : "inactive",
+  ].join("|")
+
   return {
     hasStartupBonus,
     startupBonusReceivedAt: receivedAt,
@@ -94,5 +102,6 @@ export async function buildStartupBonusOnboardingStatus(
     starterFixUnlock,
     starterFixPersonaId,
     showCampaignPromo,
+    campaignContentRevision,
   }
 }
