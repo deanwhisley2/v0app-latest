@@ -2,87 +2,48 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense } from "react"
+import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
+import { PasswordField } from "@/components/auth/password-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export default function ResetPasswordPage() {
+const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
+
+function ResetPasswordContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const [email, setEmail] = useState("")
+  const [code, setCode] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
-    let mounted = true
-
-    async function initRecoverySession() {
-      setError(null)
-      try {
-        // Recovery links may carry tokens in hash or code in query (PKCE).
-        const href = window.location.href
-        const u = new URL(href)
-        const code = u.searchParams.get("code")
-
-        if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-          if (exchangeError) {
-            if (mounted) setError(exchangeError.message)
-            return
-          }
-        }
-
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""))
-        const accessToken = hashParams.get("access_token")
-        const refreshToken = hashParams.get("refresh_token")
-        if (accessToken && refreshToken) {
-          const { error: setSessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          })
-          if (setSessionError) {
-            if (mounted) setError(setSessionError.message)
-            return
-          }
-        }
-
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) {
-          if (mounted) setError(sessionError.message)
-          return
-        }
-        if (!sessionData.session) {
-          if (mounted) setError("Recovery session not found. Request a new reset email.")
-          return
-        }
-
-        if (mounted) {
-          setReady(true)
-          setInfo("Recovery verified. Set a new password.")
-        }
-      } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "Could not initialize recovery.")
-      }
+    const prefill = searchParams.get("email")?.trim()
+    if (prefill) setEmail(prefill)
+    if (searchParams.get("sent") === "1") {
+      setInfo("Enter the 6-digit code from your email and choose a new password.")
     }
-
-    void initRecoverySession()
-    return () => {
-      mounted = false
-    }
-  }, [])
+  }, [searchParams])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setInfo(null)
 
-    if (!ready) {
-      setError("Recovery session is not ready. Open the latest reset email link again.")
+    const emailTrim = email.trim()
+    if (!emailTrim.includes("@")) {
+      setError("Enter the email address for your account.")
+      return
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the 6-digit code from your email.")
       return
     }
     if (!password || !confirmPassword) {
@@ -100,81 +61,133 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password })
-      if (updateError) {
-        setError(updateError.message)
+      const res = await fetch("/api/auth/recovery/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailTrim,
+          code,
+          password,
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string }
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not reset password.")
         return
       }
-      await supabase.auth.signOut()
       setSuccess(true)
-      setInfo("Password updated. Redirecting to sign in…")
+      setInfo(json.message ?? "Password updated. Redirecting to sign in…")
       setTimeout(() => {
         router.replace("/auth/login?reset=success")
       }, 1200)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reset password.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold text-foreground">Reset password</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Set a new password to recover your account.
-          </p>
-        </div>
-
-        {info ? (
-          <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            {info}
-          </p>
-        ) : null}
-        {error ? (
-          <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        {!success ? (
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                autoComplete="new-password"
-                disabled={loading || !ready}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 10 characters"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm password</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                disabled={loading || !ready}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter password"
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading || !ready}>
-              {loading ? "Updating…" : "Update password"}
-            </Button>
-          </form>
-        ) : null}
-
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
-            Back to sign in
-          </Link>
+    <AuthLayoutShell language="en" showBrand={false} showTrustStrip={false}>
+      <header className="mb-5 text-center">
+        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">Reset password</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Enter the 6-digit code from your email and set a new password.
         </p>
-      </div>
-    </div>
+      </header>
+
+      {info ? (
+        <p className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
+          {info}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {!success ? (
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <div className="space-y-2">
+            <Label htmlFor="reset-email">Email address</Label>
+            <Input
+              id="reset-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              required
+              className={inputClass}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reset-code">Reset code</Label>
+            <Input
+              id="reset-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="000000"
+              disabled={loading}
+              required
+              className={`${inputClass} text-center text-2xl tracking-[0.35em] font-semibold`}
+            />
+          </div>
+          <PasswordField
+            id="new-password"
+            label="New password"
+            autoComplete="new-password"
+            value={password}
+            onChange={setPassword}
+            required
+            disabled={loading}
+            inputClassName={inputClass}
+          />
+          <PasswordField
+            id="confirm-password"
+            label="Confirm password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            required
+            disabled={loading}
+            inputClassName={inputClass}
+          />
+          <Button type="submit" className="min-h-12 w-full text-base font-semibold" disabled={loading}>
+            {loading ? "Updating…" : "Update password"}
+          </Button>
+        </form>
+      ) : null}
+
+      <p className="mt-5 text-center text-sm text-muted-foreground">
+        <Link href="/auth/recovery" className="font-medium text-primary underline-offset-4 hover:underline">
+          Request a new code
+        </Link>
+        {" · "}
+        <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
+          Back to sign in
+        </Link>
+      </p>
+    </AuthLayoutShell>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthLayoutShell language="en" showBrand={false} showTrustStrip={false}>
+          <p className="text-center text-sm text-muted-foreground">Loading…</p>
+        </AuthLayoutShell>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

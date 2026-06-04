@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
-import { createAdminClient } from "@/lib/supabaseAdmin"
-import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
-import { sendPasswordRecoveryEmail } from "@/lib/cyberpersons-email"
-import { getPublicSiteOrigin } from "@/lib/site-public-url"
+import { createAdminClient } from "@/lib/supabaseAdmin"
+import { requestPasswordResetCode } from "@/lib/server/password-reset-auth"
+import { getRequestIpAddress } from "@/lib/server/request-geo"
+import { isSmtpConfigured } from "@/lib/server/smtp-mail"
 
 type Body = { identifier?: string }
 
@@ -16,9 +16,21 @@ function maskEmail(email: string): string {
   return `${safeLocal}@${domain}`
 }
 
+/**
+ * POST /api/auth/recovery/send
+ * Sends a branded 6-digit reset code (Cyberpersons REST or SMTP). Never uses Supabase default reset email.
+ */
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
   if (blocked) return blocked
+
+  const hasEmailApi = Boolean(process.env.CYBERPERSONS_EMAIL_API_KEY?.trim())
+  if (!hasEmailApi && !isSmtpConfigured()) {
+    return NextResponse.json(
+      { error: "Password reset email is not configured on the server." },
+      { status: 503 },
+    )
+  }
 
   let body: Body
   try {
@@ -39,45 +51,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    const siteBase = getPublicSiteOrigin(request.url)
-    const redirectTo = `${siteBase}/auth/reset-password`
-
-    const supabase = await createRouteHandlerSupabaseClient()
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
+    const result = await requestPasswordResetCode({
+      emailRaw: email,
+      requestIp: getRequestIpAddress(request),
+      userAgent: request.headers.get("user-agent"),
     })
 
-    if (resetError) {
-      // Fallback: deliver recovery link via Cyberpersons when Supabase SMTP send fails.
-      console.warn("recovery resetPasswordForEmail failed; trying Cyberpersons fallback:", resetError.message)
-      const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-        type: "recovery",
-        email,
-        options: { redirectTo },
-      })
-      if (linkError || !linkData?.properties?.action_link) {
-        console.error("recovery fallback generateLink failed:", linkError)
-        return NextResponse.json(
-          { error: resetError.message || "Could not send recovery email" },
-          { status: 500 }
-        )
-      }
-
-      await sendPasswordRecoveryEmail(
-        email,
-        linkData.properties.action_link,
-        "Valued Customer"
-      )
-
-      return NextResponse.json({
-        ok: true,
-        message: `Recovery sent to ${maskEmail(email)} (email only).`,
-      })
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
     }
 
     return NextResponse.json({
       ok: true,
-      message: `Recovery sent to ${maskEmail(email)} (email only).`,
+      email,
+      message: result.message,
+      maskedEmail: result.maskedEmail ?? maskEmail(email),
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Recovery request failed"
