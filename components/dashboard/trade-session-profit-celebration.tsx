@@ -17,14 +17,15 @@ export function TradeSessionProfitCelebration({
   onDismiss,
 }: TradeSessionProfitCelebrationProps) {
   const [visible, setVisible] = useState(true)
+  const hasEarnings = profitUsd > 0
 
   useEffect(() => {
     const id = window.setTimeout(() => {
       setVisible(false)
       onDismiss()
-    }, 7000)
+    }, hasEarnings ? 7000 : 5000)
     return () => window.clearTimeout(id)
-  }, [onDismiss])
+  }, [hasEarnings, onDismiss])
 
   if (!visible) return null
 
@@ -32,11 +33,11 @@ export function TradeSessionProfitCelebration({
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       role="dialog"
-      aria-label="Session profit celebration"
+      aria-label="Session completion celebration"
     >
       <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-success/40 bg-gradient-to-b from-success/20 to-background p-6 text-center shadow-2xl">
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-          {Array.from({ length: 24 }).map((_, i) => (
+          {Array.from({ length: hasEarnings ? 24 : 12 }).map((_, i) => (
             <span
               key={i}
               className={cn("absolute h-2 w-2 rounded-full opacity-80 animate-ping")}
@@ -51,10 +52,18 @@ export function TradeSessionProfitCelebration({
           ))}
         </div>
         <p className="text-xs font-semibold uppercase tracking-widest text-success">Session complete</p>
-        <p className="mt-3 text-sm font-medium text-foreground">Released earnings</p>
-        <p className="mt-1 text-3xl font-bold text-success">+{formatMoney(profitUsd)}</p>
+        {hasEarnings ? (
+          <>
+            <p className="mt-3 text-sm font-medium text-foreground">Released earnings</p>
+            <p className="mt-1 text-3xl font-bold text-success">+{formatMoney(profitUsd)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Credited to your Pocket balance</p>
+          </>
+        ) : (
+          <p className="mt-3 text-sm font-medium text-foreground">
+            Your trade session finished successfully
+          </p>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">{summary}</p>
-        <p className="mt-1 text-xs text-muted-foreground">Credited to your available balance</p>
         <button
           type="button"
           className="mt-5 min-h-[44px] w-full rounded-xl bg-success px-4 py-2 text-sm font-semibold text-success-foreground touch-manipulation"

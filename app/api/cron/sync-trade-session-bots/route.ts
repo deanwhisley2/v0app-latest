@@ -21,9 +21,9 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
-    const expiredTradeSessions = await expireDueTradeSessions(admin)
     await syncTradeSessionBotStates(admin)
     const completedLegacyBotSessions = await completeDueNexusBotSessions(admin)
+    const expiredTradeSessions = await expireDueTradeSessions(admin)
 
     return NextResponse.json({
       ok: true,

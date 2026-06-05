@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bot, CheckCircle2, Lock, MessageCircle, Sparkles, Zap } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { dispatchCustomerLedgerBump } from "@/lib/client/customer-ledger-sync"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -97,6 +99,7 @@ type ProfitCelebration = {
   sessionId: string
   profitUsd: number
   summary: string
+  hasEarnings?: boolean
 }
 
 type NexusBotWorkspaceProps = {
@@ -111,6 +114,7 @@ export function NexusBotWorkspace({
   initialTradeCode = null,
 }: NexusBotWorkspaceProps) {
   const { user } = useAuth()
+  const { addNotification } = useNexusNotifications()
   const { formatUserMoney } = useUserPreferences()
   const [tab, setTab] = useState<BotTab>("signal")
   const [loading, setLoading] = useState(true)
@@ -177,6 +181,7 @@ export function NexusBotWorkspace({
   }, [])
 
   const hadActiveSessionRef = useRef(false)
+  const celebrationHandledRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     const {
@@ -204,6 +209,7 @@ export function NexusBotWorkspace({
       } else if (hadActiveSessionRef.current) {
         hadActiveSessionRef.current = false
         resetFlow()
+        window.setTimeout(() => void load(), 2500)
       }
       const g: Record<string, boolean> = {}
       for (const p of j.autoTradePlans ?? []) g[p.key] = Boolean(p.granted)
@@ -276,10 +282,28 @@ export function NexusBotWorkspace({
   }, [])
 
   useEffect(() => {
-    if (!activeSession) return
-    const id = window.setInterval(() => void load(), 30_000)
+    if (!celebration?.sessionId) return
+    if (celebrationHandledRef.current === celebration.sessionId) return
+    celebrationHandledRef.current = celebration.sessionId
+    dispatchCustomerLedgerBump("nexus_trade_session_complete")
+    const hasEarnings = celebration.hasEarnings ?? celebration.profitUsd > 0
+    addNotification({
+      type: "trade",
+      title: hasEarnings ? "Trade session complete" : "Session complete",
+      message: hasEarnings
+        ? `Released earnings ${formatUserMoney(celebration.profitUsd)} credited to Pocket.`
+        : "Your trade session finished successfully.",
+      detailText: celebration.summary,
+      nav: { kind: "trade" },
+    })
+  }, [addNotification, celebration, formatUserMoney])
+
+  useEffect(() => {
+    const progress = activeSession?.session_progress_pct ?? 0
+    const ms = activeSession ? (progress >= 80 ? 10_000 : 20_000) : 45_000
+    const id = window.setInterval(() => void load(), ms)
     return () => window.clearInterval(id)
-  }, [activeSession, load])
+  }, [activeSession, activeSession?.session_progress_pct, load])
 
   useEffect(() => {
     setAvailableUsd(mainBalanceUsd)

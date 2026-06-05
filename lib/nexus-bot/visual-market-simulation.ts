@@ -6,13 +6,31 @@
 export const VISUAL_MARKET_ASSETS = ["BTC", "ETH", "SOL", "XRP", "ADA"] as const
 
 export const VISUAL_HOLD_STATUSES = [
-  "Market unstable",
-  "Monitoring liquidity",
-  "Waiting for confirmation",
-  "Trend unclear",
+  "Market unstable — waiting for confirmation",
+  "Monitoring BTC liquidity…",
+  "Monitoring ETH liquidity…",
+  "Trend unclear — holding position",
   "Volume below threshold",
+  "Volatility warning — pausing entries",
   "Scanning alternative pairs",
+  "Holding position…",
 ] as const
+
+const VISUAL_OPPORTUNITY_LINES = [
+  "Opportunity detected on ETH",
+  "Opportunity detected on BTC",
+  "Opportunity detected on SOL",
+  "Detecting market conditions",
+  "Trend confirmation in progress",
+] as const
+
+const VISUAL_ROTATE_LINES = (asset: string) =>
+  [
+    `Rotating capital to stronger trend (${asset})`,
+    `Switching market focus to ${asset}`,
+    `Monitoring ${asset} volatility`,
+    `Liquidity moved to ${asset}`,
+  ] as const
 
 export type VisualCandle = {
   o: number
@@ -85,8 +103,8 @@ function holdTicksForSession(rng: () => number, progressPct: number): number {
 }
 
 function nextCandle(rng: () => number, prevClose: number, volatile: boolean): VisualCandle {
-  const body = (0.02 + rng() * 0.08) * (volatile ? 1.35 : 0.75)
-  const dir = rng() > 0.48 ? 1 : -1
+  const body = (0.015 + rng() * 0.11) * (volatile ? 1.55 : 0.65)
+  const dir = rng() > (volatile ? 0.44 : 0.5) ? 1 : -1
   const o = prevClose
   const c = Math.min(0.92, Math.max(0.08, o + dir * body * (0.35 + rng() * 0.65)))
   const wickPad = body * (0.25 + rng() * 0.55)
@@ -113,36 +131,41 @@ function startMode(rt: SimRuntime, mode: SimMode, rng: () => number, progressPct
       break
     }
     case "scan": {
-      rt.modeTicksLeft = 1 + Math.floor(rng() * 2)
-      pushFeed(rt, "Scanning opportunities", "neutral")
+      rt.modeTicksLeft = 1 + Math.floor(rng() * 3)
+      pushFeed(rt, pick(rng, ["Scanning opportunities", "Market analysis active", "Monitoring opportunities"]), "neutral")
       break
     }
     case "buy_burst": {
-      rt.burstLeft = 1 + Math.floor(rng() * 3)
+      rt.burstLeft = 1 + Math.floor(rng() * 4)
       rt.modeTicksLeft = rt.burstLeft
-      pushFeed(rt, "Opportunity detected", "neutral")
+      pushFeed(rt, pick(rng, VISUAL_OPPORTUNITY_LINES), "neutral")
       break
     }
     case "sell_burst": {
-      rt.burstLeft = 1 + Math.floor(rng() * 2)
+      rt.burstLeft = 1 + Math.floor(rng() * 3)
       rt.modeTicksLeft = rt.burstLeft
+      pushFeed(rt, pick(rng, ["Sell cycle recorded", "Profit target secured", "Taking profit…"]), "sell")
       break
     }
     case "pause": {
-      rt.modeTicksLeft = 1 + Math.floor(rng() * 5)
-      pushFeed(rt, pick(rng, ["Monitoring market", "Holding position", "Waiting for confirmation"]), "neutral")
+      rt.modeTicksLeft = 1 + Math.floor(rng() * 6)
+      pushFeed(
+        rt,
+        pick(rng, [
+          "Monitoring market",
+          "Holding position…",
+          "Waiting for confirmation",
+          "Position management active",
+        ]),
+        "neutral",
+      )
       break
     }
     case "rotate": {
       rt.modeTicksLeft = 1
       rt.assetIdx = Math.floor(rng() * VISUAL_MARKET_ASSETS.length)
       const a = assetLabel(VISUAL_MARKET_ASSETS[rt.assetIdx]!)
-      const msg = pick(rng, [
-        `Switching market focus to ${a}`,
-        `Liquidity moved to ${a}`,
-        `Monitoring ${a} volatility`,
-      ])
-      pushFeed(rt, msg, "asset")
+      pushFeed(rt, pick(rng, VISUAL_ROTATE_LINES(a)), "asset")
       break
     }
     default:
@@ -226,8 +249,11 @@ export function stepVisualSimulation(
     }
   }
 
-  if (rt.mode === "buy_burst" && rt.modeTicksLeft === 1 && rng() > 0.5) {
-    pushFeed(rt, "Profit reserve updating", "neutral")
+  if (rt.mode === "buy_burst" && rt.modeTicksLeft === 1 && rng() > 0.45) {
+    pushFeed(rt, pick(rng, ["Trend confirmation in progress", "Position management active"]), "neutral")
+  }
+  if (rt.mode === "sell_burst" && rt.modeTicksLeft === 1 && rng() > 0.55) {
+    pushFeed(rt, "Profit target secured", "sell")
   }
 
   rt.modeTicksLeft -= 1
@@ -240,13 +266,18 @@ export function stepVisualSimulation(
   } else if (rt.mode === "rotate" && rt.feed[0]?.tone === "asset") {
     statusLine = rt.feed[0].text
   } else if (rt.mode === "buy_burst") {
-    statusLine = "Executing buy…"
+    statusLine = pick(rng, ["Executing buy sequence…", "Entry opened", `Buying ${asset}…`])
   } else if (rt.mode === "sell_burst") {
-    statusLine = "Taking profit…"
+    statusLine = pick(rng, ["Sell sequence active", "Taking profit…", "Closing position…"])
   } else if (rt.mode === "pause") {
-    statusLine = pick(rng, ["Monitoring market", "Holding position"])
+    statusLine = pick(rng, ["Monitoring market", "Holding position…", "Market analysis active"])
   } else {
-    statusLine = pick(rng, ["Analyzing structure…", "Desk flow active…", `Scanning ${asset}…`])
+    statusLine = pick(rng, [
+      "Analyzing structure…",
+      "Desk flow active…",
+      `Scanning ${asset}…`,
+      `Monitoring ${asset} liquidity…`,
+    ])
   }
 
   return {

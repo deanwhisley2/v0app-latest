@@ -83,6 +83,89 @@ export function HistoryCenterScreen() {
     [inbox],
   )
 
+  type UnifiedHistoryItem = {
+    id: string
+    timestamp: string
+    sortMs: number
+    title: string
+    subtitle: string
+    onOpen: () => void
+  }
+
+  const unifiedHistory = useMemo(() => {
+    const rows: UnifiedHistoryItem[] = []
+    for (const w of withdrawals) {
+      rows.push({
+        id: `w-${w.id}`,
+        timestamp: w.created_at,
+        sortMs: new Date(w.created_at).getTime(),
+        title: t(withdrawalTimelineLabelKey(w)),
+        subtitle: `${formatUserMoney(Number(w.amount))} · ${w.transaction_ref.slice(0, 8)}…`,
+        onOpen: () => openWithdrawal(w),
+      })
+    }
+    for (const r of fundRequests) {
+      const usd =
+        r.amount_usd_locked != null && Number.isFinite(Number(r.amount_usd_locked))
+          ? Number(r.amount_usd_locked)
+          : Number(r.amount)
+      rows.push({
+        id: `f-${r.id}`,
+        timestamp: r.created_at,
+        sortMs: new Date(r.created_at).getTime(),
+        title: t(fundRequestTitleKey(r.status)),
+        subtitle: `${formatUserMoney(usd)} · ${String(r.tx_reference).slice(0, 8)}…`,
+        onOpen: () => {},
+      })
+    }
+    for (const d of deposits) {
+      rows.push({
+        id: `d-${d.id}`,
+        timestamp: d.created_at,
+        sortMs: new Date(d.created_at).getTime(),
+        title: t(depositTimelineLabelKey(d)),
+        subtitle: `${formatUserMoney(Number(d.amount_usd))} · ${d.tx_hash.slice(0, 8)}…`,
+        onOpen: () => openDeposit(d),
+      })
+    }
+    for (const e of events) {
+      const presented = presentFinancialEventForCustomer(e, viewer)
+      rows.push({
+        id: `e-${e.id}`,
+        timestamp: e.created_at,
+        sortMs: new Date(e.created_at).getTime(),
+        title: presented.title,
+        subtitle: presented.detailLine,
+        onOpen: () => openFinancialEvent(e),
+      })
+    }
+    for (const n of historyNotifs) {
+      const p = presentNotification(n, t, viewer)
+      rows.push({
+        id: `n-${n.id}`,
+        timestamp: n.timestamp,
+        sortMs: new Date(n.timestamp).getTime(),
+        title: p.title,
+        subtitle: p.summary,
+        onOpen: () => void openNotification(n),
+      })
+    }
+    return rows.sort((a, b) => b.sortMs - a.sortMs)
+  }, [
+    deposits,
+    events,
+    formatUserMoney,
+    fundRequests,
+    historyNotifs,
+    openDeposit,
+    openFinancialEvent,
+    openNotification,
+    openWithdrawal,
+    t,
+    viewer,
+    withdrawals,
+  ])
+
   const loadFundRequests = useCallback(async () => {
     const gen = ++fundGenRef.current
     setFundLoading(true)
@@ -181,22 +264,10 @@ export function HistoryCenterScreen() {
     return () => window.clearInterval(id)
   }, [refreshAll])
 
-  const showFullSpinner =
-    coreLoading &&
-    !accountInboxReady &&
-    withdrawals.length === 0 &&
-    deposits.length === 0 &&
-    events.length === 0 &&
-    historyNotifs.length === 0
+  const showFullSpinner = coreLoading && !accountInboxReady && unifiedHistory.length === 0
 
   const showEmpty =
-    !coreLoading &&
-    !fundLoading &&
-    withdrawals.length === 0 &&
-    deposits.length === 0 &&
-    fundRequests.length === 0 &&
-    events.length === 0 &&
-    historyNotifs.length === 0
+    !coreLoading && !fundLoading && unifiedHistory.length === 0
 
   return (
     <div className="mx-auto w-full max-w-lg pb-24 pt-4 md:max-w-2xl md:pb-8">
@@ -222,85 +293,13 @@ export function HistoryCenterScreen() {
             </p>
           ) : null}
 
-          {withdrawals.length > 0 ? (
-            <section className={`${INBOX_CARD} overflow-hidden`}>
-              <div className="border-b border-border/60 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  {t("history.section.withdrawals")}
-                </p>
-              </div>
-              <ul className="divide-y divide-border/50">
-                {withdrawals.map((w) => (
-                  <TransactionHistoryRow
-                    key={w.id}
-                    title={t(withdrawalTimelineLabelKey(w))}
-                    subtitle={`${formatUserMoney(Number(w.amount))} · ${w.transaction_ref.slice(0, 8)}…`}
-                    timestamp={w.created_at}
-                    t={t}
-                    onOpen={() => openWithdrawal(w)}
-                  />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           {fundLoading && fundRequests.length === 0 ? (
             <div className="flex justify-center py-4" aria-busy="true">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : null}
 
-          {fundRequests.length > 0 ? (
-            <section className={`${INBOX_CARD} overflow-hidden`}>
-              <div className="border-b border-border/60 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  {t("history.section.addFunds")}
-                </p>
-              </div>
-              <ul className="divide-y divide-border/50">
-                {fundRequests.map((r) => {
-                  const usd =
-                    r.amount_usd_locked != null && Number.isFinite(Number(r.amount_usd_locked))
-                      ? Number(r.amount_usd_locked)
-                      : Number(r.amount)
-                  return (
-                    <TransactionHistoryRow
-                      key={r.id}
-                      title={t(fundRequestTitleKey(r.status))}
-                      subtitle={`${formatUserMoney(usd)} · ${String(r.tx_reference).slice(0, 8)}…`}
-                      timestamp={r.created_at}
-                      t={t}
-                      onOpen={() => {}}
-                    />
-                  )
-                })}
-              </ul>
-            </section>
-          ) : null}
-
-          {deposits.length > 0 ? (
-            <section className={`${INBOX_CARD} overflow-hidden`}>
-              <div className="border-b border-border/60 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  {t("history.section.deposits")}
-                </p>
-              </div>
-              <ul className="divide-y divide-border/50">
-                {deposits.map((d) => (
-                  <TransactionHistoryRow
-                    key={d.id}
-                    title={t(depositTimelineLabelKey(d))}
-                    subtitle={`${formatUserMoney(Number(d.amount_usd))} · ${d.tx_hash.slice(0, 8)}…`}
-                    timestamp={d.created_at}
-                    t={t}
-                    onOpen={() => openDeposit(d)}
-                  />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {events.length > 0 ? (
+          {unifiedHistory.length > 0 ? (
             <section className={`${INBOX_CARD} overflow-hidden`}>
               <div className="border-b border-border/60 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -308,44 +307,16 @@ export function HistoryCenterScreen() {
                 </p>
               </div>
               <ul className="divide-y divide-border/50">
-                {events.map((e) => {
-                  const presented = presentFinancialEventForCustomer(e, viewer)
-                  return (
-                    <TransactionHistoryRow
-                      key={e.id}
-                      title={presented.title}
-                      subtitle={presented.detailLine}
-                      timestamp={e.created_at}
-                      t={t}
-                      onOpen={() => openFinancialEvent(e)}
-                    />
-                  )
-                })}
-              </ul>
-            </section>
-          ) : null}
-
-          {accountInboxReady && historyNotifs.length > 0 ? (
-            <section className={`${INBOX_CARD} overflow-hidden`}>
-              <div className="border-b border-border/60 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  {t("history.section.accountNotices")}
-                </p>
-              </div>
-              <ul className="divide-y divide-border/50">
-                {historyNotifs.map((n) => {
-                  const p = presentNotification(n, t, viewer)
-                  return (
-                    <TransactionHistoryRow
-                      key={n.id}
-                      title={p.title}
-                      subtitle={p.summary}
-                      timestamp={n.timestamp}
-                      t={t}
-                      onOpen={() => void openNotification(n)}
-                    />
-                  )
-                })}
+                {unifiedHistory.map((row) => (
+                  <TransactionHistoryRow
+                    key={row.id}
+                    title={row.title}
+                    subtitle={row.subtitle}
+                    timestamp={row.timestamp}
+                    t={t}
+                    onOpen={row.onOpen}
+                  />
+                ))}
               </ul>
             </section>
           ) : null}

@@ -15,6 +15,7 @@ import {
 import { creditPrincipalToMainAndEarningsToPocket } from "@/lib/server/copy-trade-balance-credit"
 import { casCreditNexusMainOnly, casReserveCopyTradeStake } from "@/lib/server/nexus-main-enforcement"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
+import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import {
   awardPerformancePoints,
   incrementCompletedSessions,
@@ -357,6 +358,28 @@ async function completeTradeSessionBotRow(
     },
   })
 
+  await appendUserAccountNotification(admin, {
+    userId: row.userId,
+    sourceKind: "trade_session_complete",
+    sourceId: row.id,
+    notificationType: "trade",
+    title: earningsUsd > 0 ? "Trade session complete" : "Session complete",
+    body:
+      earningsUsd > 0
+        ? `Released earnings credited to your Pocket balance.`
+        : "Your trade session has completed. Capital returned to Nexus Main.",
+    nav: { kind: "trade" },
+    metadata: {
+      amount_usd: earningsUsd,
+      session_id: row.id,
+      trade_session_id: row.tradeSessionId,
+      friendly_detail:
+        earningsUsd > 0
+          ? `Session complete — released earnings are in Pocket. Transfer to Nexus Main when ready.`
+          : "Session complete — your reserved capital is back on Nexus Main.",
+    },
+  })
+
   await awardPerformancePoints(admin, {
     userId: row.userId,
     ruleKey: "session_complete",
@@ -514,7 +537,6 @@ export async function activateTradeSessionBot(
       trade_session_id: tradeSession.id,
       session_id: ins.id,
       participation_weight: participationWeight,
-      projected_profit_usd: projectedProfitUsd,
       reserve_source: TRADE_SESSION_RESERVE_SOURCE,
       queued_at: queuedAt,
       code_verified_at: verified.verifiedAt,
@@ -544,7 +566,7 @@ export async function activateTradeSessionBot(
 export async function findPendingProfitCelebration(
   admin: SupabaseClient,
   userId: string,
-): Promise<{ sessionId: string; profitUsd: number; summary: string } | null> {
+): Promise<{ sessionId: string; profitUsd: number; summary: string; hasEarnings: boolean } | null> {
   const { data } = await admin
     .from("nexus_bot_sessions")
     .select("id,profit_released_usd,profit_celebrated_at,settled_at")
@@ -552,17 +574,20 @@ export async function findPendingProfitCelebration(
     .eq("status", "completed")
     .not("trade_session_id", "is", null)
     .is("profit_celebrated_at", null)
-    .gt("profit_released_usd", 0)
+    .not("settled_at", "is", null)
     .order("settled_at", { ascending: false })
     .limit(1)
     .maybeSingle()
   if (!data) return null
   const profitUsd = roundUsd2(Number(data.profit_released_usd ?? 0))
-  if (!(profitUsd > 0)) return null
+  const hasEarnings = profitUsd > 0
   return {
     sessionId: String(data.id),
     profitUsd,
-    summary: closedTradeHistorySummary(profitUsd),
+    hasEarnings,
+    summary: hasEarnings
+      ? closedTradeHistorySummary(profitUsd)
+      : "Session complete — capital returned to Nexus Main.",
   }
 }
 

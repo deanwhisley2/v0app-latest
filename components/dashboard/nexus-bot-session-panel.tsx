@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CheckCircle2, Lock } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
 import { FixedTradeSimulation } from "@/components/dashboard/fixed-trade-simulation"
 import {
-  sessionEarningsLockedLabel,
+  sessionActiveStatusLabel,
   sessionProgressMeterBlocks,
   sessionProgressPct,
   visibleSessionActivities,
@@ -50,7 +50,7 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
 
   const activities = useMemo(() => visibleSessionActivities(progressPct), [progressPct])
   const meter = useMemo(() => sessionProgressMeterBlocks(progressPct), [progressPct])
-  const lockedLabel = useMemo(() => sessionEarningsLockedLabel(progressPct), [progressPct])
+  const statusLabel = useMemo(() => sessionActiveStatusLabel(progressPct), [progressPct])
 
   const isPreStart = session.status === "booked" || session.status === "ready"
   const isLive =
@@ -71,41 +71,36 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
             +{formatMoney(Number(session.profit_released_usd))}
           </span>
           <span className="block text-xs text-muted-foreground">
-            Credited to your available balance
+            Credited to your Pocket balance
           </span>
         </p>
-      ) : (
+      ) : isLive ? (
         <div className="mt-2 space-y-2">
-          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-            Session earnings
-            <span className="text-muted-foreground">· {lockedLabel}</span>
-          </p>
-          {isLive ? (
-            <>
-              <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Session progress
-                </p>
-                <p className="mt-1 font-mono text-xs tabular-nums text-foreground" aria-label={`${progressPct}%`}>
-                  {meter.label}
-                </p>
-              </div>
-              <ul className="space-y-1.5" aria-label="Bullish trade activity">
-                {activities.map((label) => (
-                  <li
-                    key={label}
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success/80" aria-hidden />
-                    <span>{label}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <p className="text-sm font-medium text-foreground">{statusLabel}</p>
+          <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Session progress
+            </p>
+            <p
+              className="mt-1 font-mono text-xs tabular-nums text-foreground"
+              aria-label={`${progressPct}%`}
+            >
+              {meter.label}
+            </p>
+          </div>
+          <ul className="space-y-1.5" aria-label="Trade session activity">
+            {activities.map((label) => (
+              <li
+                key={label}
+                className="flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success/80" aria-hidden />
+                <span>{label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-      )}
+      ) : null}
 
       {isPreStart ? (
         <p className="mt-2 flex items-center gap-2 text-sm text-warning">

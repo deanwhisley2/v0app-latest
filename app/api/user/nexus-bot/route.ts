@@ -10,7 +10,6 @@ import {
   resolveUserDisplayPhase,
   syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
-import { loadUserReserveForPeriod, periodKeyFromDate, previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
 import { sessionProgressPct } from "@/lib/nexus-bot/session-earnings-ux"
 import { userSessionPresentation, TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
@@ -18,10 +17,7 @@ import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
 import { NEXUS_AUTO_TRADE_PLANS } from "@/lib/nexus-bot/plans"
 
-function mapTradeSessionForUser(
-  row: Record<string, unknown>,
-  reserve: Awaited<ReturnType<typeof loadUserReserveForPeriod>>,
-) {
+function mapTradeSessionForUser(row: Record<string, unknown>) {
   const ts = row.trade_sessions as { start_at?: string; end_at?: string; session_slot?: string } | null
   const startAt = ts?.start_at ? String(ts.start_at) : ""
   const endAt = ts?.end_at ? String(ts.end_at) : String(row.ends_at ?? "")
@@ -37,16 +33,6 @@ function mapTradeSessionForUser(
   const stake = Number(row.stake_usd ?? 0)
   const weight = Number(row.participation_weight ?? 1)
   const isOpen = (TRADE_SESSION_OPEN_STATUSES as readonly string[]).includes(status)
-  const projectedProfitUsd = isOpen
-    ? previewSessionPayoutFromCapital({
-        userId: String(row.user_id ?? ""),
-        capitalUsd: stake,
-        sessionStartAt: startAt,
-        sessionSlot,
-        participationWeight: weight,
-        existingReserve: reserve,
-      })
-    : Number(row.profit_released_usd ?? 0)
   const earningsWithdrawable = status === "completed"
   return {
     id: String(row.id),
@@ -57,15 +43,12 @@ function mapTradeSessionForUser(
     headline: presentation.headline,
     detail: presentation.detail,
     participation_weight: weight,
-    profit_released_usd: Number(row.profit_released_usd ?? 0),
+    profit_released_usd: isOpen ? 0 : Number(row.profit_released_usd ?? 0),
     earnings_withdrawable: earningsWithdrawable,
     session_start_at: startAt || null,
     session_end_at: endAt || null,
     session_progress_pct: isOpen && startAt && endAt ? sessionProgressPct({ startAt, endAt }) : 0,
     earnings_locked: isOpen,
-    ...(isOpen
-      ? {}
-      : { projected_profit_usd: projectedProfitUsd }),
   }
 }
 
@@ -76,9 +59,9 @@ export async function GET(request: Request) {
     const { user } = auth
     const admin = createAdminClient()
 
-    await expireDueTradeSessions(admin)
-    await completeDueNexusBotSessions(admin, user.id)
     await syncTradeSessionBotStates(admin, user.id)
+    await completeDueNexusBotSessions(admin, user.id)
+    await expireDueTradeSessions(admin)
     const streak = await recordAttendanceVisit(admin, user.id)
     const grants = await getAutoTradeGrantsMap(admin, user.id)
     const availableUsd = await readNexusMainAvailableUsd(admin, user.id)
@@ -102,13 +85,6 @@ export async function GET(request: Request) {
       .in("status", [...TRADE_SESSION_OPEN_STATUSES])
       .order("created_at", { ascending: false })
       .limit(3)
-
-    const activeRow = (activeSessions ?? [])[0] as Record<string, unknown> | undefined
-    const ts0 = activeRow?.trade_sessions as { start_at?: string } | null | undefined
-    const reservePeriodKey = ts0?.start_at
-      ? periodKeyFromDate(new Date(String(ts0.start_at)))
-      : periodKeyFromDate(new Date())
-    const reserve = await loadUserReserveForPeriod(admin, user.id, reservePeriodKey)
 
     const { data: streakRow } = await admin
       .from("user_attendance_streaks")
@@ -134,7 +110,7 @@ export async function GET(request: Request) {
         windowClosesAt: s.window_closes_at,
       })),
       activeSessions: (activeSessions ?? []).map((r) =>
-        mapTradeSessionForUser(r as Record<string, unknown>, reserve),
+        mapTradeSessionForUser(r as Record<string, unknown>),
       ),
       pendingProfitCelebration,
       legacyCopyFixedRetired: true,

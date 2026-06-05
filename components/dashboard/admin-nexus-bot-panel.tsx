@@ -38,6 +38,14 @@ type Stats = {
   participants: number
   totalCapitalAllocatedUsd: number
   totalReleasedProfitUsd: number
+  settlementMonitoring?: {
+    activeBotParticipants: number
+    settledBotParticipants: number
+    expiredBotParticipants: number
+    pendingCelebrations: number
+    failedSettlementsStuckOpen: number
+    reconciliationTopUpEvents: number
+  }
 }
 
 type LeaderboardRow = {
@@ -428,24 +436,75 @@ export function AdminNexusBotPanel() {
       {view === "sessions" ? (
         <>
           {stats ? (
-            <Card className="grid gap-2 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <p className="text-muted-foreground">Generated codes</p>
-                <p className="font-mono font-semibold">{stats.generatedCodes}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Active sessions</p>
-                <p className="font-mono font-semibold">{stats.activeSessions}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Participants</p>
-                <p className="font-mono font-semibold">{stats.participants}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Released profit (USD)</p>
-                <p className="font-mono font-semibold">{stats.totalReleasedProfitUsd.toFixed(2)}</p>
-              </div>
-            </Card>
+            <>
+              <Card className="grid gap-2 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <p className="text-muted-foreground">Generated codes</p>
+                  <p className="font-mono font-semibold">{stats.generatedCodes}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Active sessions</p>
+                  <p className="font-mono font-semibold">{stats.activeSessions}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Participants</p>
+                  <p className="font-mono font-semibold">{stats.participants}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Released profit (USD)</p>
+                  <p className="font-mono font-semibold">{stats.totalReleasedProfitUsd.toFixed(2)}</p>
+                </div>
+              </Card>
+              {stats.settlementMonitoring ? (
+                <Card className="grid gap-2 border-amber-500/25 bg-amber-500/5 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                  <p className="col-span-full text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Settlement monitoring
+                  </p>
+                  <div>
+                    <p className="text-muted-foreground">Active bot participants</p>
+                    <p className="font-mono font-semibold">
+                      {stats.settlementMonitoring.activeBotParticipants}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Settled participants</p>
+                    <p className="font-mono font-semibold">
+                      {stats.settlementMonitoring.settledBotParticipants}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Expired participants</p>
+                    <p className="font-mono font-semibold">
+                      {stats.settlementMonitoring.expiredBotParticipants}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Pending celebrations</p>
+                    <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">
+                      {stats.settlementMonitoring.pendingCelebrations}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Stuck after session end</p>
+                    <p
+                      className={`font-mono font-semibold ${
+                        stats.settlementMonitoring.failedSettlementsStuckOpen > 0
+                          ? "text-destructive"
+                          : ""
+                      }`}
+                    >
+                      {stats.settlementMonitoring.failedSettlementsStuckOpen}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Reconciliation top-ups</p>
+                    <p className="font-mono font-semibold">
+                      {stats.settlementMonitoring.reconciliationTopUpEvents}
+                    </p>
+                  </div>
+                </Card>
+              ) : null}
+            </>
           ) : null}
 
           <Card className="space-y-3 p-4">

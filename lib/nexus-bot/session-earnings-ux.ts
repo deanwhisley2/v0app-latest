@@ -1,31 +1,33 @@
 /** Customer-facing session activity copy — no payout amounts until settlement. */
 
+export const SESSION_ACTIVE_STATUS_LABELS = [
+  "Session in progress",
+  "Market analysis active",
+  "Monitoring opportunities",
+  "Detecting market conditions",
+  "Opportunity identified",
+  "Position management active",
+] as const
+
 export const SESSION_BULLISH_ACTIVITY_STEPS = [
-  { id: "started", label: "Session started", minProgress: 0 },
-  { id: "scan", label: "Scanning opportunities", minProgress: 0.05 },
-  { id: "entry", label: "First entry opened", minProgress: 0.12 },
-  { id: "monitor", label: "Monitoring market", minProgress: 0.22 },
-  { id: "buy", label: "Buy cycle recorded", minProgress: 0.35 },
-  { id: "hold", label: "Holding position", minProgress: 0.48 },
-  { id: "sell", label: "Sell cycle recorded", minProgress: 0.58 },
-  { id: "bullish", label: "Bullish trades updated", minProgress: 0.68 },
-  { id: "liquidity", label: "Monitoring liquidity", minProgress: 0.76 },
-  { id: "reserve", label: "Profit reserve updated", minProgress: 0.86 },
-  { id: "settlement", label: "Settlement pending", minProgress: 0.94 },
+  { id: "started", label: "Session in progress", minProgress: 0 },
+  { id: "analysis", label: "Market analysis active", minProgress: 0.04 },
+  { id: "monitor", label: "Monitoring opportunities", minProgress: 0.12 },
+  { id: "detect", label: "Detecting market conditions", minProgress: 0.22 },
+  { id: "opportunity", label: "Opportunity identified", minProgress: 0.35 },
+  { id: "position", label: "Position management active", minProgress: 0.48 },
+  { id: "hold", label: "Holding position", minProgress: 0.58 },
+  { id: "liquidity", label: "Monitoring liquidity", minProgress: 0.68 },
+  { id: "confirm", label: "Trend confirmation in progress", minProgress: 0.78 },
+  { id: "settlement", label: "Settlement pending", minProgress: 0.9 },
 ] as const
 
-export const SESSION_EARNINGS_LOCKED_LABELS = [
-  "Settlement pending",
-  "Earnings locked",
-  "Profit reserve updating",
-] as const
-
-export function sessionEarningsLockedLabel(progressPct: number): string {
+export function sessionActiveStatusLabel(progressPct: number): string {
   const idx = Math.min(
-    SESSION_EARNINGS_LOCKED_LABELS.length - 1,
-    Math.floor((Math.min(100, Math.max(0, progressPct)) / 100) * SESSION_EARNINGS_LOCKED_LABELS.length),
+    SESSION_ACTIVE_STATUS_LABELS.length - 1,
+    Math.floor((Math.min(100, Math.max(0, progressPct)) / 100) * SESSION_ACTIVE_STATUS_LABELS.length),
   )
-  return SESSION_EARNINGS_LOCKED_LABELS[idx]!
+  return SESSION_ACTIVE_STATUS_LABELS[idx]!
 }
 
 export function sessionProgressPct(params: {

@@ -215,7 +215,18 @@ export async function expireDueTradeSessions(admin: SupabaseClient): Promise<num
 }
 
 export async function getTradeSessionAdminStats(admin: SupabaseClient) {
-  const [gens, sessions, participants, activeBot] = await Promise.all([
+  const [
+    gens,
+    sessions,
+    participants,
+    activeBot,
+    botExpired,
+    botCompleted,
+    botOpen,
+    pendingCelebrations,
+    openBotRows,
+    reconcileEvents,
+  ] = await Promise.all([
     admin.from("trade_code_generations").select("id", { count: "exact", head: true }),
     admin.from("trade_sessions").select("id,status", { count: "exact" }),
     admin
@@ -223,6 +234,37 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
       .select("stake_usd,profit_released_usd,status")
       .not("trade_session_id", "is", null),
     admin.from("trade_sessions").select("id").eq("status", "active"),
+    admin
+      .from("nexus_bot_sessions")
+      .select("id", { count: "exact", head: true })
+      .not("trade_session_id", "is", null)
+      .eq("status", "expired"),
+    admin
+      .from("nexus_bot_sessions")
+      .select("id", { count: "exact", head: true })
+      .not("trade_session_id", "is", null)
+      .eq("status", "completed"),
+    admin
+      .from("nexus_bot_sessions")
+      .select("id", { count: "exact", head: true })
+      .not("trade_session_id", "is", null)
+      .in("status", ["booked", "ready", "pending", "running", "active"]),
+    admin
+      .from("nexus_bot_sessions")
+      .select("id", { count: "exact", head: true })
+      .not("trade_session_id", "is", null)
+      .eq("status", "completed")
+      .is("profit_celebrated_at", null),
+    admin
+      .from("nexus_bot_sessions")
+      .select("id,trade_sessions(end_at)")
+      .not("trade_session_id", "is", null)
+      .in("status", ["booked", "ready", "pending", "running", "active"])
+      .limit(500),
+    admin
+      .from("container_balance_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "nexus_trade_session_reconcile_topup"),
   ])
 
   let totalStake = 0
@@ -239,6 +281,13 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
   const expired =
     sessions.data?.filter((s) => String(s.status) === "expired").length ?? 0
   const active = activeBot.data?.length ?? 0
+  const nowMs = Date.now()
+  let failedSettlementsStuckOpen = 0
+  for (const row of openBotRows.data ?? []) {
+    const ts = row.trade_sessions as { end_at?: string } | null
+    const endMs = ts?.end_at ? new Date(ts.end_at).getTime() : NaN
+    if (Number.isFinite(endMs) && endMs < nowMs) failedSettlementsStuckOpen += 1
+  }
 
   return {
     generatedCodes: gens.count ?? 0,
@@ -248,6 +297,14 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
     participants: participantCount,
     totalCapitalAllocatedUsd: Math.round(totalStake * 100) / 100,
     totalReleasedProfitUsd: Math.round(totalProfit * 100) / 100,
+    settlementMonitoring: {
+      activeBotParticipants: botOpen.count ?? 0,
+      settledBotParticipants: botCompleted.count ?? 0,
+      expiredBotParticipants: botExpired.count ?? 0,
+      pendingCelebrations: pendingCelebrations.count ?? 0,
+      failedSettlementsStuckOpen,
+      reconciliationTopUpEvents: reconcileEvents.count ?? 0,
+    },
   }
 }
 

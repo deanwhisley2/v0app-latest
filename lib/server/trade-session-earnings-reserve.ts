@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { buildExactSumBuckets, stringSeed } from "@/lib/server/target-driven-accrual"
+import {
+  buildDailyTwoTradeSchedule,
+  DAILY_TWO_TRADE_POLICY_DAYS,
+  type DailyTwoTradeSchedulePayload,
+} from "@/lib/server/daily-two-trade-engine"
 
 /** Policy constants — internal only; never expose in customer UI. */
 export const TRADE_SESSION_MONTHLY_TARGET_PCT = 28
@@ -13,7 +18,7 @@ const RECONCILE_EPSILON_USD = 0.02
 
 /** Minimum visible settlement for active-session late joins (debited from reserve only). */
 export const TRADE_SESSION_MIN_VISIBLE_SETTLEMENT_USD = 0.01
-export const TRADE_SESSION_RESERVE_SOURCE = "monthly_reserve_v1"
+export const TRADE_SESSION_RESERVE_SOURCE = "daily_two_trade_v1"
 
 export type SessionParticipationPayout = {
   payoutUsd: number
@@ -28,7 +33,8 @@ export type ReserveDaySchedule = {
 }
 
 export type ReserveSchedulePayload = {
-  v: 1
+  v: 1 | 2
+  source?: string
   days: ReserveDaySchedule[]
 }
 
@@ -134,11 +140,20 @@ export function assertReserveConservation(row: Pick<UserTradeSessionReserveRow, 
   }
 }
 
+function dailyTwoTradeToReserveDays(schedule: DailyTwoTradeSchedulePayload): ReserveDaySchedule[] {
+  return schedule.days.map((d) => ({
+    dailyUsd: d.dailyUsd,
+    morningUsd: d.morningUsd,
+    eveningUsd: d.eveningUsd,
+  }))
+}
+
 function parseSchedule(raw: unknown): ReserveSchedulePayload {
   if (!raw || typeof raw !== "object") return { v: 1, days: [] }
   const o = raw as Record<string, unknown>
   const daysRaw = o.days
   if (!Array.isArray(daysRaw)) return { v: 1, days: [] }
+  const v = Number(o.v ?? 1)
   const days = daysRaw.map((d) => {
     const x = d as Record<string, unknown>
     return {
@@ -147,7 +162,44 @@ function parseSchedule(raw: unknown): ReserveSchedulePayload {
       eveningUsd: roundUsd2(Number(x.eveningUsd ?? 0)),
     }
   })
-  return { v: 1, days }
+  return {
+    v: v === 2 ? 2 : 1,
+    source: typeof o.source === "string" ? o.source : undefined,
+    days,
+  }
+}
+
+function isDailyTwoTradeSchedule(schedule: ReserveSchedulePayload): boolean {
+  return schedule.v === 2 || schedule.source === "daily_two_trade_v1"
+}
+
+function rebuildFutureDailyTwoTradeSlots(
+  existing: ReserveSchedulePayload,
+  settledDaySlots: Set<string>,
+  capitalUsd: number,
+  periodKey: string,
+  fromDayIndex: number,
+): ReserveSchedulePayload {
+  const fresh = buildDailyTwoTradeSchedule(capitalUsd, periodKey)
+  const freshDays = dailyTwoTradeToReserveDays(fresh)
+  const days = existing.days.map((d) => ({ ...d }))
+  while (days.length < DAILY_TWO_TRADE_POLICY_DAYS) {
+    days.push({ dailyUsd: 0, morningUsd: 0, eveningUsd: 0 })
+  }
+  for (let d = fromDayIndex; d < DAILY_TWO_TRADE_POLICY_DAYS; d++) {
+    for (const slot of ["morning", "evening"] as const) {
+      const key = `${d}:${slot}`
+      if (settledDaySlots.has(key)) continue
+      const src = freshDays[d]!
+      if (slot === "evening") {
+        days[d]!.eveningUsd = src.eveningUsd
+      } else {
+        days[d]!.morningUsd = src.morningUsd
+      }
+      days[d]!.dailyUsd = roundUsd2(days[d]!.morningUsd + days[d]!.eveningUsd)
+    }
+  }
+  return { v: 2, source: "daily_two_trade_v1", days }
 }
 
 function mapReserveRow(row: Record<string, unknown>): UserTradeSessionReserveRow {
@@ -254,23 +306,27 @@ export async function ensureUserTradeSessionReserve(
   const now = new Date().toISOString()
 
   if (!existing) {
-    const seedKey = `reserve|${userId}|${periodKey}|${capital}`
-    const targetPct = resolveTradeSessionMonthlyTargetPct(seedKey)
-    const amounts = computeMonthlyReserveAmounts(capital, targetPct)
-    const schedule = buildReserveSchedule(amounts.netReserveUsd, seedKey)
+    const seedKey = `daily_two_trade|${userId}|${periodKey}|${capital}`
+    const dailySchedule = buildDailyTwoTradeSchedule(capital, periodKey)
+    const schedule: ReserveSchedulePayload = {
+      v: 2,
+      source: "daily_two_trade_v1",
+      days: dailyTwoTradeToReserveDays(dailySchedule),
+    }
+    const netReserveUsd = scheduleSlotTotalUsd(schedule)
     const { data, error } = await admin
       .from("user_trade_session_earnings_reserves")
       .insert({
         user_id: userId,
         period_key: periodKey,
         capital_usd: capital,
-        monthly_target_pct: amounts.targetPct,
-        gross_monthly_usd: amounts.grossMonthlyUsd,
-        platform_fee_usd: amounts.platformFeeUsd,
-        net_reserve_usd: amounts.netReserveUsd,
+        monthly_target_pct: 0,
+        gross_monthly_usd: netReserveUsd,
+        platform_fee_usd: 0,
+        net_reserve_usd: netReserveUsd,
         earned_usd: 0,
         forfeited_usd: 0,
-        remaining_reserve_usd: amounts.netReserveUsd,
+        remaining_reserve_usd: netReserveUsd,
         schedule,
         seed_key: seedKey,
         updated_at: now,
@@ -288,26 +344,53 @@ export async function ensureUserTradeSessionReserve(
   }
 
   const seedKey = `${existing.seed_key}|cap${capital}`
-  const targetPct = existing.monthly_target_pct
-  const amounts = computeMonthlyReserveAmounts(capital, targetPct)
   const settled = await loadSettledDaySlots(admin, existing.id)
   const fromDay = dayIndexInPeriod(anchorDate, periodKey)
+
+  let schedule: ReserveSchedulePayload
+  let netReserveUsd: number
+  let grossMonthlyUsd: number
+  let platformFeeUsd: number
+  let monthlyTargetPct: number
+
+  if (isDailyTwoTradeSchedule(existing.schedule)) {
+    schedule = rebuildFutureDailyTwoTradeSlots(
+      existing.schedule,
+      settled,
+      capital,
+      periodKey,
+      fromDay,
+    )
+    netReserveUsd = scheduleSlotTotalUsd(schedule)
+    grossMonthlyUsd = netReserveUsd
+    platformFeeUsd = 0
+    monthlyTargetPct = 0
+  } else {
+    const targetPct = existing.monthly_target_pct
+    const amounts = computeMonthlyReserveAmounts(capital, targetPct)
+    netReserveUsd = amounts.netReserveUsd
+    grossMonthlyUsd = amounts.grossMonthlyUsd
+    platformFeeUsd = amounts.platformFeeUsd
+    monthlyTargetPct = targetPct
+    schedule = rebuildFutureScheduleSlots(
+      existing.schedule,
+      settled,
+      roundUsd2(Math.max(0, netReserveUsd - existing.earned_usd - existing.forfeited_usd)),
+      seedKey,
+      fromDay,
+    )
+  }
+
   const remainingTarget = roundUsd2(
-    Math.max(0, amounts.netReserveUsd - existing.earned_usd - existing.forfeited_usd),
-  )
-  const schedule = rebuildFutureScheduleSlots(
-    existing.schedule,
-    settled,
-    remainingTarget,
-    seedKey,
-    fromDay,
+    Math.max(0, netReserveUsd - existing.earned_usd - existing.forfeited_usd),
   )
 
   const patch = {
     capital_usd: capital,
-    gross_monthly_usd: amounts.grossMonthlyUsd,
-    platform_fee_usd: amounts.platformFeeUsd,
-    net_reserve_usd: amounts.netReserveUsd,
+    gross_monthly_usd: grossMonthlyUsd,
+    platform_fee_usd: platformFeeUsd,
+    net_reserve_usd: netReserveUsd,
+    monthly_target_pct: monthlyTargetPct,
     remaining_reserve_usd: remainingTarget,
     schedule,
     seed_key: seedKey,
@@ -451,23 +534,37 @@ export async function settleTradeSessionParticipation(
     : Math.min(1, Math.max(0, params.participationWeight))
 
   if (await slotLedgerExists(admin, params.userId, params.tradeSessionId)) {
-    const reserve = await ensureUserTradeSessionReserve(
-      admin,
-      params.userId,
-      params.capitalUsd,
-      new Date(params.sessionStartAt),
-    )
-    const { data } = await admin
+    const { data: existingLedger } = await admin
       .from("user_trade_session_slot_ledger")
-      .select("payout_usd")
+      .select("outcome,payout_usd")
       .eq("user_id", params.userId)
       .eq("trade_session_id", params.tradeSessionId)
       .maybeSingle()
-    return {
-      profitUsd: roundUsd2(Number(data?.payout_usd ?? 0)),
-      reserve,
-      allocatedUsd: 0,
-      minFloorApplied: false,
+    const { data: botJoined } = await admin
+      .from("nexus_bot_sessions")
+      .select("id")
+      .eq("user_id", params.userId)
+      .eq("trade_session_id", params.tradeSessionId)
+      .maybeSingle()
+
+    if (existingLedger && String(existingLedger.outcome) === "forfeited" && botJoined) {
+      await reverseErroneousForfeitLedgerEntry(admin, {
+        userId: params.userId,
+        tradeSessionId: params.tradeSessionId,
+      })
+    } else {
+      const reserve = await ensureUserTradeSessionReserve(
+        admin,
+        params.userId,
+        params.capitalUsd,
+        new Date(params.sessionStartAt),
+      )
+      return {
+        profitUsd: roundUsd2(Number(existingLedger?.payout_usd ?? 0)),
+        reserve,
+        allocatedUsd: 0,
+        minFloorApplied: false,
+      }
     }
   }
 
@@ -589,22 +686,26 @@ export function previewSessionPayoutFromCapital(params: {
   }
 
   const capital = roundUsd2(params.capitalUsd)
-  const seedKey = `reserve|${params.userId}|${periodKey}|${capital}`
-  const targetPct = resolveTradeSessionMonthlyTargetPct(seedKey)
-  const amounts = computeMonthlyReserveAmounts(capital, targetPct)
-  const schedule = buildReserveSchedule(amounts.netReserveUsd, seedKey)
+  const seedKey = `daily_two_trade|${params.userId}|${periodKey}|${capital}`
+  const dailySchedule = buildDailyTwoTradeSchedule(capital, periodKey)
+  const schedule: ReserveSchedulePayload = {
+    v: 2,
+    source: "daily_two_trade_v1",
+    days: dailyTwoTradeToReserveDays(dailySchedule),
+  }
+  const netReserveUsd = scheduleSlotTotalUsd(schedule)
   const provisional: UserTradeSessionReserveRow = {
     id: "preview",
     user_id: params.userId,
     period_key: periodKey,
     capital_usd: capital,
-    monthly_target_pct: amounts.targetPct,
-    gross_monthly_usd: amounts.grossMonthlyUsd,
-    platform_fee_usd: amounts.platformFeeUsd,
-    net_reserve_usd: amounts.netReserveUsd,
+    monthly_target_pct: 0,
+    gross_monthly_usd: netReserveUsd,
+    platform_fee_usd: 0,
+    net_reserve_usd: netReserveUsd,
     earned_usd: 0,
     forfeited_usd: 0,
-    remaining_reserve_usd: amounts.netReserveUsd,
+    remaining_reserve_usd: netReserveUsd,
     schedule,
     seed_key: seedKey,
   }
@@ -614,6 +715,86 @@ export function previewSessionPayoutFromCapital(params: {
     params.sessionSlot,
     params.participationWeight,
   )
+}
+
+/** Users who joined a trade session via Nexus Bot must never be auto-forfeited. */
+async function loadTradeSessionBotParticipantIds(
+  admin: SupabaseClient,
+  tradeSessionId: string,
+): Promise<Set<string>> {
+  const { data, error } = await admin
+    .from("nexus_bot_sessions")
+    .select("user_id")
+    .eq("trade_session_id", tradeSessionId)
+  if (error) throw new Error(error.message)
+  return new Set((data ?? []).map((r) => String(r.user_id)))
+}
+
+/**
+ * Undo a mistaken forfeit ledger row (reserve conservation restored) so earned settlement can run.
+ * Idempotent when the ledger row is absent or not forfeited.
+ */
+export async function reverseErroneousForfeitLedgerEntry(
+  admin: SupabaseClient,
+  params: {
+    userId: string
+    tradeSessionId: string
+  },
+): Promise<boolean> {
+  const { data: ledger, error: lErr } = await admin
+    .from("user_trade_session_slot_ledger")
+    .select("id,reserve_id,outcome,slot_gross_usd,payout_usd")
+    .eq("user_id", params.userId)
+    .eq("trade_session_id", params.tradeSessionId)
+    .maybeSingle()
+  if (lErr) throw new Error(lErr.message)
+  if (!ledger || String(ledger.outcome) !== "forfeited") return false
+
+  const forfeitUsd = roundUsd2(Number(ledger.slot_gross_usd ?? 0))
+  if (!(forfeitUsd > 0)) {
+    const { error: delErr } = await admin
+      .from("user_trade_session_slot_ledger")
+      .delete()
+      .eq("id", ledger.id)
+    if (delErr) throw new Error(delErr.message)
+    return true
+  }
+
+  const { data: reserveRow, error: rErr } = await admin
+    .from("user_trade_session_earnings_reserves")
+    .select("*")
+    .eq("id", ledger.reserve_id)
+    .maybeSingle()
+  if (rErr) throw new Error(rErr.message)
+  if (!reserveRow) throw new Error("RESERVE_NOT_FOUND_FOR_FORFEIT_REVERSAL")
+
+  const reserve = mapReserveRow(reserveRow as Record<string, unknown>)
+  const earned = roundUsd2(reserve.earned_usd)
+  const forfeited = roundUsd2(Math.max(0, reserve.forfeited_usd - forfeitUsd))
+  const remaining = roundUsd2(reserve.remaining_reserve_usd + forfeitUsd)
+  const now = new Date().toISOString()
+
+  const { error: uErr } = await admin
+    .from("user_trade_session_earnings_reserves")
+    .update({
+      earned_usd: earned,
+      forfeited_usd: forfeited,
+      remaining_reserve_usd: remaining,
+      updated_at: now,
+    })
+    .eq("id", reserve.id)
+    .eq("remaining_reserve_usd", reserve.remaining_reserve_usd)
+  if (uErr) throw new Error(uErr.message)
+
+  const { error: delErr } = await admin
+    .from("user_trade_session_slot_ledger")
+    .delete()
+    .eq("id", ledger.id)
+  if (delErr) throw new Error(delErr.message)
+
+  const refreshed = await loadUserReserveForPeriod(admin, params.userId, reserve.period_key)
+  if (refreshed) assertReserveConservation(refreshed, "reverseErroneousForfeitLedgerEntry")
+  return true
 }
 
 /** After a trade session ends, forfeit slots for reserve holders who did not participate. */
@@ -632,13 +813,18 @@ export async function processTradeSessionForfeitures(
     .eq("period_key", periodKey)
   if (error) throw new Error(error.message)
 
-  const { data: participants, error: pErr } = await admin
-    .from("user_trade_session_slot_ledger")
-    .select("user_id")
-    .eq("trade_session_id", tradeSession.id)
+  const [{ data: ledgerParticipants, error: pErr }, botParticipants] = await Promise.all([
+    admin
+      .from("user_trade_session_slot_ledger")
+      .select("user_id")
+      .eq("trade_session_id", tradeSession.id),
+    loadTradeSessionBotParticipantIds(admin, tradeSession.id),
+  ])
   if (pErr) throw new Error(pErr.message)
 
-  const participated = new Set((participants ?? []).map((r) => String(r.user_id)))
+  const participated = new Set((ledgerParticipants ?? []).map((r) => String(r.user_id)))
+  for (const userId of botParticipants) participated.add(userId)
+
   let n = 0
   for (const r of reserves ?? []) {
     const userId = String(r.user_id)
