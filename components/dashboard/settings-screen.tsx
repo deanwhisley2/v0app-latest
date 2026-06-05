@@ -42,6 +42,10 @@ import { getNexusAssistantWelcome } from "@/lib/nexus-assistant"
 import { requestNexusAssistantReply } from "@/lib/nexus-assistant/client"
 import { resolveNexusTierDefinition } from "@/lib/nexus-tier-matrix"
 import { AboutCompanyPanel } from "@/components/dashboard/about-company-panel"
+import {
+  EmailVerificationSettingsCard,
+  useEmailVerificationNeeded,
+} from "@/components/dashboard/email-verification-settings-card"
 
 type LearnerMessage = { id: string; role: "user" | "assistant"; content: string }
 
@@ -118,6 +122,7 @@ export function SettingsScreen({
     setCurrentView("main")
   }, [currentView])
   const [regionMessage, setRegionMessage] = useState<string | null>(null)
+  const emailVerificationNeeded = useEmailVerificationNeeded()
   const [wireCurrency, setWireCurrency] = useState("USD")
   const [securityLevel, setSecurityLevel] = useState<1 | 2 | 3>(1)
   const [mainBalance] = useState(24831.42)
@@ -193,7 +198,14 @@ export function SettingsScreen({
   }
 
   const settingsItems: SettingItem[] = [
-    { key: "security", href: "/dashboard/security", icon: <Shield className="h-5 w-5" />, label: t("settings.menu.security"), description: t("settings.menu.securityDesc").replace("{{level}}", String(securityLevel)) },
+    {
+      key: "security",
+      href: "/dashboard/security",
+      icon: <Shield className="h-5 w-5" />,
+      label: t("settings.menu.security"),
+      description: t("settings.menu.securityDesc").replace("{{level}}", String(securityLevel)),
+      ...(emailVerificationNeeded ? { badge: "Verify email" } : {}),
+    },
     { key: "deposit-withdraw", icon: <ArrowDownUp className="h-5 w-5" />, label: t("settings.menu.depositWithdraw"), description: t("settings.menu.depositWithdrawDesc") },
     { key: "notifications", icon: <Bell className="h-5 w-5" />, label: t("settings.menu.notifications"), description: t("settings.menu.notificationsDesc") },
     { key: "nexus-learner", icon: <MessageCircle className="h-5 w-5" />, label: t("settings.menu.learner"), description: t("settings.menu.learnerDesc") },
@@ -237,6 +249,9 @@ export function SettingsScreen({
     const tier = resolveNexusTierDefinition(tradingUserLevel, retailerCreditDesk)
     return (
       <div className="space-y-4">
+        {!isGuestSession && emailVerificationNeeded ? (
+          <EmailVerificationSettingsCard variant="settings" />
+        ) : null}
         {!isGuestSession && (
           <Card className="border-primary/30 bg-primary/5 p-4">
             <h3 className="text-sm font-semibold text-foreground">{tier.title}</h3>

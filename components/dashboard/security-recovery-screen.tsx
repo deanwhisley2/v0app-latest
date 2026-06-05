@@ -194,7 +194,7 @@ export function SecurityRecoveryScreen() {
 
   return (
     <div className="space-y-4">
-      <EmailVerificationSettingsCard />
+      <EmailVerificationSettingsCard variant="security" />
 
       {needsSetup === null ? null : needsSetup ? null : (
         <UserSecurityRecoverySummary key={profileKey} appealCenterHref="/dashboard/security/appeals" />

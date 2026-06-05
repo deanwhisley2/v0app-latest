@@ -1787,6 +1787,22 @@ export function DashboardPageInner() {
     if (typeof window === "undefined" || authLoading) return
     try {
       const u = new URL(window.location.href)
+      const rawTab = (u.searchParams.get("tab") ?? "").trim().toLowerCase()
+      if (rawTab === "settings") {
+        setTabProgrammatic("settings", "settings_tab_url")
+        u.searchParams.delete("tab")
+        const qs = u.searchParams.toString()
+        window.history.replaceState({}, "", u.pathname + (qs ? `?${qs}` : ""))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [authLoading, setTabProgrammatic])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return
+    try {
+      const u = new URL(window.location.href)
       const rawView = (u.searchParams.get("view") ?? "").trim()
       if (!rawView) return
       if (

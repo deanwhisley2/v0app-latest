@@ -79,7 +79,14 @@ export async function POST(request: Request) {
       await commitVerifiedProfileEmail(admin, user.id, email)
       await admin.from("email_verifications").delete().eq("user_id", user.id)
 
-      return NextResponse.json({ ok: true, message: "Email verified." })
+      const { error: confirmErr } = await admin.auth.admin.updateUserById(user.id, {
+        email_confirm: true,
+      })
+      if (confirmErr) {
+        console.error("[user/email-verification] email_confirm:", confirmErr.message)
+      }
+
+      return NextResponse.json({ ok: true, message: "Email verified. Your account is now fully protected." })
     }
 
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : ""
@@ -96,10 +103,12 @@ export async function POST(request: Request) {
 
     const issued = await issueEmailVerificationCodeForUser(user.id, email)
     if (!issued.ok) {
+      const status =
+        issued.status === 502 ? "delivery_pending" : "generation_failed"
       return NextResponse.json(
         {
           ok: false,
-          deferred: true,
+          verificationEmailStatus: status,
           error: issued.error,
           ...(issued.retryAfterSeconds ? { retryAfterSeconds: issued.retryAfterSeconds } : {}),
         },
@@ -109,7 +118,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Verification code sent. It usually arrives within one minute.",
+      verificationEmailStatus: "sent",
+      message: "Verification email sent. Most arrive within 1 minute; some providers may take up to 5 minutes.",
       email,
     })
   } catch (e) {

@@ -51,7 +51,7 @@ export function EmailVerificationReminderBanner() {
       <p className="flex-1 leading-relaxed text-muted-foreground">{EMAIL_VERIFICATION_REMINDER}</p>
       <div className="flex shrink-0 items-center gap-1">
         <Button asChild type="button" variant="outline" size="sm" className="touch-manipulation">
-          <Link href="/dashboard/security">Verify in Settings</Link>
+          <Link href="/dashboard?tab=settings">Verify in Settings</Link>
         </Button>
         <Button
           type="button"

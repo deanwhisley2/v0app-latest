@@ -11,15 +11,23 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
+import { VerificationEmailStatusPanel } from "@/components/auth/verification-email-status-panel"
+import type { VerificationEmailStatus } from "@/lib/auth/verification-email-status"
 import { supabase } from "@/lib/supabaseClient"
 
 type EmailStatus = {
   isVerified: boolean
   profileEmail: string | null
   pendingEmail: string | null
+  authEmail: string | null
 }
 
-export function EmailVerificationSettingsCard() {
+type Props = {
+  /** Compact layout for settings home; full layout on security page. */
+  variant?: "settings" | "security"
+}
+
+export function EmailVerificationSettingsCard({ variant = "security" }: Props) {
   const [status, setStatus] = useState<EmailStatus | null>(null)
   const [emailInput, setEmailInput] = useState("")
   const [code, setCode] = useState("")
@@ -27,6 +35,8 @@ export function EmailVerificationSettingsCard() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<"send" | "verify" | null>(null)
   const [showCodeStep, setShowCodeStep] = useState(false)
+  const [verificationStatus, setVerificationStatus] = useState<VerificationEmailStatus>("generation_failed")
+  const [codeSentAt, setCodeSentAt] = useState<number | null>(null)
 
   const loadStatus = useCallback(async () => {
     const {
@@ -41,7 +51,10 @@ export function EmailVerificationSettingsCard() {
     const j = (await res.json().catch(() => ({}))) as EmailStatus & { error?: string }
     if (res.ok) {
       setStatus(j)
-      const next = j.pendingEmail ?? j.profileEmail ?? ""
+      const auth = j.authEmail?.includes("@") && !j.authEmail.includes("@accounts.nexuspro.it.com")
+        ? j.authEmail
+        : null
+      const next = j.pendingEmail ?? j.profileEmail ?? auth ?? ""
       if (next) setEmailInput(next)
     }
   }, [])
@@ -68,19 +81,29 @@ export function EmailVerificationSettingsCard() {
         },
         body: JSON.stringify({ action: "send", email: emailInput.trim() }),
       })
-      const j = (await res.json().catch(() => ({}))) as { error?: string; message?: string; deferred?: boolean }
-      if (!res.ok) {
-        if (j.deferred) {
-          setError(
-            j.error ??
-              "We could not deliver the verification email right now. Try again later or contact support.",
-          )
-          return
-        }
-        throw new Error(j.error ?? "Could not send verification email")
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        verificationEmailStatus?: VerificationEmailStatus
+        retryAfterSeconds?: number
       }
+      if (!res.ok) {
+        const failedStatus = j.verificationEmailStatus ?? (res.status === 502 ? "delivery_pending" : "generation_failed")
+        setVerificationStatus(failedStatus)
+        setCodeSentAt(null)
+        if (j.retryAfterSeconds) {
+          setMessage(`Please wait ${j.retryAfterSeconds} seconds before resending.`)
+        } else if (failedStatus === "delivery_pending") {
+          setMessage("Your verification email is on its way. Please allow up to 5 minutes.")
+        } else {
+          setMessage("We couldn't prepare your verification code. Please try again.")
+        }
+        return
+      }
+      setVerificationStatus("sent")
+      setCodeSentAt(Date.now())
       setShowCodeStep(true)
-      setMessage(j.message ?? "Verification code sent.")
+      setMessage(j.message ?? "Verification email sent.")
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not send code")
     } finally {
@@ -111,7 +134,7 @@ export function EmailVerificationSettingsCard() {
         }),
       })
       const j = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
-      if (!res.ok) throw new Error(j.error ?? "Verification failed")
+      if (!res.ok) throw new Error(j.error ?? "Invalid or expired code")
       setMessage(j.message ?? "Email verified.")
       setCode("")
       setShowCodeStep(false)
@@ -137,16 +160,30 @@ export function EmailVerificationSettingsCard() {
     )
   }
 
+  const intro =
+    variant === "settings"
+      ? "You skipped email verification at signup. Verify now to protect recovery and security alerts."
+      : "Verify your inbox for recovery and security alerts."
+
   return (
     <Card className="border-amber-500/25 bg-amber-500/5 p-4 sm:p-6">
       <div className="flex items-start gap-3">
         <Mail className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-200" aria-hidden />
         <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold">Verify your email</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Verify your inbox for recovery and security alerts.
-          </p>
-          <VerificationDeliveryHint className="mt-3" />
+          <p className="mt-1 text-sm text-muted-foreground">{intro}</p>
+
+          {verificationStatus === "sent" && codeSentAt ? (
+            <div className="mt-4">
+              <VerificationEmailStatusPanel
+                status="sent"
+                email={emailInput}
+                canResend
+              />
+              <VerificationDeliveryHint className="mt-3" codeSentAt={codeSentAt} />
+            </div>
+          ) : null}
+
           <div className="mt-4 space-y-3">
             <Input
               type="email"
@@ -154,15 +191,17 @@ export function EmailVerificationSettingsCard() {
               onChange={(e) => setEmailInput(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
+              disabled={busy !== null}
             />
             {!showCodeStep ? (
               <Button
                 type="button"
                 size="sm"
+                className="min-h-11 touch-manipulation"
                 disabled={busy === "send" || !emailInput.trim()}
                 onClick={() => void sendCode()}
               >
-                {busy === "send" ? "Sending…" : "Send verification code"}
+                {busy === "send" ? "Sending…" : "Send verification email"}
               </Button>
             ) : (
               <div className="space-y-3">
@@ -177,6 +216,7 @@ export function EmailVerificationSettingsCard() {
                   <Button
                     type="button"
                     size="sm"
+                    className="min-h-11 touch-manipulation"
                     disabled={busy === "verify" || code.length !== 6}
                     onClick={() => void verifyCode()}
                   >
@@ -186,19 +226,41 @@ export function EmailVerificationSettingsCard() {
                     type="button"
                     size="sm"
                     variant="outline"
+                    className="min-h-11 touch-manipulation"
                     disabled={busy === "send"}
                     onClick={() => void sendCode()}
                   >
-                    Resend code
+                    Resend verification email
                   </Button>
                 </div>
               </div>
             )}
-            {message ? <p className="text-xs text-success">{message}</p> : null}
+            {message ? <p className="text-xs text-primary">{message}</p> : null}
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
           </div>
         </div>
       </div>
     </Card>
   )
+}
+
+/** Lightweight hook for settings badge / banner gating. */
+export function useEmailVerificationNeeded(): boolean {
+  const [needed, setNeeded] = useState(false)
+  useEffect(() => {
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/email-verification", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      const j = (await res.json().catch(() => ({}))) as { isVerified?: boolean }
+      if (res.ok) setNeeded(j.isVerified !== true)
+    })()
+  }, [])
+  return needed
 }
