@@ -132,9 +132,10 @@ export async function POST(req: Request) {
     userId: userIdForLog,
     ipAddress: ip,
     userAgent: ua,
+    messageId: result.ok && !result.ambiguous ? result.messageId ?? null : null,
   })
 
   return NextResponse.json({
-    message: "Verification email sent. Please check your inbox. Delivery may take up to 2 minutes.",
+    message: "Verification email sent. Most arrive within 1 minute; some providers may take up to 5 minutes.",
   })
 }

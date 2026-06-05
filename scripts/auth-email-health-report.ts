@@ -5,7 +5,7 @@
  */
 import { config } from "dotenv"
 import { resolve } from "node:path"
-import { getAuthEmailHealthStats } from "../lib/server/auth-email-delivery-log"
+import { getAuthEmailDeliverabilityDashboard } from "../lib/server/auth-email-deliverability"
 import { createAdminClient } from "../lib/supabaseAdmin"
 
 config({ path: resolve(process.cwd(), ".env.local") })
@@ -13,8 +13,8 @@ config({ path: resolve(process.cwd(), ".env") })
 
 async function main() {
   const hours = Number.parseInt(process.argv[2] ?? "48", 10) || 48
-  const stats = await getAuthEmailHealthStats(hours)
-  console.log(JSON.stringify(stats, null, 2))
+  const dashboard = await getAuthEmailDeliverabilityDashboard(hours)
+  console.log(JSON.stringify(dashboard, null, 2))
 
   const admin = createAdminClient()
   const since = new Date(Date.now() - hours * 3600 * 1000).toISOString()

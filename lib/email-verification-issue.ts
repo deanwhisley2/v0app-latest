@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
 import { sendTransactionalVerificationEmail } from "@/lib/server/transactional-email"
 
-const VERIFY_TTL_MS = 15 * 60 * 1000
+const VERIFY_TTL_MS = 10 * 60 * 1000
 export const EMAIL_VERIFICATION_SEND_COOLDOWN_MS = 60 * 1000
 
 const COOLDOWN_ERROR = "Please wait 60 seconds before requesting another code."
@@ -19,7 +19,7 @@ function enqueueVerificationSend<T>(emailKey: string, fn: () => Promise<T>): Pro
 
 export type IssueVerificationResult =
   | { ok: true; ambiguous: true }
-  | { ok: true; ambiguous?: false }
+  | { ok: true; ambiguous?: false; messageId?: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 
 /**
@@ -124,12 +124,11 @@ async function issueVerificationCodeInner(
     const displayName = prof?.full_name?.trim() || "Valued Customer"
 
     try {
-      await sendTransactionalVerificationEmail(trimmed, code, displayName)
+      const { messageId } = await sendTransactionalVerificationEmail(trimmed, code, displayName)
+      return { ok: true, ambiguous: false, messageId }
     } catch (e) {
       await admin.from("email_verifications").delete().eq("user_id", userId)
       const msg = e instanceof Error ? e.message : "Failed to send email"
       return { ok: false, error: msg, status: 502 }
     }
-
-  return { ok: true, ambiguous: false }
 }

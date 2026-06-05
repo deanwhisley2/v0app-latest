@@ -3,49 +3,41 @@
  */
 import { isSmtpConfigured, sendSmtpMail } from "@/lib/server/smtp-mail"
 import { buildBrandedTransactionalEmail } from "@/lib/server/transactional-email-templates"
+import { transactionalSenderFromEnv } from "@/lib/server/transactional-sender"
 
 export function senderFromTransactionalEnv(): { email: string; name: string } {
-  const email = (
-    process.env.BREVO_SENDER_EMAIL ??
-    process.env.SMTP_FROM_EMAIL ??
-    process.env.TRANSACTIONAL_FROM_EMAIL ??
-    "no-reply@nexuspro.it.com"
-  ).trim()
-  const name = (
-    process.env.BREVO_SENDER_NAME ??
-    process.env.SMTP_FROM_NAME ??
-    process.env.TRANSACTIONAL_FROM_NAME ??
-    "Nexus Pro"
-  ).trim()
-  return { email, name }
+  const { fromEmail, fromName } = transactionalSenderFromEnv()
+  return { email: fromEmail, name: fromName }
 }
 
 export async function sendTransactionalVerificationEmail(
   to: string,
   code: string,
   fullName: string = "Valued Customer",
-): Promise<string> {
+): Promise<{ messageId: string }> {
   const mail = buildBrandedTransactionalEmail({
-    subject: "Your Nexus Pro verification code",
-    preheader: "Complete your Nexus Pro registration with this secure code.",
+    subject: "Verify your Nexus Pro email",
+    preheader: "Your secure verification code from Nexus Pro.",
     headline: "Verify your email address",
     greetingName: fullName,
     bodyHtml:
-      "<p style=\"margin:0 0 12px;\">Thank you for joining Nexus Pro. Enter the code below to verify your email and continue.</p><p style=\"margin:0;font-size:14px;color:#64748b;\">This code expires in <strong>15 minutes</strong>.</p>",
+      "<p style=\"margin:0 0 12px;\">You requested email verification for your Nexus Pro account. Enter the code below on the verification screen to continue.</p><p style=\"margin:0 0 12px;font-size:14px;color:#64748b;\">Most messages arrive within one minute. Some providers may take a little longer.</p><p style=\"margin:0;font-size:14px;color:#64748b;\">This code expires in <strong>10 minutes</strong>.</p>",
     bodyText:
-      "Thank you for joining Nexus Pro. Enter the code below to verify your email and continue.\n\nThis code expires in 15 minutes.",
+      "You requested email verification for your Nexus Pro account. Enter the code below on the verification screen to continue.\n\nMost messages arrive within one minute.\n\nThis code expires in 10 minutes.",
     code,
     purpose: "verification",
+    securityNote:
+      "Never share this code with anyone — including people claiming to be Nexus Pro support. If you did not request this, you can ignore this email.",
   })
-  await sendSmtpMail({ to, ...mail })
-  return ""
+  const { messageId } = await sendSmtpMail({ to, ...mail })
+  return { messageId }
 }
 
 export async function sendTransactionalPasswordRecoveryEmail(
   to: string,
   recoveryUrl: string,
   fullName: string = "Valued Customer",
-): Promise<string> {
+): Promise<{ messageId: string }> {
   const mail = buildBrandedTransactionalEmail({
     subject: "Reset your Nexus Pro password",
     preheader: "Use this secure link to reset your Nexus Pro password.",
@@ -57,8 +49,8 @@ export async function sendTransactionalPasswordRecoveryEmail(
     cta: { label: "Reset Password", href: recoveryUrl },
     purpose: "password_recovery",
   })
-  await sendSmtpMail({ to, ...mail })
-  return ""
+  const { messageId } = await sendSmtpMail({ to, ...mail })
+  return { messageId }
 }
 
 export async function getTransactionalDeliveryEvent(

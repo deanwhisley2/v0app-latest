@@ -39,7 +39,11 @@ export async function attemptRegisterEmailVerification(
   }
 
   if (issued.ok && issued.ambiguous !== true) {
-    await logAuthEmailDeliveryEvent({ ...baseLog, outcome: "sent" })
+    await logAuthEmailDeliveryEvent({
+      ...baseLog,
+      outcome: "sent",
+      messageId: issued.messageId ?? null,
+    })
     return { status: "sent" }
   }
 

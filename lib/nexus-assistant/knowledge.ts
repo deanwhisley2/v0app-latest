@@ -199,11 +199,13 @@ export const NEXUS_UI_WHERE_TO_GO = [
 
 export const NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE = [
   "Email verification (after signup):",
-  "• Nexus sends a 6-digit code to the email you registered with.",
-  "• Typical delivery: within 1 minute; allow up to 2 minutes before resending.",
-  "• Check inbox, spam, junk, promotions, and updates folders.",
-  "• The verify screen shows one of three states: email sent (provider accepted), on the way (allow 2 minutes), or code not ready yet (tap resend).",
-  "• Resend has a 60-second cooldown. You can skip verification and sign in later, then verify from Settings → Security.",
+  "• Nexus sends a 6-digit code from Nexus Pro Security (security@nexuspro.it.com). Reply-to: support@nexuspro.it.com.",
+  "• Typical delivery: within 1 minute. Some providers (especially Gmail) may take up to 5 minutes.",
+  "• Gmail: check Primary, Promotions, and Spam. Outlook: check Inbox and Junk.",
+  "• The verify screen shows: email sent (provider accepted), on the way (allow a few minutes), or code not ready (tap resend).",
+  "• Spam-folder tips appear only after a short wait — not immediately at signup.",
+  "• Resend has a 60-second cooldown. Codes expire in 10 minutes.",
+  "• You can skip verification and sign in later, then verify from Settings → Security & Recovery.",
   "",
   "Sign-in options:",
   "• Email tab: your registered email + account password.",
@@ -217,9 +219,19 @@ export const NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE = [
   "",
   "Troubleshooting (before contacting support):",
   "• Confirm you are using the same email or phone you registered with.",
-  "• Wait 60 seconds between resend attempts.",
+  "• Wait at least one minute, then up to five minutes, before resending.",
+  "• Check Promotions (Gmail) or Junk (Outlook) — security mail is often filtered there.",
   "• Try resend from the verify screen or Settings → Security & Recovery.",
   "• Never share live codes, passwords, or PINs with anyone claiming to be support.",
+  "• If delivery still fails after two resend attempts, contact support@nexuspro.it.com from the email you registered with.",
+].join("\n")
+
+export const NEXUS_EMAIL_DELIVERABILITY_GUIDE = [
+  "Nexus Pro uses Brevo for transactional security email (verification, recovery, sign-in codes).",
+  "Sender: Nexus Pro Security <security@nexuspro.it.com>. Support replies: support@nexuspro.it.com.",
+  "Delivery expectations: under 1 minute typical; up to 5 minutes on some mobile and webmail providers.",
+  "Domain warming: keep volume steady; avoid mixing promotional campaigns with security OTP mail.",
+  "Institutional ops monitor accept/defer/bounce via Brevo logs and the admin deliverability dashboard.",
 ].join("\n")
 
 export const NEXUS_VERIFICATION_AND_SECURITY_GUIDE = [

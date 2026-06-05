@@ -1,5 +1,9 @@
 import { createHash, randomBytes } from "crypto"
 import nodemailer, { type Transporter } from "nodemailer"
+import {
+  transactionalListUnsubscribeHeader,
+  transactionalSenderFromEnv,
+} from "@/lib/server/transactional-sender"
 
 let cachedTransport: Transporter | null = null
 
@@ -10,6 +14,7 @@ export type SmtpConfig = {
   password: string
   fromEmail: string
   fromName: string
+  replyToEmail: string
 }
 
 export function smtpConfigFromEnv(): SmtpConfig | null {
@@ -22,16 +27,7 @@ export function smtpConfigFromEnv(): SmtpConfig | null {
   const user = process.env.BREVO_SMTP_USER?.trim() || process.env.SMTP_USER?.trim()
   const password =
     process.env.BREVO_SMTP_PASSWORD?.trim() || process.env.SMTP_PASSWORD?.trim()
-  const fromEmail =
-    process.env.BREVO_SENDER_EMAIL?.trim() ||
-    process.env.SMTP_FROM_EMAIL?.trim() ||
-    process.env.TRANSACTIONAL_FROM_EMAIL?.trim() ||
-    "no-reply@nexuspro.it.com"
-  const fromName =
-    process.env.BREVO_SENDER_NAME?.trim() ||
-    process.env.SMTP_FROM_NAME?.trim() ||
-    process.env.TRANSACTIONAL_FROM_NAME?.trim() ||
-    "Nexus Pro"
+  const sender = transactionalSenderFromEnv()
 
   if (!user || !password) return null
 
@@ -40,8 +36,9 @@ export function smtpConfigFromEnv(): SmtpConfig | null {
     port: Number.parseInt(portRaw, 10) || 587,
     user,
     password,
-    fromEmail,
-    fromName,
+    fromEmail: sender.fromEmail,
+    fromName: sender.fromName,
+    replyToEmail: sender.replyToEmail,
   }
 }
 
@@ -72,6 +69,10 @@ export async function verifySmtpConnection(): Promise<void> {
   await transport.verify()
 }
 
+export type SmtpSendResult = {
+  messageId: string
+}
+
 export async function sendSmtpMail(params: {
   to: string
   subject: string
@@ -79,13 +80,14 @@ export async function sendSmtpMail(params: {
   text: string
   /** Used for Message-ID / logging — e.g. login_code, verification */
   purpose?: string
-}): Promise<void> {
+}): Promise<SmtpSendResult> {
   const cfg = smtpConfigFromEnv()
   if (!cfg) throw new Error("Brevo SMTP is not configured")
 
   const transport = getTransport()
   const domain = cfg.fromEmail.split("@")[1] ?? "nexuspro.it.com"
   const messageId = `<${createHash("sha256").update(randomBytes(16)).digest("hex").slice(0, 24)}@${domain}>`
+  const sentAt = new Date()
 
   await transport.sendMail({
     from: `"${cfg.fromName}" <${cfg.fromEmail}>`,
@@ -94,13 +96,19 @@ export async function sendSmtpMail(params: {
     subject: params.subject,
     text: params.text,
     html: params.html,
-    replyTo: cfg.fromEmail,
+    replyTo: `"Nexus Pro Support" <${cfg.replyToEmail}>`,
+    date: sentAt,
     headers: {
       "Message-ID": messageId,
+      Date: sentAt.toUTCString(),
+      "List-Unsubscribe": transactionalListUnsubscribeHeader(cfg.replyToEmail),
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
       "X-Mailer": "Nexus Pro Transactional",
       "Auto-Submitted": "auto-generated",
       "X-Auto-Response-Suppress": "All",
       ...(params.purpose ? { "X-Entity-Ref-ID": params.purpose } : {}),
     },
   })
+
+  return { messageId }
 }

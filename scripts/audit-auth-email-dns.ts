@@ -18,7 +18,7 @@ config({ path: resolve(process.cwd(), ".env") })
 const DOMAIN = (
   process.env.BREVO_SENDER_EMAIL ??
   process.env.SMTP_FROM_EMAIL ??
-  "no-reply@nexuspro.it.com"
+  "security@nexuspro.it.com"
 )
   .split("@")[1]
   ?.trim()
@@ -92,7 +92,7 @@ function auditDns(providerInfo: { provider: string; configured: boolean }): {
   const senderEmail = (
     process.env.BREVO_SENDER_EMAIL ??
     process.env.SMTP_FROM_EMAIL ??
-    "no-reply@nexuspro.it.com"
+    "security@nexuspro.it.com"
   ).trim()
   const senderName = (process.env.BREVO_SENDER_NAME ?? process.env.SMTP_FROM_NAME ?? "Nexus Pro").trim()
   const fromDomain = senderEmail.split("@")[1]?.toLowerCase() ?? ""

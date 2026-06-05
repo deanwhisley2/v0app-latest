@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const SPAM_GUIDANCE =
-  "If you still do not see the message, check Spam, Junk, Promotions, or Updates. Some providers filter automated security emails."
+  "Gmail may place security messages in Promotions or Spam. Outlook may use Junk. Add security@nexuspro.it.com to contacts if needed."
 
 type Props = {
   className?: string
@@ -22,7 +22,7 @@ export function VerificationDeliveryHint({ className, codeSentAt }: Props) {
       setShowDelayedGuidance(false)
       return
     }
-    const elapsed = () => Date.now() - codeSentAt >= 60_000
+    const elapsed = () => Date.now() - codeSentAt >= 90_000
     if (elapsed()) {
       setShowDelayedGuidance(true)
       return
@@ -39,7 +39,7 @@ export function VerificationDeliveryHint({ className, codeSentAt }: Props) {
   return (
     <div className={cn("space-y-2", className)}>
       <p className="text-center text-xs leading-relaxed text-muted-foreground/85">
-        Verification emails usually arrive within 1 minute.
+        Verification email sent. Most emails arrive within 1 minute. Some providers may take up to 5 minutes.
       </p>
       {showDelayedGuidance ? (
         <div className="rounded-xl border border-border/50 bg-muted/10">

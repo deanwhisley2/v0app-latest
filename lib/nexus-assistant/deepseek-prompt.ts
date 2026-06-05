@@ -26,6 +26,7 @@ import {
   NEXUS_SETTLEMENT_AND_TRANSFER_RULES,
   NEXUS_VERIFICATION_AND_SECURITY_GUIDE,
   NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE,
+  NEXUS_EMAIL_DELIVERABILITY_GUIDE,
   NEXUS_ASSISTANT_RESPONSE_STYLE,
 } from "./knowledge"
 
@@ -121,6 +122,9 @@ export function buildJoelinDeepseekSystemPrompt(
     "",
     "Verification, sign-in & recovery:",
     NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE,
+    "",
+    "Email deliverability (calm troubleshooting):",
+    NEXUS_EMAIL_DELIVERABILITY_GUIDE,
     "",
     "Security PIN & withdrawals:",
     NEXUS_VERIFICATION_AND_SECURITY_GUIDE,

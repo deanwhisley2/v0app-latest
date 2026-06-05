@@ -18,6 +18,7 @@ export type AuthEmailDeliveryLogInput = {
   errorMessage?: string | null
   ipAddress?: string | null
   userAgent?: string | null
+  messageId?: string | null
 }
 
 function emailDomain(email: string | null | undefined): string | null {
@@ -45,7 +46,7 @@ export async function logAuthEmailDeliveryEvent(
 
   try {
     const client = admin ?? createAdminClient()
-    const { error } = await client.from("auth_email_delivery_events").insert({
+    const row: Record<string, unknown> = {
       user_id: input.userId ?? null,
       email_domain: payload.email_domain,
       channel: input.channel,
@@ -53,7 +54,13 @@ export async function logAuthEmailDeliveryEvent(
       error_message: payload.error,
       ip_address: payload.ip,
       user_agent: input.userAgent?.slice(0, 500) ?? null,
-    })
+    }
+    if (input.messageId) row.message_id = input.messageId.slice(0, 200)
+    let { error } = await client.from("auth_email_delivery_events").insert(row)
+    if (error && /message_id|column/i.test(error.message) && input.messageId) {
+      const { message_id: _drop, ...withoutMessageId } = row
+      ;({ error } = await client.from("auth_email_delivery_events").insert(withoutMessageId))
+    }
     if (error && !/relation.*does not exist|auth_email_delivery_events/i.test(error.message)) {
       console.warn("[auth-email] persist:", error.message)
     }

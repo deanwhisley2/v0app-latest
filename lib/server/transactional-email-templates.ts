@@ -38,8 +38,9 @@ export function buildBrandedTransactionalEmail(content: BrandedEmailContent): {
     "If you did not request this message, you can safely ignore it. Nexus Pro will never ask you to share your code by phone or chat."
   const codeBlock = content.code
     ? `<div style="margin:24px 0;padding:20px;background:#f4f6fb;border:1px solid #e2e8f0;border-radius:12px;text-align:center;">
-        <p style="margin:0 0 8px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Your secure code</p>
-        <p style="margin:0;font-size:36px;font-weight:700;letter-spacing:8px;color:#0f172a;">${escapeHtml(content.code)}</p>
+        <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Your verification code</p>
+        <p style="margin:0;font-size:32px;font-weight:700;letter-spacing:6px;color:#0f172a;">${escapeHtml(content.code)}</p>
+        <p style="margin:12px 0 0;font-size:12px;color:#64748b;">Never share this code with anyone.</p>
       </div>`
     : ""
   const ctaBlock = content.cta
@@ -62,6 +63,7 @@ export function buildBrandedTransactionalEmail(content: BrandedEmailContent): {
       <p style="margin:6px 0 0;font-size:13px;color:#64748b;">Institutional trading platform</p>
     </td></tr>
     <tr><td style="background:#ffffff;border:1px solid #dbe3ef;border-radius:16px;padding:28px 24px;">
+      <p style="margin:0 0 14px;font-size:12px;color:#64748b;">Requested from Nexus Pro</p>
       <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#0f172a;">${safeHeadline}</h1>
       <p style="margin:0 0 16px;">Hello <strong>${safeName}</strong>,</p>
       ${content.bodyHtml}
@@ -81,12 +83,13 @@ export function buildBrandedTransactionalEmail(content: BrandedEmailContent): {
 
   const text = [
     "Nexus Pro",
+    "Requested from Nexus Pro",
     content.headline,
     "",
     `Hello ${content.greetingName.trim() || "Valued Customer"},`,
     "",
     content.bodyText,
-    content.code ? `\nYour secure code: ${content.code}\n` : "",
+    content.code ? `\nYour verification code: ${content.code}\nNever share this code with anyone.\n` : "",
     content.cta ? `\n${content.cta.label}: ${content.cta.href}\n` : "",
     "",
     `Security notice: ${security}`,

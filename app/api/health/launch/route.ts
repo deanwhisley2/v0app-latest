@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { NEXUS_TIER_MATRIX_PUBLIC } from "@/lib/nexus-tier-matrix"
 import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
-import { getAuthEmailHealthStats } from "@/lib/server/auth-email-delivery-log"
+import { getAuthEmailDeliverabilityDashboard } from "@/lib/server/auth-email-deliverability"
 
 export const dynamic = "force-dynamic"
 
@@ -79,10 +79,10 @@ export async function GET() {
 
   const launchReady = Boolean(platformLaunch?.active)
 
-  let authEmailHealth: Awaited<ReturnType<typeof getAuthEmailHealthStats>> | null = null
+  let authEmailHealth: Awaited<ReturnType<typeof getAuthEmailDeliverabilityDashboard>> | null = null
   if (databasePing) {
     try {
-      authEmailHealth = await getAuthEmailHealthStats(24)
+      authEmailHealth = await getAuthEmailDeliverabilityDashboard(24)
     } catch {
       authEmailHealth = null
     }
@@ -122,7 +122,8 @@ export async function GET() {
       health_basic: "/api/health",
       site_url: "Set NEXT_PUBLIC_SITE_URL (e.g. https://nexuspro.it.com) for auth links and metadata.",
       transactional_email:
-        "Set BREVO_SMTP_USER + BREVO_SMTP_PASSWORD (Brevo SMTP relay key xsmtpsib…) and optional BREVO_SENDER_EMAIL / BREVO_SENDER_NAME.",
+        "Set BREVO_SMTP_USER + BREVO_SMTP_PASSWORD. Sender defaults: security@nexuspro.it.com (Nexus Pro Security), Reply-To support@nexuspro.it.com.",
+      auth_email_deliverability_admin: "/api/admin/auth-email-deliverability (Level 5 bearer)",
       magic_link_login:
         "Passwordless login: POST /api/auth/request-magic-link (6-digit code email) and POST /api/auth/verify-magic-link with { email, code }. Uses Brevo SMTP.",
     },
