@@ -8,7 +8,7 @@ type Body = { email?: string }
 
 /**
  * POST /api/auth/request-magic-link
- * Sends a 6-digit sign-in code (Cyberpersons REST or SMTP). Anti-enumeration: same response when email unknown.
+ * Sends a 6-digit sign-in code via Brevo SMTP. Anti-enumeration: same response when email unknown.
  */
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Magic link email is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD on the server.",
+          "Magic link email is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_PASSWORD on the server.",
       },
       { status: 503 },
     )

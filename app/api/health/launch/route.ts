@@ -66,13 +66,13 @@ export async function GET() {
   }
 
   /** Optional: registration / password flows need transactional email; core app shell works without. */
+  const brevoSmtpConfigured = Boolean(
+    (process.env.BREVO_SMTP_USER?.trim() || process.env.SMTP_USER?.trim()) &&
+      (process.env.BREVO_SMTP_PASSWORD?.trim() || process.env.SMTP_PASSWORD?.trim()),
+  )
   const optionalServices = {
-    cyberpersons_email_api_configured: Boolean(process.env.CYBERPERSONS_EMAIL_API_KEY?.trim()),
-    smtp_magic_link_configured: Boolean(
-      (process.env.SMTP_HOST?.trim() || process.env.CYBERPERSONS_SMTP_HOST?.trim()) &&
-        (process.env.SMTP_USER?.trim() || process.env.CYBERPERSONS_SMTP_USER?.trim()) &&
-        (process.env.SMTP_PASSWORD?.trim() || process.env.CYBERPERSONS_SMTP_PASSWORD?.trim()),
-    ),
+    brevo_smtp_configured: brevoSmtpConfigured,
+    transactional_email_configured: brevoSmtpConfigured,
     next_public_site_url: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
   }
 
@@ -111,9 +111,9 @@ export async function GET() {
       health_basic: "/api/health",
       site_url: "Set NEXT_PUBLIC_SITE_URL (e.g. https://nexuspro.it.com) for auth links and metadata.",
       transactional_email:
-        "Set CYBERPERSONS_EMAIL_API_KEY (and optional CYBERPERSONS_SENDER_*) for registration codes; set SMTP_* for passwordless magic-link login.",
+        "Set BREVO_SMTP_USER + BREVO_SMTP_PASSWORD (Brevo SMTP relay key xsmtpsib…) and optional BREVO_SENDER_EMAIL / BREVO_SENDER_NAME.",
       magic_link_login:
-        "Passwordless login: POST /api/auth/request-magic-link (6-digit code email) and POST /api/auth/verify-magic-link with { email, code }. Uses CYBERPERSONS_EMAIL_API_KEY or SMTP_*.",
+        "Passwordless login: POST /api/auth/request-magic-link (6-digit code email) and POST /api/auth/verify-magic-link with { email, code }. Uses Brevo SMTP.",
     },
   })
 }

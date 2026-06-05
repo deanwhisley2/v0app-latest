@@ -24,7 +24,7 @@ if [[ "${DEPLOY_FROM_LOCAL:-0}" == "1" ]]; then
   REMOTE_USER="${REMOTE_USER:-vpsuser}"
   LOCAL_ENV="${LOCAL_ENV_FILE:-.env.local}"
   if [[ ! -f "${LOCAL_ENV}" ]]; then
-    echo "ERROR: ${LOCAL_ENV} not found (create it with Cyberpersons email + Supabase keys)."
+    echo "ERROR: ${LOCAL_ENV} not found (create it with Brevo SMTP + Supabase keys)."
     exit 1
   fi
   echo "==> Copy ${LOCAL_ENV} → ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_APP_DIR}/.env.local"

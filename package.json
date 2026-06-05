@@ -9,6 +9,8 @@
     "start": "next start",
     "start:with-recovery": "npx tsx scripts/reconcile-on-start.ts && next start",
     "operational:smoke": "npx tsx scripts/operational-smoke-check.ts",
+    "audit:auth-email-dns": "npx tsx scripts/audit-auth-email-dns.ts",
+    "brevo:smtp-check": "npx tsx scripts/brevo-smtp-check.ts",
     "verify:withdrawal-payout": "npx tsx scripts/verify-withdrawal-payout-reconciliation.ts",
     "nexus:financial-batch1-check": "npx tsx scripts/nexus-financial-batch1-check.ts",
     "test:fixed-trade-earnings-conservation": "npx tsx scripts/test-fixed-trade-earnings-conservation.ts",

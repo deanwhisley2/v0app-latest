@@ -64,57 +64,7 @@ function transactionalCodeBodies(code: string, fullName: string, kind: CodeEmail
   return { subject: copy.subject, text, html, tag: copy.tag }
 }
 
-async function sendViaCyberpersonsRest(
-  to: string,
-  code: string,
-  fullName: string,
-  kind: CodeEmailKind,
-): Promise<boolean> {
-  const apiKey = process.env.CYBERPERSONS_EMAIL_API_KEY?.trim()
-  if (!apiKey) return false
-
-  const senderEmail =
-    process.env.CYBERPERSONS_SENDER_EMAIL?.trim() ||
-    process.env.SMTP_FROM_EMAIL?.trim() ||
-    "noreply@nexuspro.it.com"
-  const senderName =
-    process.env.CYBERPERSONS_SENDER_NAME?.trim() ||
-    process.env.SMTP_FROM_NAME?.trim() ||
-    "Nexus Pro"
-  const sendUrl =
-    (process.env.CYBERPERSONS_EMAIL_API_URL ?? "https://platform.cyberpersons.com/email/v1/send").trim()
-
-  const { subject, text, html, tag } = transactionalCodeBodies(code, fullName, kind)
-
-  const res = await fetch(sendUrl, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      from: senderEmail,
-      to: to.trim(),
-      subject,
-      html,
-      text,
-      reply_to: senderEmail,
-      tags: ["nexus-pro", tag],
-      metadata: { purpose: tag, recipient_name: fullName.trim() || "Customer" },
-    }),
-    signal: AbortSignal.timeout(15_000),
-  })
-
-  const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string }
-  if (!res.ok || body.success === false) {
-    console.warn("[login-code-email] Cyberpersons REST failed:", body.error ?? res.statusText)
-    return false
-  }
-  return true
-}
-
-/** Transactional login code — Cyberpersons REST when configured, else SMTP. No links in body. */
+/** Transactional login / reset codes via Brevo SMTP. No links in body. */
 async function sendTransactionalCodeEmail(
   to: string,
   code: string,
@@ -122,9 +72,6 @@ async function sendTransactionalCodeEmail(
   kind: CodeEmailKind,
 ): Promise<void> {
   const { subject, text, html, tag } = transactionalCodeBodies(code, fullName, kind)
-
-  if (await sendViaCyberpersonsRest(to, code, fullName, kind)) return
-
   await sendSmtpMail({
     to,
     subject,

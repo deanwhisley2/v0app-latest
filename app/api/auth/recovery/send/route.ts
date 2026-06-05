@@ -18,14 +18,13 @@ function maskEmail(email: string): string {
 
 /**
  * POST /api/auth/recovery/send
- * Sends a branded 6-digit reset code (Cyberpersons REST or SMTP). Never uses Supabase default reset email.
+ * Sends a branded 6-digit reset code via Brevo SMTP. Never uses Supabase default reset email.
  */
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
   if (blocked) return blocked
 
-  const hasEmailApi = Boolean(process.env.CYBERPERSONS_EMAIL_API_KEY?.trim())
-  if (!hasEmailApi && !isSmtpConfigured()) {
+  if (!isSmtpConfigured()) {
     return NextResponse.json(
       { error: "Password reset email is not configured on the server." },
       { status: 503 },

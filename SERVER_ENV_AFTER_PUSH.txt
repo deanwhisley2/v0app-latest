@@ -1,15 +1,16 @@
 # After git pull on VPS — append to /opt/nexus-pro/.env.local (do not commit real keys):
 
-# REST API (registration 6-digit codes)
-echo "CYBERPERSONS_EMAIL_API_KEY=PASTE_YOUR_sk_live_KEY_HERE" >> .env.local
+# Brevo SMTP — https://app.brevo.com/settings/keys/smtp (relay key xsmtpsib…)
+echo "BREVO_SMTP_HOST=smtp-relay.brevo.com" >> .env.local
+echo "BREVO_SMTP_PORT=587" >> .env.local
+echo "BREVO_SMTP_USER=your-brevo-login@email.com" >> .env.local
+echo "BREVO_SMTP_PASSWORD=PASTE_xsmtpsib_SMTP_KEY_HERE" >> .env.local
+echo "BREVO_SENDER_EMAIL=no-reply@nexuspro.it.com" >> .env.local
+echo "BREVO_SENDER_NAME=Nexus Pro" >> .env.local
 
-# SMTP (passwordless magic-link login — nodemailer)
-echo "SMTP_HOST=mail.cyberpersons.com" >> .env.local
-echo "SMTP_PORT=587" >> .env.local
-echo "SMTP_USER=smtp_3671703833b3c8c2" >> .env.local
-echo "SMTP_PASSWORD=PASTE_SMTP_PASSWORD_HERE" >> .env.local
-echo "SMTP_FROM_EMAIL=noreply@nexuspro.it.com" >> .env.local
-echo "SMTP_FROM_NAME=Nexus Pro" >> .env.local
+# Remove legacy Cyberpersons vars if present:
+# sed -i '/^CYBERPERSONS_/d' .env.local
 
 # Docs: docs/MAGIC_LINK_AUTH_SETUP.md
-# Health: optional_services.smtp_magic_link_configured on GET /api/health/launch
+# Health: optional_services.brevo_smtp_configured on GET /api/health/launch
+# Check: npm run brevo:smtp-check

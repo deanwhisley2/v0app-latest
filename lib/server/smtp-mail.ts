@@ -13,20 +13,27 @@ export type SmtpConfig = {
 }
 
 export function smtpConfigFromEnv(): SmtpConfig | null {
-  const host = process.env.SMTP_HOST?.trim() || process.env.CYBERPERSONS_SMTP_HOST?.trim()
-  const portRaw = process.env.SMTP_PORT?.trim() || process.env.CYBERPERSONS_SMTP_PORT?.trim() || "587"
-  const user = process.env.SMTP_USER?.trim() || process.env.CYBERPERSONS_SMTP_USER?.trim()
-  const password = process.env.SMTP_PASSWORD?.trim() || process.env.CYBERPERSONS_SMTP_PASSWORD?.trim()
+  const host =
+    process.env.BREVO_SMTP_HOST?.trim() ||
+    process.env.SMTP_HOST?.trim() ||
+    "smtp-relay.brevo.com"
+  const portRaw =
+    process.env.BREVO_SMTP_PORT?.trim() || process.env.SMTP_PORT?.trim() || "587"
+  const user = process.env.BREVO_SMTP_USER?.trim() || process.env.SMTP_USER?.trim()
+  const password =
+    process.env.BREVO_SMTP_PASSWORD?.trim() || process.env.SMTP_PASSWORD?.trim()
   const fromEmail =
+    process.env.BREVO_SENDER_EMAIL?.trim() ||
     process.env.SMTP_FROM_EMAIL?.trim() ||
-    process.env.CYBERPERSONS_SENDER_EMAIL?.trim() ||
-    "noreply@nexuspro.it.com"
+    process.env.TRANSACTIONAL_FROM_EMAIL?.trim() ||
+    "no-reply@nexuspro.it.com"
   const fromName =
+    process.env.BREVO_SENDER_NAME?.trim() ||
     process.env.SMTP_FROM_NAME?.trim() ||
-    process.env.CYBERPERSONS_SENDER_NAME?.trim() ||
+    process.env.TRANSACTIONAL_FROM_NAME?.trim() ||
     "Nexus Pro"
 
-  if (!host || !user || !password) return null
+  if (!user || !password) return null
 
   return {
     host,
@@ -47,7 +54,7 @@ function getTransport(): Transporter {
   const cfg = smtpConfigFromEnv()
   if (!cfg) {
     throw new Error(
-      "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD (or CYBERPERSONS_SMTP_*).",
+      "Brevo SMTP is not configured. Set BREVO_SMTP_USER, BREVO_SMTP_PASSWORD (and optional BREVO_SMTP_HOST, BREVO_SENDER_*).",
     )
   }
   cachedTransport = nodemailer.createTransport({
@@ -60,6 +67,11 @@ function getTransport(): Transporter {
   return cachedTransport
 }
 
+export async function verifySmtpConnection(): Promise<void> {
+  const transport = getTransport()
+  await transport.verify()
+}
+
 export async function sendSmtpMail(params: {
   to: string
   subject: string
@@ -69,7 +81,7 @@ export async function sendSmtpMail(params: {
   purpose?: string
 }): Promise<void> {
   const cfg = smtpConfigFromEnv()
-  if (!cfg) throw new Error("SMTP is not configured")
+  if (!cfg) throw new Error("Brevo SMTP is not configured")
 
   const transport = getTransport()
   const domain = cfg.fromEmail.split("@")[1] ?? "nexuspro.it.com"

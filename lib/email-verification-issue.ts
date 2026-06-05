@@ -1,7 +1,7 @@
 import { randomInt } from "crypto"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
-import { sendVerificationEmail } from "@/lib/cyberpersons-email"
+import { sendTransactionalVerificationEmail } from "@/lib/server/transactional-email"
 
 const VERIFY_TTL_MS = 15 * 60 * 1000
 export const EMAIL_VERIFICATION_SEND_COOLDOWN_MS = 60 * 1000
@@ -23,8 +23,21 @@ export type IssueVerificationResult =
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 
 /**
- * Stores a code in public.email_verifications (service role) and sends it via Cyberpersons Email API.
+ * Stores a code in public.email_verifications (service role) and sends it via Brevo SMTP.
  */
+export async function issueEmailVerificationCodeForUser(
+  userId: string,
+  emailRaw: string,
+): Promise<IssueVerificationResult> {
+  const trimmed = emailRaw.trim()
+  const emailKey = trimmed.toLowerCase()
+
+  return enqueueVerificationSend(`${userId}:${emailKey}`, async () => {
+    const admin = createAdminClient()
+    return issueVerificationCodeInner(admin, userId, trimmed, emailKey)
+  })
+}
+
 export async function issueEmailVerificationCode(
   emailRaw: string
 ): Promise<IssueVerificationResult> {
@@ -39,7 +52,18 @@ export async function issueEmailVerificationCode(
       return { ok: true, ambiguous: true }
     }
 
-    const { data: lastRows, error: lastErr } = await admin
+    return issueVerificationCodeInner(admin, userId, trimmed, emailKey)
+  })
+}
+
+async function issueVerificationCodeInner(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  trimmed: string,
+  emailKey: string,
+): Promise<IssueVerificationResult> {
+
+  const { data: lastRows, error: lastErr } = await admin
       .from("email_verifications")
       .select("created_at")
       .eq("user_id", userId)
@@ -100,13 +124,12 @@ export async function issueEmailVerificationCode(
     const displayName = prof?.full_name?.trim() || "Valued Customer"
 
     try {
-      await sendVerificationEmail(trimmed, code, displayName)
+      await sendTransactionalVerificationEmail(trimmed, code, displayName)
     } catch (e) {
       await admin.from("email_verifications").delete().eq("user_id", userId)
       const msg = e instanceof Error ? e.message : "Failed to send email"
       return { ok: false, error: msg, status: 502 }
     }
 
-    return { ok: true, ambiguous: false }
-  })
+  return { ok: true, ambiguous: false }
 }

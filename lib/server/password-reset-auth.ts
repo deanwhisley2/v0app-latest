@@ -37,7 +37,7 @@ export type RequestPasswordResetResult =
   | { ok: true; message: string; maskedEmail?: string }
   | { ok: false; error: string; status: number }
 
-/** Sends branded 6-digit code via Cyberpersons/SMTP — never Supabase default reset email. */
+/** Sends branded 6-digit code via Brevo SMTP — never Supabase default reset email. */
 export async function requestPasswordResetCode(params: {
   emailRaw: string
   requestIp: string | null

@@ -13,7 +13,7 @@ import { commitVerifiedProfileEmail } from "@/lib/server/pending-verification-em
 import { trackLoginSession } from "@/lib/server/login-session"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 
-/** Validates code from public.email_verifications (issued via Cyberpersons transactional email). */
+/** Validates code from public.email_verifications (issued via Brevo SMTP). */
 
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -40,7 +40,19 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
-    const userId = await findAuthUserIdByEmail(admin, email)
+    const nowIso = new Date().toISOString()
+    let userId = await findAuthUserIdByEmail(admin, email)
+    if (!userId) {
+      const { data: pendingRow } = await admin
+        .from("email_verifications")
+        .select("user_id")
+        .eq("email", emailNormalized)
+        .gt("expires_at", nowIso)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      userId = pendingRow?.user_id ? String(pendingRow.user_id) : null
+    }
     if (!userId) {
       return NextResponse.json({ error: "Invalid code or email" }, { status: 400 })
     }
@@ -71,8 +83,6 @@ export async function POST(request: Request) {
     if (!corridor.ok) {
       return NextResponse.json({ error: corridor.message }, { status: 403 })
     }
-
-    const nowIso = new Date().toISOString()
 
     const { data: rows, error: selErr } = await admin
       .from("email_verifications")
@@ -127,7 +137,9 @@ export async function POST(request: Request) {
 
     await admin.from("email_verifications").delete().eq("user_id", userId)
 
-    const sessionResult = await createAuthSessionForEmail(emailNormalized)
+    const { data: authUser } = await admin.auth.admin.getUserById(userId)
+    const authEmail = authUser.user?.email?.trim().toLowerCase() ?? emailNormalized
+    const sessionResult = await createAuthSessionForEmail(authEmail)
     if (!sessionResult.ok) {
       return NextResponse.json({ error: sessionResult.error }, { status: sessionResult.status })
     }

@@ -1,6 +1,6 @@
 # NEXUS PRO — Terms, Privacy & Support (filled draft)
 
-**Purpose:** Draft for your counsel to review. Filled placeholders use information from the product codebase (e.g. Supabase, Cyberpersons email) and details you supplied (Roger Schelman, NEXUS CRYPTO INTELLIGENCE, esknexuspro@gmail.com, nexuspro.it.com). **Replace bracketed items** that still need a street address, final entity name, or jurisdiction.
+**Purpose:** Draft for your counsel to review. Filled placeholders use information from the product codebase (e.g. Supabase, Brevo email) and details you supplied (Roger Schelman, NEXUS CRYPTO INTELLIGENCE, esknexuspro@gmail.com, nexuspro.it.com). **Replace bracketed items** that still need a street address, final entity name, or jurisdiction.
 
 ---
 
@@ -124,14 +124,14 @@ We do not intentionally collect **precise geolocation** unless you later add an 
 - Operate accounts, charts, notifications, exchange connectivity, and optional automation.
 - **Security and fraud prevention**, abuse detection, and legal compliance.
 - **Product improvement** (including diagnostics and aggregated analytics if you use them — **disclose vendors**).
-- **Communications**: service emails (e.g., verification via **Cyberpersons** transactional email using sender such as `no-reply@nexuspro.it.com`), support responses, and legally required notices.
+- **Communications**: service emails (e.g., verification via **Brevo** transactional email using sender such as `no-reply@nexuspro.it.com`), support responses, and legally required notices.
 
 ## 3. Sharing & processors
 
 We use service providers (“processors”) to run the Platform, including:
 
 - **Supabase** — authentication, database, and related infrastructure *(region: per your Supabase project settings; link: [https://supabase.com/privacy](https://supabase.com/privacy))*.
-- **Cyberpersons** — transactional email delivery *(link: [https://cyberpersons.com/](https://cyberpersons.com/))*.
+- **Brevo** — transactional email delivery *(link: [https://www.brevo.com/](https://www.brevo.com/))*.
 - **Hosting / deployment** — e.g. VPS with nginx + PM2, or other servers **as actually used**; list the provider and subprocessors.
 - **Optional AI** — **DeepSeek** (Joelin) when `DEEPSEEK_API_KEY` is configured; otherwise assistant replies may be local-only.
 
