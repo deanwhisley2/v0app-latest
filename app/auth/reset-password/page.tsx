@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
+import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
 import { PasswordField } from "@/components/auth/password-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -89,12 +90,14 @@ function ResetPasswordContent() {
 
   return (
     <AuthLayoutShell language="en" showBrand={false} showTrustStrip={false}>
-      <header className="mb-5 text-center">
-        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">Reset password</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+      <header className="mb-6 text-center">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Reset password</h1>
+        <p className="mt-2 text-xs text-muted-foreground">
           Enter the 6-digit code from your email and set a new password.
         </p>
       </header>
+
+      <VerificationDeliveryHint className="mb-5" />
 
       {info ? (
         <p className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">

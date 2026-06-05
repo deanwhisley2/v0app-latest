@@ -7,7 +7,7 @@ import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 const TTL_MS = 15 * 60 * 1000
 const SEND_COOLDOWN_MS = 120 * 1000
 const GENERIC_SENT_MESSAGE =
-  "If an account exists for this email, we sent a 6-digit sign-in code. Check your inbox (and spam) and enter it on the login page."
+  "If an account exists for this email, we sent a 6-digit sign-in code. It usually arrives within one minute."
 
 const sendChains = new Map<string, Promise<unknown>>()
 

@@ -69,7 +69,7 @@ const en: AuthMessages = {
     signingIn: "Signing in…",
     biometricSoon: "Biometric sign-in (soon)",
     noAccount: "New to Nexus?",
-    register: "Create account",
+    register: "Open your Nexus account",
     home: "Home",
     guestContinue: "Continue as guest",
     guestHint: "Local preview only — not a registered account.",

@@ -15,24 +15,18 @@ export function isValidRegisterEmail(raw: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
 }
 
-/** At least one of phone or email must be present and valid. */
+/** Email is required; phone is optional secondary contact. */
 export function validateRegisterContact(emailRaw: string, phoneRaw: string): string | null {
   const email = emailRaw.trim()
   const phone = normalizeRegisterPhone(phoneRaw)
   const hasEmail = isValidRegisterEmail(email)
   const hasPhone = isValidRegisterPhone(phone)
-  if (!hasEmail && !hasPhone) {
-    return "Enter a valid phone number, email address, or both."
-  }
-  if (email && !hasEmail) return "Enter a valid email address or leave it blank."
-  if (phone && !hasPhone) return "Enter a valid phone number (at least 9 digits)."
+  if (!hasEmail) return "Enter a valid email address."
+  if (phone && !hasPhone) return "Enter a valid phone number (at least 9 digits) or leave it blank."
   return null
 }
 
-/**
- * Supabase Auth requires an email for password signup.
- * Phone-only users get an internal routing address; they sign in with phone via resolveIdentifierToEmail.
- */
+/** Canonical auth email is always the user's real inbox address. */
 export function resolveRegisterAuthEmail(emailRaw: string, phoneRaw: string): {
   authEmail: string
   displayEmail: string | null
@@ -41,24 +35,13 @@ export function resolveRegisterAuthEmail(emailRaw: string, phoneRaw: string): {
 } {
   const email = emailRaw.trim().toLowerCase()
   const phone = normalizeRegisterPhone(phoneRaw)
-  const hasEmail = isValidRegisterEmail(email)
   const hasPhone = isValidRegisterPhone(phone)
 
-  if (hasEmail) {
-    return {
-      authEmail: email,
-      displayEmail: email,
-      phone: hasPhone ? phone : null,
-      requiresEmailVerification: true,
-    }
-  }
-
-  const digits = phone.replace(/\D/g, "")
   return {
-    authEmail: `p${digits}@${PHONE_AUTH_EMAIL_DOMAIN}`,
-    displayEmail: null,
-    phone,
-    requiresEmailVerification: false,
+    authEmail: email,
+    displayEmail: email,
+    phone: hasPhone ? phone : null,
+    requiresEmailVerification: true,
   }
 }
 

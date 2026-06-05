@@ -12,8 +12,7 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp"
-import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
-import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
+import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
 import { useVerificationResendCooldown } from "@/hooks/use-verification-resend-cooldown"
 import {
   clearPendingEmailVerification,
@@ -31,7 +30,6 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
   const [busy, setBusy] = useState<"verify" | "resend" | null>(null)
   /** Inline errors only after user actions — never shown on initial load. */
   const [inlineError, setInlineError] = useState<string | null>(null)
-  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
   const { secondsLeft, canResend, markSent, applyServerRetryAfter } = useVerificationResendCooldown()
 
   useEffect(() => {
@@ -73,8 +71,7 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         return
       }
       markSent()
-      toast.success(json.message || "Check your inbox for the code.")
-      setEmailSentDialogOpen(true)
+      toast.success(json.message || "Verification code sent.")
     } catch {
       setInlineError("Network error")
     } finally {
@@ -120,7 +117,7 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
   return (
     <>
     <form className="space-y-6" onSubmit={handleVerify}>
-      <EmailDeliverabilityNotice />
+      <VerificationDeliveryHint />
 
       <div className="space-y-2">
         <Label htmlFor="verify-email">Email</Label>
@@ -193,8 +190,6 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
             : `Resend available in ${secondsLeft}s`}
       </Button>
 
-      <EmailDeliverabilityNotice />
-
       <p className="text-center text-sm text-muted-foreground">
         <Link href="/auth/login" className="underline-offset-4 hover:underline">
           Back to sign in
@@ -205,7 +200,6 @@ export function EmailVerification({ initialEmail = "" }: EmailVerificationProps)
         </Link>
       </p>
     </form>
-    <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
     </>
   )
 }

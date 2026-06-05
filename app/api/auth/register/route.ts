@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
-import { issueEmailVerificationCode } from "@/lib/email-verification-issue"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { normalizeReferralCodeInput } from "@/lib/referral-code"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
@@ -34,6 +33,7 @@ import {
   confirmAuthEmailForPhonePasswordLogin,
 } from "@/lib/server/register-auth-access"
 import { syncRegisterProfileContact } from "@/lib/server/register-profile-sync"
+import { attemptRegisterEmailVerification } from "@/lib/server/register-email-verification"
 
 type RegisterBody = {
   email?: string
@@ -173,13 +173,12 @@ export async function POST(request: Request) {
         full_name,
         funding_country_code,
       })
+      let emailVerificationDeferred = false
       if (requiresEmailVerification && emailRaw) {
         const pendingEmail = emailRaw.toLowerCase()
         await markProfilePendingVerificationEmail(admin, existingId, pendingEmail, userMetadata)
-        const issued = await issueEmailVerificationCode(emailRaw)
-        if (!issued.ok) {
-          return NextResponse.json({ error: issued.error }, { status: 400 })
-        }
+        const emailAttempt = await attemptRegisterEmailVerification(emailRaw)
+        emailVerificationDeferred = emailAttempt.deferred
       }
       if (phone) {
         await confirmAuthEmailForPhonePasswordLogin(admin, existingId)
@@ -189,6 +188,7 @@ export async function POST(request: Request) {
         ok: true,
         requiresEmailVerification,
         email: requiresEmailVerification ? emailRaw.toLowerCase() : undefined,
+        ...(emailVerificationDeferred ? { emailVerificationDeferred: true } : {}),
       })
     } catch (e) {
       console.warn("[register] duplicate resend path:", e instanceof Error ? e.message : String(e))
@@ -262,10 +262,7 @@ export async function POST(request: Request) {
   }
 
   if (requiresEmailVerification && emailRaw) {
-    const issued = await issueEmailVerificationCode(emailRaw)
-    if (!issued.ok) {
-      return NextResponse.json({ error: issued.error }, { status: issued.status ?? 400 })
-    }
+    const emailAttempt = await attemptRegisterEmailVerification(emailRaw)
 
     if (phone) {
       const sessionResult = await createAuthSessionForEmail(authEmail)
@@ -291,6 +288,7 @@ export async function POST(request: Request) {
           requiresEmailVerification: true,
           email: emailRaw.toLowerCase(),
           session: true,
+          ...(emailAttempt.deferred ? { emailVerificationDeferred: true } : {}),
         })
       }
     }
@@ -299,6 +297,7 @@ export async function POST(request: Request) {
       ok: true,
       requiresEmailVerification: true,
       email: emailRaw.toLowerCase(),
+      ...(emailAttempt.deferred ? { emailVerificationDeferred: true } : {}),
     })
   }
 

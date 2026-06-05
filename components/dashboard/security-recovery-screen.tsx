@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
+import { EmailVerificationSettingsCard } from "@/components/dashboard/email-verification-settings-card"
 const UserSecurityRecoverySummary = dynamic(
   () =>
     import("@/components/dashboard/user-security-recovery-summary").then((m) => m.UserSecurityRecoverySummary),
@@ -193,6 +194,8 @@ export function SecurityRecoveryScreen() {
 
   return (
     <div className="space-y-4">
+      <EmailVerificationSettingsCard />
+
       {needsSetup === null ? null : needsSetup ? null : (
         <UserSecurityRecoverySummary key={profileKey} appealCenterHref="/dashboard/security/appeals" />
       )}

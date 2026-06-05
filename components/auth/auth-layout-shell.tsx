@@ -48,7 +48,9 @@ export function AuthLayoutShell({
         {showTrustStrip ? <AuthTrustStrip language={language} className="mb-5" /> : null}
         <div
           className={cn(
-            "rounded-2xl border border-border/90 bg-card/95 p-5 shadow-xl shadow-black/10 backdrop-blur-sm sm:p-6",
+            "rounded-[24px] border border-emerald-500/15 p-5 shadow-lg shadow-black/20 sm:p-7",
+            "bg-[rgba(20,28,52,0.78)] backdrop-blur-[24px] backdrop-saturate-[160%]",
+            "ring-1 ring-inset ring-emerald-400/10",
           )}
         >
           {children}

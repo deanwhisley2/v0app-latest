@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { Check, Loader2, Mail } from "lucide-react"
+import { Loader2, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,8 +10,8 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp"
-import { EmailSentSuccessDialog } from "@/components/auth/email-sent-success-dialog"
-import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { VerificationCodeSentPanel } from "@/components/auth/verification-code-sent-panel"
+import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
 import { useVerificationResendCooldown } from "@/hooks/use-verification-resend-cooldown"
 import { supabase } from "@/lib/supabaseClient"
 import {
@@ -28,8 +28,6 @@ type Props = {
   initialMode?: ViewMode
 }
 
-const FOLDER_CHECKS = ["Inbox", "Spam/Junk", "Promotions", "Updates"] as const
-
 export function EmailVerificationPendingScreen({
   initialEmail = "",
   initialMode = "landing",
@@ -41,7 +39,8 @@ export function EmailVerificationPendingScreen({
   const [infoMsg, setInfoMsg] = useState("")
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
-  const [emailSentDialogOpen, setEmailSentDialogOpen] = useState(false)
+  const [deliveryDeferred, setDeliveryDeferred] = useState(false)
+  const [codeSentAt, setCodeSentAt] = useState<number | null>(() => Date.now())
   const otpWrapRef = useRef<HTMLDivElement>(null)
 
   const { secondsLeft, canResend, markSent, applyServerRetryAfter } = useVerificationResendCooldown()
@@ -50,6 +49,7 @@ export function EmailVerificationPendingScreen({
     const pending = getPendingEmailVerification()
     if (pending?.email) setEmail(pending.email)
     if (pending?.enter_code_mode) setViewMode("enter-code")
+    if (pending?.email_delivery_deferred) setDeliveryDeferred(true)
   }, [])
 
   useEffect(() => {
@@ -63,6 +63,7 @@ export function EmailVerificationPendingScreen({
         last_resend_at: pending?.last_resend_at,
         enter_code_mode: pending?.enter_code_mode ?? initialMode === "enter-code",
         created_at: pending?.created_at,
+        email_delivery_deferred: pending?.email_delivery_deferred,
       })
     }
     hydrateFromStorage()
@@ -155,12 +156,19 @@ export function EmailVerificationPendingScreen({
         if (res.status === 429 && data.retryAfterSeconds) {
           applyServerRetryAfter(data.retryAfterSeconds)
         }
-        setError(data.error ?? "Failed to resend code.")
+        setDeliveryDeferred(true)
+        patchPendingEmailVerification({ email_delivery_deferred: true })
+        setError(
+          data.error ??
+            "We could not deliver the verification email. You can verify later from Security Settings after sign-in.",
+        )
         return
       }
+      setDeliveryDeferred(false)
+      patchPendingEmailVerification({ email_delivery_deferred: false })
       markSent()
-      setInfoMsg(data.message ?? "New code sent! Check your email.")
-      setEmailSentDialogOpen(true)
+      setCodeSentAt(Date.now())
+      setInfoMsg(data.message ?? "Verification code sent.")
     } catch {
       setError("Network error. Please try again.")
     } finally {
@@ -221,34 +229,37 @@ export function EmailVerificationPendingScreen({
   if (viewMode === "landing") {
     return (
       <>
-        <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl">
+        <div className="w-full max-w-md space-y-6 rounded-[24px] border border-emerald-500/15 bg-[rgba(20,28,52,0.78)] p-8 shadow-lg shadow-black/20 ring-1 ring-inset ring-emerald-400/10 backdrop-blur-[24px] backdrop-saturate-[160%]">
           <div className="text-center">
             <img src="/logo.jpg" alt="Nexus Pro" className="mx-auto mb-3 h-16 w-16 rounded-xl" />
             <h1 className="text-2xl font-semibold text-foreground">Account created successfully</h1>
             <p className="mt-1 text-xs text-muted-foreground">One more step — verify your email</p>
           </div>
 
-          <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-center">
-            <p className="text-sm text-muted-foreground">We have sent a verification code to:</p>
-            <p className="mt-1 flex items-center justify-center gap-2 text-base font-semibold text-primary">
-              <Mail className="h-4 w-4 shrink-0" aria-hidden />
-              {email}
-            </p>
-          </div>
+          {deliveryDeferred ? (
+            <div
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center"
+              role="status"
+            >
+              <p className="text-sm font-medium text-foreground">Your account is ready</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                We could not deliver a verification email right now. You can sign in and verify later from
+                Security Settings, or try resend below.
+              </p>
+              <p className="mt-2 flex items-center justify-center gap-2 text-sm font-semibold text-primary">
+                <Mail className="h-4 w-4 shrink-0" aria-hidden />
+                {email}
+              </p>
+            </div>
+          ) : (
+            <VerificationCodeSentPanel
+              email={email}
+              secondsLeft={secondsLeft}
+              canResend={canResend}
+            />
+          )}
 
-          <EmailDeliverabilityNotice collapsibleOnMobile={false} />
-
-          <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 px-4 py-3">
-            <p className="text-sm font-medium text-foreground">Also check:</p>
-            <ul className="space-y-1.5 text-sm text-muted-foreground">
-              {FOLDER_CHECKS.map((label) => (
-                <li key={label} className="flex items-center gap-2">
-                  <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  {label}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <VerificationDeliveryHint codeSentAt={codeSentAt} />
 
           {error ? (
             <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive" role="alert">
@@ -301,23 +312,20 @@ export function EmailVerificationPendingScreen({
             Email verification improves recovery; it does not block trading once you sign in.
           </p>
         </div>
-        <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
       </>
     )
   }
 
   return (
     <>
-      <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl">
+      <div className="w-full max-w-md space-y-6 rounded-[24px] border border-emerald-500/15 bg-[rgba(20,28,52,0.78)] p-8 shadow-lg shadow-black/20 ring-1 ring-inset ring-emerald-400/10 backdrop-blur-[24px] backdrop-saturate-[160%]">
         <div className="text-center">
           <img src="/logo.jpg" alt="Nexus Pro" className="mx-auto mb-3 h-16 w-16 rounded-xl" />
           <h1 className="text-2xl font-semibold text-foreground">Enter verification code</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            6-digit code sent to <strong className="text-primary">{email}</strong>
-          </p>
         </div>
 
-        <EmailDeliverabilityNotice collapsibleOnMobile={false} />
+        <VerificationCodeSentPanel email={email} secondsLeft={secondsLeft} canResend={canResend} />
+        <VerificationDeliveryHint codeSentAt={codeSentAt} />
 
         <div className="sr-only">
           <LabelledEmail value={email} onChange={setEmail} />
@@ -400,7 +408,6 @@ export function EmailVerificationPendingScreen({
           </Button>
         </div>
       </div>
-      <EmailSentSuccessDialog open={emailSentDialogOpen} onOpenChange={setEmailSentDialogOpen} />
     </>
   )
 }

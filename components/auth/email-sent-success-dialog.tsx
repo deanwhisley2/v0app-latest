@@ -20,15 +20,14 @@ export function EmailSentSuccessDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Email Sent Successfully</DialogTitle>
+          <DialogTitle>Verification code sent</DialogTitle>
           <DialogDescription className="pt-2 text-left text-sm leading-relaxed text-muted-foreground">
-            Please check your Inbox, Spam, Junk, Promotions, and Updates folders. Some email
-            providers may automatically filter verification emails.
+            Your code is on its way. Verification emails usually arrive within 1 minute.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={() => onOpenChange(false)}>
-            OK
+          <Button type="button" className="min-h-12 w-full sm:w-auto" onClick={() => onOpenChange(false)}>
+            Continue
           </Button>
         </DialogFooter>
       </DialogContent>

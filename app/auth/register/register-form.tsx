@@ -27,7 +27,8 @@ import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-mo
 import { NewMemberCampaignRegisterStrip } from "@/components/marketing/new-member-campaign-register-strip"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
-import { EmailDeliverabilityNotice } from "@/components/auth/email-deliverability-notice"
+import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
+import { isValidRegisterEmail } from "@/lib/auth/register-contact"
 import {
   getPendingEmailVerification,
   recordVerificationResendSent,
@@ -111,6 +112,8 @@ export default function RegisterForm() {
       if (r) setReferralCode(r.trim())
       const c = sp.get("campaign")
       if (c) setCampaignSlug(c.trim())
+      const prefillEmail = sp.get("email")?.trim()
+      if (prefillEmail && isValidRegisterEmail(prefillEmail)) setEmail(prefillEmail)
     } catch {
       /* ignore */
     }
@@ -159,11 +162,9 @@ export default function RegisterForm() {
   function validateStep(s: number): string | null {
     if (s === 1) {
       if (!fullName.trim()) return "Enter your full name."
+      if (!isValidRegisterEmail(email.trim())) return "Enter a valid email address."
       const hasPhone = phone.trim().replace(/\D/g, "").length >= 9
-      const hasEmail = email.trim().includes("@") && email.includes(".")
-      if (!hasPhone && !hasEmail) return "Enter a phone number, email address, or both."
-      if (email.trim() && !hasEmail) return "Enter a valid email or leave it blank."
-      if (phone.trim() && !hasPhone) return "Enter a valid phone number (at least 9 digits)."
+      if (phone.trim() && !hasPhone) return "Enter a valid phone number (at least 9 digits) or leave it blank."
       return null
     }
     if (s === 2) {
@@ -362,7 +363,23 @@ export default function RegisterForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="register-phone">{reg.phone}</Label>
+                <Label htmlFor="register-email">{reg.email}</Label>
+                <Input
+                  id="register-email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  placeholder="you@example.com"
+                  className={inputClass}
+                />
+                <VerificationDeliveryHint />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="register-phone">Mobile Number (optional)</Label>
                 <Input
                   id="register-phone"
                   type="tel"
@@ -374,34 +391,9 @@ export default function RegisterForm() {
                   placeholder="+256 7XX XXX XXX"
                   className={inputClass}
                 />
-                {phone.trim() ? (
-                  <p className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
-                    Please use a phone number that belongs to you and that you can remember. This number may be used
-                    to help recover your account until a verified email is added.
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-email">{reg.email} (optional)</Label>
-                <Input
-                  id="register-email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  placeholder="you@example.com"
-                  className={inputClass}
-                />
-                {!email.trim() ? (
-                  <p className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                    Adding and verifying an email address is strongly recommended for account recovery and security.
-                    You can continue without email.
-                  </p>
-                ) : (
-                  <EmailDeliverabilityNotice className="mt-0" />
-                )}
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Used as an additional sign-in and account recovery method.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="register-referral">{reg.referralCodeOptional ?? "Referral ID (optional)"}</Label>
@@ -424,7 +416,7 @@ export default function RegisterForm() {
             <div className="space-y-4 animate-in fade-in duration-200" key="step2">
               <PasswordField
                 id="register-password"
-                label={reg.password}
+                label="Account password"
                 autoComplete="new-password"
                 value={password}
                 onChange={setPassword}
@@ -551,7 +543,7 @@ export default function RegisterForm() {
                     {authT.register.submitting}
                   </>
                 ) : (
-                  authT.register.submit
+                  "Open your Nexus account"
                 )}
               </Button>
             )}
@@ -580,7 +572,7 @@ export default function RegisterForm() {
         initialMessages={[
           {
             role: "assistant",
-            text: "Hi — I’m the Nexus assistant. Ask me about optional email, phone signup, Security PIN in Settings, referrals, or what to expect after you create your account.",
+            text: "Hi — I’m the Nexus assistant. Ask me about email verification, optional mobile number, Security PIN in Settings, referrals, or what to expect after you create your account.",
           },
         ]}
         chips={REGISTER_JOELIN_CHIPS}

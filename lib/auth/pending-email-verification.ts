@@ -13,6 +13,8 @@ export type PendingEmailVerification = {
   last_resend_at?: number
   /** When true, reopen on the code-entry step (not only the landing buttons). */
   enter_code_mode?: boolean
+  /** Provider could not deliver at signup — account still created. */
+  email_delivery_deferred?: boolean
 }
 
 function isBrowser(): boolean {
@@ -37,6 +39,7 @@ function parseRecord(raw: string | null): PendingEmailVerification | null {
         : {}),
       ...(typeof parsed.last_resend_at === "number" ? { last_resend_at: parsed.last_resend_at } : {}),
       ...(parsed.enter_code_mode === true ? { enter_code_mode: true } : {}),
+      ...(parsed.email_delivery_deferred === true ? { email_delivery_deferred: true } : {}),
     }
   } catch {
     return null
@@ -92,6 +95,7 @@ export function setPendingEmailVerification(
       : {}),
     ...(typeof input.last_resend_at === "number" ? { last_resend_at: input.last_resend_at } : {}),
     ...(input.enter_code_mode === true ? { enter_code_mode: true } : {}),
+    ...(input.email_delivery_deferred === true ? { email_delivery_deferred: true } : {}),
   }
   try {
     localStorage.setItem(PENDING_VERIFY_STORAGE_KEY, JSON.stringify(record))
@@ -105,7 +109,12 @@ export function setPendingEmailVerification(
 }
 
 export function patchPendingEmailVerification(
-  patch: Partial<Pick<PendingEmailVerification, "enter_code_mode" | "last_resend_at" | "email">>,
+  patch: Partial<
+    Pick<
+      PendingEmailVerification,
+      "enter_code_mode" | "last_resend_at" | "email" | "email_delivery_deferred"
+    >
+  >,
 ): void {
   const current = getPendingEmailVerification()
   if (!current) return
