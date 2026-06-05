@@ -94,12 +94,24 @@ function auditDns(providerInfo: { provider: string; configured: boolean }): {
     process.env.SMTP_FROM_EMAIL ??
     "security@nexuspro.it.com"
   ).trim()
-  const senderName = (process.env.BREVO_SENDER_NAME ?? process.env.SMTP_FROM_NAME ?? "Nexus Pro").trim()
+  const senderName = (
+    process.env.BREVO_SENDER_NAME ?? process.env.SMTP_FROM_NAME ?? "Nexus Pro Security"
+  ).trim()
+  const replyTo = (
+    process.env.TRANSACTIONAL_REPLY_TO_EMAIL ??
+    process.env.BREVO_REPLY_TO_EMAIL ??
+    "support@nexuspro.it.com"
+  ).trim()
   const fromDomain = senderEmail.split("@")[1]?.toLowerCase() ?? ""
   rows.push({
     label: "Sender From address",
     value: `${senderName} <${senderEmail}>`,
-    ok: fromDomain === DOMAIN,
+    ok: senderEmail.toLowerCase() === "security@nexuspro.it.com" && fromDomain === DOMAIN,
+  })
+  rows.push({
+    label: "Reply-To address",
+    value: replyTo,
+    ok: replyTo.toLowerCase() === "support@nexuspro.it.com",
   })
   if (fromDomain !== DOMAIN) {
     blockers.push(`From domain (${fromDomain}) does not match audited domain (${DOMAIN}) — alignment broken`)

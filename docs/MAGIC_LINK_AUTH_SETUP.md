@@ -18,8 +18,9 @@ BREVO_SMTP_HOST=smtp-relay.brevo.com
 BREVO_SMTP_PORT=587
 BREVO_SMTP_USER=your-brevo-login@email.com
 BREVO_SMTP_PASSWORD=xsmtpsib-...   # Brevo → SMTP & API → SMTP keys
-BREVO_SENDER_EMAIL=no-reply@nexuspro.it.com
-BREVO_SENDER_NAME=Nexus Pro
+BREVO_SENDER_EMAIL=security@nexuspro.it.com
+BREVO_SENDER_NAME=Nexus Pro Security
+TRANSACTIONAL_REPLY_TO_EMAIL=support@nexuspro.it.com
 ```
 
 Generic `SMTP_*` aliases are supported as fallback.

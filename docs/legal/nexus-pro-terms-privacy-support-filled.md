@@ -124,7 +124,7 @@ We do not intentionally collect **precise geolocation** unless you later add an 
 - Operate accounts, charts, notifications, exchange connectivity, and optional automation.
 - **Security and fraud prevention**, abuse detection, and legal compliance.
 - **Product improvement** (including diagnostics and aggregated analytics if you use them — **disclose vendors**).
-- **Communications**: service emails (e.g., verification via **Brevo** transactional email using sender such as `no-reply@nexuspro.it.com`), support responses, and legally required notices.
+- **Communications**: service emails (e.g., verification via **Brevo** transactional email from `security@nexuspro.it.com`, Reply-To `support@nexuspro.it.com`), support responses, and legally required notices.
 
 ## 3. Sharing & processors
 

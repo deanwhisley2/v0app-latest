@@ -94,7 +94,8 @@ Transactional → Logs — compare timestamp to `auth_email_delivery_events.crea
 | Variable | Purpose |
 |----------|---------|
 | `BREVO_SMTP_USER` / `BREVO_SMTP_PASSWORD` | **Required** |
-| `BREVO_SENDER_EMAIL` | Default `no-reply@nexuspro.it.com` |
+| `BREVO_SENDER_EMAIL` | Default `security@nexuspro.it.com` (Nexus Pro Security) |
+| `TRANSACTIONAL_REPLY_TO_EMAIL` | Default `support@nexuspro.it.com` |
 | `NEXT_PUBLIC_SITE_URL` | Auth redirects / metadata |
 
 Audit: `npx tsx scripts/audit-auth-email-dns.ts`

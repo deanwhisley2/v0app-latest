@@ -20,6 +20,7 @@ export type AuthEmailDeliverabilityDashboard = AuthEmailHealthWindow & {
     reply_to: string
     recommended_from: string
     recommended_reply_to: string
+    aligned: boolean
   }
   pipeline: {
     emails_accepted_by_provider: number
@@ -147,6 +148,9 @@ export async function getAuthEmailDeliverabilityDashboard(
       reply_to: sender.replyToEmail,
       recommended_from: NEXUS_SECURITY_EMAIL,
       recommended_reply_to: NEXUS_SUPPORT_EMAIL,
+      aligned:
+        sender.fromEmail.toLowerCase() === NEXUS_SECURITY_EMAIL &&
+        sender.replyToEmail.toLowerCase() === NEXUS_SUPPORT_EMAIL,
     },
     pipeline: {
       emails_accepted_by_provider: accepted,

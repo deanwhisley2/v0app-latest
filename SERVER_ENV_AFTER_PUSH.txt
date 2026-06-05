@@ -5,8 +5,9 @@ echo "BREVO_SMTP_HOST=smtp-relay.brevo.com" >> .env.local
 echo "BREVO_SMTP_PORT=587" >> .env.local
 echo "BREVO_SMTP_USER=your-brevo-login@email.com" >> .env.local
 echo "BREVO_SMTP_PASSWORD=PASTE_xsmtpsib_SMTP_KEY_HERE" >> .env.local
-echo "BREVO_SENDER_EMAIL=no-reply@nexuspro.it.com" >> .env.local
-echo "BREVO_SENDER_NAME=Nexus Pro" >> .env.local
+echo "BREVO_SENDER_EMAIL=security@nexuspro.it.com" >> .env.local
+echo "BREVO_SENDER_NAME=Nexus Pro Security" >> .env.local
+echo "TRANSACTIONAL_REPLY_TO_EMAIL=support@nexuspro.it.com" >> .env.local
 
 # Remove legacy Cyberpersons vars if present:
 # sed -i '/^CYBERPERSONS_/d' .env.local
