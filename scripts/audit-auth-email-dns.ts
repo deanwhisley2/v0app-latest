@@ -95,7 +95,7 @@ function auditDns(providerInfo: { provider: string; configured: boolean }): {
     "security@nexuspro.it.com"
   ).trim()
   const senderName = (
-    process.env.BREVO_SENDER_NAME ?? process.env.SMTP_FROM_NAME ?? "Nexus Pro Security"
+    process.env.BREVO_SENDER_NAME ?? process.env.SMTP_FROM_NAME ?? "Nexus pro"
   ).trim()
   const replyTo = (
     process.env.TRANSACTIONAL_REPLY_TO_EMAIL ??

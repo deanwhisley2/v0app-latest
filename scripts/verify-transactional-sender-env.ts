@@ -18,7 +18,7 @@ const sender = transactionalSenderFromEnv()
 const checks = [
   {
     label: "Brevo / SMTP From",
-    expected: `${NEXUS_SECURITY_EMAIL} (Nexus Pro Security)`,
+    expected: `${NEXUS_SECURITY_EMAIL} (Nexus pro)`,
     actual: `${sender.fromEmail} (${sender.fromName})`,
     ok: sender.fromEmail.toLowerCase() === NEXUS_SECURITY_EMAIL,
   },
@@ -39,9 +39,9 @@ for (const c of checks) {
   console.log(`  actual:   ${c.actual}`)
 }
 
-console.log("\nNote: Nexus auth mail is sent via app Brevo SMTP (not Supabase built-in templates).")
+console.log("\nNote: App auth mail uses Brevo SMTP; Supabase custom SMTP should match the same sender.")
 console.log(
-  "If Supabase Dashboard → Authentication → SMTP is enabled, set sender to security@nexuspro.it.com there too.",
+  "Supabase Dashboard → Authentication → SMTP: security@nexuspro.it.com (Nexus pro), smtp-relay.brevo.com:587.",
 )
 console.log("Brevo Dashboard → Senders: verify security@nexuspro.it.com is authenticated.")
 

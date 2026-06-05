@@ -19,7 +19,7 @@ BREVO_SMTP_PORT=587
 BREVO_SMTP_USER=your-brevo-login@email.com
 BREVO_SMTP_PASSWORD=xsmtpsib-...   # Brevo → SMTP & API → SMTP keys
 BREVO_SENDER_EMAIL=security@nexuspro.it.com
-BREVO_SENDER_NAME=Nexus Pro Security
+BREVO_SENDER_NAME=Nexus pro
 TRANSACTIONAL_REPLY_TO_EMAIL=support@nexuspro.it.com
 ```
 

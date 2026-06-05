@@ -122,7 +122,7 @@ export async function GET() {
       health_basic: "/api/health",
       site_url: "Set NEXT_PUBLIC_SITE_URL (e.g. https://nexuspro.it.com) for auth links and metadata.",
       transactional_email:
-        "Set BREVO_SMTP_USER + BREVO_SMTP_PASSWORD. Sender defaults: security@nexuspro.it.com (Nexus Pro Security), Reply-To support@nexuspro.it.com.",
+        "Set BREVO_SMTP_USER + BREVO_SMTP_PASSWORD. Sender defaults: security@nexuspro.it.com (Nexus pro), Reply-To support@nexuspro.it.com.",
       auth_email_deliverability_admin: "/api/admin/auth-email-deliverability (Level 5 bearer)",
       magic_link_login:
         "Passwordless login: POST /api/auth/request-magic-link (6-digit code email) and POST /api/auth/verify-magic-link with { email, code }. Uses Brevo SMTP.",

@@ -94,11 +94,21 @@ Transactional → Logs — compare timestamp to `auth_email_delivery_events.crea
 | Variable | Purpose |
 |----------|---------|
 | `BREVO_SMTP_USER` / `BREVO_SMTP_PASSWORD` | **Required** |
-| `BREVO_SENDER_EMAIL` | Default `security@nexuspro.it.com` (Nexus Pro Security) |
+| `BREVO_SENDER_EMAIL` | Default `security@nexuspro.it.com` (Nexus pro) — sole Brevo sender |
 | `TRANSACTIONAL_REPLY_TO_EMAIL` | Default `support@nexuspro.it.com` |
 | `NEXT_PUBLIC_SITE_URL` | Auth redirects / metadata |
 
 Audit: `npx tsx scripts/audit-auth-email-dns.ts`
+
+## Supabase custom SMTP (aligned)
+
+Supabase Dashboard → Authentication → SMTP should mirror app Brevo relay:
+
+- Sender: `security@nexuspro.it.com` (Nexus pro)
+- Host: `smtp-relay.brevo.com`, port `587`
+- Brevo Senders: only `security@nexuspro.it.com` (avoid multi-sender conflicts)
+
+App verification codes still flow **app → Brevo SMTP**; Supabase SMTP covers native Auth emails (recovery, email change) when triggered by Supabase.
 
 ## Supabase auth URLs
 

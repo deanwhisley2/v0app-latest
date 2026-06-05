@@ -22,7 +22,7 @@ export function transactionalSenderFromEnv(): TransactionalSenderIdentity {
     process.env.BREVO_SENDER_NAME ??
     process.env.SMTP_FROM_NAME ??
     process.env.TRANSACTIONAL_FROM_NAME ??
-    "Nexus Pro Security"
+    "Nexus pro"
   ).trim()
 
   const replyToEmail = (
