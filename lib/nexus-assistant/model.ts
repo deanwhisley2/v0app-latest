@@ -21,6 +21,11 @@ import {
   NEXUS_SESSIONS_EXPLAINER,
   NEXUS_FEES_EXPLAINER,
   NEXUS_EARN_PATH_EXPLAINER,
+  NEXUS_QUICK_START_GUIDE,
+  NEXUS_BALANCE_EXPLAINER,
+  NEXUS_FIXED_TRADE_GUIDE,
+  NEXUS_SETTLEMENT_AND_TRANSFER_RULES,
+  NEXUS_VERIFICATION_AND_SECURITY_GUIDE,
 } from "./knowledge"
 
 function norm(s: string) {
@@ -270,7 +275,16 @@ function helpTour(surface: NexusAssistantSurface): string {
     surface === "dashboard_wallstreet_assistant" || surface === "dashboard_chat"
       ? "Chat: assistant · support · account alerts."
       : "Settings: exchanges · security · wallet."
-  return ["Navigation:", NEXUS_UI_WHERE_TO_GO, tail].join("\n")
+  return [
+    "Quick Start:",
+    NEXUS_QUICK_START_GUIDE,
+    "",
+    "Navigation:",
+    NEXUS_UI_WHERE_TO_GO,
+    tail,
+    "",
+    "Say fund, copy trading, fixed trading, withdraw, or security for detail.",
+  ].join("\n")
 }
 
 /** Welcome line for first bubble — keep short. */
@@ -360,15 +374,53 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     ])
   ) {
     return [
-      nexusPlatformOverviewForAssistant(),
+      NEXUS_QUICK_START_GUIDE,
       "",
-      NEXUS_SESSIONS_EXPLAINER,
+      NEXUS_BALANCE_EXPLAINER,
       "",
-      NEXUS_BULLISH_TRADES_EXPLAINER,
+      "Ask for Copy Trading, Fixed Trading, withdrawals, or referrals if you want more detail.",
     ].join("\n")
   }
 
-  if (hasAny(q, ["bullish trade", "bullish trades", "what are bullish"])) {
+  if (
+    hasAny(q, [
+      "quick guide",
+      "quick start",
+      "how to start",
+      "getting started",
+      "first trade",
+      "new member",
+      "what do i do first",
+    ])
+  ) {
+    return [NEXUS_QUICK_START_GUIDE, "", NEXUS_UI_WHERE_TO_GO].join("\n")
+  }
+
+  if (
+    hasAny(q, [
+      "available balance",
+      "processing balance",
+      "nexus main",
+      "main balance",
+      "what is pocket",
+    ])
+  ) {
+    return [NEXUS_BALANCE_EXPLAINER, "", NEXUS_SETTLEMENT_AND_TRANSFER_RULES].join("\n")
+  }
+
+  if (hasAny(q, ["copy trading", "copy trade", "24 hour", "24h trade"])) {
+    return [NEXUS_COPY_TRADE_GUIDE, "", CONTAINER_WITHDRAWAL_SUMMARY].join("\n")
+  }
+
+  if (hasAny(q, ["fixed trading", "fixed trade", "lock period", "1 month", "3 month", "6 month"])) {
+    return [NEXUS_FIXED_TRADE_GUIDE, "", NEXUS_FIXED_EARLY_EXIT_GUIDE].join("\n")
+  }
+
+  if (hasAny(q, ["verify", "verification", "security pin", "email verify"])) {
+    return NEXUS_VERIFICATION_AND_SECURITY_GUIDE
+  }
+
+  if (hasAny(q, ["bullish trade", "bullish trades", "what are bullish", "trading earnings"])) {
     return [NEXUS_BULLISH_TRADES_EXPLAINER, "", NEXUS_EARNINGS_POCKET_FLOW, "", CONTAINER_WITHDRAWAL_SUMMARY].join("\n")
   }
 
@@ -580,21 +632,19 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     ])
   ) {
     return [
-      "Container mode is where you run copy (~24h) or fixed-term desks from the trading workspace — read stake and fee rules on the card before you confirm.",
+      "Open the trading workspace from your dashboard to run Copy Trading (~24h) or Fixed Trading (1 / 3 / 6 months). Read duration and fees on the confirm screen before you commit.",
       "",
       containerCustomerEarningsStory(),
       "",
-      NEXUS_EARNINGS_POCKET_FLOW,
+      NEXUS_SETTLEMENT_AND_TRANSFER_RULES,
       "",
-      CONTAINER_WITHDRAWAL_SUMMARY,
+      "While a trade runs, track progress on the dashboard. When it completes, transfer earnings from Pocket to Nexus Main when you are ready.",
       "",
-      "Practical rhythm: check Container for accrual while sessions run; when one completes, confirm earnings in Pocket, then transfer to Nexus Main only when you are ready.",
-      "",
-      "Funding rule: opening trades spends from Nexus Main — if Main can’t cover stake plus upfront fees, reduce size or Add Funds first.",
+      "Funding rule: allocations spend from available Nexus Main balance — if balance is short, reduce size or Add Funds first.",
       "",
       focusSymbol
-        ? `You currently have ${focusSymbol} on the desk — you can still run Container flows; the coin context and container pick are independent, so follow whichever plan matches your risk plan.`
-        : "Pick a coin context on the desk when you want price-linked views; container schedules are about the program you join, not a single tweet-sized tip.",
+        ? `You have ${focusSymbol} in context on Trade — that view is separate from Copy/Fixed allocations; pick the trade type that matches your plan.`
+        : "Expand the trading workspace on Home to compare Copy and Fixed options.",
     ].join("\n")
   }
 

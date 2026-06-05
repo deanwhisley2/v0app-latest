@@ -21,36 +21,22 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
     "New members receive one-time startup capital in Nexus Main. Built for serious traders who want speed, clarity, and professional execution.",
   "marketing.newMember.modalReward": "Your welcome bonus: {{amount}} credited to Nexus Main",
   "marketing.newMember.modalFooter":
-    "Use startup capital to open a Container trade. When sessions complete, earnings go to Pocket first — transfer to Nexus Main when you are ready.",
+    "Use startup capital to open Copy Trading or Fixed Trading. When a trade completes, earnings settle per platform rules — transfer to Nexus Main when you are ready.",
   "marketing.newMember.modalContinue": "Explore the platform",
 
-  "marketing.newMember.howToTradeButton": "How to Trade",
-  "marketing.newMember.howToTradeBadge": "Quick guide",
-  "marketing.newMember.howToTradeTitle": "How to start trading on Nexus",
-  "marketing.newMember.howToTradeLead":
-    "Four steps from startup capital to recognized earnings — Pocket first, then Nexus Main when you choose.",
+  "marketing.newMember.howToTradeButton": "Quick guide",
   "marketing.newMember.howToTradeBalance": "Your Nexus Main balance: {{amount}}",
-  "marketing.newMember.howToTradeStep1":
-    "Open Container from your dashboard — copy desks (~24h) or fixed desks (1 / 3 / 6 months).",
-  "marketing.newMember.howToTradeStep2":
-    "Commit your allocation from Nexus Main (stake locks until the session ends or you use early exit on fixed).",
-  "marketing.newMember.howToTradeStep3":
-    "While a fixed trade runs, release bullish-trade slices to Pocket when the button is available.",
-  "marketing.newMember.howToTradeStep4":
-    "When the session completes, earnings land in Pocket. Tap Transfer to main balance, then withdraw or fund new trades from Nexus Main.",
-  "marketing.newMember.howToTradeEncourage":
-    "Earnings stay visible in Pocket so you control when they move to Nexus Main — no automatic sweep.",
-  "marketing.newMember.howToTradeCta": "Start Trading with Nexus Now",
+  "marketing.newMember.howToTradeCta": "Open trading workspace",
   "marketing.newMember.howToTradeLater": "I'll explore first",
 
   "marketing.newMember.onboardProgress": "Step {{step}} of {{total}}",
   "marketing.newMember.onboardStep1Title": "Congratulations! You received your startup capital.",
   "marketing.newMember.onboardStep1Body":
-    "{{amount}} is in Nexus Main — use it to open your first Container trade (copy or fixed starter desk).",
-  "marketing.newMember.onboardStep1Cta": "Open Container",
-  "marketing.newMember.onboardStep2Title": "Open a trade from Nexus Main",
+    "{{amount}} is in Nexus Main — choose Copy Trading or Fixed Trading from your dashboard.",
+  "marketing.newMember.onboardStep1Cta": "Open trading workspace",
+  "marketing.newMember.onboardStep2Title": "Start your first allocation",
   "marketing.newMember.onboardStep2Body":
-    "Pick a starter desk and confirm the amount. Session earnings will credit to Pocket when the trade completes.",
+    "Confirm the amount from Nexus Main. Track progress on your dashboard until the trade completes.",
   "marketing.newMember.onboardStep3Title": "Secure your account for withdrawals",
   "marketing.newMember.onboardStep3Body":
     "Set your 6-digit Security PIN and register your mobile money numbers so future withdrawals are fast and safe.",
@@ -58,24 +44,24 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
   "marketing.newMember.onboardSkipForNow": "Skip for now",
 
   "marketing.newMember.activateLabel": "Startup capital ready",
-  "marketing.newMember.activateHint": "Container · copy or fixed starter desk",
-  "marketing.newMember.releaseBullish": "Release to pocket",
+  "marketing.newMember.activateHint": "Copy Trading or Fixed Trading",
+  "marketing.newMember.releaseBullish": "Transfer earnings",
   "marketing.newMember.activateOpening": "Opening your trade…",
-  "marketing.newMember.activateSuccess": "Trade opened. Track progress in Container; earnings will land in Pocket when the session completes.",
+  "marketing.newMember.activateSuccess": "Trade opened. Track progress on your dashboard; earnings credit when the session completes.",
 
   "marketing.newMember.panelAria": "Startup bonus campaign",
   "marketing.newMember.panelHotOffer": "Hot offer",
   "marketing.newMember.panelTitle": "Your {{amount}} startup capital is waiting — activate it today",
   "marketing.newMember.panelPendingBody":
-    "Open Container and commit your welcome capital. Completed session earnings appear in Pocket — transfer to Nexus Main when ready.",
+    "Open the trading workspace and commit your welcome capital. Completed earnings settle per platform rules — transfer to Nexus Main when ready.",
   "marketing.newMember.panelActiveBody":
-    "Your trade is live. Watch accrual in Container; use Pocket balance after session completion.",
+    "Your trade is live. Track progress on your dashboard and transfer earnings to Nexus Main when you choose.",
   "marketing.newMember.panelViewTrades": "View my trades",
 
   "marketing.newMember.testimonial1":
-    "“I opened my first fixed desk on day one — earnings showed in Pocket, then I transferred to Main.” — James K., Kenya",
+    "“I opened Fixed Trading on day one — earnings settled clearly, then I transferred to Nexus Main.” — James K., Kenya",
   "marketing.newMember.testimonial2":
-    "“Clear Pocket → Main step. I control when earnings move.” — Amina M., Uganda",
+    "“Simple steps: fund, trade, track, transfer. I control when earnings move.” — Amina M., Uganda",
   "marketing.newMember.testimonial3":
     "“Best onboarding I've seen on a trading platform. Capital was live in minutes.” — Samuel T., Nigeria",
 

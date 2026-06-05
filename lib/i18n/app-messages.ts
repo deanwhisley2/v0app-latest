@@ -16,6 +16,7 @@ import {
   newMemberCampaignMarketingEn,
   newMemberCampaignMarketingFr,
 } from "@/lib/i18n/new-member-campaign-marketing"
+import { quickGuideCopyEn, quickGuideCopyFr } from "@/lib/i18n/quick-guide-copy"
 import {
   mobileMessagesEn,
   mobileMessagesFr,
@@ -269,6 +270,7 @@ const en: Record<string, string> = {
   ...fundingWithdrawalEn,
   ...companyMessagesEn,
   ...newMemberCampaignMarketingEn,
+  ...quickGuideCopyEn,
   ...mobileMessagesEn,
 }
 
@@ -301,6 +303,7 @@ const fr: Partial<Record<string, string>> = {
   ...(fundingWithdrawalOverlays.fr ?? {}),
   ...frNotificationsOverlay,
   ...newMemberCampaignMarketingFr,
+  ...quickGuideCopyFr,
   ...mobileMessagesFr,
 }
 

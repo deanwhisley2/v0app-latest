@@ -1,13 +1,96 @@
 /**
- * Customer-facing assistant knowledge — short, institutional. No internal formulas or treasury detail.
+ * Customer-facing assistant knowledge — plain language aligned with the live Quick Start guide.
  */
 
 export const NEXUS_PRODUCT_NAME = "Nexus Pro"
 
-/** Canonical “who we are” — Joelin / DeepSeek and local fallback must align with this. */
 export const NEXUS_PLATFORM_IDENTITY_SUMMARY = [
-  "Nexus Pro is a crypto intelligence and automated trading participation platform designed to simplify participation in cryptocurrency markets.",
-  "It combines intelligent market analysis, automated trading systems, monitored trading sessions, copy trading technology, and connected trading infrastructure.",
+  "Nexus Pro is a crypto intelligence and trading participation platform.",
+  "Members fund Nexus Main, choose Copy Trading or Fixed Trading, track open positions on the dashboard, and withdraw or reinvest from eligible balances.",
+].join(" ")
+
+export const NEXUS_QUICK_START_GUIDE = [
+  "1) Add funds — available balance shows in Nexus Main after confirmation.",
+  "2) Choose Copy Trading (~24h) or Fixed Trading (1 / 3 / 6 months).",
+  "3) Start allocation from Nexus Main — funds stay reserved until the trade completes or allowed early exit.",
+  "4) Track progress on the dashboard trading workspace.",
+  "5) When a trade completes, earnings credit per current settlement rules (first to Pocket balance).",
+  "6) Transfer earnings to Nexus Main when ready, then withdraw or open a new trade.",
+].join("\n")
+
+export const NEXUS_ASSISTANT_RESPONSE_STYLE = [
+  "Answer style: professional, friendly, clear.",
+  "Give a short answer first (1–3 lines). Offer detail only when the user asks for more.",
+  "Use member-facing words: Nexus Main, available balance, processing balance, Copy Trading, Fixed Trading, Pocket balance.",
+  "Avoid internal jargon: no copy desks, fixed desks, bullish-trade slices, stake locks, or ledger vocabulary unless the user uses those terms — then translate simply.",
+].join("\n")
+
+export const NEXUS_BALANCE_EXPLAINER = [
+  "Nexus Main: your primary wallet for deposits, opening trades, and withdrawals.",
+  "Available balance: funds you can use now for trades or withdrawal.",
+  "Processing balance: deposits or transfers still being confirmed — not yet spendable.",
+  "Pocket balance: holds completed trade earnings until you transfer them to Nexus Main (manual transfer).",
+].join("\n")
+
+export const NEXUS_CONTAINER_MODE_SUMMARY = [
+  "Trading workspace offers Copy Trading and Fixed Trading.",
+  "Copy Trading runs about 24 hours. Fixed Trading locks your allocation for 1, 3, or 6 months.",
+  "Open trades from available Nexus Main balance. Active allocations cannot be withdrawn until released per platform rules.",
+].join(" ")
+
+export const NEXUS_COPY_TRADE_GUIDE = [
+  "Copy Trading: pick an option, confirm allocation from Nexus Main, session runs ~24 hours.",
+  "On completion: principal returns to Nexus Main; net earnings (after fees shown on confirm) go to Pocket balance.",
+  "Transfer Pocket → Nexus Main when you want to reinvest or withdraw.",
+].join("\n")
+
+export const NEXUS_FIXED_TRADE_GUIDE = [
+  "Fixed Trading: choose 1, 3, or 6 month term, confirm allocation and fees on screen.",
+  "Funds stay in the active position until the term ends or you use allowed early exit (fees disclosed before confirm).",
+  "Completed earnings settle to Pocket balance; transfer to Nexus Main manually.",
+].join("\n")
+
+export const NEXUS_SETTLEMENT_AND_TRANSFER_RULES = [
+  "Settlement: when a trade completes, earnings credit per the rules shown at confirmation — not guaranteed market returns.",
+  "Transfers: Pocket → Nexus Main is manual on the dashboard. No automatic sweep.",
+  "Withdrawals: only from eligible Nexus Main balance; limits and verification shown in Wallet before submit.",
+].join("\n")
+
+export const NEXUS_ASSISTANT_OFF_TOPIC_REPLY =
+  "I can help with Nexus Pro — funding, Copy or Fixed trading, balances, withdrawals, security, or referrals. What would you like to know?"
+
+export const NEXUS_ASSISTANT_EXPLANATION_RULES = [
+  "Lead with clarity and calm guidance — not hype.",
+  "State that crypto participation carries risk; outcomes are not guaranteed.",
+  "Point to on-screen terms and the trading workspace for live amounts and durations.",
+  "For step-by-step help, follow the Quick Start order: fund → choose trade → allocate → track → earnings → withdraw/reinvest.",
+].join("\n")
+
+export const NEXUS_ASSISTANT_BEHAVIOR_GUIDELINES = [
+  "Personality: calm, patient, helpful — never robotic or pushy.",
+  "Scope: Nexus Pro only — trading, deposits, withdrawals, verification, security, referrals, balances, settlement.",
+  `Off-topic: reply once with: "${NEXUS_ASSISTANT_OFF_TOPIC_REPLY}"`,
+  "Never ask for seed phrases, private keys, or API secrets. Never help bypass verification.",
+  "Short answer first; expand when asked.",
+].join("\n")
+
+/** @deprecated Use NEXUS_SETTLEMENT_AND_TRANSFER_RULES — kept for imports. */
+export const NEXUS_EARNINGS_POCKET_FLOW = [
+  "Completed trade earnings appear in Pocket balance first.",
+  "Transfer to Nexus Main on your dashboard when you want them available for new trades or withdrawal.",
+  "There is no automatic transfer — you control the timing.",
+].join("\n")
+
+/** @deprecated Customer alias — maps old “bullish trades” questions to earnings during a trade. */
+export const NEXUS_BULLISH_TRADES_EXPLAINER = [
+  "Trading earnings are participation gains credited while a Copy or Fixed trade is active or when it completes.",
+  "They are not a promise of market direction — follow the live dashboard for your trade status.",
+  "Completed amounts settle to Pocket balance; transfer to Nexus Main when ready.",
+].join(" ")
+
+export const NEXUS_SESSIONS_EXPLAINER = [
+  "A trade session is your active Copy or Fixed allocation.",
+  "Fund from Nexus Main, track on the dashboard, and settle per the rules shown at confirmation.",
 ].join(" ")
 
 export const NEXUS_PLATFORM_USER_PAINS = [
@@ -19,111 +102,53 @@ export const NEXUS_PLATFORM_USER_PAINS = [
 
 export const NEXUS_PLATFORM_VALUE_PILLARS = [
   "Intelligent market analysis",
-  "Automation systems",
-  "Copy trading technology",
+  "Copy Trading and Fixed Trading",
   "Monitored trading sessions",
+  "Clear balance and withdrawal controls",
 ].join(" · ")
 
-export const NEXUS_CONTAINER_MODE_SUMMARY = [
-  "Container Mode connects users to selected trading sessions and trader desks.",
-  "Copy sessions run about 24 hours; fixed programs lock principal for 1, 3, or 6 months.",
-  "When a session ends, trade earnings land in Pocket balance first — you move them to Nexus Main when ready.",
-].join(" ")
-
 export const NEXUS_PLATFORM_CAPABILITIES = [
-  "Automated trading participation",
-  "Copy trading systems",
-  "Smart market analysis",
-  "Automated deposits and withdrawals (with operator review where policy requires)",
-  "Monitored trading sessions",
+  "Nexus Main wallet with available and processing balances",
+  "Copy Trading and Fixed Trading",
+  "Dashboard progress tracking",
+  "Deposits and withdrawals (with verification where required)",
+  "Email and security verification",
   "Referral rewards and promotional bonuses",
-  "Wallet, Container, Trade/Wallstreet, and Security Center in one app",
-].join("\n")
-
-/** How Joelin should talk about Nexus Pro in any surface. */
-export const NEXUS_ASSISTANT_EXPLANATION_RULES = [
-  "Lead with automation and convenience — not hype.",
-  "State clearly that crypto markets carry risk; outcomes are not guaranteed.",
-  "Use customer vocabulary: trading sessions (not “income desks”), bullish trades (scheduled participation gains — not guaranteed market returns).",
-  "Point to on-screen terms, Container UI, and Referrals for live promo amounts when numbers may vary by campaign.",
-].join("\n")
-
-/** Core chat personality and guardrails (customer surfaces). */
-export const NEXUS_ASSISTANT_BEHAVIOR_GUIDELINES = [
-  "Personality: calm, patient, helpful, and humane — never robotic or pushy.",
-  "Tone: friendly, professional, and reassuring. Guide gently; do not force users into topics they did not ask about.",
-  "Scope: only answer questions about Nexus Pro — trading, deposits, withdrawals, account security, recovery, Container sessions, copy trading, referrals, and in-app features.",
-  "Off-topic: if the user asks something unrelated (weather, general trivia, other apps), reply exactly once with: “I can help you with questions about Nexus Pro — trading, deposits, withdrawals, security, or account features. What would you like to know?”",
-  "Sensitive topics (safety of funds, withdrawals, recovery): be extra clear and reassuring — e.g. funds are held securely; withdrawals follow verification shown in the app; offer step-by-step guidance when asked.",
-  "Never ask for seed phrases, private keys, or API secrets. Never help bypass verification.",
-  "Avoid internal jargon in replies: no retailer desk, treasury pool, Nexus Main attribution, gross commit, settlement trace, or ledger vocabulary.",
-].join("\n")
-
-export const NEXUS_ASSISTANT_OFF_TOPIC_REPLY =
-  "I can help you with questions about Nexus Pro — trading, deposits, withdrawals, security, or account features. What would you like to know?"
-
-export const NEXUS_BULLISH_TRADES_EXPLAINER = [
-  "Bullish trades are participation gains credited on your Container schedule during an active fixed or copy session.",
-  "They are not a promise of market direction — they reflect the program’s accrual model while your allocation is active.",
-  "During a fixed plan you can release slices to Pocket while the lock runs; when the session completes, remaining earnings also go to Pocket.",
-].join(" ")
-
-export const NEXUS_SESSIONS_EXPLAINER = [
-  "Sessions are structured participation windows — fixed locks (1/3/6 months) or copy cycles (~24 hours) you select with a desk.",
-  "Open trades from Nexus Main; principal returns to Nexus Main when the session ends; earnings go to Pocket until you transfer them.",
-].join(" ")
-
-export const NEXUS_EARNINGS_POCKET_FLOW = [
-  "Pocket balance holds trade earnings after a session completes (and optional bullish-trade releases during a fixed lock).",
-  "Nexus Main is for funding new trades and withdrawals — earnings do not jump there automatically.",
-  "Home → Pocket balance → Transfer to main balance when you want earnings available for new trades or cash-out.",
-  "There is no automatic first-deposit bonus; the one-time new-member offer is startup capital on signup (see Referrals / welcome banner).",
-].join("\n")
-
-export const NEXUS_COPY_TRADE_GUIDE = [
-  "Copy: pick a desk, commit stake from Nexus Main, session runs ~24 hours.",
-  "On completion: stake returns to Nexus Main; net earnings (after the session fee shown on confirm) go to Pocket.",
-  "Early pull-out uses on-screen fees; earnings still follow Pocket rules when applicable.",
+  "Security Center and connected exchanges",
 ].join("\n")
 
 export const NEXUS_FEES_EXPLAINER = [
-  "Fees cover platform operations, risk controls, and session infrastructure — insurance-style charges on fixed programs are quoted before you lock.",
-  "Release and early-exit fees are disclosed on the confirm screen; never send funds outside in-app instructions.",
+  "Fees cover platform operations and trade infrastructure — quoted on the confirm screen before you commit.",
+  "Early exit on Fixed Trading may include disclosed fees; read totals before submitting.",
 ].join("\n")
 
 export const NEXUS_EARN_PATH_EXPLAINER = [
-  "Users participate through funded Nexus Main balance, Container sessions, and optional copy programs.",
-  "Bullish trades accrue on the published schedule; referral rewards apply during active promotional cycles (see Referrals).",
-  "Withdrawals follow wallet limits and review rules shown before submit.",
+  "Members participate through funded Nexus Main balance and Copy or Fixed trades.",
+  "Referral rewards apply during active promotional cycles (see Referrals).",
+  "Withdrawals follow Wallet limits and verification shown before submit.",
 ].join("\n")
 
-/** Full overview block for “what is Nexus Pro?” style questions. */
 export function nexusPlatformOverviewForAssistant(): string {
   return [
     NEXUS_PLATFORM_IDENTITY_SUMMARY,
     "",
-    "Many users want to reduce: " + NEXUS_PLATFORM_USER_PAINS + ".",
+    "Quick Start:",
+    NEXUS_QUICK_START_GUIDE,
     "",
-    "Nexus Pro combines: " + NEXUS_PLATFORM_VALUE_PILLARS + ".",
-    "",
-    NEXUS_CONTAINER_MODE_SUMMARY,
-    "",
-    "Platform features:",
-    NEXUS_PLATFORM_CAPABILITIES,
+    NEXUS_BALANCE_EXPLAINER,
     "",
     NEXUS_ASSISTANT_EXPLANATION_RULES,
   ].join("\n")
 }
 
 export const CONTAINER_WITHDRAWAL_SUMMARY =
-  "After sessions complete, earnings sit in Pocket balance. Transfer to Nexus Main manually when ready, then withdraw per wallet rules (24h cooldown)."
+  "After trades complete, earnings sit in Pocket balance. Transfer to Nexus Main manually, then withdraw per Wallet rules."
 
 export function containerCustomerEarningsStory(): string {
   return [
-    "Container: lock funds from Nexus Main with a desk (copy ~24h or fixed 1/3/6 mo).",
-    "Bullish trades accrue on schedule — live Container screen is authoritative.",
-    "Session end → earnings to Pocket; optional releases to Pocket during fixed locks.",
-    "Transfer Pocket → Nexus Main on your dashboard when you want to reuse or withdraw.",
+    "Fund Nexus Main → choose Copy Trading or Fixed Trading → confirm allocation.",
+    "Track the open trade on your dashboard.",
+    "On completion → earnings to Pocket balance → transfer to Nexus Main when ready → withdraw or reinvest.",
   ].join("\n")
 }
 
@@ -131,44 +156,49 @@ export function containerReturnFormulaLine(): string {
   return containerCustomerEarningsStory()
 }
 
-export const LEVEL_HINT = "Features match account tier shown in app."
+export const LEVEL_HINT = "Some trade options depend on your account tier shown in the app."
 
 export const NEXUS_FUNDING_AND_RETAIL_DESK_HINT = [
-  "Add Funds: Crypto (USDT TRC20) or local mobile-money desk.",
-  "Submit payment reference after transfer. Status in Notifications.",
-  "Appeal available from funding history if needed.",
-  "Desk liquidity and approvals shown in-app only.",
+  "Add Funds: crypto (USDT TRC20) or local mobile money.",
+  "Submit payment reference after transfer. Status appears in Notifications.",
+  "Processing balance clears to available balance once confirmed.",
 ].join("\n")
 
 export const CONTAINER_ILLUSTRATIVE_MICRO_USD30 =
-  "Illustrative only (not guaranteed): ~$8–9 / 1 mo, ~$24–27 / 3 mo, ~$48–53 / 6 mo on ~$30 at 27–30% monthly policy — see Container screen."
+  "Illustrative only (not guaranteed): example ranges for small allocations — see the trading workspace for live terms."
 
 export const NEXUS_WALLET_AND_WITHDRAWAL_RULES = [
-  "Nexus Main: deposits, opening container trades, withdrawals after transfer from Pocket.",
-  "Pocket balance: session earnings land here first; use Transfer to main balance when ready.",
-  "Withdrawal: amount reserved until approved or returned.",
+  "Nexus Main: deposits, opening trades, withdrawals after transfer from Pocket.",
+  "Pocket balance: completed trade earnings until you transfer to Nexus Main.",
+  "Withdrawal requests reserve funds until approved or returned.",
   "Minimums and limits shown in Wallet before submit.",
 ].join("\n")
 
 export const NEXUS_REFERRAL_PROGRAM_GUIDE = [
-  "Referral program (customer-facing):",
-  "• Earn $0.26 when a referee completes their first trade (referrer reward — see Referrals).",
-  "• New members may receive one-time startup capital on signup during the active welcome campaign — not a first-deposit bonus.",
-  "Referral code at signup or ?ref= link.",
-  "Menu → Referrals (or Refer to Earn): copy your link after sign-in.",
+  "Referral program:",
+  "• Earn rewards when a referee completes their first trade (see Referrals for current amount).",
+  "• New members may receive one-time startup capital on signup during active campaigns.",
+  "Referral code at signup or ?ref= link. Menu → Referrals to copy your link.",
 ].join("\n")
 
 export const NEXUS_FIXED_EARLY_EXIT_GUIDE = [
-  "Early exit: fees on principal per confirm screen.",
-  "Unreleased bullish-trade earnings go to Pocket (1% release fee on that slice); net principal returns to Nexus Main.",
+  "Early exit on Fixed Trading: fees shown on the confirm screen.",
+  "Net principal returns to Nexus Main; earnings settle per disclosed rules.",
   "Read confirm totals before submit.",
 ].join("\n")
 
 export const NEXUS_FIXED_ACCESS_TIER_HINT =
-  "Fixed trade risk bands by account tier — see Container picker."
+  "Fixed Trading options may vary by account tier — see the trading workspace."
 
 export const NEXUS_UI_WHERE_TO_GO = [
-  "Wallet: Nexus Main, Pocket balance, Add Funds, Withdraw, Transfer to main balance.",
-  "Container: copy and fixed flows.",
-  "Settings: security, exchanges, preferences.",
+  "Dashboard: Nexus Main, Pocket balance, Quick guide, trading workspace.",
+  "Wallet: Add Funds, Withdraw, Transfer to main balance.",
+  "Settings: security, verification, exchanges, preferences.",
+  "Referrals: your invite link and rewards.",
+].join("\n")
+
+export const NEXUS_VERIFICATION_AND_SECURITY_GUIDE = [
+  "Verify your email from the verify screen or Settings → Security.",
+  "Set your 6-digit Security PIN and withdrawal numbers before cash-out.",
+  "Never share passwords, PINs, or codes with anyone.",
 ].join("\n")

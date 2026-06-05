@@ -177,7 +177,12 @@ export async function POST(request: Request) {
       if (requiresEmailVerification && emailRaw) {
         const pendingEmail = emailRaw.toLowerCase()
         await markProfilePendingVerificationEmail(admin, existingId, pendingEmail, userMetadata)
-        const emailAttempt = await attemptRegisterEmailVerification(emailRaw)
+        const emailAttempt = await attemptRegisterEmailVerification({
+          userId: existingId,
+          emailRaw,
+          ipAddress: ip,
+          userAgent,
+        })
         emailVerificationDeferred = emailAttempt.deferred
       }
       if (phone) {
@@ -188,7 +193,9 @@ export async function POST(request: Request) {
         ok: true,
         requiresEmailVerification,
         email: requiresEmailVerification ? emailRaw.toLowerCase() : undefined,
-        ...(emailVerificationDeferred ? { emailVerificationDeferred: true } : {}),
+        ...(emailVerificationDeferred
+          ? { emailVerificationDeferred: true }
+          : { emailVerificationSent: true }),
       })
     } catch (e) {
       console.warn("[register] duplicate resend path:", e instanceof Error ? e.message : String(e))
@@ -262,7 +269,12 @@ export async function POST(request: Request) {
   }
 
   if (requiresEmailVerification && emailRaw) {
-    const emailAttempt = await attemptRegisterEmailVerification(emailRaw)
+    const emailAttempt = await attemptRegisterEmailVerification({
+      userId: newUserId!,
+      emailRaw,
+      ipAddress: ip,
+      userAgent,
+    })
 
     if (phone) {
       const sessionResult = await createAuthSessionForEmail(authEmail)
@@ -288,7 +300,7 @@ export async function POST(request: Request) {
           requiresEmailVerification: true,
           email: emailRaw.toLowerCase(),
           session: true,
-          ...(emailAttempt.deferred ? { emailVerificationDeferred: true } : {}),
+          ...(emailAttempt.deferred ? { emailVerificationDeferred: true } : { emailVerificationSent: true }),
         })
       }
     }
@@ -297,7 +309,7 @@ export async function POST(request: Request) {
       ok: true,
       requiresEmailVerification: true,
       email: emailRaw.toLowerCase(),
-      ...(emailAttempt.deferred ? { emailVerificationDeferred: true } : {}),
+      ...(emailAttempt.deferred ? { emailVerificationDeferred: true } : { emailVerificationSent: true }),
     })
   }
 

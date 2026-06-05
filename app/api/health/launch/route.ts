@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { NEXUS_TIER_MATRIX_PUBLIC } from "@/lib/nexus-tier-matrix"
 import { getPlatformLaunchStatus } from "@/lib/server/platform-launch"
+import { getAuthEmailHealthStats } from "@/lib/server/auth-email-delivery-log"
 
 export const dynamic = "force-dynamic"
 
@@ -78,6 +79,15 @@ export async function GET() {
 
   const launchReady = Boolean(platformLaunch?.active)
 
+  let authEmailHealth: Awaited<ReturnType<typeof getAuthEmailHealthStats>> | null = null
+  if (databasePing) {
+    try {
+      authEmailHealth = await getAuthEmailHealthStats(24)
+    } catch {
+      authEmailHealth = null
+    }
+  }
+
   return NextResponse.json({
     ok: coreReady && (launchReady || !databasePing),
     service: "nexus-launch",
@@ -86,6 +96,7 @@ export async function GET() {
     version: readPackageVersion(),
     checks,
     optional_services: optionalServices,
+    auth_email_health: authEmailHealth,
     deployment: {
       node_env: process.env.NODE_ENV ?? "development",
       /** Set by CI or deploy scripts (optional); null on a plain VPS build. */

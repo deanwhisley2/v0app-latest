@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/country-corridor-guard"
 import { isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
+import { logAuthEmailDeliveryEvent } from "@/lib/server/auth-email-delivery-log"
 
 /** App sends the message via Brevo SMTP; codes live in public.email_verifications (service role). */
 
@@ -81,9 +82,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: corridor.message }, { status: 403 })
   }
 
+  const userIdForLog = await findAuthUserIdByEmail(createAdminClient(), email).catch(() => null)
+  const ua = req.headers.get("user-agent")
+  const ip = getRequestIpAddress(req)
+
   const result = await issueEmailVerificationCode(email)
 
   if (!result.ok) {
+    await logAuthEmailDeliveryEvent({
+      channel: "send_verification",
+      outcome: "failed",
+      email,
+      userId: userIdForLog,
+      ipAddress: ip,
+      userAgent: ua,
+      errorMessage: result.error,
+    })
     return NextResponse.json(
       {
         error: result.error,
@@ -96,11 +110,31 @@ export async function POST(req: Request) {
   }
 
   if (result.ambiguous) {
+    await logAuthEmailDeliveryEvent({
+      channel: "send_verification",
+      outcome: "skipped",
+      email,
+      userId: null,
+      ipAddress: ip,
+      userAgent: ua,
+      errorMessage: "No matching auth user for email",
+    })
     return NextResponse.json({
       ok: true,
       message: "If an account exists for this email, a code was sent.",
     })
   }
 
-  return NextResponse.json({ message: "Verification code sent" })
+  await logAuthEmailDeliveryEvent({
+    channel: "send_verification",
+    outcome: "sent",
+    email,
+    userId: userIdForLog,
+    ipAddress: ip,
+    userAgent: ua,
+  })
+
+  return NextResponse.json({
+    message: "Verification email sent. Please check your inbox. Delivery may take up to 2 minutes.",
+  })
 }

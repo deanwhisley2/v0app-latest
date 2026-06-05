@@ -243,8 +243,8 @@ export function EmailVerificationPendingScreen({
             >
               <p className="text-sm font-medium text-foreground">Your account is ready</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                We could not deliver a verification email right now. You can sign in and verify later from
-                Security Settings, or try resend below.
+                We could not send the verification email from our mail provider. Try resend below, or verify
+                later from Security Settings after sign-in.
               </p>
               <p className="mt-2 flex items-center justify-center gap-2 text-sm font-semibold text-primary">
                 <Mail className="h-4 w-4 shrink-0" aria-hidden />

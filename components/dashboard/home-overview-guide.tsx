@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { Layers, Plus, Wallet } from "lucide-react"
+import { BookOpen } from "lucide-react"
+import { NexusQuickGuide } from "@/components/dashboard/nexus-quick-guide"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { cn } from "@/lib/utils"
 
@@ -12,17 +13,11 @@ type Props = {
   className?: string
 }
 
-const steps = [
-  { icon: Plus, key: "stepFund", hintKey: "stepFundHint" },
-  { icon: Layers, key: "stepContainer", hintKey: "stepContainerHint" },
-  { icon: Wallet, key: "stepWithdraw", hintKey: "stepWithdrawHint" },
-] as const
-
-/** Workspace guide — native details/summary (no transform animations). */
+/** Collapsible workspace quick start — matches live member journey. */
 export function HomeOverviewGuide({ t, className }: Props) {
   const { currency } = useUserPreferences()
   const detailsRef = useRef<HTMLDetailsElement>(null)
-  const trustLine = t("home.overview.trustLine").replace("{{currency}}", currency)
+  const trustLine = t("guide.quickStart.trustLine").replace("{{currency}}", currency)
 
   useEffect(() => {
     try {
@@ -49,34 +44,18 @@ export function HomeOverviewGuide({ t, className }: Props) {
     >
       <summary className="nexus-home-guide-summary flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground">{t("home.overview.eyebrow")}</p>
-          <p className="mt-0.5 text-sm font-medium text-foreground">{t("home.overview.compactLine")}</p>
+          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <BookOpen className="h-3.5 w-3.5 text-primary" aria-hidden />
+            {t("guide.quickStart.badge")}
+          </p>
+          <p className="mt-0.5 text-sm font-medium text-foreground">{t("guide.quickStart.compactLine")}</p>
           <p className="mt-1 text-[11px] font-medium text-primary">{t("container.info.viewDetails")}</p>
         </div>
       </summary>
 
-      <div className="border-t border-border px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
-        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {steps.map((step) => {
-            const Icon = step.icon
-            return (
-              <li
-                key={step.key}
-                className="flex min-h-[48px] items-start gap-2.5 rounded-xl border border-border bg-muted/35 px-3 py-2.5"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-foreground">{t(`home.overview.${step.key}`)}</p>
-                  <p className="text-[11px] leading-snug text-muted-foreground">
-                    {t(`home.overview.${step.hintKey}`)}
-                  </p>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+      <div className="border-t border-border px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+        <p className="mb-3 text-xs leading-relaxed text-muted-foreground">{t("guide.quickStart.lead")}</p>
+        <NexusQuickGuide t={t} layout="grid" showLearnMore />
         <p className="mt-3 text-[11px] text-muted-foreground">{trustLine}</p>
       </div>
     </details>
