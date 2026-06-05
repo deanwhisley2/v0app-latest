@@ -1,3 +1,4 @@
+import type { VerificationEmailStatus } from "@/lib/auth/verification-email-status"
 import type { IssueVerificationResult } from "@/lib/email-verification-issue"
 import { issueEmailVerificationCodeForUser } from "@/lib/email-verification-issue"
 import {
@@ -6,8 +7,7 @@ import {
 } from "@/lib/server/auth-email-delivery-log"
 
 export type RegisterEmailVerificationAttempt = {
-  sent: boolean
-  deferred: boolean
+  status: VerificationEmailStatus
   error?: string
 }
 
@@ -19,8 +19,8 @@ type RegisterEmailContext = {
 }
 
 /**
- * Registration verification send — uses user id directly (not email lookup).
- * Never blocks account creation; logs sent/deferred/failed for monitoring.
+ * Registration verification — create code (step 2) then send email (step 3).
+ * Never blocks account creation; returns explicit status so UI never claims "sent" falsely.
  */
 export async function attemptRegisterEmailVerification(
   ctx: RegisterEmailContext,
@@ -40,7 +40,20 @@ export async function attemptRegisterEmailVerification(
 
   if (issued.ok && issued.ambiguous !== true) {
     await logAuthEmailDeliveryEvent({ ...baseLog, outcome: "sent" })
-    return { sent: true, deferred: false }
+    return { status: "sent" }
+  }
+
+  if (!issued.ok && issued.status === 502) {
+    await logAuthEmailDeliveryEvent({
+      ...baseLog,
+      outcome: "deferred",
+      errorMessage: issued.error,
+    })
+    console.error("[register] verification email delivery failed:", issued.error, {
+      userId: ctx.userId,
+      email: ctx.emailRaw,
+    })
+    return { status: "delivery_pending", error: issued.error }
   }
 
   const error = !issued.ok
@@ -49,18 +62,14 @@ export async function attemptRegisterEmailVerification(
 
   await logAuthEmailDeliveryEvent({
     ...baseLog,
-    outcome: issued.ok ? "skipped" : "deferred",
+    outcome: "failed",
     errorMessage: error,
   })
 
-  console.warn("[register] verification email deferred:", error, {
+  console.error("[register] verification code generation failed:", error, {
     userId: ctx.userId,
     email: ctx.emailRaw,
   })
 
-  return {
-    sent: false,
-    deferred: true,
-    error,
-  }
+  return { status: "generation_failed", error }
 }

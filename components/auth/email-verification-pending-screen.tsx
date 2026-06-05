@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { Loader2, Mail } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,8 +10,8 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp"
-import { VerificationCodeSentPanel } from "@/components/auth/verification-code-sent-panel"
 import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
+import { VerificationEmailStatusPanel } from "@/components/auth/verification-email-status-panel"
 import { useVerificationResendCooldown } from "@/hooks/use-verification-resend-cooldown"
 import { supabase } from "@/lib/supabaseClient"
 import {
@@ -20,6 +20,11 @@ import {
   patchPendingEmailVerification,
   setPendingEmailVerification,
 } from "@/lib/auth/pending-email-verification"
+import {
+  isVerificationEmailSent,
+  resolveVerificationEmailStatus,
+  type VerificationEmailStatus,
+} from "@/lib/auth/verification-email-status"
 
 type ViewMode = "landing" | "enter-code"
 
@@ -39,8 +44,14 @@ export function EmailVerificationPendingScreen({
   const [infoMsg, setInfoMsg] = useState("")
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
-  const [deliveryDeferred, setDeliveryDeferred] = useState(false)
-  const [codeSentAt, setCodeSentAt] = useState<number | null>(() => Date.now())
+  const [verificationStatus, setVerificationStatus] = useState<VerificationEmailStatus>(() =>
+    resolveVerificationEmailStatus(getPendingEmailVerification() ?? {}),
+  )
+  const [codeSentAt, setCodeSentAt] = useState<number | null>(() => {
+    const pending = getPendingEmailVerification()
+    const status = resolveVerificationEmailStatus(pending ?? {})
+    return isVerificationEmailSent(status) ? (pending?.created_at ?? Date.now()) : null
+  })
   const otpWrapRef = useRef<HTMLDivElement>(null)
 
   const { secondsLeft, canResend, markSent, applyServerRetryAfter } = useVerificationResendCooldown()
@@ -49,7 +60,13 @@ export function EmailVerificationPendingScreen({
     const pending = getPendingEmailVerification()
     if (pending?.email) setEmail(pending.email)
     if (pending?.enter_code_mode) setViewMode("enter-code")
-    if (pending?.email_delivery_deferred) setDeliveryDeferred(true)
+    const status = resolveVerificationEmailStatus(pending ?? {})
+    setVerificationStatus(status)
+    if (isVerificationEmailSent(status)) {
+      setCodeSentAt((prev) => prev ?? pending?.created_at ?? Date.now())
+    } else {
+      setCodeSentAt(null)
+    }
   }, [])
 
   useEffect(() => {
@@ -57,13 +74,14 @@ export function EmailVerificationPendingScreen({
     if (resolved) {
       setEmail(resolved)
       const pending = getPendingEmailVerification()
+      const status = resolveVerificationEmailStatus(pending ?? {})
       setPendingEmailVerification({
         email: resolved,
         funding_country_code: pending?.funding_country_code,
         last_resend_at: pending?.last_resend_at,
         enter_code_mode: pending?.enter_code_mode ?? initialMode === "enter-code",
         created_at: pending?.created_at,
-        email_delivery_deferred: pending?.email_delivery_deferred,
+        verification_email_status: status,
       })
     }
     hydrateFromStorage()
@@ -155,20 +173,28 @@ export function EmailVerificationPendingScreen({
       if (!res.ok) {
         if (res.status === 429 && data.retryAfterSeconds) {
           applyServerRetryAfter(data.retryAfterSeconds)
+          setInfoMsg(`Please wait ${data.retryAfterSeconds} seconds before resending.`)
+          return
         }
-        setDeliveryDeferred(true)
-        patchPendingEmailVerification({ email_delivery_deferred: true })
-        setError(
-          data.error ??
-            "We could not deliver the verification email. You can verify later from Security Settings after sign-in.",
-        )
+        const failedStatus: VerificationEmailStatus =
+          res.status === 502 ? "delivery_pending" : "generation_failed"
+        setVerificationStatus(failedStatus)
+        patchPendingEmailVerification({ verification_email_status: failedStatus })
+        setCodeSentAt(null)
+        if (res.status === 502 && data.error) {
+          setInfoMsg("Your verification email is on its way. Please allow up to 2 minutes.")
+        } else if (failedStatus === "generation_failed") {
+          setInfoMsg("We couldn't prepare your verification code. Please try again.")
+        } else {
+          setInfoMsg("Please try resend in a moment, or verify later from Security Settings after sign-in.")
+        }
         return
       }
-      setDeliveryDeferred(false)
-      patchPendingEmailVerification({ email_delivery_deferred: false })
+      setVerificationStatus("sent")
+      patchPendingEmailVerification({ verification_email_status: "sent" })
       markSent()
       setCodeSentAt(Date.now())
-      setInfoMsg(data.message ?? "Verification code sent.")
+      setInfoMsg(data.message ?? "Verification email sent.")
     } catch {
       setError("Network error. Please try again.")
     } finally {
@@ -236,30 +262,25 @@ export function EmailVerificationPendingScreen({
             <p className="mt-1 text-xs text-muted-foreground">One more step — verify your email</p>
           </div>
 
-          {deliveryDeferred ? (
-            <div
-              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center"
-              role="status"
-            >
-              <p className="text-sm font-medium text-foreground">Your account is ready</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                We could not send the verification email from our mail provider. Try resend below, or verify
-                later from Security Settings after sign-in.
-              </p>
-              <p className="mt-2 flex items-center justify-center gap-2 text-sm font-semibold text-primary">
-                <Mail className="h-4 w-4 shrink-0" aria-hidden />
-                {email}
-              </p>
-            </div>
-          ) : (
-            <VerificationCodeSentPanel
-              email={email}
-              secondsLeft={secondsLeft}
-              canResend={canResend}
-            />
-          )}
+          <VerificationEmailStatusPanel
+            status={verificationStatus}
+            email={email}
+            secondsLeft={secondsLeft}
+            canResend={canResend}
+          />
 
-          <VerificationDeliveryHint codeSentAt={codeSentAt} />
+          {isVerificationEmailSent(verificationStatus) ? (
+            <VerificationDeliveryHint codeSentAt={codeSentAt} />
+          ) : verificationStatus === "delivery_pending" ? (
+            <p className="text-center text-xs leading-relaxed text-muted-foreground/85">
+              Delivery can take up to 2 minutes. Check inbox, spam, and promotions — then enter your code or resend.
+            </p>
+          ) : (
+            <p className="text-center text-xs leading-relaxed text-muted-foreground/85">
+              Tap resend below when ready. We only show “Verification email sent” after our provider accepts the
+              message.
+            </p>
+          )}
 
           {error ? (
             <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive" role="alert">
@@ -289,7 +310,7 @@ export function EmailVerificationPendingScreen({
                   Sending…
                 </>
               ) : canResend ? (
-                "Resend email"
+                "Resend verification email"
               ) : (
                 `Resend available in ${secondsLeft}s`
               )}
@@ -324,8 +345,15 @@ export function EmailVerificationPendingScreen({
           <h1 className="text-2xl font-semibold text-foreground">Enter verification code</h1>
         </div>
 
-        <VerificationCodeSentPanel email={email} secondsLeft={secondsLeft} canResend={canResend} />
-        <VerificationDeliveryHint codeSentAt={codeSentAt} />
+        <VerificationEmailStatusPanel
+          status={verificationStatus}
+          email={email}
+          secondsLeft={secondsLeft}
+          canResend={canResend}
+        />
+        {isVerificationEmailSent(verificationStatus) ? (
+          <VerificationDeliveryHint codeSentAt={codeSentAt} />
+        ) : null}
 
         <div className="sr-only">
           <LabelledEmail value={email} onChange={setEmail} />
@@ -381,7 +409,7 @@ export function EmailVerificationPendingScreen({
             disabled={resendLoading || loading || !canResend}
             onClick={() => void handleResend()}
           >
-            {resendLoading ? "Sending…" : canResend ? "Resend email" : `Resend available in ${secondsLeft}s`}
+            {resendLoading ? "Sending…" : canResend ? "Resend verification email" : `Resend available in ${secondsLeft}s`}
           </Button>
           <Button
             type="button"

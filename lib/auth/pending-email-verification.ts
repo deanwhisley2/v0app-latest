@@ -1,5 +1,8 @@
 /** Client-only persistence so users can return from Gmail without losing verification context. */
 
+import type { VerificationEmailStatus } from "@/lib/auth/verification-email-status"
+import { resolveVerificationEmailStatus } from "@/lib/auth/verification-email-status"
+
 export const PENDING_VERIFY_STORAGE_KEY = "nexus_verification_pending_v1"
 const LEGACY_SESSION_EMAIL_KEY = "nexus_pending_verify_email"
 const LEGACY_SESSION_COUNTRY_KEY = "nexus_pending_verify_country"
@@ -15,6 +18,8 @@ export type PendingEmailVerification = {
   enter_code_mode?: boolean
   /** Provider could not deliver at signup — account still created. */
   email_delivery_deferred?: boolean
+  /** Explicit register send outcome — never treat as sent unless `sent`. */
+  verification_email_status?: VerificationEmailStatus
 }
 
 function isBrowser(): boolean {
@@ -40,6 +45,11 @@ function parseRecord(raw: string | null): PendingEmailVerification | null {
       ...(typeof parsed.last_resend_at === "number" ? { last_resend_at: parsed.last_resend_at } : {}),
       ...(parsed.enter_code_mode === true ? { enter_code_mode: true } : {}),
       ...(parsed.email_delivery_deferred === true ? { email_delivery_deferred: true } : {}),
+      ...(parsed.verification_email_status === "sent" ||
+      parsed.verification_email_status === "delivery_pending" ||
+      parsed.verification_email_status === "generation_failed"
+        ? { verification_email_status: parsed.verification_email_status }
+        : {}),
     }
   } catch {
     return null
@@ -86,6 +96,7 @@ export function setPendingEmailVerification(
   },
 ): void {
   if (!isBrowser()) return
+  const status = resolveVerificationEmailStatus(input)
   const record: PendingEmailVerification = {
     verification_pending: true,
     email: input.email.trim(),
@@ -95,7 +106,8 @@ export function setPendingEmailVerification(
       : {}),
     ...(typeof input.last_resend_at === "number" ? { last_resend_at: input.last_resend_at } : {}),
     ...(input.enter_code_mode === true ? { enter_code_mode: true } : {}),
-    ...(input.email_delivery_deferred === true ? { email_delivery_deferred: true } : {}),
+    verification_email_status: status,
+    email_delivery_deferred: status !== "sent",
   }
   try {
     localStorage.setItem(PENDING_VERIFY_STORAGE_KEY, JSON.stringify(record))
@@ -112,13 +124,19 @@ export function patchPendingEmailVerification(
   patch: Partial<
     Pick<
       PendingEmailVerification,
-      "enter_code_mode" | "last_resend_at" | "email" | "email_delivery_deferred"
+      "enter_code_mode" | "last_resend_at" | "email" | "email_delivery_deferred" | "verification_email_status"
     >
   >,
 ): void {
   const current = getPendingEmailVerification()
   if (!current) return
-  setPendingEmailVerification({ ...current, ...patch })
+  const merged = { ...current, ...patch }
+  const status = resolveVerificationEmailStatus(merged)
+  setPendingEmailVerification({
+    ...merged,
+    verification_email_status: status,
+    email_delivery_deferred: status !== "sent",
+  })
 }
 
 export function clearPendingEmailVerification(): void {

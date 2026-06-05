@@ -35,6 +35,10 @@ import {
   setPendingEmailVerification,
 } from "@/lib/auth/pending-email-verification"
 import {
+  isVerificationEmailSent,
+  type VerificationEmailStatus,
+} from "@/lib/auth/verification-email-status"
+import {
   clearRegisterDraft,
   getRegisterDraft,
   getRegisterDraftPassword,
@@ -258,7 +262,8 @@ export default function RegisterForm() {
         requiresEmailVerification?: boolean
         email?: string
         session?: boolean
-        emailVerificationDeferred?: boolean
+        verificationEmailStatus?: VerificationEmailStatus
+        verificationEmailError?: string
       }
       if (!res.ok) {
         setError(json.error || "Registration failed")
@@ -268,12 +273,15 @@ export default function RegisterForm() {
       if (json.requiresEmailVerification) {
         const verifyEmail = json.email ?? trimmedEmail
         if (verifyEmail) {
+          const verificationStatus = json.verificationEmailStatus ?? "generation_failed"
           setPendingEmailVerification({
             email: verifyEmail,
             ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
-            ...(json.emailVerificationDeferred ? { email_delivery_deferred: true } : {}),
+            verification_email_status: verificationStatus,
           })
-          recordVerificationResendSent()
+          if (isVerificationEmailSent(verificationStatus)) {
+            recordVerificationResendSent()
+          }
           clearRegisterDraft()
           if (json.session) {
             router.replace("/auth/verify")

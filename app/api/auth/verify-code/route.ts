@@ -137,6 +137,18 @@ export async function POST(request: Request) {
 
     await admin.from("email_verifications").delete().eq("user_id", userId)
 
+    console.info(
+      "[auth-email]",
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        channel: "verify_complete",
+        outcome: "completed",
+        user_id: userId,
+        email_domain: emailNormalized.split("@")[1] ?? null,
+        ip,
+      }),
+    )
+
     const { data: authUser } = await admin.auth.admin.getUserById(userId)
     const authEmail = authUser.user?.email?.trim().toLowerCase() ?? emailNormalized
     const sessionResult = await createAuthSessionForEmail(authEmail)

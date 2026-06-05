@@ -25,6 +25,7 @@ import {
   NEXUS_FIXED_TRADE_GUIDE,
   NEXUS_SETTLEMENT_AND_TRANSFER_RULES,
   NEXUS_VERIFICATION_AND_SECURITY_GUIDE,
+  NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE,
   NEXUS_ASSISTANT_RESPONSE_STYLE,
 } from "./knowledge"
 
@@ -118,7 +119,10 @@ export function buildJoelinDeepseekSystemPrompt(
     `- ${CONTAINER_WITHDRAWAL_SUMMARY}`,
     `- ${LEVEL_HINT}`,
     "",
-    "Verification & security:",
+    "Verification, sign-in & recovery:",
+    NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE,
+    "",
+    "Security PIN & withdrawals:",
     NEXUS_VERIFICATION_AND_SECURITY_GUIDE,
     "",
     `Funding — retailers vs company crypto:\n${NEXUS_FUNDING_AND_RETAIL_DESK_HINT}`,

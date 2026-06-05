@@ -26,13 +26,9 @@ export function VerificationCodeSentPanel({
     >
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Check className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
-        Verification code sent
+        Verification email sent
       </div>
-      <p className="mt-2 flex items-center gap-2 text-xs text-emerald-400/90">
-        <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        Delivered
-      </p>
-      <p className="mt-3 text-xs text-muted-foreground">Verification code sent to:</p>
+      <p className="mt-3 text-xs text-muted-foreground">Sent to:</p>
       <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-primary">
         <Mail className="h-4 w-4 shrink-0" aria-hidden />
         <a href={`mailto:${email}`} className="truncate underline-offset-4 hover:underline">

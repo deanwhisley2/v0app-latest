@@ -26,6 +26,7 @@ import {
   NEXUS_FIXED_TRADE_GUIDE,
   NEXUS_SETTLEMENT_AND_TRANSFER_RULES,
   NEXUS_VERIFICATION_AND_SECURITY_GUIDE,
+  NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE,
 } from "./knowledge"
 
 function norm(s: string) {
@@ -238,17 +239,24 @@ function authReply(q: string, authStep?: string): string | null {
       "Reset links time out — if it expired, request a fresh one.",
     ].join("\n")
   }
-  if (hasAny(q, ["2fa", "otp", "verification code", "sms code", "email code", "not receiving"])) {
-    return [
-      "When codes don’t arrive:",
-      "",
-      "• Confirm you’re on the method you actually registered (email vs phone).",
-      "• Wait 60s before resend; carriers and inboxes batch messages.",
-      "• Check spam / promotions folders for email OTP.",
-      "• If you changed phone numbers, you’ll need account recovery through support.",
-      "",
-      "Never share a live code with anyone claiming to be support.",
-    ].join("\n")
+  if (
+    hasAny(q, [
+      "2fa",
+      "otp",
+      "verification code",
+      "verification email",
+      "sms code",
+      "email code",
+      "not receiving",
+      "resend",
+      "magic link",
+      "email login",
+      "phone login",
+      "forgot password",
+      "recovery email",
+    ])
+  ) {
+    return NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE
   }
   if (hasAny(q, ["sign up", "register", "create account", "new account"])) {
     return [
@@ -416,7 +424,7 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     return [NEXUS_FIXED_TRADE_GUIDE, "", NEXUS_FIXED_EARLY_EXIT_GUIDE].join("\n")
   }
 
-  if (hasAny(q, ["verify", "verification", "security pin", "email verify"])) {
+  if (hasAny(q, ["verify", "verification", "security pin", "email verify", "sign in", "login", "register"])) {
     return NEXUS_VERIFICATION_AND_SECURITY_GUIDE
   }
 

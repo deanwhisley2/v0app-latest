@@ -197,8 +197,35 @@ export const NEXUS_UI_WHERE_TO_GO = [
   "Referrals: your invite link and rewards.",
 ].join("\n")
 
+export const NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE = [
+  "Email verification (after signup):",
+  "• Nexus sends a 6-digit code to the email you registered with.",
+  "• Typical delivery: within 1 minute; allow up to 2 minutes before resending.",
+  "• Check inbox, spam, junk, promotions, and updates folders.",
+  "• The verify screen shows one of three states: email sent (provider accepted), on the way (allow 2 minutes), or code not ready yet (tap resend).",
+  "• Resend has a 60-second cooldown. You can skip verification and sign in later, then verify from Settings → Security.",
+  "",
+  "Sign-in options:",
+  "• Email tab: your registered email + account password.",
+  "• Phone tab: mobile number linked at signup + account password (email verification still recommended for recovery).",
+  "• Email code login / magic link: request a one-time sign-in link or code from the login screen when offered.",
+  "",
+  "Password recovery:",
+  "• Use Forgot password on the sign-in screen with the same email you registered.",
+  "• Recovery emails use the same delivery path as verification — wait up to 2 minutes and check spam folders.",
+  "• Links expire; request a fresh one if needed.",
+  "",
+  "Troubleshooting (before contacting support):",
+  "• Confirm you are using the same email or phone you registered with.",
+  "• Wait 60 seconds between resend attempts.",
+  "• Try resend from the verify screen or Settings → Security & Recovery.",
+  "• Never share live codes, passwords, or PINs with anyone claiming to be support.",
+].join("\n")
+
 export const NEXUS_VERIFICATION_AND_SECURITY_GUIDE = [
-  "Verify your email from the verify screen or Settings → Security.",
-  "Set your 6-digit Security PIN and withdrawal numbers before cash-out.",
-  "Never share passwords, PINs, or codes with anyone.",
+  NEXUS_AUTH_EMAIL_AND_LOGIN_GUIDE,
+  "",
+  "Account security:",
+  "• Set your 6-digit Security PIN and withdrawal details in Settings → Security & Recovery before cash-out.",
+  "• Never share passwords, PINs, or verification codes with anyone.",
 ].join("\n")
