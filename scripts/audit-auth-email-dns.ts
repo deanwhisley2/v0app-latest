@@ -24,18 +24,7 @@ const DOMAIN = (
   ?.trim()
   .toLowerCase() ?? "nexuspro.it.com"
 
-const DKIM_SELECTORS = [
-  "brevo",
-  "mail",
-  "default",
-  "dkim",
-  "selector1",
-  "selector2",
-  "k1",
-  "k2",
-  "s1",
-  "s2",
-]
+const DKIM_SELECTORS = ["brevo1", "brevo2", "brevo", "mail", "default", "dkim", "k1", "k2"]
 
 type DnsRow = { label: string; value: string | null; ok?: boolean }
 

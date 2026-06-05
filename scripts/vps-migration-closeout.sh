@@ -77,6 +77,7 @@ if ! grep -q 'verify-crypto-deposits-cron' "\$CRON_TMP"; then
 */15 * * * * CRON_SECRET=\${SECRET} APP_URL=https://nexuspro.it.com bash ${REMOTE_APP_DIR}/scripts/treasury-reconcile-cron.sh >> /var/log/nexus-treasury-cron.log 2>&1
 */5 * * * * curl -fsS -X POST https://nexuspro.it.com/api/cron/process-fixed-trade-maturity -H "x-cron-secret: \${SECRET}" -H "Content-Type: application/json" --max-time 120 >> /var/log/nexus-fixed-trade-cron.log 2>&1
 */10 * * * * curl -fsS -X POST https://nexuspro.it.com/api/cron/settle-expired-copy-trades -H "x-cron-secret: \${SECRET}" -H "Content-Type: application/json" --max-time 120 >> /var/log/nexus-copy-trade-cron.log 2>&1
+*/3 * * * * CRON_SECRET=\${SECRET} APP_URL=https://nexuspro.it.com bash ${REMOTE_APP_DIR}/scripts/sync-trade-session-bots-cron.sh >> /var/log/nexus-trade-session-cron.log 2>&1
 EOF
 fi
 
