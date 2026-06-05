@@ -5,25 +5,29 @@ import { cn } from "@/lib/utils"
 
 type TradeSessionProfitCelebrationProps = {
   profitUsd: number
+  stakeReturnedUsd?: number
   summary: string
   formatMoney: (usd: number) => string
+  celebrationKind?: "earnings" | "stake_return"
   onDismiss: () => void
 }
 
 export function TradeSessionProfitCelebration({
   profitUsd,
+  stakeReturnedUsd = 0,
   summary,
   formatMoney,
+  celebrationKind = profitUsd > 0 ? "earnings" : "stake_return",
   onDismiss,
 }: TradeSessionProfitCelebrationProps) {
   const [visible, setVisible] = useState(true)
-  const hasEarnings = profitUsd > 0
+  const hasEarnings = celebrationKind === "earnings" && profitUsd > 0
 
   useEffect(() => {
     const id = window.setTimeout(() => {
       setVisible(false)
       onDismiss()
-    }, hasEarnings ? 7000 : 5000)
+    }, hasEarnings ? 7000 : 4000)
     return () => window.clearTimeout(id)
   }, [hasEarnings, onDismiss])
 
@@ -33,11 +37,19 @@ export function TradeSessionProfitCelebration({
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       role="dialog"
-      aria-label="Session completion celebration"
+      aria-label={hasEarnings ? "Trade earnings celebration" : "Session completion"}
     >
-      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-success/40 bg-gradient-to-b from-success/20 to-background p-6 text-center shadow-2xl">
+      <div
+        className={cn(
+          "relative w-full max-w-sm overflow-hidden rounded-2xl border p-6 text-center shadow-2xl",
+          hasEarnings
+            ? "border-success/40 bg-gradient-to-b from-success/20 to-background"
+            : "border-border/80 bg-card",
+        )}
+      >
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-          {Array.from({ length: hasEarnings ? 24 : 12 }).map((_, i) => (
+          {hasEarnings
+            ? Array.from({ length: 24 }).map((_, i) => (
             <span
               key={i}
               className={cn("absolute h-2 w-2 rounded-full opacity-80 animate-ping")}
@@ -49,19 +61,39 @@ export function TradeSessionProfitCelebration({
                 animationDuration: `${900 + (i % 5) * 200}ms`,
               }}
             />
-          ))}
+              ))
+            : null}
         </div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-success">Session complete</p>
+        <p
+          className={cn(
+            "text-xs font-semibold uppercase tracking-widest",
+            hasEarnings ? "text-success" : "text-muted-foreground",
+          )}
+        >
+          {hasEarnings ? "Earnings released" : "Session complete"}
+        </p>
         {hasEarnings ? (
           <>
-            <p className="mt-3 text-sm font-medium text-foreground">Released earnings</p>
+            <p className="mt-3 text-sm font-medium text-foreground">Released earnings (Pocket)</p>
             <p className="mt-1 text-3xl font-bold text-success">+{formatMoney(profitUsd)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Credited to your Pocket balance</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Earnings are in your <span className="font-medium text-foreground">Pocket balance</span>, not Nexus
+              Main. Open Pocket on the home screen to transfer to Main when ready.
+            </p>
+            {stakeReturnedUsd > 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Trading capital {formatMoney(stakeReturnedUsd)} returned to Nexus Main.
+              </p>
+            ) : null}
           </>
         ) : (
-          <p className="mt-3 text-sm font-medium text-foreground">
-            Your trade session finished successfully
-          </p>
+          <>
+            <p className="mt-3 text-sm font-medium text-foreground">Capital returned to Nexus Main</p>
+            {stakeReturnedUsd > 0 ? (
+              <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(stakeReturnedUsd)}</p>
+            ) : null}
+            <p className="mt-2 text-xs text-muted-foreground">No earnings were released for this session.</p>
+          </>
         )}
         <p className="mt-2 text-sm text-muted-foreground">{summary}</p>
         <button

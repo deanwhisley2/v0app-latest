@@ -49,6 +49,15 @@ function main() {
   assert(/UGX/i.test(ug650), `UG $650 → UGX: ${ug650}`)
   assert(!/\$650/.test(ug650), `UG must not show USD symbol: ${ug650}`)
 
+  const ugUsdPref = buildCustomerMoneyContext({
+    fundingCountryCode: "UG",
+    preferredCurrency: "USD",
+    language: "en",
+  })
+  assert(ugUsdPref.currency === "UGX", `UG corridor must override USD pref: ${ugUsdPref.currency}`)
+  const ugUsdFmt = formatUsdForCustomerDisplay(650, ugUsdPref)
+  assert(/UGX/i.test(ugUsdFmt), `UG with USD pref $650 → UGX: ${ugUsdFmt}`)
+
   const ke = buildCustomerMoneyContext({ fundingCountryCode: "KE", language: "en" })
   const ke650 = formatUsdForCustomerDisplay(650, ke)
   assert(/KES/i.test(ke650), `KE $650 → KES: ${ke650}`)

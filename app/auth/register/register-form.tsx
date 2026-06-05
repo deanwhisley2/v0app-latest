@@ -41,13 +41,13 @@ import {
   setRegisterDraftPassword,
 } from "@/lib/auth/register-draft"
 import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
+import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import type { AppLanguage } from "@/lib/user-preferences"
 import { LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
 import {
   isSupportedOperatingCountry,
   operatingCountriesByRegion,
 } from "@/lib/operating-countries"
-import type { FiatCurrencyCode } from "@/lib/currency-display"
 import { cn } from "@/lib/utils"
 
 const REGISTER_JOELIN_CHIPS = [
@@ -78,10 +78,13 @@ export default function RegisterForm() {
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
   const [language, setLanguage] = useState<AppLanguage>(ctxLang)
-  const currency: FiatCurrencyCode = "USD"
   const [referralCode, setReferralCode] = useState("")
   const [campaignSlug, setCampaignSlug] = useState("")
   const [operatingCountry, setOperatingCountry] = useState("UG")
+  const currency = useMemo(
+    () => displayCurrencyForCustomer(operatingCountry, null),
+    [operatingCountry],
+  )
   const [error, setError] = useState<string | null>(null)
   const [corridorWarning, setCorridorWarning] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -254,6 +257,7 @@ export default function RegisterForm() {
         requiresEmailVerification?: boolean
         email?: string
         session?: boolean
+        emailVerificationDeferred?: boolean
       }
       if (!res.ok) {
         setError(json.error || "Registration failed")
@@ -266,6 +270,7 @@ export default function RegisterForm() {
           setPendingEmailVerification({
             email: verifyEmail,
             ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
+            ...(json.emailVerificationDeferred ? { email_delivery_deferred: true } : {}),
           })
           recordVerificationResendSent()
           clearRegisterDraft()

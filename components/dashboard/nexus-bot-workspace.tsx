@@ -100,6 +100,8 @@ type ProfitCelebration = {
   profitUsd: number
   summary: string
   hasEarnings?: boolean
+  celebrationKind?: "earnings" | "stake_return"
+  stakeReturnedUsd?: number
 }
 
 type NexusBotWorkspaceProps = {
@@ -286,17 +288,22 @@ export function NexusBotWorkspace({
     if (celebrationHandledRef.current === celebration.sessionId) return
     celebrationHandledRef.current = celebration.sessionId
     dispatchCustomerLedgerBump("nexus_trade_session_complete")
-    const hasEarnings = celebration.hasEarnings ?? celebration.profitUsd > 0
+    void load()
+    const hasEarnings =
+      celebration.celebrationKind === "earnings" ||
+      (celebration.hasEarnings ?? celebration.profitUsd > 0)
     addNotification({
       type: "trade",
       title: hasEarnings ? "Trade session complete" : "Session complete",
       message: hasEarnings
         ? `Released earnings ${formatUserMoney(celebration.profitUsd)} credited to Pocket.`
-        : "Your trade session finished successfully.",
+        : celebration.stakeReturnedUsd && celebration.stakeReturnedUsd > 0
+          ? `Trading capital ${formatUserMoney(celebration.stakeReturnedUsd)} returned to Nexus Main.`
+          : "Your trade session finished successfully.",
       detailText: celebration.summary,
       nav: { kind: "trade" },
     })
-  }, [addNotification, celebration, formatUserMoney])
+  }, [addNotification, celebration, formatUserMoney, load])
 
   useEffect(() => {
     const progress = activeSession?.session_progress_pct ?? 0
@@ -452,6 +459,8 @@ export function NexusBotWorkspace({
       {celebration ? (
         <TradeSessionProfitCelebration
           profitUsd={celebration.profitUsd}
+          stakeReturnedUsd={celebration.stakeReturnedUsd}
+          celebrationKind={celebration.celebrationKind}
           summary={celebration.summary}
           formatMoney={formatUserMoney}
           onDismiss={() => void dismissCelebration()}

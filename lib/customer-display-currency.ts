@@ -14,13 +14,17 @@ export function corridorDisplayFiatForFunding(
 }
 
 /**
- * Currency for staking copy/fixed trades — user preferred balance currency when supported,
- * otherwise operating-country corridor fiat, else USD. Ledger remains USD.
+ * Currency for staking copy/fixed trades — operating-country corridor fiat when the corridor
+ * has local money (UG→UGX, KE→KES, …). USD preference only applies for USD corridors or
+ * users without a locked operating country. Ledger remains USD.
  */
 export function accountBalanceCurrencyForStaking(
   fundingCountryCode: string | null | undefined,
   preferredCurrency?: string | null,
 ): FiatCurrencyCode {
+  if (corridorOverridesPreferredCurrency(fundingCountryCode, preferredCurrency)) {
+    return corridorDisplayFiatForFunding(fundingCountryCode)
+  }
   const pref = (preferredCurrency ?? "").trim().toUpperCase()
   if (pref && isSupportedFiat(pref)) return pref as FiatCurrencyCode
   return corridorDisplayFiatForFunding(fundingCountryCode)
@@ -34,11 +38,15 @@ export function displayCurrencyForCustomer(
   return accountBalanceCurrencyForStaking(fundingCountryCode, preferredCurrency)
 }
 
+/** Operating corridors with local fiat always display in corridor currency — not USD. */
 export function corridorOverridesPreferredCurrency(
-  _fundingCountryCode: string | null | undefined,
-  _preferredCurrency?: string | null,
+  fundingCountryCode: string | null | undefined,
+  preferredCurrency?: string | null,
 ): boolean {
-  return false
+  const corridor = corridorCurrencyForCountry(fundingCountryCode)
+  if (!corridor || corridor === "USD") return false
+  const pref = (preferredCurrency ?? "").trim().toUpperCase()
+  return !pref || pref !== corridor
 }
 
 export function mergeCustomerPreferencesWithCorridor(
@@ -75,7 +83,7 @@ export function customerCurrencyOptionsForCountry(
 ): FiatCurrencyCode[] | null {
   const corridor = corridorCurrencyForCountry(fundingCountryCode)
   if (!corridor) return ["USD"]
-  return corridor === "USD" ? ["USD"] : [corridor, "USD"]
+  return corridor === "USD" ? ["USD"] : [corridor]
 }
 
 export function customerLanguageChoicesForCountry(

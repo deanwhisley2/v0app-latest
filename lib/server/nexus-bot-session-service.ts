@@ -12,7 +12,6 @@ import {
   normalizeSignalCode,
   type NexusSignalSlot,
 } from "@/lib/nexus-bot/plans"
-import { creditPrincipalToMainAndEarningsToPocket } from "@/lib/server/copy-trade-balance-credit"
 import { casCreditNexusMainOnly, casReserveCopyTradeStake } from "@/lib/server/nexus-main-enforcement"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
@@ -30,6 +29,11 @@ import {
   settleTradeSessionParticipation,
   TRADE_SESSION_RESERVE_SOURCE,
 } from "@/lib/server/trade-session-earnings-reserve"
+import {
+  ensureTradeSessionSettlementCredits,
+  hasTradeSessionSettlementEvent,
+  repairUnsettledCompletedSessions,
+} from "@/lib/server/nexus-bot-settlement-integrity"
 
 export type { UserTradeSessionReserveRow } from "@/lib/server/trade-session-earnings-reserve"
 export { previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
@@ -256,6 +260,8 @@ export async function syncTradeSessionBotStates(
       start_at: ts.start_at,
     })
   }
+
+  await repairUnsettledCompletedSessions(admin, userId)
 }
 
 async function completeTradeSessionBotRow(
@@ -286,7 +292,58 @@ async function completeTradeSessionBotRow(
           joinedAt,
         })
 
+  const { data: existingRow } = await admin
+    .from("nexus_bot_sessions")
+    .select("status,profit_released_usd,stake_usd,trade_session_id,queued_at,participation_weight")
+    .eq("id", row.id)
+    .maybeSingle()
+  if (existingRow && String(existingRow.status) === "completed") {
+    const profitUsd = roundUsd2(Number(existingRow.profit_released_usd ?? 0))
+    await ensureTradeSessionSettlementCredits(admin, {
+      userId: row.userId,
+      botSessionId: row.id,
+      stakeUsd: roundUsd2(Number(existingRow.stake_usd ?? row.stakeUsd)),
+      profitUsd,
+      tradeSessionId: existingRow.trade_session_id ? String(existingRow.trade_session_id) : row.tradeSessionId,
+      joinedAt: existingRow.queued_at ? String(existingRow.queued_at) : joinedAt,
+      participationWeight: Number(existingRow.participation_weight ?? weight),
+      forceFullParticipation: row.forceFullParticipation,
+    })
+    return { profitUsd }
+  }
+
   if (!row.forceFullParticipation && weight <= 0) {
+    if (stake > 0) {
+      await ensureTradeSessionSettlementCredits(admin, {
+        userId: row.userId,
+        botSessionId: row.id,
+        stakeUsd: stake,
+        profitUsd: 0,
+        tradeSessionId: row.tradeSessionId,
+        joinedAt,
+        participationWeight: 0,
+        summary: "Session complete — reserved capital returned to Nexus Main.",
+        eventMetadata: {
+          session_id: row.id,
+          trade_session_id: row.tradeSessionId,
+          stake_returned_usd: stake,
+          profit_usd: 0,
+          late_join_no_earnings: true,
+        },
+      })
+    }
+    const { error: expireErr } = await admin
+      .from("nexus_bot_sessions")
+      .update({
+        status: "completed",
+        settled_at: now,
+        display_phase: "completed",
+        profit_released_usd: 0,
+        participation_weight: 0,
+      })
+      .eq("id", row.id)
+      .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+    if (expireErr) return null
     return { profitUsd: 0 }
   }
 
@@ -303,43 +360,20 @@ async function completeTradeSessionBotRow(
   const { profitUsd, allocatedUsd, minFloorApplied } = settlement
   const earningsUsd = roundUsd2(profitUsd)
 
-  const { error: uErr } = await admin
-    .from("nexus_bot_sessions")
-    .update({
-      status: "completed",
-      settled_at: now,
-      display_phase: "profit_released",
-      profit_released_usd: profitUsd,
-      participation_weight: weight,
-    })
-    .eq("id", row.id)
-    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
-  if (uErr) return null
-
-  if (stake > 0 || earningsUsd > 0) {
-    await creditPrincipalToMainAndEarningsToPocket(admin, row.userId, stake, earningsUsd)
-  }
-
   const historySummary = closedTradeHistorySummary(profitUsd)
 
-  await recordFinancialEvent({
+  await ensureTradeSessionSettlementCredits(admin, {
     userId: row.userId,
-    eventType: "nexus_trade_session_complete",
-    category: "container",
-    amount: roundUsd2(stake + earningsUsd),
-    balanceSource: "nexus_bot_session",
-    balanceDestination:
-      earningsUsd > 0 && stake > 0
-        ? "available_balance,container_withdrawable_earnings"
-        : earningsUsd > 0
-          ? "container_withdrawable_earnings"
-          : "available_balance",
-    status: "completed",
-    actorType: "system",
-    actorId: row.userId,
-    relatedSessionId: row.id,
+    botSessionId: row.id,
+    stakeUsd: stake,
+    profitUsd: earningsUsd,
+    tradeSessionId: row.tradeSessionId,
+    joinedAt,
+    participationWeight: weight,
+    minFloorApplied,
+    forceFullParticipation: row.forceFullParticipation,
     summary: historySummary,
-    metadata: {
+    eventMetadata: {
       session_id: row.id,
       trade_session_id: row.tradeSessionId,
       joined_at: joinedAt,
@@ -354,9 +388,21 @@ async function completeTradeSessionBotRow(
       earnings_source: TRADE_SESSION_RESERVE_SOURCE,
       min_floor_applied: minFloorApplied,
       pocket_manual_transfer_required: earningsUsd > 0,
-      ...(row.forceFullParticipation ? { settlement_mode: "full_session_target" } : {}),
     },
   })
+
+  const { error: uErr } = await admin
+    .from("nexus_bot_sessions")
+    .update({
+      status: "completed",
+      settled_at: now,
+      display_phase: "profit_released",
+      profit_released_usd: profitUsd,
+      participation_weight: weight,
+    })
+    .eq("id", row.id)
+    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+  if (uErr) return null
 
   await appendUserAccountNotification(admin, {
     userId: row.userId,
@@ -566,10 +612,17 @@ export async function activateTradeSessionBot(
 export async function findPendingProfitCelebration(
   admin: SupabaseClient,
   userId: string,
-): Promise<{ sessionId: string; profitUsd: number; summary: string; hasEarnings: boolean } | null> {
+): Promise<{
+  sessionId: string
+  profitUsd: number
+  summary: string
+  hasEarnings: boolean
+  celebrationKind: "earnings" | "stake_return"
+  stakeReturnedUsd: number
+} | null> {
   const { data } = await admin
     .from("nexus_bot_sessions")
-    .select("id,profit_released_usd,profit_celebrated_at,settled_at")
+    .select("id,stake_usd,profit_released_usd,profit_celebrated_at,settled_at,trade_session_id,queued_at,participation_weight")
     .eq("user_id", userId)
     .eq("status", "completed")
     .not("trade_session_id", "is", null)
@@ -579,15 +632,37 @@ export async function findPendingProfitCelebration(
     .limit(1)
     .maybeSingle()
   if (!data) return null
+
+  const stakeUsd = roundUsd2(Number(data.stake_usd ?? 0))
   const profitUsd = roundUsd2(Number(data.profit_released_usd ?? 0))
+
+  await ensureTradeSessionSettlementCredits(admin, {
+    userId,
+    botSessionId: String(data.id),
+    stakeUsd,
+    profitUsd,
+    tradeSessionId: data.trade_session_id ? String(data.trade_session_id) : null,
+    joinedAt: data.queued_at ? String(data.queued_at) : null,
+    participationWeight: Number(data.participation_weight ?? 1),
+  })
+
+  const credited = await hasTradeSessionSettlementEvent(admin, userId, String(data.id))
+  if (!credited && (stakeUsd > 0 || profitUsd > 0)) {
+    return null
+  }
+
   const hasEarnings = profitUsd > 0
   return {
     sessionId: String(data.id),
     profitUsd,
     hasEarnings,
+    stakeReturnedUsd: stakeUsd,
+    celebrationKind: hasEarnings ? "earnings" : "stake_return",
     summary: hasEarnings
-      ? closedTradeHistorySummary(profitUsd)
-      : "Session complete — capital returned to Nexus Main.",
+      ? `${closedTradeHistorySummary(profitUsd)} Earnings are in your Pocket balance — transfer to Nexus Main when ready.`
+      : stakeUsd > 0
+        ? `Session complete — ${stakeUsd.toFixed(2)} USD capital returned to Nexus Main.`
+        : "Session complete — capital returned to Nexus Main.",
   }
 }
 

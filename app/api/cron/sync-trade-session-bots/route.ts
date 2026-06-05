@@ -4,6 +4,7 @@ import {
   completeDueNexusBotSessions,
   syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
+import { repairUnsettledCompletedSessions } from "@/lib/server/nexus-bot-settlement-integrity"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 
 /**
@@ -24,11 +25,13 @@ export async function POST(request: Request) {
     await syncTradeSessionBotStates(admin)
     const completedLegacyBotSessions = await completeDueNexusBotSessions(admin)
     const expiredTradeSessions = await expireDueTradeSessions(admin)
+    const repairedSettlementCredits = await repairUnsettledCompletedSessions(admin)
 
     return NextResponse.json({
       ok: true,
       expiredTradeSessions,
       completedLegacyBotSessions,
+      repairedSettlementCredits,
     })
   } catch (e) {
     return NextResponse.json(

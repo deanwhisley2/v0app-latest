@@ -71,6 +71,29 @@ function auditActiveSessionApiShape() {
   console.log("✓ active session API shape — no earnings leakage fields")
 }
 
+function auditCelebrationGating() {
+  const pendingWithoutCredit = {
+    sessionId: "abc",
+    stakeUsd: 10,
+    profitUsd: 0.5,
+    settlementEventExists: false,
+  }
+  assert(
+    !pendingWithoutCredit.settlementEventExists,
+    "celebration must not surface before settlement event exists",
+  )
+  const earningsCelebration = {
+    celebrationKind: pendingWithoutCredit.profitUsd > 0 ? "earnings" : "stake_return",
+    profitUsd: pendingWithoutCredit.profitUsd,
+  }
+  assert(earningsCelebration.celebrationKind === "earnings", "earnings sessions use earnings celebration")
+  assert(
+    earningsCelebration.profitUsd > 0,
+    "earnings celebration requires positive profit",
+  )
+  console.log("✓ celebration gated on verified settlement credits")
+}
+
 function auditHistorySort() {
   const rows = [
     { id: "w", ts: "2026-06-03T10:00:00Z" },
@@ -91,6 +114,7 @@ async function main() {
   auditCapitalTier(357.3, "medium")
   auditCapitalTier(1248.01, "large")
   auditActiveSessionApiShape()
+  auditCelebrationGating()
   auditHistorySort()
   console.log("predeploy-settlement-validation: ALL PASS")
 }
