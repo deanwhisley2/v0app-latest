@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
 import { sendPasswordResetCodeEmail } from "@/lib/login-code-email"
+import { logAuthEmailDeliveryEvent } from "@/lib/server/auth-email-delivery-log"
 import { hashLoginCode } from "@/lib/server/magic-link-auth"
 import { randomInt, timingSafeEqual } from "crypto"
 
@@ -54,6 +55,13 @@ export async function requestPasswordResetCode(params: {
     const userId = await findAuthUserIdByEmail(admin, trimmed)
 
     if (!userId) {
+      await logAuthEmailDeliveryEvent({
+        channel: "recovery",
+        outcome: "skipped",
+        email: trimmed,
+        ipAddress: params.requestIp,
+        userAgent: params.userAgent,
+      })
       return { ok: true, message: RESET_SENT_MESSAGE }
     }
 
@@ -109,10 +117,28 @@ export async function requestPasswordResetCode(params: {
     const displayName = prof?.full_name?.trim() || "Valued Customer"
 
     try {
-      await sendPasswordResetCodeEmail(trimmed, code, displayName)
+      const { messageId } = await sendPasswordResetCodeEmail(trimmed, code, displayName)
+      await logAuthEmailDeliveryEvent({
+        channel: "recovery",
+        outcome: "sent",
+        email: trimmed,
+        userId,
+        messageId,
+        ipAddress: params.requestIp,
+        userAgent: params.userAgent,
+      })
     } catch (e) {
       await admin.from("auth_magic_link_tokens").delete().eq("user_id", userId)
       const msg = e instanceof Error ? e.message : "Failed to send email"
+      await logAuthEmailDeliveryEvent({
+        channel: "recovery",
+        outcome: "failed",
+        email: trimmed,
+        userId,
+        errorMessage: msg,
+        ipAddress: params.requestIp,
+        userAgent: params.userAgent,
+      })
       return { ok: false, error: msg, status: 502 }
     }
 

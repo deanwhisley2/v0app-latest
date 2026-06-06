@@ -39,23 +39,23 @@ async function sendTransactionalCodeEmail(
   code: string,
   fullName: string,
   kind: CodeEmailKind,
-): Promise<void> {
+): Promise<{ messageId: string }> {
   const mail = transactionalCodeBodies(code, fullName, kind)
-  await sendSmtpMail({ to, ...mail })
+  return sendSmtpMail({ to, ...mail })
 }
 
 export async function sendLoginCodeEmail(
   to: string,
   code: string,
   fullName: string = "Valued Customer",
-): Promise<void> {
-  await sendTransactionalCodeEmail(to, code, fullName, "login")
+): Promise<{ messageId: string }> {
+  return sendTransactionalCodeEmail(to, code, fullName, "login")
 }
 
 export async function sendPasswordResetCodeEmail(
   to: string,
   code: string,
   fullName: string = "Valued Customer",
-): Promise<void> {
-  await sendTransactionalCodeEmail(to, code, fullName, "password_reset")
+): Promise<{ messageId: string }> {
+  return sendTransactionalCodeEmail(to, code, fullName, "password_reset")
 }

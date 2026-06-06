@@ -15,6 +15,10 @@ import { NexusBotSessionPanel } from "@/components/dashboard/nexus-bot-session-p
 import { TradeSessionProfitCelebration } from "@/components/dashboard/trade-session-profit-celebration"
 import { NEXUS_AUTO_TRADE_PLANS, NEXUS_SIGNAL_STAKE_TIERS_USD } from "@/lib/nexus-bot/plans"
 import { buildOperationsWhatsAppHref } from "@/lib/nexus-operations-whatsapp"
+import {
+  claimTradeCelebrationSession,
+  isTradeCelebrationClaimed,
+} from "@/lib/nexus-bot/trade-celebration-coordination"
 import { VERIFY_STEPS_USER } from "@/lib/nexus-bot/user-session-messaging"
 import { cn } from "@/lib/utils"
 
@@ -223,7 +227,11 @@ export function NexusBotWorkspace({
         visits: Number(att.total_visits ?? 0),
       })
       if (j.pendingProfitCelebration?.sessionId) {
-        setCelebration(j.pendingProfitCelebration)
+        const sid = j.pendingProfitCelebration.sessionId
+        if (!isTradeCelebrationClaimed(sid)) {
+          claimTradeCelebrationSession(sid)
+          setCelebration(j.pendingProfitCelebration)
+        }
       }
       onActiveSessionCountsChange?.({ copy: 0, fix: active ? 1 : 0 })
     }

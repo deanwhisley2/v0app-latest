@@ -78,6 +78,7 @@ import { broadcastOperationalBump } from "@/lib/nexus-operational-sync-broadcast
 import { OperationalContinuityHud } from "@/components/dashboard/operational-continuity-hud"
 import { LaunchStatusBanner } from "@/components/dashboard/launch-status-banner"
 import { NexusPushAlertsBootstrap } from "@/components/push/nexus-push-alerts-bootstrap"
+import { TradeCelebrationBootstrap } from "@/components/dashboard/trade-celebration-bootstrap"
 import { NewMemberCampaignPromoModal } from "@/components/marketing/new-member-campaign-promo-modal"
 import { StartupBonusOnboardingOrchestrator } from "@/components/marketing/startup-bonus-onboarding-orchestrator"
 import { StartupBonusCampaignPanelSection } from "@/components/marketing/startup-bonus-campaign-panel-section"
@@ -4290,6 +4291,8 @@ export function DashboardPageInner() {
           router.push("/settings/deposit-withdraw")
         }}
       />
+
+      {!isGuestSession ? <TradeCelebrationBootstrap /> : null}
 
     </div>
   )
