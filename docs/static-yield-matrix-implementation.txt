@@ -1,0 +1,131 @@
+STATIC 30-DAY YIELD MATRIX — IMPLEMENTATION SUMMARY
+Nexus Pro / v0app_latest
+Updated: 2026-06-07
+
+================================================================================
+WHAT CHANGED (THIS REFACTOR)
+================================================================================
+
+REMOVED
+  - lib/server/daily-two-trade-engine.ts (HMAC dynamic reserve scheduler)
+  - lib/server/trade-session-earnings-reserves.ts (monthly reserve ledger)
+  - user_trade_session_earnings_reserves table (migration drop)
+  - user_trade_session_slot_ledger table (migration drop)
+  - Admin manual max_yield_percent input (e.g. 3.5% default)
+  - processTradeSessionForfeitures (no reserve = no slot forfeiture sweeps)
+
+ADDED
+  - lib/nexus-bot/trade-session-yield-matrix.ts (hardcoded 30-day matrix)
+  - lib/server/trade-session-settlement.ts (session-only settlement)
+  - supabase/migrations/20260707120000_retire_trade_session_earnings_reserve_v2.sql
+  - scripts/test-trade-session-yield-matrix.ts
+
+KEPT UNCHANGED
+  - lib/server/time-weighted-yield-engine.ts (late-entry LINEAR_TIME_WEIGHTED)
+  - Join stores expected_profit_usd in session_participant_profit_percentages
+  - Settlement reads stored expected_profit_usd only
+
+================================================================================
+30-DAY MATRIX (lib/nexus-bot/trade-session-yield-matrix.ts)
+================================================================================
+
+Total of all 60 slots: 24.78329% (within 21–28% company cap)
+
+Day 1:  morning 0.45%     evening 0.28333%
+Day 2:  morning 0.6%       evening 0.23333%
+Day 3:  morning 0.25%      evening 0.45%
+Day 4:  morning 0.55%      evening 0.35%
+Day 5:  morning 0.7%       evening 0.23333%
+Day 6:  morning 0.4%       evening 0.35%
+Day 7:  morning 0.5%       evening 0.3%
+Day 8:  morning 0.35%      evening 0.4%
+Day 9:  morning 0.55%      evening 0.28333%
+Day 10: morning 0.45%      evening 0.35%
+Day 11: morning 0.3%       evening 0.5%
+Day 12: morning 0.65%      evening 0.23333%
+Day 13: morning 0.4%       evening 0.38333%
+Day 14: morning 0.5%       evening 0.33333%
+Day 15: morning 0.55%      evening 0.25%
+Day 16: morning 0.35%      evening 0.45%
+Day 17: morning 0.6%       evening 0.28333%
+Day 18: morning 0.45%      evening 0.38333%
+Day 19: morning 0.25%      evening 0.53333%
+Day 20: morning 0.7%       evening 0.23333%
+Day 21: morning 0.4%       evening 0.41667%
+Day 22: morning 0.55%      evening 0.3%
+Day 23: morning 0.35%      evening 0.46667%
+Day 24: morning 0.5%       evening 0.35%
+Day 25: morning 0.45%      evening 0.38333%
+Day 26: morning 0.6%       evening 0.23333%
+Day 27: morning 0.3%       evening 0.51667%
+Day 28: morning 0.55%      evening 0.28333%
+Day 29: morning 0.4%       evening 0.43333%
+Day 30: morning 0.65%      evening 0.28333%
+
+Day index = UTC calendar day within month (0–29), same as before.
+
+Lookup: resolveMatrixYieldPercent(sessionStartAt, sessionSlot)
+
+================================================================================
+SESSION REGISTRATION FLOW
+================================================================================
+
+Admin registers session (no manual yield input):
+  1. Admin sets start time + morning/evening slot
+  2. registerTradeSession() calls resolveMatrixYieldPercent(start, slot)
+  3. Sets trade_sessions.max_yield_percent automatically
+  4. yield_distribution_mode = LINEAR_TIME_WEIGHTED
+
+File: lib/server/trade-sessions.ts
+
+================================================================================
+USER JOIN FLOW (unchanged logic, matrix-sourced base %)
+================================================================================
+
+activateTradeSessionBot() in nexus-bot-session-service.ts:
+  1. Reads tradeSession.maxYieldPercent from DB (matrix-assigned at register)
+  2. joinTradeSessionWithYieldEngine() calculates time-weighted yield
+  3. Late join: earnedPercent = participationRatio × maxYieldPercent
+  4. Stores expected_profit_usd at join (immutable for settlement)
+
+Example: 0.6% max, 8h session, join 3h late → (5/8) × 0.6 = 0.375%
+
+================================================================================
+SETTLEMENT FLOW (simplified)
+================================================================================
+
+settleTradeSessionParticipation() in lib/server/trade-session-settlement.ts:
+  1. Load stored yield participant row
+  2. Pay expected_profit_usd (no reserve debit, no slot ledger)
+  3. Mark participant settled
+
+Auto-bots (24h/7d/14d/30d): capital stays locked until session close;
+only net profit released to Pocket on settlement (existing ledger path).
+
+================================================================================
+VALIDATION
+================================================================================
+
+  npx tsx scripts/test-trade-session-yield-matrix.ts
+  npx tsx scripts/predeploy-settlement-validation.ts
+  npx tsx scripts/stress-test-yield-engine.ts
+
+All PASS after refactor.
+
+================================================================================
+MIGRATION REQUIRED
+================================================================================
+
+Apply: supabase/migrations/20260707120000_retire_trade_session_earnings_reserve_v2.sql
+Drops: user_trade_session_slot_ledger, user_trade_session_earnings_reserves
+
+================================================================================
+KEY FILES
+================================================================================
+
+  lib/nexus-bot/trade-session-yield-matrix.ts       — static matrix + lookup
+  lib/server/trade-session-settlement.ts            — session-only settlement
+  lib/server/time-weighted-yield-engine.ts          — late-entry pro-rating
+  lib/server/trade-sessions.ts                      — auto matrix on register
+  lib/server/nexus-bot-session-service.ts           — join + settle router
+  components/dashboard/admin-nexus-bot-panel.tsx    — matrix preview UI

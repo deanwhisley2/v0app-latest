@@ -13,6 +13,12 @@ import {
   parseDatetimeLocalInput,
   toDatetimeLocalInputValue,
 } from "@/lib/nexus-bot/trade-code"
+import {
+  getYieldMatrixDayRates,
+  resolveMatrixYieldPercent,
+  sumYieldMatrixTotalPercent,
+  yieldMatrixDayIndex,
+} from "@/lib/nexus-bot/trade-session-yield-matrix"
 import { TradeSignalShareActions } from "@/components/dashboard/trade-signal-share-actions"
 
 type TradeSessionRow = {
@@ -85,9 +91,10 @@ export function AdminNexusBotPanel() {
   const [startAt, setStartAt] = useState("")
   const [endAt, setEndAt] = useState("")
   const [registerStatus, setRegisterStatus] = useState<"draft" | "active">("active")
-  const [maxYieldPercent, setMaxYieldPercent] = useState("3.5")
   const [yieldPreview, setYieldPreview] = useState<{
     durationHours: number
+    maxYieldPercent?: number
+    matrixDayIndex?: number
     examples: Array<{ label: string; earnedPercent: number }>
   } | null>(null)
 
@@ -147,11 +154,11 @@ export function AdminNexusBotPanel() {
   const runYieldSimulation = async () => {
     const start = parseDatetimeLocalInput(startAt)
     const end = parseDatetimeLocalInput(endAt)
-    const pct = Number(maxYieldPercent)
-    if (!start || !end || !Number.isFinite(pct) || pct <= 0) {
-      setRegisterError("Set valid times and max yield before simulating.")
+    if (!start || !end) {
+      setRegisterError("Set valid times before simulating.")
       return
     }
+    const pct = resolveMatrixYieldPercent(start, sessionSlot)
     setBusy(true)
     setRegisterError(null)
     try {
@@ -169,6 +176,8 @@ export function AdminNexusBotPanel() {
       if (!res.ok) throw new Error(j.error ?? "Simulation failed")
       setYieldPreview({
         durationHours: Number(j.session_duration_hours ?? 0),
+        maxYieldPercent: pct,
+        matrixDayIndex: yieldMatrixDayIndex(start),
         examples: (j.results ?? []).map((r: Record<string, unknown>) => ({
           label: r.is_early_bird
             ? "Early bird"
@@ -294,11 +303,6 @@ export function AdminNexusBotPanel() {
       setRegisterError("End time must be after start time.")
       return
     }
-    const pct = Number(maxYieldPercent)
-    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
-      setRegisterError("Enter max yield between 0.01 and 100 (%).")
-      return
-    }
 
     setBusy(true)
     setMsg(null)
@@ -315,7 +319,6 @@ export function AdminNexusBotPanel() {
           startAt: start.toISOString(),
           endAt: end.toISOString(),
           status: registerStatus,
-          maxYieldPercent: pct,
         }),
       })
       const j = (await res.json().catch(() => ({}))) as {
@@ -368,9 +371,16 @@ export function AdminNexusBotPanel() {
     Boolean(sessionName.trim()) &&
     Boolean(startAt) &&
     Boolean(endAt) &&
-    Boolean(maxYieldPercent.trim()) &&
-    Number(maxYieldPercent) > 0 &&
     !busy
+
+  const matrixSlotPreview = (() => {
+    const start = parseDatetimeLocalInput(startAt)
+    if (!start) return null
+    const dayIndex = yieldMatrixDayIndex(start)
+    const dayRates = getYieldMatrixDayRates(dayIndex)
+    const slotPct = resolveMatrixYieldPercent(start, sessionSlot)
+    return { dayIndex, dayRates, slotPct }
+  })()
 
   const terminateSession = async (session: TradeSessionRow) => {
     const activeCount = session.participants?.active ?? 0
@@ -735,37 +745,52 @@ export function AdminNexusBotPanel() {
             </div>
             <div className="space-y-2 rounded-lg border border-border/60 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Max yield (time-weighted)
+                Static 30-day yield matrix
               </p>
-              <label className="text-xs">
-                Max yield % (early birds get exactly this; late entrants pro-rated)
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max="100"
-                  value={maxYieldPercent}
-                  onChange={(e) => {
-                    setMaxYieldPercent(e.target.value)
-                    setYieldPreview(null)
-                  }}
-                  className="mt-1"
-                  placeholder="3.5"
-                />
-              </label>
+              <p className="text-xs text-muted-foreground">
+                Monthly cap: {sumYieldMatrixTotalPercent().toFixed(3)}% total across 60 slots (21–28%
+                treasury shield). Session max yield is assigned automatically from the matrix.
+              </p>
+              {matrixSlotPreview ? (
+                <div className="rounded-lg bg-muted/50 p-2 text-xs space-y-1">
+                  <p>
+                    Day index <span className="font-mono">{matrixSlotPreview.dayIndex + 1}</span> ·{" "}
+                    {sessionSlot} slot:{" "}
+                    <span className="font-mono">{matrixSlotPreview.slotPct.toFixed(5)}%</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Day pair — morning{" "}
+                    <span className="font-mono">
+                      {matrixSlotPreview.dayRates.morningPercent.toFixed(5)}%
+                    </span>{" "}
+                    · evening{" "}
+                    <span className="font-mono">
+                      {matrixSlotPreview.dayRates.eveningPercent.toFixed(5)}%
+                    </span>{" "}
+                    · daily{" "}
+                    <span className="font-mono">
+                      {matrixSlotPreview.dayRates.dailyPercent.toFixed(5)}%
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Set start time to preview matrix slot.</p>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={busy}
+                disabled={busy || !startAt || !endAt}
                 onClick={() => void runYieldSimulation()}
               >
-                Preview earnings by join time
+                Preview late-entry pro-rating
               </Button>
               {yieldPreview ? (
                 <div className="rounded-lg bg-muted/50 p-2 text-xs">
                   <p className="font-medium">
-                    Session duration: {yieldPreview.durationHours.toFixed(2)}h
+                    Matrix day {((yieldPreview.matrixDayIndex ?? 0) + 1).toString()} · max yield{" "}
+                    {yieldPreview.maxYieldPercent?.toFixed(5)}% · duration{" "}
+                    {yieldPreview.durationHours.toFixed(2)}h
                   </p>
                   <ul className="mt-1 space-y-1">
                     {yieldPreview.examples.map((ex, i) => (

@@ -1,46 +1,25 @@
 #!/usr/bin/env npx tsx
 /**
- * Final pre-deploy validation: daily engine capital tiers, no API leakage shape, history sort.
+ * Pre-deploy validation: static yield matrix cap, no API leakage, history sort.
  */
-import { config } from "dotenv"
-import { resolve } from "node:path"
 import {
-  buildDailyTwoTradeSchedule,
-  DAILY_RETURN_PCT_MAX,
-  DAILY_RETURN_PCT_MIN,
-  resolveDailyTwoTradeDayRates,
-  dayKeyFromPeriod,
-} from "../lib/server/daily-two-trade-engine"
-
-config({ path: resolve(process.cwd(), ".env.local") })
+  assertYieldMatrixMonthlyCap,
+  resolveMatrixYieldPercent,
+  sumYieldMatrixTotalPercent,
+} from "../lib/nexus-bot/trade-session-yield-matrix"
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)
 }
 
-function auditCapitalTier(capitalUsd: number, label: string) {
-  const schedule = buildDailyTwoTradeSchedule(capitalUsd, "2026-06")
-  for (let i = 0; i < schedule.days.length; i++) {
-    const day = schedule.days[i]!
-    const rates = resolveDailyTwoTradeDayRates(dayKeyFromPeriod("2026-06", i))
-    assert(
-      rates.dailyReturnPct >= DAILY_RETURN_PCT_MIN - 0.001 &&
-        rates.dailyReturnPct <= DAILY_RETURN_PCT_MAX + 0.001,
-      `${label} day ${i}: daily pct ${rates.dailyReturnPct} out of range`,
-    )
-    const sumPct =
-      Math.round((rates.morningReturnPct + rates.eveningReturnPct) * 1000) / 1000
-    assert(
-      Math.abs(sumPct - rates.dailyReturnPct) < 0.002,
-      `${label} day ${i}: trade1+trade2=${sumPct} != daily=${rates.dailyReturnPct}`,
-    )
-    const sumUsd = Math.round((day.morningUsd + day.eveningUsd) * 100) / 100
-    assert(
-      Math.abs(sumUsd - day.dailyUsd) < 0.02,
-      `${label} day ${i}: morning+evening usd drift`,
-    )
-  }
-  console.log(`✓ ${label} ($${capitalUsd}) — ${schedule.days.length} days conserved`)
+function auditYieldMatrix() {
+  assertYieldMatrixMonthlyCap()
+  const total = sumYieldMatrixTotalPercent()
+  assert(total >= 21 && total <= 28, `matrix total ${total} outside 21-28%`)
+  const morning = resolveMatrixYieldPercent("2026-06-01T09:00:00.000Z", "morning")
+  const evening = resolveMatrixYieldPercent("2026-06-01T17:00:00.000Z", "evening")
+  assert(morning > 0 && evening > 0, "matrix slot percents positive")
+  console.log(`✓ static matrix total ${total.toFixed(5)}% — morning ${morning}% evening ${evening}%`)
 }
 
 function auditActiveSessionApiShape() {
@@ -87,10 +66,7 @@ function auditCelebrationGating() {
     profitUsd: pendingWithoutCredit.profitUsd,
   }
   assert(earningsCelebration.celebrationKind === "earnings", "earnings sessions use earnings celebration")
-  assert(
-    earningsCelebration.profitUsd > 0,
-    "earnings celebration requires positive profit",
-  )
+  assert(earningsCelebration.profitUsd > 0, "earnings celebration requires positive profit")
   console.log("✓ celebration gated on verified settlement credits")
 }
 
@@ -110,9 +86,7 @@ function auditHistorySort() {
 }
 
 async function main() {
-  auditCapitalTier(5.3, "small")
-  auditCapitalTier(357.3, "medium")
-  auditCapitalTier(1248.01, "large")
+  auditYieldMatrix()
   auditActiveSessionApiShape()
   auditCelebrationGating()
   auditHistorySort()

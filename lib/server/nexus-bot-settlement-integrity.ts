@@ -3,7 +3,7 @@ import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { closedTradeHistorySummary } from "@/lib/nexus-bot/user-session-messaging"
 import { creditPrincipalToMainAndEarningsToPocket } from "@/lib/server/copy-trade-balance-credit"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
-import { TRADE_SESSION_RESERVE_SOURCE } from "@/lib/server/trade-session-earnings-reserve"
+import { TRADE_SESSION_YIELD_MATRIX_SOURCE } from "@/lib/nexus-bot/trade-session-yield-matrix"
 import { casCreditNexusMainOnly } from "@/lib/server/nexus-main-enforcement"
 import {
   claimTradeSessionSettlementIdempotency,
@@ -187,8 +187,8 @@ export async function ensureTradeSessionSettlementCredits(
         stake_returned_usd: stake,
         earnings_to_pocket_usd: profit,
         principal_to_main_usd: stake,
-        reserve_source: TRADE_SESSION_RESERVE_SOURCE,
-        earnings_source: TRADE_SESSION_RESERVE_SOURCE,
+        reserve_source: TRADE_SESSION_YIELD_MATRIX_SOURCE,
+        earnings_source: TRADE_SESSION_YIELD_MATRIX_SOURCE,
         min_floor_applied: Boolean(params.minFloorApplied),
         pocket_manual_transfer_required: profit > 0,
         idempotency_key: idempotencyKey,

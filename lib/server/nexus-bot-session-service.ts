@@ -25,10 +25,7 @@ import {
   buildSettlementYieldAuditMetadata,
   joinTradeSessionWithYieldEngine,
 } from "@/lib/server/time-weighted-yield-engine"
-import {
-  processTradeSessionForfeitures,
-  settleTradeSessionParticipation,
-} from "@/lib/server/trade-session-earnings-reserve"
+import { settleTradeSessionParticipation } from "@/lib/server/trade-session-settlement"
 import {
   ensureTradeSessionSettlementCredits,
   hasTradeSessionFinancialResolution,
@@ -39,9 +36,6 @@ import {
 /** Paginate all open trade-session participants — must match settlement scope (no batch asymmetry). */
 const TRADE_SESSION_SYNC_PAGE_SIZE = 100
 const YIELD_EARNINGS_SOURCE = "time_weighted_yield_engine_v2"
-
-export type { UserTradeSessionReserveRow } from "@/lib/server/trade-session-earnings-reserve"
-export { previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
 
 export function resolveUserDisplayPhase(params: {
   status: string
@@ -225,7 +219,6 @@ export async function syncTradeSessionBotStates(
   userId?: string,
 ): Promise<void> {
   const now = new Date()
-  const endedTradeSessions = new Map<string, TradeSessionTiming>()
 
   for (let page = 0; ; page += 1) {
     const from = page * TRADE_SESSION_SYNC_PAGE_SIZE
@@ -279,7 +272,6 @@ export async function syncTradeSessionBotStates(
           sessionEndAt: ts.end_at,
           sessionSlot: ts.session_slot,
         })
-        endedTradeSessions.set(tradeSessionId, ts)
         continue
       }
 
@@ -300,14 +292,6 @@ export async function syncTradeSessionBotStates(
     }
 
     if (rows.length < TRADE_SESSION_SYNC_PAGE_SIZE) break
-  }
-
-  for (const [tradeSessionId, ts] of endedTradeSessions) {
-    await processTradeSessionForfeitures(admin, {
-      id: tradeSessionId,
-      session_slot: ts.session_slot,
-      start_at: ts.start_at,
-    })
   }
 
   await repairUnsettledTradeSessionParticipants(admin, { userId })
@@ -832,12 +816,6 @@ export async function terminateTradeSessionByAdmin(
     .update({ consumed_at: now })
     .eq("trade_session_id", params.tradeSessionId)
     .is("consumed_at", null)
-
-  await processTradeSessionForfeitures(admin, {
-    id: params.tradeSessionId,
-    session_slot: String(ts.session_slot ?? "morning"),
-    start_at: String(ts.start_at),
-  })
 
   return {
     tradeSessionId: params.tradeSessionId,

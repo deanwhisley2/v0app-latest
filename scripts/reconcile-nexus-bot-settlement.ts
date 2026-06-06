@@ -23,11 +23,8 @@ import { createAdminClient } from "../lib/supabaseAdmin"
 import { roundUsd2 } from "../lib/nexus-financial-policy"
 import { recordFinancialEvent } from "../lib/server/financial-events"
 import { creditPrincipalToMainAndEarningsToPocket } from "../lib/server/copy-trade-balance-credit"
-import {
-  computeSessionParticipationPayoutUsd,
-  periodKeyFromDate,
-  settleTradeSessionParticipation,
-} from "../lib/server/trade-session-earnings-reserve"
+import { getStoredYieldParticipant } from "../lib/server/time-weighted-yield-engine"
+import { settleTradeSessionParticipation } from "../lib/server/trade-session-settlement"
 
 config({ path: resolve(process.cwd(), ".env.local") })
 
@@ -85,7 +82,6 @@ async function main() {
   }
 
   const tradeSessionIds = [...new Set(rows.map((r) => String(r.trade_session_id)))]
-  const userIds = [...new Set(rows.map((r) => String(r.user_id)))]
 
   const { data: tradeSessions, error: tsErr } = await admin
     .from("trade_sessions")
@@ -94,41 +90,11 @@ async function main() {
   if (tsErr) throw new Error(tsErr.message)
 
   const tradeById = new Map(
-    (tradeSessions ?? []).map((ts) => [String(ts.id), { start_at: String(ts.start_at), session_slot: String(ts.session_slot ?? "morning") }]),
+    (tradeSessions ?? []).map((ts) => [
+      String(ts.id),
+      { start_at: String(ts.start_at), session_slot: String(ts.session_slot ?? "morning") },
+    ]),
   )
-
-  const { data: ledgerRows, error: ledgerErr } = await admin
-    .from("user_trade_session_slot_ledger")
-    .select("user_id,trade_session_id,outcome,payout_usd,slot_gross_usd")
-    .in("trade_session_id", tradeSessionIds)
-  if (ledgerErr) throw new Error(ledgerErr.message)
-
-  const ledgerKey = (u: string, t: string) => `${u}|${t}`
-  const ledgerByKey = new Map<string, any>()
-  for (const lr of ledgerRows ?? []) {
-    const key = ledgerKey(String(lr.user_id), String(lr.trade_session_id))
-    if (!ledgerByKey.has(key)) ledgerByKey.set(key, lr)
-  }
-
-  const periodKeys = [...new Set(rows.map((r) => {
-    const ts = tradeById.get(String(r.trade_session_id))
-    if (!ts) return null
-    return periodKeyFromDate(new Date(ts.start_at))
-  }).filter(Boolean))] as string[]
-
-  const { data: reserveRows, error: reserveErr } = await admin
-    .from("user_trade_session_earnings_reserves")
-    .select("user_id,period_key,remaining_reserve_usd")
-    .in("user_id", userIds)
-    .in("period_key", periodKeys)
-  if (reserveErr) throw new Error(reserveErr.message)
-
-  const reserveKey = (u: string, p: string) => `${u}|${p}`
-  const reserveByKey = new Map<string, any>()
-  for (const rr of reserveRows ?? []) {
-    const key = reserveKey(String(rr.user_id), String(rr.period_key))
-    if (!reserveByKey.has(key)) reserveByKey.set(key, rr)
-  }
 
   let checked = 0
   let candidates = 0
@@ -154,36 +120,13 @@ async function main() {
     const participationWeight = Number(bs.participation_weight ?? 1)
     const queuedAt = bs.queued_at ? String(bs.queued_at) : null
 
-    const pKey = periodKeyFromDate(new Date(ts.start_at))
-    const reserve = reserveByKey.get(reserveKey(uid, pKey))
-    if (!reserve) {
-      skipped.push({ bot_session_id: botSessionId, reason: "missing_reserve_row" })
+    const stored = await getStoredYieldParticipant(admin, uid, tradeSessionId)
+    if (!stored) {
+      skipped.push({ bot_session_id: botSessionId, reason: "missing_yield_participant_row" })
       continue
     }
 
-    const ledger = ledgerByKey.get(ledgerKey(uid, tradeSessionId))
-    if (!ledger) {
-      skipped.push({ bot_session_id: botSessionId, reason: "missing_slot_ledger_row" })
-      continue
-    }
-
-    const outcome = String(ledger.outcome ?? "")
-    let simulatedProfitUsd = 0
-    if (outcome === "earned") {
-      simulatedProfitUsd = roundUsd2(Number(ledger.payout_usd ?? 0))
-    } else if (outcome === "forfeited") {
-      const slotGrossUsd = roundUsd2(Number(ledger.slot_gross_usd ?? 0))
-      const remainingReserveUsd = roundUsd2(Number(reserve.remaining_reserve_usd ?? 0))
-      const remainingSimUsd = roundUsd2(remainingReserveUsd + slotGrossUsd)
-      simulatedProfitUsd = computeSessionParticipationPayoutUsd({
-        slotGrossUsd,
-        participationWeight,
-        remainingReserveUsd: remainingSimUsd,
-      }).payoutUsd
-    } else {
-      // Unknown outcome; leave simulation conservative.
-      simulatedProfitUsd = roundUsd2(Number(ledger.payout_usd ?? 0))
-    }
+    const simulatedProfitUsd = roundUsd2(stored.expectedProfitUsd)
 
     checked += 1
     const delta = roundUsd2(simulatedProfitUsd - oldProfitUsd)

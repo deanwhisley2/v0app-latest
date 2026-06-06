@@ -1,0 +1,269 @@
+DAILY EARNINGS PROJECTION & TRADE-SPLITTING — FULL IMPLEMENTATION SUMMARY
+Nexus Pro / v0app_latest
+Generated: 2026-06-07
+
+================================================================================
+WHAT WE LAST CHANGED (TWO COMMITS, JUN 5–6 2026)
+================================================================================
+
+Commit 1 — 6cfe39c (Jun 5): Daily Two-Trade Engine + settlement hardening
+  - Server-side daily earnings schedule
+  - Wired into monthly reserve ledger
+  - Fixed settlement ordering (settle before forfeit)
+  - Reconciliation / admin monitoring scripts
+  - Hid live earnings from customer UI during active sessions
+  - Restored celebration notifications
+
+Commit 2 — 5509f2d (Jun 6): Time-Weighted Yield Engine v2
+  - Late-entry pro-rating as single earnings authority at join time
+  - Postgres schema for audit + idempotency
+  - Retired legacy reserve-slot payout math
+  - Admin simulation / audit APIs
+  - Migrated / cancelled open legacy participants
+
+These two commits together ARE the production implementation — not a standalone
+spreadsheet calculator, but a ledger-backed earnings engine inside Nexus trade
+sessions.
+
+================================================================================
+SYSTEM OVERVIEW (TWO LAYERS)
+================================================================================
+
+Layer 1 — Daily Two-Trade Engine
+  Purpose: Builds a 30-day, 2-trades-per-day USD schedule from capital
+  File:    lib/server/daily-two-trade-engine.ts
+
+Layer 2 — Time-Weighted Yield Engine v2
+  Purpose: Pro-rates each user's % yield by how late they joined a session
+  File:    lib/server/time-weighted-yield-engine.ts
+
+Reserve schedule answers:  "How much USD is budgeted for this user this month,
+                            split across morning/evening slots?"
+
+Yield engine answers:      "What % (and USD) does this specific user earn on
+                            their stake, given when they joined?"
+
+At settlement, payout comes from the STORED join-time calculation
+(expected_profit_usd), NOT a fresh recalculation.
+
+================================================================================
+LAYER 1 — DAILY TWO-TRADE ENGINE
+================================================================================
+
+File: lib/server/daily-two-trade-engine.ts
+
+POLICY CONSTANTS (server-only, never exposed in customer UI)
+  DAILY_RETURN_PCT_MIN      = 0.8      (~24% monthly if x 30)
+  DAILY_RETURN_PCT_MAX      = 1.167    (~35% monthly if x 30)
+  DAILY_TRADE_SPLIT_MIN     = 0.35     morning gets 35–65% of daily %
+  DAILY_TRADE_SPLIT_MAX     = 0.65
+  DAILY_TWO_TRADE_POLICY_DAYS = 30
+
+Conceptual band was 21–28% monthly. Shipped code uses 0.8%–1.167% daily,
+which over 30 days is roughly 24%–35% on capital — slightly wider, same order
+of magnitude.
+
+EXAMPLE: $100,000 capital
+  At 0.8% daily   → $800/day   (two trades sum to $800)
+  At 1.167% daily → $1,167/day
+  Mid-band ~0.933% → ~$933/day (matches 700–933 table range when daily % varies)
+
+FORMULAS IMPLEMENTED
+
+1. Daily return % (deterministic "random-style" per day)
+   dailyReturnPct = 0.8 + HMAC(scope, "daily_return_pct") x (1.167 - 0.8)
+   Uses createHmac("sha256", TRADE_SESSION_RNG_SECRET)
+   Same day always yields same %, not predictable from UI.
+
+2. Two-trade split (morning + evening)
+   morningShare     = 0.35 + HMAC(scope, "morning_share") x (0.65 - 0.35)
+   eveningShare     = 1 - morningShare
+   morningReturnPct = dailyReturnPct x morningShare
+   eveningReturnPct = dailyReturnPct - morningReturnPct
+   Conservation: morningReturnPct + eveningReturnPct = dailyReturnPct
+
+3. USD per trade
+   morningUsd = capital x (morningReturnPct / 100)
+   eveningUsd = capital x (eveningReturnPct / 100)
+   dailyUsd   = morningUsd + eveningUsd
+
+4. Full 30-day schedule
+   buildDailyTwoTradeSchedule(capitalUsd, periodKey)
+   Loops days 0–29, keyed by "YYYY-MM|dN"
+   Returns: { v: 2, source: "daily_two_trade_v1", days: [...] }
+
+================================================================================
+LAYER 2 — RESERVE LEDGER
+================================================================================
+
+File:     lib/server/trade-session-earnings-reserve.ts
+Migration: supabase/migrations/20260703220000_trade_session_earnings_reserve_v1.sql
+
+When a user first participates in a trade session for a calendar month:
+
+1. ensureUserTradeSessionReserve() creates row in user_trade_session_earnings_reserves
+2. Schedule built via buildDailyTwoTradeSchedule(capital, periodKey)
+3. net_reserve_usd = sum of all 30 days x 2 slots (morning + evening USD)
+4. Conservation: earned_usd + forfeited_usd + remaining_reserve_usd = net_reserve_usd
+
+SLOT LOOKUP
+  dayIndex = floor((sessionStart - monthStart) / 86400000)  capped 0–29
+  slotGrossUsd = schedule.days[dayIndex].morningUsd OR eveningUsd
+
+FORFEITURE
+  If user with reserve misses a slot:
+  forfeitMissedTradeSessionSlot() debits slot gross USD from remaining_reserve_usd
+  Writes user_trade_session_slot_ledger with outcome: "forfeited"
+
+LEGACY PATH (still in code, superseded for new reserves)
+  Older reserves used TRADE_SESSION_MONTHLY_TARGET_PCT 27–30% with 3% platform fee.
+  New reserves use daily_two_trade_v1 with monthly_target_pct: 0, no platform fee.
+
+================================================================================
+LAYER 3 — TIME-WEIGHTED YIELD ENGINE V2 (LATE-ENTRY RULE)
+================================================================================
+
+File:     lib/server/time-weighted-yield-engine.ts
+Migration: supabase/migrations/20260608000000_time_weighted_yield_engine_v2.sql
+
+CORE FORMULA
+
+  durationHours      = (sessionEnd - sessionStart) / 3600000
+  isEarlyBird        = joinTime <= sessionStart
+  effectiveStart     = isEarlyBird ? sessionStart : joinTime
+  remainingHours     = max(0, sessionEnd - effectiveStart)
+  participationRatio = remainingHours / durationHours
+
+  earnedPercent = isEarlyBird
+    ? maxYieldPercent
+    : participationRatio x maxYieldPercent
+
+  profitUsd = capitalAtJoinUsd x earnedPercent / 100
+
+EXAMPLE (your rule)
+  0.6% over 8 hours, join 3 hours late → 5 hours remaining
+  earnedPercent = (5 / 8) x 0.6 = 0.375%
+  Tested in scripts/stress-test-yield-engine.ts
+
+JOIN FLOW (locked at join, immutable at settlement)
+
+  joinTradeSessionWithYieldEngine() called from activateTradeSessionBot()
+  (lib/server/nexus-bot-session-service.ts)
+
+  1. Admin registers session with max_yield_percent (admin UI default 3.5%, manual)
+  2. User confirms stake → calculateTimeWeightedYield() runs ONCE
+  3. Persisted to session_participant_profit_percentages:
+       earned_percent, expected_profit_usd, participation_ratio,
+       effective_start_time, is_early_bird
+  4. Audit row in yield_calculation_audit with SHA-256 hash
+  5. Idempotency via session_join_idempotency
+
+SETTLEMENT (reads stored value only)
+
+  settleTradeSessionParticipation() → getStoredYieldParticipant()
+  Pays expected_profit_usd
+  Legacy reserve-slot proportional math DISABLED (LEGACY_EARNINGS_DISABLED)
+
+POSTGRES ADDITIONS
+  trade_sessions.max_yield_percent
+  trade_sessions.yield_distribution_mode = 'LINEAR_TIME_WEIGHTED'
+  Extended session_participant_profit_percentages columns
+  yield_calculation_audit table
+  session_join_idempotency table
+  View user_earnings_explanation_v1 with labels:
+    EARLY_BIRD — Full max yield
+    LATE_ENTRY — Time-pro-rated yield
+    REJECTED — Joined after end
+
+================================================================================
+LAYER 4 — ADMIN, OPS, CUSTOMER UX
+================================================================================
+
+ADMIN PANEL — components/dashboard/admin-nexus-bot-panel.tsx
+  - Register sessions with max yield % (manual, not auto from daily schedule)
+  - Yield simulation: POST /api/admin/trade-sessions/simulate
+  - Earnings audit: GET /api/admin/trade-sessions/earnings-audit?userId=...
+  - Settlement monitoring stats on session list
+
+CUSTOMER UX — lib/nexus-bot/session-earnings-ux.ts
+  Active sessions show progress copy only ("Market analysis active", etc.)
+  NO payout amounts, NO reserve fields, NO daily % in API payloads
+  Validated in scripts/predeploy-settlement-validation.ts
+
+SETTLEMENT INTEGRITY
+  lib/server/trade-session-settlement-idempotency.ts — duplicate top-up prevention
+  lib/server/trade-session-settlement-monitoring.ts — /api/health/settlement
+  scripts/reconcile-nexus-bot-settlement.ts
+  scripts/run-nexus-bot-settlement-pass.ts
+  scripts/cancel-legacy-trade-sessions.ts
+  scripts/reverse-duplicate-trade-session-topups.ts
+
+================================================================================
+VALIDATION SCRIPTS
+================================================================================
+
+scripts/test-daily-two-trade-engine.ts
+  Daily % in range, trade1+trade2 = daily, capital scaling, determinism
+
+scripts/predeploy-settlement-validation.ts
+  Capital tiers ($100, $1000, $100k), conservation, no API leakage
+
+scripts/stress-test-yield-engine.ts
+  1000 random joins, determinism, edge cases (start/end/reject after end)
+
+================================================================================
+DESIGN DOC → SHIPPED CODE MAPPING
+================================================================================
+
+Your concept                    Shipped implementation
+------------------------------  -----------------------------------------------
+Monthly 21–28% target           Daily band 0.8–1.167% x 30 ≈ 24–35%;
+                                legacy constants 27–30%
+$100,000 investment             Any capitalUsd / user stakeUsd; same formulas
+Daily = monthly x capital / 30  dailyUsd = capital x dailyReturnPct/100
+Two trades per day              morning + evening slots, 35–65% split
+Late entry pro-rating           participationRatio x maxYieldPercent
+Reference tables                HMAC-driven schedule + admin simulator (no UI table)
+Random daily examples           Deterministic HMAC per periodKey|dN
+Profit assurance                NONE — math only; reserve conservation + audit
+
+================================================================================
+IMPORTANT ARCHITECTURAL NOTE
+================================================================================
+
+Daily schedule % and session max_yield_percent are SEPARATE today.
+
+  RESERVE:  uses 0.8–1.167% daily from daily-two-trade-engine to budget USD
+  SESSION:  admin-set max_yield_percent (e.g. 0.6%, 3.5%) for yield engine
+
+They align operationally when admin sets session max yield to match that day's
+slot %, but code does NOT auto-wire morningReturnPct from reserve into
+trade_sessions.max_yield_percent yet.
+
+================================================================================
+BOTTOM LINE
+================================================================================
+
+WHAT WAS BUILT
+  (1) 30-day, two-trades-per-day USD reserve scheduler keyed to capital
+  (2) Time-weighted yield calculator: linear late-join pro-rating, persist at
+      join, settle from stored values only
+  (3) Postgres audit, idempotency, conservation checks
+  (4) Customer earnings hidden until settlement
+
+WHAT WAS ASSURED
+  Mathematical consistency and ledger conservation — NOT market returns.
+  The 21–28% (or 24–35%) monthly framing is an internal scheduling band,
+  not a guarantee of real trading performance.
+
+KEY FILES
+  lib/server/daily-two-trade-engine.ts
+  lib/server/time-weighted-yield-engine.ts
+  lib/server/trade-session-earnings-reserve.ts
+  lib/server/nexus-bot-session-service.ts
+  lib/server/trade-sessions.ts
+  supabase/migrations/20260608000000_time_weighted_yield_engine_v2.sql
+  supabase/migrations/20260703220000_trade_session_earnings_reserve_v1.sql
+  scripts/test-daily-two-trade-engine.ts
+  scripts/stress-test-yield-engine.ts
+  scripts/predeploy-settlement-validation.ts

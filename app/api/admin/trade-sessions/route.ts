@@ -152,22 +152,19 @@ export async function POST(request: Request) {
     if (body.action === "register") {
       const startAt = body.startAt ?? ""
       const endAt = body.endAt ?? ""
-      const maxYieldPercent = Number(body.maxYieldPercent)
+      const sessionSlot = body.sessionSlot ?? "morning"
       const out = await registerTradeSession(admin, {
         actorId: actor.id,
         code: body.code ?? "",
         sessionName: body.sessionName ?? "",
-        sessionSlot: body.sessionSlot ?? "morning",
+        sessionSlot,
         startAt,
         endAt,
         status: body.status === "draft" ? "draft" : "active",
         displayLabel: body.displayLabel,
-        maxYieldPercent,
       })
       const preview =
-        startAt && endAt && Number.isFinite(maxYieldPercent)
-          ? previewRegisteredTradeSessionYield(startAt, endAt, maxYieldPercent)
-          : null
+        startAt && endAt ? previewRegisteredTradeSessionYield(startAt, endAt, sessionSlot) : null
       const persisted = await getTradeSessionByCode(admin, out.code)
       if (!persisted) {
         return NextResponse.json({ error: "Registration did not persist — retry." }, { status: 500 })

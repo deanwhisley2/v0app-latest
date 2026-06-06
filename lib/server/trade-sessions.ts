@@ -5,7 +5,11 @@ import {
   isValidTradeCodeFormat,
   normalizeTradeCode,
 } from "@/lib/nexus-bot/trade-code"
-import { processTradeSessionForfeitures } from "@/lib/server/trade-session-earnings-reserve"
+import {
+  resolveMatrixYieldPercent,
+  TRADE_SESSION_YIELD_MATRIX_SOURCE,
+  yieldMatrixDayIndex,
+} from "@/lib/nexus-bot/trade-session-yield-matrix"
 import {
   buildYieldSessionPreview,
   validateMaxYieldPercent,
@@ -67,7 +71,6 @@ export async function registerTradeSession(
     endAt: string
     status: "draft" | "active"
     displayLabel?: string
-    maxYieldPercent: number
   },
 ): Promise<RegisteredTradeSession> {
   const code = normalizeTradeCode(params.code)
@@ -91,7 +94,9 @@ export async function registerTradeSession(
   if (gen.trade_session_id) throw new Error("CODE_ALREADY_REGISTERED")
 
   const displayLabel = params.displayLabel?.trim() || sessionName
-  const maxYieldPercent = validateMaxYieldPercent(params.maxYieldPercent)
+  const maxYieldPercent = validateMaxYieldPercent(
+    resolveMatrixYieldPercent(start, sessionSlot),
+  )
 
   const { data: session, error: sErr } = await admin
     .from("trade_sessions")
@@ -148,9 +153,15 @@ export async function registerTradeSession(
 export function previewRegisteredTradeSessionYield(
   startAt: string,
   endAt: string,
-  maxYieldPercent: number,
+  sessionSlot: string,
 ) {
-  return buildYieldSessionPreview(new Date(startAt), new Date(endAt), maxYieldPercent)
+  const maxYieldPercent = resolveMatrixYieldPercent(new Date(startAt), sessionSlot)
+  return {
+    matrixDayIndex: yieldMatrixDayIndex(new Date(startAt)),
+    matrixSource: TRADE_SESSION_YIELD_MATRIX_SOURCE,
+    maxYieldPercent,
+    ...buildYieldSessionPreview(new Date(startAt), new Date(endAt), maxYieldPercent),
+  }
 }
 
 export async function findActiveTradeSessionByCode(
@@ -236,11 +247,6 @@ export async function expireDueTradeSessions(admin: SupabaseClient): Promise<num
       .eq("status", "active")
     if (!uErr) {
       n += 1
-      await processTradeSessionForfeitures(admin, {
-        id: String(row.id),
-        session_slot: String(row.session_slot ?? "morning"),
-        start_at: String(row.start_at),
-      })
     }
   }
   return n
@@ -371,9 +377,9 @@ export function humanizeTradeSessionError(code: string): string {
     case "PARTICIPANT_YIELD_RECORD_MISSING":
       return "Participant yield record missing — settlement requires stored expected profit."
     case "LEGACY_EARNINGS_DISABLED":
-      return "Legacy earnings system disabled. Register sessions with max yield % only."
+      return "Legacy earnings system disabled. Sessions use the static 30-day yield matrix only."
     case "MAX_YIELD_NOT_CONFIGURED":
-      return "This session has no max yield configured. Admin must register with max yield %."
+      return "This session has no matrix yield configured. Re-register the session."
     default:
       return code
   }
