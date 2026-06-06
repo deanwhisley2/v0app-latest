@@ -6,6 +6,11 @@ import {
   normalizeTradeCode,
 } from "@/lib/nexus-bot/trade-code"
 import { processTradeSessionForfeitures } from "@/lib/server/trade-session-earnings-reserve"
+import {
+  buildYieldSessionPreview,
+  validateMaxYieldPercent,
+  YIELD_DISTRIBUTION_LINEAR,
+} from "@/lib/server/time-weighted-yield-engine"
 
 export type RegisteredTradeSession = {
   sessionId: string
@@ -16,6 +21,8 @@ export type RegisteredTradeSession = {
   endAt: string
   status: "draft" | "active"
   displayLabel: string
+  maxYieldPercent: number
+  yieldDistributionMode: string
 }
 
 function parseRequiredInstant(raw: string, field: string): Date {
@@ -60,6 +67,7 @@ export async function registerTradeSession(
     endAt: string
     status: "draft" | "active"
     displayLabel?: string
+    maxYieldPercent: number
   },
 ): Promise<RegisteredTradeSession> {
   const code = normalizeTradeCode(params.code)
@@ -83,6 +91,7 @@ export async function registerTradeSession(
   if (gen.trade_session_id) throw new Error("CODE_ALREADY_REGISTERED")
 
   const displayLabel = params.displayLabel?.trim() || sessionName
+  const maxYieldPercent = validateMaxYieldPercent(params.maxYieldPercent)
 
   const { data: session, error: sErr } = await admin
     .from("trade_sessions")
@@ -95,8 +104,14 @@ export async function registerTradeSession(
       status: params.status,
       display_label: displayLabel,
       registered_by: params.actorId,
+      max_yield_percent: maxYieldPercent,
+      yield_distribution_mode: YIELD_DISTRIBUTION_LINEAR,
+      profit_mode: "fixed",
+      profit_percentage: maxYieldPercent,
     })
-    .select("id,code,session_name,session_slot,start_at,end_at,status,display_label")
+    .select(
+      "id,code,session_name,session_slot,start_at,end_at,status,display_label,max_yield_percent,yield_distribution_mode",
+    )
     .single()
   if (sErr) {
     if (sErr.code === "23505") throw new Error("CODE_ALREADY_REGISTERED")
@@ -125,7 +140,17 @@ export async function registerTradeSession(
     endAt: String(session.end_at),
     status: params.status,
     displayLabel: String(session.display_label ?? sessionName),
+    maxYieldPercent: Number(session.max_yield_percent ?? maxYieldPercent),
+    yieldDistributionMode: String(session.yield_distribution_mode ?? YIELD_DISTRIBUTION_LINEAR),
   }
+}
+
+export function previewRegisteredTradeSessionYield(
+  startAt: string,
+  endAt: string,
+  maxYieldPercent: number,
+) {
+  return buildYieldSessionPreview(new Date(startAt), new Date(endAt), maxYieldPercent)
 }
 
 export async function findActiveTradeSessionByCode(
@@ -141,17 +166,20 @@ export async function findActiveTradeSessionByCode(
   startAt: string
   endAt: string
   status: string
+  maxYieldPercent: number | null
 } | null> {
   const code = normalizeTradeCode(codeRaw)
   const { data, error } = await admin
     .from("trade_sessions")
-    .select("id,code,session_name,display_label,session_slot,start_at,end_at,status")
+    .select("id,code,session_name,display_label,session_slot,start_at,end_at,status,max_yield_percent,yield_distribution_mode")
     .eq("code", code)
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (!data || data.status !== "active") return null
   const end = new Date(String(data.end_at))
   if (end.getTime() <= now.getTime()) return null
+  const maxYield = data.max_yield_percent != null ? Number(data.max_yield_percent) : null
+  if (!(maxYield != null && maxYield > 0)) return null
   return {
     id: String(data.id),
     code: String(data.code),
@@ -161,6 +189,7 @@ export async function findActiveTradeSessionByCode(
     startAt: String(data.start_at),
     endAt: String(data.end_at),
     status: String(data.status),
+    maxYieldPercent: maxYield,
   }
 }
 
@@ -171,7 +200,7 @@ export async function getTradeSessionByCode(
   const code = normalizeTradeCode(codeRaw)
   const { data, error } = await admin
     .from("trade_sessions")
-    .select("id,code,session_name,session_slot,start_at,end_at,status,display_label")
+    .select("id,code,session_name,session_slot,start_at,end_at,status,display_label,max_yield_percent,yield_distribution_mode")
     .eq("code", code)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -185,6 +214,8 @@ export async function getTradeSessionByCode(
     endAt: String(data.end_at),
     status: data.status === "draft" ? "draft" : data.status === "active" ? "active" : "draft",
     displayLabel: String(data.display_label ?? data.session_name),
+    maxYieldPercent: Number(data.max_yield_percent ?? 0),
+    yieldDistributionMode: String(data.yield_distribution_mode ?? YIELD_DISTRIBUTION_LINEAR),
   }
 }
 
@@ -327,6 +358,22 @@ export function humanizeTradeSessionError(code: string): string {
     case "INVALID_START_AT":
     case "INVALID_END_AT":
       return "Set valid start and end times before registering."
+    case "PROFIT_PERCENTAGE_INVALID":
+      return "Enter a fixed profit percentage between 0.01 and 100."
+    case "PROFIT_RANGE_INVALID":
+      return "Enter a valid profit range (min ≤ max, both between 0.01 and 100)."
+    case "PROFIT_PERCENTAGE_NOT_CONFIGURED":
+      return "This trade session has no profit percentage configured."
+    case "PROFIT_RANGE_NOT_CONFIGURED":
+      return "This trade session has no profit range configured."
+    case "MAX_YIELD_PERCENT_INVALID":
+      return "Enter max yield between 0.01 and 100 (%)."
+    case "PARTICIPANT_YIELD_RECORD_MISSING":
+      return "Participant yield record missing — settlement requires stored expected profit."
+    case "LEGACY_EARNINGS_DISABLED":
+      return "Legacy earnings system disabled. Register sessions with max yield % only."
+    case "MAX_YIELD_NOT_CONFIGURED":
+      return "This session has no max yield configured. Admin must register with max yield %."
     default:
       return code
   }

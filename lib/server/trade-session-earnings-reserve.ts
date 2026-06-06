@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { buildExactSumBuckets, stringSeed } from "@/lib/server/target-driven-accrual"
 import {
+  getStoredYieldParticipant,
+  markYieldParticipantSettled,
+  tradeSessionUsesYieldEngine,
+} from "@/lib/server/time-weighted-yield-engine"
+import {
   buildDailyTwoTradeSchedule,
   DAILY_TWO_TRADE_POLICY_DAYS,
   type DailyTwoTradeSchedulePayload,
@@ -528,96 +533,53 @@ export async function settleTradeSessionParticipation(
   reserve: UserTradeSessionReserveRow
   allocatedUsd: number
   minFloorApplied: boolean
+  usedYieldEngine: boolean
+  earnedPercent?: number
+  maxYieldPercent?: number
+  participationRatio?: number
+  isEarlyBird?: boolean
+  capitalAtJoinUsd?: number
 }> {
-  const weight = params.forceFullParticipation
-    ? 1
-    : Math.min(1, Math.max(0, params.participationWeight))
+  const { data: tsRow, error: tsErr } = await admin
+    .from("trade_sessions")
+    .select("max_yield_percent,yield_distribution_mode")
+    .eq("id", params.tradeSessionId)
+    .maybeSingle()
+  if (tsErr) throw new Error(tsErr.message)
 
-  if (await slotLedgerExists(admin, params.userId, params.tradeSessionId)) {
-    const { data: existingLedger } = await admin
-      .from("user_trade_session_slot_ledger")
-      .select("outcome,payout_usd")
-      .eq("user_id", params.userId)
-      .eq("trade_session_id", params.tradeSessionId)
-      .maybeSingle()
-    const { data: botJoined } = await admin
-      .from("nexus_bot_sessions")
-      .select("id")
-      .eq("user_id", params.userId)
-      .eq("trade_session_id", params.tradeSessionId)
-      .maybeSingle()
-
-    if (existingLedger && String(existingLedger.outcome) === "forfeited" && botJoined) {
-      await reverseErroneousForfeitLedgerEntry(admin, {
-        userId: params.userId,
-        tradeSessionId: params.tradeSessionId,
-      })
-    } else {
-      const reserve = await ensureUserTradeSessionReserve(
-        admin,
-        params.userId,
-        params.capitalUsd,
-        new Date(params.sessionStartAt),
-      )
-      return {
-        profitUsd: roundUsd2(Number(existingLedger?.payout_usd ?? 0)),
-        reserve,
-        allocatedUsd: 0,
-        minFloorApplied: false,
-      }
-    }
+  if (!tradeSessionUsesYieldEngine(tsRow ?? {})) {
+    throw new Error("LEGACY_EARNINGS_DISABLED")
   }
 
-  let reserve = await ensureUserTradeSessionReserve(
+  const yieldParticipant = await getStoredYieldParticipant(admin, params.userId, params.tradeSessionId)
+  if (!yieldParticipant) {
+    throw new Error("PARTICIPANT_YIELD_RECORD_MISSING")
+  }
+
+  const payoutUsd = yieldParticipant.expectedProfitUsd
+  const reserve = await ensureUserTradeSessionReserve(
     admin,
     params.userId,
     params.capitalUsd,
     new Date(params.sessionStartAt),
   )
 
-  const dayIndex = dayIndexInPeriod(params.sessionStartAt, reserve.period_key)
-  const slotGross = slotGrossUsdFromSchedule(reserve.schedule, dayIndex, params.sessionSlot)
-  const { payoutUsd, allocatedUsd, minFloorApplied } = computeSessionParticipationPayoutUsd({
-    slotGrossUsd: slotGross,
-    participationWeight: weight,
-    remainingReserveUsd: reserve.remaining_reserve_usd,
-  })
-  const debitUsd = payoutUsd
-
-  const { error: insErr } = await admin.from("user_trade_session_slot_ledger").insert({
-    user_id: params.userId,
-    reserve_id: reserve.id,
-    trade_session_id: params.tradeSessionId,
-    day_index: dayIndex,
-    session_slot: normalizeSessionSlot(params.sessionSlot),
-    slot_gross_usd: slotGross,
-    participation_weight: weight,
-    allocated_profit_usd: allocatedUsd,
-    payout_usd: payoutUsd,
-    outcome: "earned",
-    joined_at: params.joinedAt ?? null,
-    reserve_source: TRADE_SESSION_RESERVE_SOURCE,
-  })
-  if (insErr) {
-    if (insErr.code === "23505") {
-      const { data } = await admin
-        .from("user_trade_session_slot_ledger")
-        .select("payout_usd")
-        .eq("user_id", params.userId)
-        .eq("trade_session_id", params.tradeSessionId)
-        .maybeSingle()
-      return {
-        profitUsd: roundUsd2(Number(data?.payout_usd ?? 0)),
-        reserve,
-        allocatedUsd: 0,
-        minFloorApplied: false,
-      }
-    }
-    throw new Error(insErr.message)
+  if (!yieldParticipant.settled) {
+    await markYieldParticipantSettled(admin, params.userId, params.tradeSessionId)
   }
 
-  reserve = await applyReserveDebit(admin, reserve, debitUsd, "earned", payoutUsd)
-  return { profitUsd: payoutUsd, reserve, allocatedUsd, minFloorApplied }
+  return {
+    profitUsd: payoutUsd,
+    reserve,
+    allocatedUsd: payoutUsd,
+    minFloorApplied: false,
+    usedYieldEngine: true,
+    earnedPercent: yieldParticipant.earnedPercent,
+    maxYieldPercent: Number(tsRow?.max_yield_percent ?? 0),
+    participationRatio: yieldParticipant.participationRatio,
+    isEarlyBird: yieldParticipant.isEarlyBird,
+    capitalAtJoinUsd: yieldParticipant.capitalAtJoinUsd,
+  }
 }
 
 export async function forfeitMissedTradeSessionSlot(

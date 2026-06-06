@@ -22,12 +22,12 @@ import {
 import { consumeTradeSessionVerification } from "@/lib/server/trade-session-verification"
 import { findActiveTradeSessionByCode } from "@/lib/server/trade-sessions"
 import {
-  ensureUserTradeSessionReserve,
-  previewSessionPayoutFromCapital,
+  buildSettlementYieldAuditMetadata,
+  joinTradeSessionWithYieldEngine,
+} from "@/lib/server/time-weighted-yield-engine"
+import {
   processTradeSessionForfeitures,
-  projectSessionPayoutUsd,
   settleTradeSessionParticipation,
-  TRADE_SESSION_RESERVE_SOURCE,
 } from "@/lib/server/trade-session-earnings-reserve"
 import {
   ensureTradeSessionSettlementCredits,
@@ -38,6 +38,7 @@ import {
 
 /** Paginate all open trade-session participants — must match settlement scope (no batch asymmetry). */
 const TRADE_SESSION_SYNC_PAGE_SIZE = 100
+const YIELD_EARNINGS_SOURCE = "time_weighted_yield_engine_v2"
 
 export type { UserTradeSessionReserveRow } from "@/lib/server/trade-session-earnings-reserve"
 export { previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
@@ -420,10 +421,23 @@ export async function settleTradeSessionBotParticipant(
     forceFullParticipation: row.forceFullParticipation,
     joinedAt,
   })
-  const { profitUsd, allocatedUsd, minFloorApplied } = settlement
+  const { profitUsd, allocatedUsd, minFloorApplied, usedYieldEngine, earnedPercent, maxYieldPercent, participationRatio, isEarlyBird, capitalAtJoinUsd } = settlement
   const earningsUsd = roundUsd2(profitUsd)
 
   const historySummary = closedTradeHistorySummary(profitUsd)
+  const profitAudit =
+    usedYieldEngine && earnedPercent != null && capitalAtJoinUsd != null && maxYieldPercent != null
+      ? buildSettlementYieldAuditMetadata({
+          tradeSessionId: row.tradeSessionId,
+          maxYieldPercent,
+          earnedPercent,
+          capitalAtJoinUsd,
+          participationRatio: participationRatio ?? 0,
+          profitAmountUsd: earningsUsd,
+          settlementAmountUsd: roundUsd2(stake + earningsUsd),
+          isEarlyBird: Boolean(isEarlyBird),
+        })
+      : {}
 
   await ensureTradeSessionSettlementCredits(admin, {
     userId: row.userId,
@@ -443,14 +457,14 @@ export async function settleTradeSessionBotParticipant(
       participation_weight: weight,
       allocated_profit_usd: allocatedUsd,
       released_profit_usd: profitUsd,
-      reserve_source: TRADE_SESSION_RESERVE_SOURCE,
       profit_usd: profitUsd,
       stake_returned_usd: stake,
       earnings_to_pocket_usd: earningsUsd,
       principal_to_main_usd: stake,
-      earnings_source: TRADE_SESSION_RESERVE_SOURCE,
+      earnings_source: YIELD_EARNINGS_SOURCE,
       min_floor_applied: minFloorApplied,
       pocket_manual_transfer_required: earningsUsd > 0,
+      ...profitAudit,
     },
   })
 
@@ -580,18 +594,23 @@ export async function activateTradeSessionBot(
     throw new Error("SESSION_EXPIRED")
   }
 
-  const reserve = await ensureUserTradeSessionReserve(
-    admin,
-    params.userId,
-    stake,
-    new Date(tradeSession.startAt),
-  )
-  const projectedProfitUsd = projectSessionPayoutUsd(
-    reserve,
-    tradeSession.startAt,
-    tradeSession.sessionSlot,
+  if (!(tradeSession.maxYieldPercent != null && tradeSession.maxYieldPercent > 0)) {
+    throw new Error("MAX_YIELD_NOT_CONFIGURED")
+  }
+
+  const { calculation } = await joinTradeSessionWithYieldEngine(admin, {
+    userId: params.userId,
+    tradeSessionId: tradeSession.id,
+    capitalAtJoinUsd: stake,
+    joinTime: now,
     participationWeight,
-  )
+    sessionStartAt: tradeSession.startAt,
+    sessionEndAt: tradeSession.endAt,
+    maxYieldPercent: tradeSession.maxYieldPercent,
+  })
+  const projectedProfitUsd = calculation.profitUsd
+  const earnedPercent = calculation.earnedPercent
+
   if (!(projectedProfitUsd > 0)) {
     throw new Error("SESSION_NO_EARNINGS_REMAINING")
   }
@@ -629,6 +648,7 @@ export async function activateTradeSessionBot(
         scheduled_start_at: tradeSession.startAt,
         scheduled_end_at: tradeSession.endAt,
         activated_at: queuedAt,
+        ...(earnedPercent != null ? { earned_percent: earnedPercent, max_yield_percent: tradeSession.maxYieldPercent } : {}),
       },
     })
     .select("id")
@@ -655,9 +675,11 @@ export async function activateTradeSessionBot(
       trade_session_id: tradeSession.id,
       session_id: ins.id,
       participation_weight: participationWeight,
-      reserve_source: TRADE_SESSION_RESERVE_SOURCE,
+      reserve_source: YIELD_EARNINGS_SOURCE,
       queued_at: queuedAt,
       code_verified_at: verified.verifiedAt,
+      earned_percent: earnedPercent,
+      max_yield_percent: tradeSession.maxYieldPercent,
     },
   })
 
@@ -707,16 +729,6 @@ export async function findPendingProfitCelebration(
 
   const stakeUsd = roundUsd2(Number(data.stake_usd ?? 0))
   const profitUsd = roundUsd2(Number(data.profit_released_usd ?? 0))
-
-  await ensureTradeSessionSettlementCredits(admin, {
-    userId,
-    botSessionId: String(data.id),
-    stakeUsd,
-    profitUsd,
-    tradeSessionId: data.trade_session_id ? String(data.trade_session_id) : null,
-    joinedAt: data.queued_at ? String(data.queued_at) : null,
-    participationWeight: Number(data.participation_weight ?? 1),
-  })
 
   const credited = await hasTradeSessionSettlementEvent(admin, userId, String(data.id))
   if (!credited && (stakeUsd > 0 || profitUsd > 0)) {

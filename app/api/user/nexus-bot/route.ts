@@ -3,16 +3,13 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import {
   acknowledgeProfitCelebration,
-  completeDueNexusBotSessions,
   findPendingProfitCelebration,
   getAutoTradeGrantsMap,
   recordAttendanceVisit,
   resolveUserDisplayPhase,
-  syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
 import { sessionProgressPct } from "@/lib/nexus-bot/session-earnings-ux"
 import { userSessionPresentation, TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
-import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
 import { NEXUS_AUTO_TRADE_PLANS } from "@/lib/nexus-bot/plans"
@@ -59,9 +56,6 @@ export async function GET(request: Request) {
     const { user } = auth
     const admin = createAdminClient()
 
-    await syncTradeSessionBotStates(admin, user.id)
-    await completeDueNexusBotSessions(admin, user.id)
-    await expireDueTradeSessions(admin)
     const streak = await recordAttendanceVisit(admin, user.id)
     const grants = await getAutoTradeGrantsMap(admin, user.id)
     const availableUsd = await readNexusMainAvailableUsd(admin, user.id)

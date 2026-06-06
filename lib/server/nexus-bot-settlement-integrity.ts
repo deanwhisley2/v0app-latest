@@ -5,6 +5,13 @@ import { creditPrincipalToMainAndEarningsToPocket } from "@/lib/server/copy-trad
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { TRADE_SESSION_RESERVE_SOURCE } from "@/lib/server/trade-session-earnings-reserve"
 import { casCreditNexusMainOnly } from "@/lib/server/nexus-main-enforcement"
+import {
+  claimTradeSessionSettlementIdempotency,
+  logDuplicateSettlementAttempt,
+  sumTradeSessionReconcileTopupUsd,
+  tradeSessionCompleteIdempotencyKey,
+  tradeSessionTopupIdempotencyKey,
+} from "@/lib/server/trade-session-settlement-idempotency"
 
 const EPSILON_USD = 0.005
 
@@ -109,10 +116,12 @@ export async function ensureTradeSessionSettlementCredits(
     forceFullParticipation?: boolean
     summary?: string
     eventMetadata?: Record<string, unknown>
+    source?: string
   },
 ): Promise<SettlementCreditEnsureResult> {
   const stake = roundUsd2(params.stakeUsd)
   const profit = roundUsd2(params.profitUsd)
+  const source = params.source ?? "ensureTradeSessionSettlementCredits"
   if (!(stake > 0) && !(profit > 0)) {
     return { applied: false, reason: "nothing_due" }
   }
@@ -127,14 +136,35 @@ export async function ensureTradeSessionSettlementCredits(
   if (evErr) throw new Error(evErr.message)
 
   if (!completeEv) {
+    const completeAmount = roundUsd2(stake + profit)
+    const idempotencyKey = tradeSessionCompleteIdempotencyKey(params.botSessionId)
+    const claim = await claimTradeSessionSettlementIdempotency(admin, {
+      idempotencyKey,
+      userId: params.userId,
+      botSessionId: params.botSessionId,
+      settlementKind: "complete",
+      amountUsd: completeAmount,
+    })
+    if (claim.status === "duplicate") {
+      logDuplicateSettlementAttempt({
+        userId: params.userId,
+        botSessionId: params.botSessionId,
+        settlementKind: "complete",
+        amountUsd: completeAmount,
+        idempotencyKey,
+        source,
+      })
+      return { applied: false, reason: "already_settled" }
+    }
+
     if (stake > 0 || profit > 0) {
       await creditPrincipalToMainAndEarningsToPocket(admin, params.userId, stake, profit)
     }
-    await recordFinancialEvent({
+    const ledger = await recordFinancialEvent({
       userId: params.userId,
       eventType: "nexus_trade_session_complete",
       category: "container",
-      amount: roundUsd2(stake + profit),
+      amount: completeAmount,
       balanceSource: "nexus_bot_session",
       balanceDestination:
         profit > 0 && stake > 0
@@ -161,43 +191,83 @@ export async function ensureTradeSessionSettlementCredits(
         earnings_source: TRADE_SESSION_RESERVE_SOURCE,
         min_floor_applied: Boolean(params.minFloorApplied),
         pocket_manual_transfer_required: profit > 0,
+        idempotency_key: idempotencyKey,
         ...(params.eventMetadata ?? {}),
         ...(params.forceFullParticipation ? { settlement_mode: "full_session_target" } : {}),
         ...(!params.eventMetadata ? { repair_applied: true } : {}),
       },
     })
+    if (ledger?.id) {
+      await admin
+        .from("trade_session_settlement_idempotency")
+        .update({ ledger_event_id: ledger.id })
+        .eq("idempotency_key", idempotencyKey)
+    }
     return { applied: true, reason: "initial_credit" }
   }
 
   const recordedProfit = recordedProfitFromCompleteEvent(
     completeEv.metadata as Record<string, unknown> | null | undefined,
   )
-  const topUp = roundUsd2(profit - recordedProfit)
-  if (!(topUp > EPSILON_USD)) {
+  const priorTopups = await sumTradeSessionReconcileTopupUsd(
+    admin,
+    params.userId,
+    params.botSessionId,
+  )
+  const stillDue = roundUsd2(profit - recordedProfit - priorTopups)
+  if (!(stillDue > EPSILON_USD)) {
     return { applied: false, reason: "already_settled" }
   }
 
-  await creditPrincipalToMainAndEarningsToPocket(admin, params.userId, 0, topUp)
-  await recordFinancialEvent({
+  const idempotencyKey = tradeSessionTopupIdempotencyKey(params.botSessionId, stillDue)
+  const claim = await claimTradeSessionSettlementIdempotency(admin, {
+    idempotencyKey,
+    userId: params.userId,
+    botSessionId: params.botSessionId,
+    settlementKind: "reconcile_topup",
+    amountUsd: stillDue,
+  })
+  if (claim.status === "duplicate") {
+    logDuplicateSettlementAttempt({
+      userId: params.userId,
+      botSessionId: params.botSessionId,
+      settlementKind: "reconcile_topup",
+      amountUsd: stillDue,
+      idempotencyKey,
+      source,
+    })
+    return { applied: false, reason: "already_settled" }
+  }
+
+  await creditPrincipalToMainAndEarningsToPocket(admin, params.userId, 0, stillDue)
+  const ledger = await recordFinancialEvent({
     userId: params.userId,
     eventType: "nexus_trade_session_reconcile_topup",
     category: "container",
-    amount: topUp,
+    amount: stillDue,
     balanceSource: "nexus_bot_session_reconciliation",
     balanceDestination: "container_withdrawable_earnings",
     status: "completed",
     actorType: "system",
     actorId: params.userId,
     relatedSessionId: params.botSessionId,
-    summary: `Reconciliation top-up — released earnings credited (${topUp.toFixed(2)} USD).`,
+    summary: `Reconciliation top-up — released earnings credited (${stillDue.toFixed(2)} USD).`,
     metadata: {
       session_id: params.botSessionId,
       trade_session_id: params.tradeSessionId ?? null,
       previous_profit_usd: recordedProfit,
+      prior_topups_usd: priorTopups,
       reconciled_profit_usd: profit,
+      idempotency_key: idempotencyKey,
       repair_applied: true,
     },
   })
+  if (ledger?.id) {
+    await admin
+      .from("trade_session_settlement_idempotency")
+      .update({ ledger_event_id: ledger.id })
+      .eq("idempotency_key", idempotencyKey)
+  }
   return { applied: true, reason: "topup" }
 }
 

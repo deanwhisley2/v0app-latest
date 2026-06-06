@@ -28,6 +28,9 @@ type TradeSessionRow = {
   admin_terminated_at?: string | null
   adminTerminated?: boolean
   participants?: { active: number; completed: number }
+  max_yield_percent?: number | string | null
+  yield_distribution_mode?: string | null
+  profit_percentage_locked_at?: string | null
 }
 
 type Stats = {
@@ -55,6 +58,7 @@ type Stats = {
     completedWithoutLedgerStakeUsd?: number
     totalStrandedStakeUsd?: number
     hasStrandedCapital?: boolean
+    settledWithoutProfitPercentageCount?: number
     checkedAt?: string
   }
 }
@@ -81,7 +85,14 @@ export function AdminNexusBotPanel() {
   const [startAt, setStartAt] = useState("")
   const [endAt, setEndAt] = useState("")
   const [registerStatus, setRegisterStatus] = useState<"draft" | "active">("active")
+  const [maxYieldPercent, setMaxYieldPercent] = useState("3.5")
+  const [yieldPreview, setYieldPreview] = useState<{
+    durationHours: number
+    examples: Array<{ label: string; earnedPercent: number }>
+  } | null>(null)
 
+  const [auditUserId, setAuditUserId] = useState("")
+  const [auditRows, setAuditRows] = useState<Array<Record<string, unknown>>>([])
   const [slot, setSlot] = useState<"morning" | "evening">("morning")
   const [code, setCode] = useState("")
   const [strategyTitle, setStrategyTitle] = useState("")
@@ -110,6 +121,66 @@ export function AdminNexusBotPanel() {
     const token = session?.access_token
     if (!token) throw new Error("Not signed in")
     return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+  }
+
+  const loadEarningsAudit = async () => {
+    if (!auditUserId.trim()) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const h = await tokenHeaders()
+      const res = await fetch(
+        `/api/admin/trade-sessions/earnings-audit?userId=${encodeURIComponent(auditUserId.trim())}`,
+        { headers: h },
+      )
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error ?? "Audit load failed")
+      setAuditRows((j.rows as Array<Record<string, unknown>>) ?? [])
+      setMsg(`Loaded ${((j.rows as unknown[]) ?? []).length} earnings audit row(s)`)
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Audit load failed")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runYieldSimulation = async () => {
+    const start = parseDatetimeLocalInput(startAt)
+    const end = parseDatetimeLocalInput(endAt)
+    const pct = Number(maxYieldPercent)
+    if (!start || !end || !Number.isFinite(pct) || pct <= 0) {
+      setRegisterError("Set valid times and max yield before simulating.")
+      return
+    }
+    setBusy(true)
+    setRegisterError(null)
+    try {
+      const h = await tokenHeaders()
+      const res = await fetch("/api/admin/trade-sessions/simulate", {
+        method: "POST",
+        headers: h,
+        body: JSON.stringify({
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
+          maxYieldPercent: pct,
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error ?? "Simulation failed")
+      setYieldPreview({
+        durationHours: Number(j.session_duration_hours ?? 0),
+        examples: (j.results ?? []).map((r: Record<string, unknown>) => ({
+          label: r.is_early_bird
+            ? "Early bird"
+            : `Join +${Number(r.join_offset_hours ?? 0).toFixed(1)}h`,
+          earnedPercent: Number(r.earned_percent ?? 0),
+        })),
+      })
+    } catch (e) {
+      setRegisterError(e instanceof Error ? e.message : "Simulation failed")
+    } finally {
+      setBusy(false)
+    }
   }
 
   const loadMemberPoints = async () => {
@@ -223,6 +294,11 @@ export function AdminNexusBotPanel() {
       setRegisterError("End time must be after start time.")
       return
     }
+    const pct = Number(maxYieldPercent)
+    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
+      setRegisterError("Enter max yield between 0.01 and 100 (%).")
+      return
+    }
 
     setBusy(true)
     setMsg(null)
@@ -239,10 +315,12 @@ export function AdminNexusBotPanel() {
           startAt: start.toISOString(),
           endAt: end.toISOString(),
           status: registerStatus,
+          maxYieldPercent: pct,
         }),
       })
       const j = (await res.json().catch(() => ({}))) as {
         error?: string
+        preview?: { durationHours: number; examples: Array<{ label: string; earnedPercent: number }> }
         session?: {
           sessionId: string
           code: string
@@ -259,6 +337,7 @@ export function AdminNexusBotPanel() {
       const saved = j.session
       if (!saved?.sessionId) throw new Error("Registration did not persist — retry.")
 
+      if (j.preview) setYieldPreview(j.preview)
       setRegisteredOk(true)
       setLastRegistered({
         id: saved.sessionId,
@@ -289,6 +368,8 @@ export function AdminNexusBotPanel() {
     Boolean(sessionName.trim()) &&
     Boolean(startAt) &&
     Boolean(endAt) &&
+    Boolean(maxYieldPercent.trim()) &&
+    Number(maxYieldPercent) > 0 &&
     !busy
 
   const terminateSession = async (session: TradeSessionRow) => {
@@ -652,6 +733,50 @@ export function AdminNexusBotPanel() {
                 />
               </label>
             </div>
+            <div className="space-y-2 rounded-lg border border-border/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Max yield (time-weighted)
+              </p>
+              <label className="text-xs">
+                Max yield % (early birds get exactly this; late entrants pro-rated)
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max="100"
+                  value={maxYieldPercent}
+                  onChange={(e) => {
+                    setMaxYieldPercent(e.target.value)
+                    setYieldPreview(null)
+                  }}
+                  className="mt-1"
+                  placeholder="3.5"
+                />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => void runYieldSimulation()}
+              >
+                Preview earnings by join time
+              </Button>
+              {yieldPreview ? (
+                <div className="rounded-lg bg-muted/50 p-2 text-xs">
+                  <p className="font-medium">
+                    Session duration: {yieldPreview.durationHours.toFixed(2)}h
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {yieldPreview.examples.map((ex, i) => (
+                      <li key={i}>
+                        {ex.label}: <span className="font-mono">{ex.earnedPercent.toFixed(4)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
             <div className="flex gap-2">
               {(["draft", "active"] as const).map((s) => (
                 <button
@@ -745,6 +870,10 @@ export function AdminNexusBotPanel() {
                     <p className="mt-1">{s.session_name}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatSessionClock(s.start_at)} – {formatSessionClock(s.end_at)} · {s.session_slot}
+                      {s.max_yield_percent != null
+                        ? ` · max yield ${s.max_yield_percent}% (time-weighted)`
+                        : ""}
+                      {s.profit_percentage_locked_at ? " · locked" : ""}
                       {(s.participants?.active ?? 0) > 0
                         ? ` · ${s.participants?.active} active`
                         : ""}
@@ -813,6 +942,38 @@ export function AdminNexusBotPanel() {
               </div>
             </Card>
           ) : null}
+
+          <Card className="space-y-3 p-4">
+            <h3 className="font-semibold">Earnings audit</h3>
+            <p className="text-xs text-muted-foreground">
+              Explain why a user earned a specific trade-session amount (profit %, capital, settlement).
+            </p>
+            <Input
+              value={auditUserId}
+              onChange={(e) => setAuditUserId(e.target.value)}
+              placeholder="User UUID"
+              className="font-mono text-xs"
+            />
+            <Button variant="outline" disabled={busy || !auditUserId.trim()} onClick={() => void loadEarningsAudit()}>
+              Load earnings audit
+            </Button>
+            {auditRows.length > 0 ? (
+              <div className="max-h-64 space-y-2 overflow-y-auto text-xs">
+                {auditRows.map((row, i) => (
+                  <div key={i} className="rounded-lg border border-border/60 p-2">
+                    <p className="font-mono font-semibold">{String(row.trade_session_code ?? "")}</p>
+                    <p>
+                      {String(row.earned_percent ?? row.participant_profit_percentage_used ?? "?")}% on $
+                      {Number(row.capital_at_join_usd ?? 0).toFixed(2)} → expected $
+                      {Number(row.expected_profit_usd ?? 0).toFixed(2)} · settled $
+                      {Number(row.settled_profit_usd ?? 0).toFixed(2)}
+                    </p>
+                    <p className="text-muted-foreground">{String(row.earnings_explanation ?? "")}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </Card>
 
           <Card className="space-y-3 p-4">
             <h3 className="font-semibold">Member performance review</h3>

@@ -14,6 +14,9 @@ export async function GET() {
     const settlement = await computeTradeSessionSettlementMonitoring(admin)
     return NextResponse.json({
       ok: !settlement.hasStrandedCapital,
+      /** Duplicate reconcile top-ups in ledger (historical + monitoring). Does not fail health once idempotency is live. */
+      duplicateTopupAlert: settlement.hasDuplicateReconcileTopups,
+      profitPercentageAlert: settlement.hasSettledWithoutProfitPercentage,
       service: "nexus-settlement",
       time: new Date().toISOString(),
       settlement,

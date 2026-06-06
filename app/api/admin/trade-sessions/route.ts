@@ -8,6 +8,7 @@ import {
   getTradeSessionAdminStats,
   getTradeSessionByCode,
   humanizeTradeSessionError,
+  previewRegisteredTradeSessionYield,
   registerTradeSession,
 } from "@/lib/server/trade-sessions"
 import {
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     let q = admin
       .from("trade_sessions")
       .select(
-        "id,code,session_name,session_slot,start_at,end_at,status,display_label,created_at,expired_at,admin_terminated_at",
+        "id,code,session_name,session_slot,start_at,end_at,status,display_label,created_at,expired_at,admin_terminated_at,max_yield_percent,yield_distribution_mode,profit_percentage_locked_at",
       )
       .order("created_at", { ascending: false })
       .limit(80)
@@ -120,6 +121,7 @@ export async function POST(request: Request) {
       endAt?: string
       status?: "draft" | "active"
       displayLabel?: string
+      maxYieldPercent?: number
       tradeSessionId?: string
     }
 
@@ -148,16 +150,24 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "register") {
+      const startAt = body.startAt ?? ""
+      const endAt = body.endAt ?? ""
+      const maxYieldPercent = Number(body.maxYieldPercent)
       const out = await registerTradeSession(admin, {
         actorId: actor.id,
         code: body.code ?? "",
         sessionName: body.sessionName ?? "",
         sessionSlot: body.sessionSlot ?? "morning",
-        startAt: body.startAt ?? "",
-        endAt: body.endAt ?? "",
+        startAt,
+        endAt,
         status: body.status === "draft" ? "draft" : "active",
         displayLabel: body.displayLabel,
+        maxYieldPercent,
       })
+      const preview =
+        startAt && endAt && Number.isFinite(maxYieldPercent)
+          ? previewRegisteredTradeSessionYield(startAt, endAt, maxYieldPercent)
+          : null
       const persisted = await getTradeSessionByCode(admin, out.code)
       if (!persisted) {
         return NextResponse.json({ error: "Registration did not persist — retry." }, { status: 500 })
@@ -166,6 +176,7 @@ export async function POST(request: Request) {
         ok: true,
         registered: true,
         session: persisted,
+        preview,
         sessionId: persisted.sessionId,
         code: persisted.code,
       })
@@ -179,7 +190,10 @@ export async function POST(request: Request) {
       msg.includes("CODE_") ||
       msg.includes("INVALID") ||
       msg.includes("SESSION_NAME") ||
-      msg.includes("FORMAT")
+      msg.includes("FORMAT") ||
+      msg.includes("PROFIT_") ||
+      msg.includes("MAX_YIELD_") ||
+      msg.includes("PARTICIPANT_YIELD")
     return NextResponse.json({ error: friendly, code: msg }, { status: isClient ? 400 : 403 })
   }
 }
