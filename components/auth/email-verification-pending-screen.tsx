@@ -259,7 +259,9 @@ export function EmailVerificationPendingScreen({
           <div className="text-center">
             <img src="/logo.jpg" alt="Nexus Pro" className="mx-auto mb-3 h-16 w-16 rounded-xl" />
             <h1 className="text-2xl font-semibold text-foreground">Account created successfully</h1>
-            <p className="mt-1 text-xs text-muted-foreground">One more step — verify your email</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Verify your email when it arrives — you can continue to the platform anytime.
+            </p>
           </div>
 
           <VerificationEmailStatusPanel
@@ -329,8 +331,8 @@ export function EmailVerificationPendingScreen({
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            You can leave this page to check your email — when you return, this screen will still be here for 24 hours.
-            Email verification improves recovery; it does not block trading once you sign in.
+            Delivery may take several minutes. Check inbox, spam, and promotions. You can skip for now and
+            verify later from Settings — verification strengthens security but does not block platform access.
           </p>
         </div>
       </>

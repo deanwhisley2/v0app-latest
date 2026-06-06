@@ -30,7 +30,7 @@ import { trackLoginSession } from "@/lib/server/login-session"
 import { markProfilePendingVerificationEmail } from "@/lib/server/pending-verification-email"
 import {
   authEmailConfirmedAtRegister,
-  confirmAuthEmailForPhonePasswordLogin,
+  confirmAuthEmailForPasswordLogin,
 } from "@/lib/server/register-auth-access"
 import { syncRegisterProfileContact } from "@/lib/server/register-profile-sync"
 import { attemptRegisterEmailVerification } from "@/lib/server/register-email-verification"
@@ -187,9 +187,7 @@ export async function POST(request: Request) {
         verificationEmailStatus = emailAttempt.status
         verificationEmailError = emailAttempt.error
       }
-      if (phone) {
-        await confirmAuthEmailForPhonePasswordLogin(admin, existingId)
-      }
+      await confirmAuthEmailForPasswordLogin(admin, existingId)
       await grantRegisterWelcomeBonus(admin, existingId)
       return NextResponse.json({
         ok: true,
@@ -281,40 +279,18 @@ export async function POST(request: Request) {
       userAgent,
     })
 
-    if (phone) {
-      const sessionResult = await createAuthSessionForEmail(authEmail)
-      if (sessionResult.ok) {
-        try {
-          const { createRouteHandlerSupabaseClient } = await import("@/lib/supabase/route-handler")
-          const supabase = await createRouteHandlerSupabaseClient()
-          const { data: sessionData } = await supabase.auth.getSession()
-          const accessToken = sessionData.session?.access_token
-          if (accessToken) {
-            await trackLoginSession({
-              userId: sessionResult.userId,
-              bearerToken: accessToken,
-              userAgent: userAgent ?? "",
-              ipAddress: ip,
-            })
-          }
-        } catch (e) {
-          console.warn("[register] email+phone session track:", e instanceof Error ? e.message : e)
-        }
-        return NextResponse.json({
-          ok: true,
-          requiresEmailVerification: true,
-          email: emailRaw.toLowerCase(),
-          session: true,
-          verificationEmailStatus: emailAttempt.status,
-          ...(emailAttempt.error ? { verificationEmailError: emailAttempt.error } : {}),
-        })
-      }
-    }
+    const sessionGranted = await grantRegisterAuthSession({
+      authEmail,
+      userId: newUserId!,
+      userAgent: userAgent ?? "",
+      ipAddress: ip,
+    })
 
     return NextResponse.json({
       ok: true,
       requiresEmailVerification: true,
       email: emailRaw.toLowerCase(),
+      session: sessionGranted,
       verificationEmailStatus: emailAttempt.status,
       ...(emailAttempt.error ? { verificationEmailError: emailAttempt.error } : {}),
     })
@@ -330,4 +306,31 @@ async function resolveExistingUserIdByPhone(
   const email = await resolveIdentifierToEmail(admin, phone)
   if (!email) return null
   return findAuthUserIdByEmail(admin, email)
+}
+
+async function grantRegisterAuthSession(params: {
+  authEmail: string
+  userId: string
+  userAgent: string
+  ipAddress: string | null
+}): Promise<boolean> {
+  const sessionResult = await createAuthSessionForEmail(params.authEmail)
+  if (!sessionResult.ok) return false
+  try {
+    const { createRouteHandlerSupabaseClient } = await import("@/lib/supabase/route-handler")
+    const supabase = await createRouteHandlerSupabaseClient()
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    if (accessToken) {
+      await trackLoginSession({
+        userId: sessionResult.userId,
+        bearerToken: accessToken,
+        userAgent: params.userAgent,
+        ipAddress: params.ipAddress,
+      })
+    }
+  } catch (e) {
+    console.warn("[register] session track:", e instanceof Error ? e.message : e)
+  }
+  return true
 }

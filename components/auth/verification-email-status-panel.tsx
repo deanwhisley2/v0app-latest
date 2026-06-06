@@ -69,9 +69,11 @@ export function VerificationEmailStatusPanel({
     >
       <div className="flex items-center justify-center gap-2 text-sm font-medium text-foreground">
         <RefreshCw className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-        We couldn&apos;t prepare your verification code.
+        We couldn&apos;t prepare your verification code yet.
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Please try again.</p>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        Please try resend in a moment. Delivery may take several minutes when it succeeds.
+      </p>
       <p className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
         <Check className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
         Your account is saved — use resend below when ready.

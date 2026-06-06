@@ -4,7 +4,7 @@ import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
-import { confirmAuthEmailForPhonePasswordLogin } from "@/lib/server/register-auth-access"
+import { confirmAuthEmailForPasswordLogin } from "@/lib/server/register-auth-access"
 
 type LoginBody = {
   email?: string
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   ) {
     try {
       const userId = await findAuthUserIdByEmail(admin, resolvedEmail)
-      if (userId && (await confirmAuthEmailForPhonePasswordLogin(admin, userId))) {
+      if (userId && (await confirmAuthEmailForPasswordLogin(admin, userId))) {
         const retry = await signIn()
         data = retry.data
         error = retry.error

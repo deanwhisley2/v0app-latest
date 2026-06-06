@@ -6,8 +6,8 @@ function assert(cond: boolean, msg: string) {
 }
 
 assert(authEmailConfirmedAtRegister(false, null) === true, "phone-only path")
-assert(authEmailConfirmedAtRegister(true, "0701081851") === true, "email+phone allows login")
-assert(authEmailConfirmedAtRegister(true, null) === false, "email-only waits verify")
-assert(authEmailConfirmedAtRegister(true, "") === false, "email-only empty phone")
+assert(authEmailConfirmedAtRegister(true, "0701081851") === true, "email+phone")
+assert(authEmailConfirmedAtRegister(true, null) === true, "email-only non-blocking stabilization")
+assert(authEmailConfirmedAtRegister(true, "") === true, "email-only empty phone")
 
 console.log("test-register-auth-access: PASS")

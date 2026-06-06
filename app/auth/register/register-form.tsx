@@ -284,8 +284,7 @@ export default function RegisterForm() {
           }
           clearRegisterDraft()
           if (json.session) {
-            router.replace("/auth/verify")
-            router.refresh()
+            window.location.replace("/dashboard")
             return
           }
           router.replace("/auth/verify")
