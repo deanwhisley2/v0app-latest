@@ -159,7 +159,6 @@ export function previewRegisteredTradeSessionYield(
   return {
     matrixDayIndex: yieldMatrixDayIndex(new Date(startAt)),
     matrixSource: TRADE_SESSION_YIELD_MATRIX_SOURCE,
-    maxYieldPercent,
     ...buildYieldSessionPreview(new Date(startAt), new Date(endAt), maxYieldPercent),
   }
 }
