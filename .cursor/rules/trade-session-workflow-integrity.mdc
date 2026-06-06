@@ -1,0 +1,62 @@
+---
+description: Trade-session settlement workflow integrity — mandatory financial checkpoints before terminal states
+alwaysApply: false
+globs:
+  - lib/server/nexus-bot-session-service.ts
+  - lib/server/nexus-bot-settlement-integrity.ts
+  - lib/server/trade-session-settlement-monitoring.ts
+  - lib/server/trade-sessions.ts
+  - app/api/cron/sync-trade-session-bots/**
+  - app/api/user/nexus-bot/**
+  - scripts/reconcile-nexus-bot-settlement.ts
+  - scripts/run-nexus-bot-settlement-pass.ts
+---
+
+# Trade session workflow integrity
+
+## Mandatory PR review question
+
+**Can this change cause any user funds to reach a terminal workflow state without a matching settlement, refund, reversal, or audit event?**
+
+If the answer is not an immediate and provable **No**, the change must not ship.
+
+## Financial lifecycle gate
+
+Reserved capital (`nexus_trade_session_open`) must resolve through exactly one terminal ledger path:
+
+1. `nexus_trade_session_complete` — settlement (principal → Main, earnings → Pocket)
+2. `nexus_trade_session_cancel` — explicit refund
+3. Defined reversal event (if added in future)
+
+## Forbidden patterns
+
+- Bulk status updates to `expired` / `cancelled` / `completed` without passing `settleTradeSessionBotParticipant()`
+- Cleanup sweeps with broader scope than settlement loops (batch asymmetry)
+- Terminal UI phase (`completed`, `profit_released`) when ledger resolution is missing
+- New terminal statuses without registering in the settlement router
+
+## Required routing
+
+All past-due stake-bearing trade-session participants must route through:
+
+`settleTradeSessionBotParticipant()` in `lib/server/nexus-bot-session-service.ts`
+
+Recovery for drift: `repairUnsettledTradeSessionParticipants()` in `lib/server/nexus-bot-settlement-integrity.ts`
+
+Monitoring: `computeTradeSessionSettlementMonitoring()` — `/api/health/settlement` must stay green in production.
+
+## Status transitions
+
+| From | To | Requirement |
+|------|-----|-------------|
+| open (`booked`/`running`/…) | `completed` | Settlement ledger event + `settled_at` |
+| open | `cancelled` | Cancel/refund ledger event + `settled_at` |
+| any with stake | `expired` | **Do not use for stake-bearing participants** |
+
+## Verification
+
+After changes touching this workflow:
+
+1. Run `npx tsx scripts/run-nexus-bot-settlement-pass.ts`
+2. Confirm `GET /api/health/settlement` → `ok: true`
+3. Confirm admin settlement monitoring shows `totalStrandedStakeUsd: 0`

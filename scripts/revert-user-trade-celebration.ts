@@ -69,7 +69,7 @@ async function main() {
 
     const { error: cancelErr } = await admin
       .from("nexus_bot_sessions")
-      .update({ status: "cancelled", display_phase: "completed" })
+      .update({ status: "cancelled", display_phase: "completed", settled_at: new Date().toISOString() })
       .eq("id", sessionId)
       .eq("user_id", userId)
       .in("status", [...TRADE_SESSION_OPEN_STATUSES])

@@ -8,6 +8,7 @@ export type TradeSessionPhaseKey =
   | "active_analysing"
   | "active_strategy"
   | "capturing"
+  | "settlement_pending"
   | "completed"
   | "profit_released"
 
@@ -46,6 +47,8 @@ export function userSessionPresentation(phase: TradeSessionPhaseKey): {
       return { headline: "Bot Trading", detail: "Strategy active" }
     case "capturing":
       return { headline: "Bot Trading", detail: "Capturing session results" }
+    case "settlement_pending":
+      return { headline: "Finalizing Session", detail: "Settlement in progress — capital release pending" }
     case "completed":
       return { headline: "Session Completed", detail: "Session completed" }
     case "profit_released":
@@ -60,6 +63,8 @@ export function resolveTradeSessionPhaseKey(params: {
   startAt: string
   endAt: string
   now?: Date
+  /** When false, expired/cancelled rows show settlement_pending instead of completed. */
+  financiallyResolved?: boolean
 }): TradeSessionPhaseKey {
   const now = params.now ?? new Date()
   const start = new Date(params.startAt).getTime()
@@ -67,7 +72,9 @@ export function resolveTradeSessionPhaseKey(params: {
   const t = now.getTime()
 
   if (params.status === "completed") return "profit_released"
-  if (params.status === "expired" || params.status === "cancelled") return "completed"
+  if (params.status === "expired" || params.status === "cancelled") {
+    return params.financiallyResolved === false ? "settlement_pending" : "completed"
+  }
   if (params.status === "booked" || params.status === "ready" || params.status === "pending") {
     return "booked"
   }

@@ -45,6 +45,17 @@ type Stats = {
     pendingCelebrations: number
     failedSettlementsStuckOpen: number
     reconciliationTopUpEvents: number
+    pastDueOpenParticipantCount?: number
+    pastDueOpenStakeUsd?: number
+    expiredUnsettledParticipantCount?: number
+    expiredUnsettledStakeUsd?: number
+    cancelledUnsettledParticipantCount?: number
+    cancelledUnsettledStakeUsd?: number
+    completedWithoutLedgerCount?: number
+    completedWithoutLedgerStakeUsd?: number
+    totalStrandedStakeUsd?: number
+    hasStrandedCapital?: boolean
+    checkedAt?: string
   }
 }
 
@@ -500,6 +511,42 @@ export function AdminNexusBotPanel() {
                     <p className="text-muted-foreground">Reconciliation top-ups</p>
                     <p className="font-mono font-semibold">
                       {stats.settlementMonitoring.reconciliationTopUpEvents}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Stranded capital (USD)</p>
+                    <p
+                      className={`font-mono font-semibold ${
+                        (stats.settlementMonitoring.totalStrandedStakeUsd ?? 0) > 0
+                          ? "text-destructive"
+                          : ""
+                      }`}
+                    >
+                      {(stats.settlementMonitoring.totalStrandedStakeUsd ?? 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Expired unsettled</p>
+                    <p
+                      className={`font-mono font-semibold ${
+                        (stats.settlementMonitoring.expiredUnsettledParticipantCount ?? 0) > 0
+                          ? "text-destructive"
+                          : ""
+                      }`}
+                    >
+                      {stats.settlementMonitoring.expiredUnsettledParticipantCount ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Past-due open</p>
+                    <p
+                      className={`font-mono font-semibold ${
+                        (stats.settlementMonitoring.pastDueOpenParticipantCount ?? 0) > 0
+                          ? "text-destructive"
+                          : ""
+                      }`}
+                    >
+                      {stats.settlementMonitoring.pastDueOpenParticipantCount ?? 0}
                     </p>
                   </div>
                 </Card>

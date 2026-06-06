@@ -4,12 +4,52 @@ import { closedTradeHistorySummary } from "@/lib/nexus-bot/user-session-messagin
 import { creditPrincipalToMainAndEarningsToPocket } from "@/lib/server/copy-trade-balance-credit"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { TRADE_SESSION_RESERVE_SOURCE } from "@/lib/server/trade-session-earnings-reserve"
+import { casCreditNexusMainOnly } from "@/lib/server/nexus-main-enforcement"
 
 const EPSILON_USD = 0.005
+
+/** Ledger events that resolve a trade-session participant reservation. */
+export const TRADE_SESSION_TERMINAL_RESOLUTION_EVENTS = [
+  "nexus_trade_session_complete",
+  "nexus_trade_session_reconcile_topup",
+  "nexus_trade_session_cancel",
+] as const
 
 export type SettlementCreditEnsureResult = {
   applied: boolean
   reason: "initial_credit" | "topup" | "already_settled" | "nothing_due"
+}
+
+export async function hasTradeSessionOpenReservation(
+  admin: SupabaseClient,
+  userId: string,
+  botSessionId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("container_balance_events")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("related_session_id", botSessionId)
+    .eq("event_type", "nexus_trade_session_open")
+    .limit(1)
+  if (error) throw new Error(error.message)
+  return Boolean(data && data.length > 0)
+}
+
+export async function hasTradeSessionCancelEvent(
+  admin: SupabaseClient,
+  userId: string,
+  botSessionId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("container_balance_events")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("related_session_id", botSessionId)
+    .eq("event_type", "nexus_trade_session_cancel")
+    .limit(1)
+  if (error) throw new Error(error.message)
+  return Boolean(data && data.length > 0)
 }
 
 export async function hasTradeSessionSettlementEvent(
@@ -23,6 +63,23 @@ export async function hasTradeSessionSettlementEvent(
     .eq("user_id", userId)
     .eq("related_session_id", botSessionId)
     .in("event_type", ["nexus_trade_session_complete", "nexus_trade_session_reconcile_topup"])
+    .limit(1)
+  if (error) throw new Error(error.message)
+  return Boolean(data && data.length > 0)
+}
+
+/** True when settlement, refund (cancel), or earnings top-up exists for this participant. */
+export async function hasTradeSessionFinancialResolution(
+  admin: SupabaseClient,
+  userId: string,
+  botSessionId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("container_balance_events")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("related_session_id", botSessionId)
+    .in("event_type", [...TRADE_SESSION_TERMINAL_RESOLUTION_EVENTS])
     .limit(1)
   if (error) throw new Error(error.message)
   return Boolean(data && data.length > 0)
@@ -150,37 +207,164 @@ export async function repairUnsettledCompletedSessions(
   userId?: string,
   limit = 80,
 ): Promise<number> {
+  const result = await repairUnsettledTradeSessionParticipants(admin, { userId, limit })
+  return result.completedLedgerRepairs
+}
+
+export type TradeSessionRepairResult = {
+  participantsSettled: number
+  completedLedgerRepairs: number
+  cancelledRefunded: number
+  auditBackfills: number
+}
+
+type RepairableRow = {
+  id: string
+  user_id: string
+  status: string
+  stake_usd: number | string | null
+  profit_released_usd: number | string | null
+  trade_session_id: string | null
+  queued_at: string | null
+  participation_weight: number | string | null
+  settled_at: string | null
+  ends_at: string | null
+}
+
+/**
+ * Workflow recovery: settle, refund, or backfill audit for any trade-session participant
+ * with an open reservation but missing terminal ledger resolution.
+ */
+export async function repairUnsettledTradeSessionParticipants(
+  admin: SupabaseClient,
+  opts?: { userId?: string; limit?: number },
+): Promise<TradeSessionRepairResult> {
+  const limit = opts?.limit ?? 120
+  const nowIso = new Date().toISOString()
+
   let q = admin
     .from("nexus_bot_sessions")
-    .select("id,user_id,stake_usd,profit_released_usd,trade_session_id,queued_at,participation_weight,settled_at")
-    .eq("status", "completed")
+    .select(
+      "id,user_id,status,stake_usd,profit_released_usd,trade_session_id,queued_at,participation_weight,settled_at,ends_at",
+    )
     .not("trade_session_id", "is", null)
-    .order("settled_at", { ascending: false })
+    .gt("stake_usd", 0)
+    .order("created_at", { ascending: false })
     .limit(limit)
-  if (userId) q = q.eq("user_id", userId)
+  if (opts?.userId) q = q.eq("user_id", opts.userId)
 
   const { data, error } = await q
   if (error) throw new Error(error.message)
 
-  let repaired = 0
-  for (const row of data ?? []) {
+  const result: TradeSessionRepairResult = {
+    participantsSettled: 0,
+    completedLedgerRepairs: 0,
+    cancelledRefunded: 0,
+    auditBackfills: 0,
+  }
+
+  for (const raw of data ?? []) {
+    const row = raw as RepairableRow
     const botSessionId = String(row.id)
     const uid = String(row.user_id)
-    const hasEvent = await hasTradeSessionSettlementEvent(admin, uid, botSessionId)
+    const status = String(row.status)
     const stake = roundUsd2(Number(row.stake_usd ?? 0))
-    const profit = roundUsd2(Number(row.profit_released_usd ?? 0))
-    if (hasEvent && profit <= 0 && stake <= 0) continue
+    if (!(stake > 0)) continue
 
-    const result = await ensureTradeSessionSettlementCredits(admin, {
+    const hasOpen = await hasTradeSessionOpenReservation(admin, uid, botSessionId)
+    if (!hasOpen) continue
+
+    const resolved = await hasTradeSessionFinancialResolution(admin, uid, botSessionId)
+    const hasCancel = await hasTradeSessionCancelEvent(admin, uid, botSessionId)
+    const endsAt = row.ends_at ? String(row.ends_at) : null
+    const pastDue = Boolean(endsAt && endsAt < nowIso)
+    const isOpenStatus = ["booked", "ready", "pending", "running", "active"].includes(status)
+
+    if (status === "completed" && !resolved) {
+      const credit = await ensureTradeSessionSettlementCredits(admin, {
+        userId: uid,
+        botSessionId,
+        stakeUsd: stake,
+        profitUsd: roundUsd2(Number(row.profit_released_usd ?? 0)),
+        tradeSessionId: row.trade_session_id ? String(row.trade_session_id) : null,
+        joinedAt: row.queued_at ? String(row.queued_at) : null,
+        participationWeight: Number(row.participation_weight ?? 1),
+      })
+      if (credit.applied) result.completedLedgerRepairs += 1
+      continue
+    }
+
+    if (status === "cancelled") {
+      if (hasCancel && !row.settled_at) {
+        const { error: uErr } = await admin
+          .from("nexus_bot_sessions")
+          .update({ settled_at: nowIso })
+          .eq("id", botSessionId)
+          .eq("status", "cancelled")
+        if (!uErr) result.auditBackfills += 1
+      } else if (!hasCancel && !resolved) {
+        await casCreditNexusMainOnly(admin, uid, stake)
+        await recordFinancialEvent({
+          userId: uid,
+          eventType: "nexus_trade_session_cancel",
+          category: "container",
+          amount: stake,
+          balanceSource: "nexus_bot_session",
+          balanceDestination: "available_balance",
+          status: "completed",
+          actorType: "system",
+          actorId: uid,
+          relatedSessionId: botSessionId,
+          summary: "Trade booking cancelled — reserved capital returned to Nexus Main.",
+          metadata: {
+            session_id: botSessionId,
+            trade_session_id: row.trade_session_id ?? null,
+            stake_returned_usd: stake,
+            repair_applied: true,
+          },
+        })
+        await admin
+          .from("nexus_bot_sessions")
+          .update({ settled_at: nowIso })
+          .eq("id", botSessionId)
+          .eq("status", "cancelled")
+        result.cancelledRefunded += 1
+      }
+      continue
+    }
+
+    const needsSettlement =
+      (status === "expired" && !resolved && !hasCancel) ||
+      (isOpenStatus && pastDue && !resolved)
+
+    if (!needsSettlement) continue
+
+    const tradeSessionId = String(row.trade_session_id)
+    const { data: tsRow, error: tsErr } = await admin
+      .from("trade_sessions")
+      .select("start_at,end_at,session_slot")
+      .eq("id", tradeSessionId)
+      .maybeSingle()
+    if (tsErr) throw new Error(tsErr.message)
+    if (!tsRow?.start_at || !tsRow?.end_at) continue
+
+    const { settleTradeSessionBotParticipant } = await import(
+      "@/lib/server/nexus-bot-session-service"
+    )
+    const settled = await settleTradeSessionBotParticipant(admin, {
+      id: botSessionId,
       userId: uid,
-      botSessionId,
       stakeUsd: stake,
-      profitUsd: profit,
-      tradeSessionId: row.trade_session_id ? String(row.trade_session_id) : null,
-      joinedAt: row.queued_at ? String(row.queued_at) : null,
+      tradeSessionId,
       participationWeight: Number(row.participation_weight ?? 1),
+      joinedAt: row.queued_at ? String(row.queued_at) : null,
+      sessionStartAt: String(tsRow.start_at),
+      sessionEndAt: String(tsRow.end_at),
+      sessionSlot: String(tsRow.session_slot ?? "morning"),
+      repairFromTerminal: true,
     })
-    if (result.applied) repaired += 1
+    if (settled) result.participantsSettled += 1
   }
-  return repaired
+
+  return result
 }

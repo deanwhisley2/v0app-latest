@@ -16,6 +16,8 @@ import { config } from "dotenv"
 import { resolve } from "node:path"
 import { createAdminClient } from "../lib/supabaseAdmin"
 import { completeDueNexusBotSessions, syncTradeSessionBotStates } from "../lib/server/nexus-bot-session-service"
+import { repairUnsettledTradeSessionParticipants } from "../lib/server/nexus-bot-settlement-integrity"
+import { computeTradeSessionSettlementMonitoring } from "../lib/server/trade-session-settlement-monitoring"
 import { expireDueTradeSessions } from "../lib/server/trade-sessions"
 
 config({ path: resolve(process.cwd(), ".env.local") })
@@ -33,9 +35,11 @@ async function main() {
   await syncTradeSessionBotStates(admin, userId)
   const legacyCompleted = await completeDueNexusBotSessions(admin, userId)
   const expiredTradeSessions = await expireDueTradeSessions(admin)
+  const repairResult = await repairUnsettledTradeSessionParticipants(admin, { userId })
+  const settlementMonitoring = await computeTradeSessionSettlementMonitoring(admin)
 
   console.log(
-    `[run-nexus-bot-settlement-pass] userId=${userId ?? "ALL"} legacyCompleted=${legacyCompleted} expiredTradeSessions=${expiredTradeSessions}`,
+    `[run-nexus-bot-settlement-pass] userId=${userId ?? "ALL"} legacyCompleted=${legacyCompleted} expiredTradeSessions=${expiredTradeSessions} repair=${JSON.stringify(repairResult)} stranded=${settlementMonitoring.hasStrandedCapital} totalStrandedUsd=${settlementMonitoring.totalStrandedStakeUsd}`,
   )
 }
 

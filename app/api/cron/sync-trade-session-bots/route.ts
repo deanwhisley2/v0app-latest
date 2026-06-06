@@ -4,7 +4,8 @@ import {
   completeDueNexusBotSessions,
   syncTradeSessionBotStates,
 } from "@/lib/server/nexus-bot-session-service"
-import { repairUnsettledCompletedSessions } from "@/lib/server/nexus-bot-settlement-integrity"
+import { repairUnsettledTradeSessionParticipants } from "@/lib/server/nexus-bot-settlement-integrity"
+import { computeTradeSessionSettlementMonitoring } from "@/lib/server/trade-session-settlement-monitoring"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
 
 /**
@@ -25,13 +26,19 @@ export async function POST(request: Request) {
     await syncTradeSessionBotStates(admin)
     const completedLegacyBotSessions = await completeDueNexusBotSessions(admin)
     const expiredTradeSessions = await expireDueTradeSessions(admin)
-    const repairedSettlementCredits = await repairUnsettledCompletedSessions(admin)
+    const repairResult = await repairUnsettledTradeSessionParticipants(admin)
+    const settlementMonitoring = await computeTradeSessionSettlementMonitoring(admin)
+
+    if (settlementMonitoring.hasStrandedCapital) {
+      console.warn("[sync-trade-session-bots] stranded capital after settlement pass", settlementMonitoring)
+    }
 
     return NextResponse.json({
-      ok: true,
+      ok: !settlementMonitoring.hasStrandedCapital,
       expiredTradeSessions,
       completedLegacyBotSessions,
-      repairedSettlementCredits,
+      repairResult,
+      settlementMonitoring,
     })
   } catch (e) {
     return NextResponse.json(

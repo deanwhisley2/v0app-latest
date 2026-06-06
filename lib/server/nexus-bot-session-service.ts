@@ -31,9 +31,13 @@ import {
 } from "@/lib/server/trade-session-earnings-reserve"
 import {
   ensureTradeSessionSettlementCredits,
+  hasTradeSessionFinancialResolution,
   hasTradeSessionSettlementEvent,
-  repairUnsettledCompletedSessions,
+  repairUnsettledTradeSessionParticipants,
 } from "@/lib/server/nexus-bot-settlement-integrity"
+
+/** Paginate all open trade-session participants — must match settlement scope (no batch asymmetry). */
+const TRADE_SESSION_SYNC_PAGE_SIZE = 100
 
 export type { UserTradeSessionReserveRow } from "@/lib/server/trade-session-earnings-reserve"
 export { previewSessionPayoutFromCapital } from "@/lib/server/trade-session-earnings-reserve"
@@ -55,6 +59,7 @@ export function resolveUserDisplayPhase(params: {
         "active_analysing",
         "active_strategy",
         "capturing",
+        "settlement_pending",
         "completed",
         "profit_released",
       ].includes(key)
@@ -182,106 +187,164 @@ export async function findOpenSignalCode(
   }
 }
 
+type TradeSessionTiming = {
+  start_at: string
+  end_at: string
+  session_slot: string
+}
+
+async function resolveTradeSessionTiming(
+  admin: SupabaseClient,
+  tradeSessionId: string,
+  embedded: { start_at?: string; end_at?: string; session_slot?: string } | null,
+): Promise<TradeSessionTiming | null> {
+  if (embedded?.start_at && embedded?.end_at) {
+    return {
+      start_at: embedded.start_at,
+      end_at: embedded.end_at,
+      session_slot: String(embedded.session_slot ?? "morning"),
+    }
+  }
+  const { data, error } = await admin
+    .from("trade_sessions")
+    .select("start_at,end_at,session_slot")
+    .eq("id", tradeSessionId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data?.start_at || !data?.end_at) return null
+  return {
+    start_at: String(data.start_at),
+    end_at: String(data.end_at),
+    session_slot: String(data.session_slot ?? "morning"),
+  }
+}
+
 export async function syncTradeSessionBotStates(
   admin: SupabaseClient,
   userId?: string,
 ): Promise<void> {
   const now = new Date()
-  const nowIso = now.toISOString()
-  let q = admin
-    .from("nexus_bot_sessions")
-    .select(
-      "id,user_id,status,trade_session_id,stake_usd,participation_weight,queued_at,trade_sessions(start_at,end_at,session_slot)",
-    )
-    .not("trade_session_id", "is", null)
-    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
-  if (userId) q = q.eq("user_id", userId)
-  const { data, error } = await q.limit(200)
-  if (error) throw new Error(error.message)
+  const endedTradeSessions = new Map<string, TradeSessionTiming>()
 
-  const endedTradeSessions = new Set<string>()
+  for (let page = 0; ; page += 1) {
+    const from = page * TRADE_SESSION_SYNC_PAGE_SIZE
+    const to = from + TRADE_SESSION_SYNC_PAGE_SIZE - 1
+    let q = admin
+      .from("nexus_bot_sessions")
+      .select(
+        "id,user_id,status,trade_session_id,stake_usd,participation_weight,queued_at,ends_at,trade_sessions(start_at,end_at,session_slot)",
+      )
+      .not("trade_session_id", "is", null)
+      .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+      .order("created_at", { ascending: true })
+      .range(from, to)
+    if (userId) q = q.eq("user_id", userId)
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    const rows = data ?? []
+    if (rows.length === 0) break
 
-  for (const row of data ?? []) {
-    const ts = row.trade_sessions as { start_at?: string; end_at?: string; session_slot?: string } | null
-    if (!ts?.start_at || !ts?.end_at) continue
-    const startMs = new Date(ts.start_at).getTime()
-    const endMs = new Date(ts.end_at).getTime()
-    const t = now.getTime()
-    const status = String(row.status)
+    for (const row of rows) {
+      const tradeSessionId = String(row.trade_session_id)
+      const ts = await resolveTradeSessionTiming(
+        admin,
+        tradeSessionId,
+        row.trade_sessions as { start_at?: string; end_at?: string; session_slot?: string } | null,
+      )
+      if (!ts) {
+        console.warn("[syncTradeSessionBotStates] missing trade session timing; skipping settlement", {
+          botSessionId: row.id,
+          tradeSessionId,
+        })
+        continue
+      }
 
-    if (t >= endMs) {
-      await completeTradeSessionBotRow(admin, {
-        id: String(row.id),
-        userId: String(row.user_id),
-        stakeUsd: Number(row.stake_usd ?? 0),
-        tradeSessionId: String(row.trade_session_id),
-        participationWeight: Number(row.participation_weight ?? 1),
-        joinedAt: row.queued_at ? String(row.queued_at) : null,
-        sessionStartAt: ts.start_at,
-        sessionEndAt: ts.end_at,
-        sessionSlot: String(ts.session_slot ?? "morning"),
+      const startMs = new Date(ts.start_at).getTime()
+      const endMs = new Date(ts.end_at).getTime()
+      const botEndMs = row.ends_at ? new Date(String(row.ends_at)).getTime() : endMs
+      const t = now.getTime()
+      const status = String(row.status)
+      const pastDue = t >= endMs || t >= botEndMs
+
+      if (pastDue) {
+        await settleTradeSessionBotParticipant(admin, {
+          id: String(row.id),
+          userId: String(row.user_id),
+          stakeUsd: Number(row.stake_usd ?? 0),
+          tradeSessionId,
+          participationWeight: Number(row.participation_weight ?? 1),
+          joinedAt: row.queued_at ? String(row.queued_at) : null,
+          sessionStartAt: ts.start_at,
+          sessionEndAt: ts.end_at,
+          sessionSlot: ts.session_slot,
+        })
+        endedTradeSessions.set(tradeSessionId, ts)
+        continue
+      }
+
+      const nextStatus = t < startMs ? "booked" : "running"
+      const phase = resolveUserDisplayPhase({
+        status: nextStatus,
+        startAt: ts.start_at,
+        endAt: ts.end_at,
+        now,
       })
-      endedTradeSessions.add(String(row.trade_session_id))
-      continue
+      if (status !== nextStatus || phase) {
+        await admin
+          .from("nexus_bot_sessions")
+          .update({ status: nextStatus, display_phase: phase })
+          .eq("id", row.id)
+          .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+      }
     }
 
-    const nextStatus = t < startMs ? "booked" : "running"
-    const phase = resolveUserDisplayPhase({
-      status: nextStatus,
-      startAt: ts.start_at,
-      endAt: ts.end_at,
-      now,
-    })
-    if (status !== nextStatus || phase) {
-      await admin
-        .from("nexus_bot_sessions")
-        .update({ status: nextStatus, display_phase: phase })
-        .eq("id", row.id)
-        .in("status", [...TRADE_SESSION_OPEN_STATUSES])
-    }
+    if (rows.length < TRADE_SESSION_SYNC_PAGE_SIZE) break
   }
 
-  await admin
-    .from("nexus_bot_sessions")
-    .update({ status: "expired", display_phase: "completed" })
-    .not("trade_session_id", "is", null)
-    .in("status", ["booked", "ready", "pending"])
-    .lt("ends_at", nowIso)
-
-  for (const tradeSessionId of endedTradeSessions) {
-    const ts = (data ?? []).find((r) => String(r.trade_session_id) === tradeSessionId)?.trade_sessions as
-      | { start_at?: string; session_slot?: string }
-      | null
-      | undefined
-    if (!ts?.start_at) continue
+  for (const [tradeSessionId, ts] of endedTradeSessions) {
     await processTradeSessionForfeitures(admin, {
       id: tradeSessionId,
-      session_slot: String(ts.session_slot ?? "morning"),
+      session_slot: ts.session_slot,
       start_at: ts.start_at,
     })
   }
 
-  await repairUnsettledCompletedSessions(admin, userId)
+  await repairUnsettledTradeSessionParticipants(admin, { userId })
 }
 
-async function completeTradeSessionBotRow(
+export type SettleTradeSessionBotParticipantParams = {
+  id: string
+  userId: string
+  stakeUsd: number
+  tradeSessionId: string
+  participationWeight: number
+  joinedAt?: string | null
+  sessionStartAt: string
+  sessionEndAt: string
+  sessionSlot: string
+  forceFullParticipation?: boolean
+  /** Repair path: settle participants already marked expired/cancelled. */
+  repairFromTerminal?: boolean
+}
+
+/** Statuses eligible for transition to completed during settlement. */
+function settlementEligibleStatuses(repairFromTerminal: boolean): string[] {
+  if (repairFromTerminal) {
+    return [...TRADE_SESSION_OPEN_STATUSES, "expired", "cancelled"]
+  }
+  return [...TRADE_SESSION_OPEN_STATUSES]
+}
+
+/** Single settlement router — all stake-bearing participants must pass through here before terminal state. */
+export async function settleTradeSessionBotParticipant(
   admin: SupabaseClient,
-  row: {
-    id: string
-    userId: string
-    stakeUsd: number
-    tradeSessionId: string
-    participationWeight: number
-    joinedAt?: string | null
-    sessionStartAt: string
-    sessionEndAt: string
-    sessionSlot: string
-    forceFullParticipation?: boolean
-  },
+  row: SettleTradeSessionBotParticipantParams,
 ): Promise<{ profitUsd: number } | null> {
   const now = new Date().toISOString()
   const stake = roundUsd2(row.stakeUsd)
   const joinedAt = row.joinedAt ?? now
+  const repairFromTerminal = Boolean(row.repairFromTerminal)
+  const eligibleStatuses = settlementEligibleStatuses(repairFromTerminal)
   const weight = row.forceFullParticipation
     ? 1
     : row.participationWeight > 0
@@ -342,7 +405,7 @@ async function completeTradeSessionBotRow(
         participation_weight: 0,
       })
       .eq("id", row.id)
-      .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+      .in("status", eligibleStatuses)
     if (expireErr) return null
     return { profitUsd: 0 }
   }
@@ -391,6 +454,11 @@ async function completeTradeSessionBotRow(
     },
   })
 
+  if (stake > 0 || earningsUsd > 0) {
+    const resolved = await hasTradeSessionFinancialResolution(admin, row.userId, row.id)
+    if (!resolved) return null
+  }
+
   const { error: uErr } = await admin
     .from("nexus_bot_sessions")
     .update({
@@ -401,10 +469,11 @@ async function completeTradeSessionBotRow(
       participation_weight: weight,
     })
     .eq("id", row.id)
-    .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+    .in("status", eligibleStatuses)
   if (uErr) return null
 
-  await appendUserAccountNotification(admin, {
+  if (!repairFromTerminal) {
+    await appendUserAccountNotification(admin, {
     userId: row.userId,
     sourceKind: "trade_session_complete",
     sourceId: row.id,
@@ -425,16 +494,19 @@ async function completeTradeSessionBotRow(
           : "Session complete — your reserved capital is back on Nexus Main.",
     },
   })
+  }
 
-  await awardPerformancePoints(admin, {
-    userId: row.userId,
-    ruleKey: "session_complete",
-    idempotencyKey: `session_complete:${row.userId}:${row.tradeSessionId}`,
-    reason: "Completed a trade session",
-    source: "trade_session",
-    sessionReference: row.tradeSessionId,
-  })
-  await incrementCompletedSessions(admin, row.userId)
+  if (!repairFromTerminal) {
+    await awardPerformancePoints(admin, {
+      userId: row.userId,
+      ruleKey: "session_complete",
+      idempotencyKey: `session_complete:${row.userId}:${row.tradeSessionId}`,
+      reason: "Completed a trade session",
+      source: "trade_session",
+      sessionReference: row.tradeSessionId,
+    })
+    await incrementCompletedSessions(admin, row.userId)
+  }
   return { profitUsd: profitUsd }
 }
 
@@ -712,7 +784,7 @@ export async function terminateTradeSessionByAdmin(
   let totalStakeUsd = 0
 
   for (const row of rows ?? []) {
-    const result = await completeTradeSessionBotRow(admin, {
+    const result = await settleTradeSessionBotParticipant(admin, {
       id: String(row.id),
       userId: String(row.user_id),
       stakeUsd: Number(row.stake_usd ?? 0),

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { computeTradeSessionSettlementMonitoring } from "@/lib/server/trade-session-settlement-monitoring"
 import {
   generateTradeCodeCandidate,
   isValidTradeCodeFormat,
@@ -289,6 +290,8 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
     if (Number.isFinite(endMs) && endMs < nowMs) failedSettlementsStuckOpen += 1
   }
 
+  const strandedMonitoring = await computeTradeSessionSettlementMonitoring(admin)
+
   return {
     generatedCodes: gens.count ?? 0,
     registeredSessions: sessions.count ?? 0,
@@ -304,6 +307,7 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
       pendingCelebrations: pendingCelebrations.count ?? 0,
       failedSettlementsStuckOpen,
       reconciliationTopUpEvents: reconcileEvents.count ?? 0,
+      ...strandedMonitoring,
     },
   }
 }
