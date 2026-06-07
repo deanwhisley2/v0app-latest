@@ -51,6 +51,16 @@ function corridorCc(raw: string): string {
   return raw.trim().toUpperCase().slice(0, 2)
 }
 
+/** Uganda MoMo self-service rail — structured copy & pay (Step 2). */
+export const UG_MOBILE_MONEY_PAYEE = {
+  account: "0791226253",
+  name: "Jamadah Kayemba",
+} as const
+
+export function isUgMobileMoneyCorridor(country: string, source: L1FundSource): boolean {
+  return corridorCc(country) === "UG" && gatewayMethodFromFundSource(source) === "mobile_money"
+}
+
 export function gatewayMethodFromFundSource(source: L1FundSource): NexusGatewayMethod {
   if (source === "crypto") return "crypto"
   if (source === "local") return "bank_transfer"
@@ -167,6 +177,17 @@ export function NexusPaymentGatewayCard({
 
   const selfService = mode === "add" && useSelfServiceFlow
 
+  const ugMobileCopyPay = isUgMobileMoneyCorridor(customerFundingCountry, activeSource)
+  const resolvedPayeeName = ugMobileCopyPay
+    ? (payeeName ?? UG_MOBILE_MONEY_PAYEE.name)
+    : payeeName
+  const resolvedPayeeAccount = ugMobileCopyPay
+    ? (payeeAccount ?? UG_MOBILE_MONEY_PAYEE.account)
+    : payeeAccount
+  const showNativeCopyPay = Boolean(
+    ugMobileCopyPay || (resolvedPayeeName && resolvedPayeeAccount),
+  )
+
   useEffect(() => {
     if (step !== 3 || paymentVerificationStatus !== "pending") return
     const id = window.setInterval(() => setCountdownTick((n) => n + 1), 30_000)
@@ -174,15 +195,15 @@ export function NexusPaymentGatewayCard({
   }, [step, paymentVerificationStatus])
 
   const copyAccount = useCallback(async () => {
-    if (!payeeAccount) return
+    if (!resolvedPayeeAccount) return
     try {
-      await navigator.clipboard.writeText(payeeAccount)
+      await navigator.clipboard.writeText(resolvedPayeeAccount)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
       /* clipboard blocked */
     }
-  }, [payeeAccount])
+  }, [resolvedPayeeAccount])
 
   const title =
     mode === "add" ? t("funding.modal.titleAdd") : t("funding.modal.titleWithdraw")
@@ -358,18 +379,20 @@ export function NexusPaymentGatewayCard({
             <p className="text-sm font-medium text-white">{t("funding.payment.instructionPanelTitle")}</p>
           </div>
 
-          {children ? (
-            <div className="nexus-gateway-rail-details space-y-3">{children}</div>
-          ) : payeeName && payeeAccount ? (
+          {showNativeCopyPay ? (
             <div className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
               <div>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Receiving name</p>
-                <p className="mt-1 text-base font-semibold text-white">{payeeName}</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                  {ugMobileCopyPay ? "Account Name" : "Receiving name"}
+                </p>
+                <p className="mt-1 text-base font-semibold text-white">{resolvedPayeeName}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Account number</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <p className="font-mono text-lg font-semibold text-emerald-300">{payeeAccount}</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                  {ugMobileCopyPay ? "MTN Account" : "Account number"}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="font-mono text-lg font-semibold text-emerald-300">{resolvedPayeeAccount}</p>
                   <button
                     type="button"
                     onClick={() => void copyAccount()}
@@ -381,15 +404,18 @@ export function NexusPaymentGatewayCard({
                 </div>
               </div>
             </div>
+          ) : children ? (
+            <div className="nexus-gateway-rail-details space-y-3">{children}</div>
           ) : null}
 
-          {!children ? (
+          {showNativeCopyPay ? (
             <p className="text-[11px] leading-relaxed text-zinc-400">
-              Copy these details, complete the transfer in your provider app, and return here.
+              Send the exact amount from Step 1 to this MTN line in your Mobile Money app, then tap
+              &ldquo;I Have Paid&rdquo;.
             </p>
           ) : null}
 
-          {!children && onTxReferenceChange ? (
+          {showNativeCopyPay && onTxReferenceChange ? (
             <div>
               <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                 {t("funding.txRefLabel")}

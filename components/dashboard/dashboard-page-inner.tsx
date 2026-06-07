@@ -129,6 +129,7 @@ import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/f
 import {
   NexusPaymentGatewayCard,
   fundSourceFromGatewayMethod,
+  isUgMobileMoneyCorridor,
   type NexusGatewayStep,
   type PaymentVerificationStatus,
 } from "@/components/dashboard/NexusPaymentGatewayCard"
@@ -3366,8 +3367,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               >
                 <div className="nexus-gateway-rail-details space-y-2 sm:space-y-3 [&_.bg-background]:bg-[#080b10] [&_.bg-card]:bg-[#080b10] [&_.bg-muted]:bg-white/5 [&_.border-border]:border-white/10 [&_.text-foreground]:text-zinc-100 [&_.text-muted-foreground]:text-zinc-400">
                 {(l1FundSource === "crypto" ||
-                  l1FundSource === "airtel" ||
-                  l1FundSource === "mpesa_ke") ? (
+                  l1FundSource === "mpesa_ke" ||
+                  (l1FundSource === "airtel" &&
+                    !isUgMobileMoneyCorridor(addFundsCorridorCountry, l1FundSource))) ? (
                 <FundingPaymentPanel
                   detailsOnly
                   hideInlineAmount
