@@ -41,7 +41,8 @@ type Props = {
   fundTxReference?: string
   onTxReferenceChange?: (value: string) => void
   onProceedToInstructions?: () => boolean | void
-  onConfirmPaid?: () => void | Promise<void>
+  /** Return true only when Step 3 in-card polling should open (default: close after submit). */
+  onConfirmPaid?: () => void | boolean | Promise<void | boolean>
   onRefreshPaymentStatus?: () => void | Promise<void>
   paymentVerificationStatus?: PaymentVerificationStatus
   paymentStatusMessage?: string
@@ -215,7 +216,9 @@ export function NexusPaymentGatewayCard({
   }
 
   const handleConfirmPaid = () => {
-    void Promise.resolve(onConfirmPaid?.()).then(() => setStep(3))
+    void Promise.resolve(onConfirmPaid?.()).then((result) => {
+      if (result === true) setStep(3)
+    })
   }
 
   const statusLine =
@@ -434,9 +437,10 @@ export function NexusPaymentGatewayCard({
             type="button"
             onClick={handleConfirmPaid}
             disabled={isProcessing}
-            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            I Have Paid
+            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            {isProcessing ? "Submitting request…" : "I Have Paid"}
           </button>
         </div>
       ) : null}

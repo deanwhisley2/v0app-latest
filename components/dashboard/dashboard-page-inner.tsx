@@ -337,6 +337,8 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     useState<PaymentVerificationStatus>("idle")
   const [withdrawPendingAckOpen, setWithdrawPendingAckOpen] = useState(false)
   const [withdrawPendingAckAmount, setWithdrawPendingAckAmount] = useState<string | null>(null)
+  const [depositPendingAckOpen, setDepositPendingAckOpen] = useState(false)
+  const [depositPendingAckAmount, setDepositPendingAckAmount] = useState<string | null>(null)
 
   const setTabProgrammatic = useCallback(
     (tab: string, source: string) => {
@@ -2230,15 +2232,23 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const raw = sessionStorage.getItem("nexus_withdraw_submitted")
-      if (!raw) return
-      sessionStorage.removeItem("nexus_withdraw_submitted")
-      const parsed = JSON.parse(raw) as { amountLabel?: string }
-      setWithdrawPendingAckAmount(parsed.amountLabel ?? null)
-      setWithdrawPendingAckOpen(true)
+      const withdrawRaw = sessionStorage.getItem("nexus_withdraw_submitted")
+      if (withdrawRaw) {
+        sessionStorage.removeItem("nexus_withdraw_submitted")
+        const parsed = JSON.parse(withdrawRaw) as { amountLabel?: string }
+        setWithdrawPendingAckAmount(parsed.amountLabel ?? null)
+        setWithdrawPendingAckOpen(true)
+        broadcastOperationalBump("notifications")
+        return
+      }
+      const depositRaw = sessionStorage.getItem("nexus_deposit_submitted")
+      if (!depositRaw) return
+      sessionStorage.removeItem("nexus_deposit_submitted")
+      const parsed = JSON.parse(depositRaw) as { amountLabel?: string }
+      setDepositPendingAckAmount(parsed.amountLabel ?? null)
+      setDepositPendingAckOpen(true)
       broadcastOperationalBump("notifications")
     } catch {
-      setWithdrawPendingAckOpen(true)
       broadcastOperationalBump("notifications")
     }
   }, [])
@@ -2454,6 +2464,42 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     withdrawalEligibility,
     t,
   ])
+
+  const completeDepositSubmission = useCallback(
+    (amountLabel: string, toastKey: string) => {
+      setGatewayStep(1)
+      setPaymentVerificationStatus("idle")
+      setFundTxReference("")
+      setFundNote("")
+      setFundPayerName("")
+      setFundPayerPhone("")
+      setFundAmount("")
+      setQualifiedRetailers([])
+      setOfficialCorridorFallback(null)
+      setSelectedOfficialRouteId("")
+      setSelectedRetailerId("")
+      setLocalMmWizardStep(1)
+      setLocalMmRetailersSearched(false)
+      setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
+
+      if (fundPageOnly) {
+        try {
+          sessionStorage.setItem(
+            "nexus_deposit_submitted",
+            JSON.stringify({ amountLabel }),
+          )
+        } catch {
+          /* private mode */
+        }
+        router.replace("/dashboard?tab=container")
+        return
+      }
+
+      showToast(t(toastKey), "success")
+      setShowFundModal(null)
+    },
+    [addFundsCorridorCountry, fundPageOnly, router, showToast, t],
+  )
 
   const refreshGatewayPaymentStatus = useCallback(async () => {
     try {
@@ -2677,18 +2723,18 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             }
             const st = String(out.deposit?.status ?? "")
             if (st === "credited") {
-              showToast(t("funding.toast.cryptoCredited"), "success")
-              setFundTxReference("")
-              setFundNote("")
-              setFundAmount("")
-              setShowFundModal(null)
+              completeDepositSubmission(
+                formatUserMoney(amount),
+                "funding.toast.cryptoCredited",
+              )
             } else if (st === "failed") {
               throw new Error(out.deposit?.failure_reason || out.verifyMessage || t("funding.error.fundActionFailed"))
             } else {
-              showToast(t("funding.toast.cryptoVerifying"), "success")
-              setFundTxReference("")
+              completeDepositSubmission(
+                formatUserMoney(amount),
+                "funding.toast.cryptoVerifying",
+              )
             }
-            setL1FundSource("crypto")
             return
           }
 
@@ -2723,14 +2769,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
             }
             setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
-            showToast(t("funding.toast.adminAirtelQueued"), "success")
-            setFundTxReference("")
-            setFundNote("")
-            setFundPayerName("")
-            setFundPayerPhone("")
-            setL1FundSource("crypto")
-            setShowFundModal(null)
-            setFundAmount("")
+            completeDepositSubmission(
+              formatLocalFiatAmount(amountRaw || amount, airtelFiat, locale),
+              "funding.toast.adminAirtelQueued",
+            )
             return
           }
 
@@ -2765,14 +2807,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
             }
             setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
-            showToast(t("funding.toast.adminAirtelQueued"), "success")
-            setFundTxReference("")
-            setFundNote("")
-            setFundPayerName("")
-            setFundPayerPhone("")
-            setL1FundSource("crypto")
-            setShowFundModal(null)
-            setFundAmount("")
+            completeDepositSubmission(
+              formatLocalFiatAmount(amountRaw || amount, kesFiat, locale),
+              "funding.toast.adminAirtelQueued",
+            )
             return
           }
 
@@ -2826,23 +2864,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
           const out = (await res.json().catch(() => ({}))) as { error?: string; request?: RetailerFundingRequest }
           if (!res.ok) throw new Error(localizeFundingWithdrawalApiMessage(out.error || "Could not create pending funding", t))
           setFundRequests((prev) => [out.request as RetailerFundingRequest, ...prev])
-          showToast(
-            selectedOfficialRouteId ? t("funding.toast.officialQueued") : t("funding.toast.retailerPending"),
-            "success",
+          completeDepositSubmission(
+            formatLocalFiatAmount(amountRaw || amount, localFundingFiat, locale),
+            selectedOfficialRouteId ? "funding.toast.officialQueued" : "funding.toast.retailerPending",
           )
-          setQualifiedRetailers([])
-          setOfficialCorridorFallback(null)
-          setSelectedOfficialRouteId("")
-          setSelectedRetailerId("")
-          setFundTxReference("")
-          setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
-          setLocalMmRetailersSearched(false)
-          setLocalMmWizardStep(1)
-          setShowFundModal(null)
-          setFundAmount("")
-          setFundNote("")
-          setFundPayerName("")
-          setFundPayerPhone("")
           return
         }
 
@@ -2897,6 +2922,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     router,
     locale,
     dispatchCustomerLedgerBump,
+    completeDepositSubmission,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -3310,10 +3336,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 onConfirmPaid={() => {
                   if (!fundTxReference.trim() && l1FundSource !== "crypto") {
                     showToast(t("funding.error.pickDeskAndTxRef"), "error")
-                    return
+                    return false
                   }
-                  setPaymentVerificationStatus("pending")
                   handleFundSubmit()
+                  return false
                 }}
                 onRefreshPaymentStatus={refreshGatewayPaymentStatus}
                 paymentVerificationStatus={paymentVerificationStatus}
@@ -4573,6 +4599,40 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               onClick={() => {
                 setWithdrawPendingAckOpen(false)
                 setWithdrawPendingAckAmount(null)
+              }}
+            >
+              Back to dashboard
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {depositPendingAckOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="deposit-pending-ack-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-emerald-500/30 bg-[#0d1117] p-5 shadow-2xl">
+            <h2 id="deposit-pending-ack-title" className="text-lg font-semibold text-white">
+              Deposit submitted
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {depositPendingAckAmount
+                ? `Your deposit of ${depositPendingAckAmount} has been submitted and is pending verification.`
+                : "Your deposit has been submitted and is pending verification."}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">
+              Expected completion within 2–10 minutes. We sent a notification to your inbox and will update you when
+              processing completes.
+            </p>
+            <button
+              type="button"
+              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+              onClick={() => {
+                setDepositPendingAckOpen(false)
+                setDepositPendingAckAmount(null)
               }}
             >
               Back to dashboard
