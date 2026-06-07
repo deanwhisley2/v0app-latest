@@ -18,6 +18,7 @@ import {
   KENYA_MPESA_BUY_GOODS_USSD,
 } from "@/lib/server/admin-payment-config"
 import { createAdminClient } from "@/lib/supabaseAdmin"
+import { loadUgAuthoritativeDepositRoutes } from "@/lib/server/ug-deposit-receive-routes"
 
 /** Public payment rails for Add Funds (Level-5 admin receive). */
 export async function GET(request: Request) {
@@ -37,6 +38,10 @@ export async function GET(request: Request) {
       .slice(0, 2)
     const ugandaAirtelEligible = isUgandaAdminAirtelEligible(fundingCountry)
     const kenyaMpesaTillEligible = isKenyaAdminMpesaEligible(fundingCountry)
+    const ugDepositRoutes =
+      fundingCountry === "UG" || !fundingCountry
+        ? await loadUgAuthoritativeDepositRoutes(admin)
+        : null
 
     return NextResponse.json({
       fundingCountryCode: fundingCountry.length === 2 ? fundingCountry : null,
@@ -74,6 +79,7 @@ export async function GET(request: Request) {
             referenceHint: "Paste your M-PESA transaction code after payment.",
           }
         : null,
+      ugDepositRoutes,
       maxRetailersOnPage: MAX_RETAILERS_ON_PAYMENT_PAGE,
     })
   } catch (e) {

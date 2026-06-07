@@ -59,12 +59,11 @@ function optionForFunding(
   network: string | null,
   preferredSource?: FundPayerSource | null,
 ): (typeof profile.payoutOptions)[number] | null {
+  const listed = listFundPayerOptionsForNetwork(profile, network)
   if (preferredSource && preferredSource !== "manual") {
-    const picked = profile.payoutOptions.find((o) => o.id === preferredSource)
+    const picked = listed.find((o) => o.id === preferredSource)
     if (picked) return picked
   }
-
-  const listed = listFundPayerOptionsForNetwork(profile, network)
   if (listed.length === 1) return listed[0]
   if (listed.length > 1) return listed[0]
 
@@ -121,12 +120,44 @@ export function bindFundPayerFromProfile(
   }
 }
 
+/** True when the user typed a full sender line (not a masked registered preview). */
+export function fundPayerManualIdentityComplete(manualName: string, manualPhone: string): boolean {
+  const phone = manualPhone.trim()
+  return Boolean(manualName.trim() && phone.length > 0 && !phone.includes("*"))
+}
+
+/** Whether the funding submit body should send inline payerDisplayName / payerPhone. */
+export function fundPayerSubmitUsesManualIdentity(
+  payerSource: FundPayerSource,
+  manualName: string,
+  manualPhone: string,
+): boolean {
+  return fundPayerManualIdentityComplete(manualName, manualPhone) || payerSource === "manual"
+}
+
+export function fundPayerSubmitPayload(
+  payerSource: FundPayerSource,
+  manualName: string,
+  manualPhone: string,
+): { payerDisplayName: string; payerPhone: string } | { payerSource: FundPayerSource } {
+  if (fundPayerSubmitUsesManualIdentity(payerSource, manualName, manualPhone)) {
+    return {
+      payerDisplayName: manualName.trim(),
+      payerPhone: manualPhone.trim(),
+    }
+  }
+  return { payerSource }
+}
+
 export function addFundsPayerIsReady(
   payerSource: FundPayerSource,
   profile: PublicSecurityProfile | null,
   manualName: string,
   manualPhone: string,
 ): boolean {
+  if (fundPayerManualIdentityComplete(manualName, manualPhone)) {
+    return true
+  }
   if (payerSource !== "manual") {
     return Boolean(profile?.hasMinimumPayoutLine)
   }

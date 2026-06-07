@@ -8,7 +8,9 @@ import { PaymentNetworkBadge, type NetworkBadgeKey } from "@/components/brand/pa
 import type { L1FundSource } from "@/components/dashboard/funding-payment-panel"
 import {
   type UgMoMoNetwork,
-  ugMoMoPayeeForNetwork,
+  ugPayeeFromDepositRoutes,
+  ugDepositReceiveRoutesFallback,
+  type UgDepositReceiveRoutesClient,
   UG_MTN_RECEIVE,
 } from "@/lib/client/ug-momo-payment-rails"
 
@@ -43,6 +45,8 @@ type Props = {
   /** Optional Airtel override from `/api/user/funding-payment-config`. */
   ugAirtelAccount?: string
   ugAirtelAccountName?: string
+  /** Live MTN/Airtel receive lines from payment-route engine (DB-first). */
+  ugDepositRoutes?: UgDepositReceiveRoutesClient | null
   gatewayStep?: NexusGatewayStep
   onGatewayStepChange?: (step: NexusGatewayStep) => void
   depositTierLabel?: string
@@ -309,6 +313,7 @@ export function NexusPaymentGatewayCard({
   onUgMoMoNetworkChange,
   ugAirtelAccount,
   ugAirtelAccountName,
+  ugDepositRoutes = null,
   gatewayStep: controlledStep,
   onGatewayStepChange,
   depositTierLabel,
@@ -361,16 +366,23 @@ export function NexusPaymentGatewayCard({
   const stepTotal = ugIsolated ? 4 : 3
 
   const ugPayee = useMemo(() => {
-    const base = ugMoMoPayeeForNetwork(ugNetwork)
-    if (ugNetwork === "Airtel") {
+    const routes = ugDepositRoutes ?? ugDepositReceiveRoutesFallback()
+    const row = ugPayeeFromDepositRoutes(routes, ugNetwork)
+    if (ugNetwork === "Airtel" && (ugAirtelAccount || ugAirtelAccountName)) {
       return {
-        ...base,
-        account: ugAirtelAccount ?? base.account,
-        name: ugAirtelAccountName ?? base.name,
+        account: ugAirtelAccount ?? row.account,
+        name: ugAirtelAccountName ?? row.name,
+        accountLabel: row.accountLabel,
+        ussdPrefix: row.ussdPrefix,
       }
     }
-    return base
-  }, [ugNetwork, ugAirtelAccount, ugAirtelAccountName])
+    return {
+      account: row.account,
+      name: row.name,
+      accountLabel: row.accountLabel,
+      ussdPrefix: row.ussdPrefix,
+    }
+  }, [ugNetwork, ugDepositRoutes, ugAirtelAccount, ugAirtelAccountName])
 
   const legacyCopyPay = !ugIsolated && isUgMobileMoneyCorridor(customerFundingCountry, activeSource)
   const resolvedPayeeName = legacyCopyPay ? (payeeName ?? UG_MTN_RECEIVE.name) : payeeName
@@ -641,7 +653,7 @@ export function NexusPaymentGatewayCard({
           {onPayerNameChange ? (
             <div>
               <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                Sender&apos;s Mobile Name
+                Sender&apos;s Account Name
               </label>
               <input
                 type="text"

@@ -133,11 +133,12 @@ import {
   type NexusGatewayStep,
   type PaymentVerificationStatus,
 } from "@/components/dashboard/NexusPaymentGatewayCard"
-import { type UgMoMoNetwork } from "@/lib/client/ug-momo-payment-rails"
+import { type UgMoMoNetwork, type UgDepositReceiveRoutesClient } from "@/lib/client/ug-momo-payment-rails"
 import {
   addFundsPayerIsReady,
   bindFundPayerFromOption,
   bindFundPayerFromProfile,
+  fundPayerSubmitPayload,
   listFundPayerOptionsForNetwork,
   type FundPayerSource,
 } from "@/lib/client/fund-payer-from-profile"
@@ -343,6 +344,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const [ugMoMoNetwork, setUgMoMoNetwork] = useState<UgMoMoNetwork>("MTN")
   const [ugAirtelMerchantAccount, setUgAirtelMerchantAccount] = useState<string | undefined>()
   const [ugAirtelMerchantName, setUgAirtelMerchantName] = useState<string | undefined>()
+  const [ugDepositRoutes, setUgDepositRoutes] = useState<UgDepositReceiveRoutesClient | null>(null)
   const [pendingDepositAmountLabel, setPendingDepositAmountLabel] = useState<string | null>(null)
 
   const setTabProgrammatic = useCallback(
@@ -2271,6 +2273,29 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
   }, [fundPageOnly, addFundsCorridorCountry])
 
+  useEffect(() => {
+    if (fundPageOnly !== "add") return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token || cancelled) return
+        const { profile } = await fetchSecurityProfileForAction(token)
+        if (cancelled || !profile) return
+        setFundPayerProfile(profile)
+        applyRegisteredFundPayer(profile, null)
+      } catch {
+        /* profile optional — inline sender entry still allowed */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [fundPageOnly, applyRegisteredFundPayer])
+
   useBodyScrollLock(Boolean(showFundModal) && !fundPageOnly)
 
   useEffect(() => {
@@ -2307,13 +2332,20 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
       try {
         const res = await fetch("/api/user/funding-payment-config", { cache: "no-store" })
         const j = (await res.json().catch(() => ({}))) as {
-          ugandaAirtel?: { merchantId?: string; legalPayeeName?: string } | null
+          ugandaAirtel?: { merchantId?: string; legalPayeeName?: string; merchantName?: string } | null
+          ugDepositRoutes?: UgDepositReceiveRoutesClient | null
         }
         if (cancelled) return
-        setUgAirtelMerchantAccount(j.ugandaAirtel?.merchantId)
-        setUgAirtelMerchantName(j.ugandaAirtel?.legalPayeeName)
+        setUgDepositRoutes(j.ugDepositRoutes ?? null)
+        setUgAirtelMerchantAccount(j.ugandaAirtel?.merchantId ?? j.ugDepositRoutes?.Airtel.account)
+        setUgAirtelMerchantName(
+          j.ugandaAirtel?.merchantName ??
+            j.ugandaAirtel?.legalPayeeName ??
+            j.ugDepositRoutes?.Airtel.name,
+        )
       } catch {
         if (!cancelled) {
+          setUgDepositRoutes(null)
           setUgAirtelMerchantAccount(undefined)
           setUgAirtelMerchantName(undefined)
         }
@@ -2800,20 +2832,13 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             }
             if (!(amount > 0)) throw new Error(t("funding.error.enterFundedAmount"))
             if (!fundTxReference.trim()) throw new Error(t("funding.error.pickDeskAndTxRef"))
-            const payerPhoneForSubmit =
-              fundPayerPhone.trim() ||
-              (fundPayerBinding.hasRegisteredLine ? fundPayerBinding.displayPhone : "")
             if (ugNetworkIsolatedDeposit) {
-              if (!fundPayerName.trim() && fundPayerSource === "manual") {
+              if (!fundPayerName.trim()) {
                 throw new Error(t("funding.error.senderIdentity"))
               }
-              if (
-                fundPayerSource === "manual" &&
-                !payerPhoneForSubmit.trim()
-              ) {
-                throw new Error(t("funding.error.senderIdentity"))
-              }
-            } else if (!addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)) {
+            } else if (
+              !addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)
+            ) {
               throw new Error(t("funding.error.senderIdentity"))
             }
             const airtelFiat = corridorFiatForCountryIso2(addFundsCorridorCountry) ?? "UGX"
@@ -2828,12 +2853,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 txReference: fundTxReference.trim(),
                 fundChannel: "admin_airtel_ug",
                 mobileNetwork: ugNetworkIsolatedDeposit ? ugMoMoNetwork : "Airtel",
-                ...(fundPayerSource === "manual"
+                ...(ugNetworkIsolatedDeposit
                   ? {
                       payerDisplayName: fundPayerName.trim(),
-                      payerPhone: payerPhoneForSubmit.trim(),
+                      payerPhone: "manual",
                     }
-                  : { payerSource: fundPayerSource }),
+                  : fundPayerSubmitPayload(fundPayerSource, fundPayerName, fundPayerPhone)),
                 fundingCountryCode: addFundsCorridorCountry,
                 note: ugNetworkIsolatedDeposit
                   ? `${ugMoMoNetwork} self-service deposit`.trim()
@@ -2874,9 +2899,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 inputCurrency: kesFiat,
                 txReference: fundTxReference.trim(),
                 fundChannel: "admin_mpesa_ke",
-                ...(fundPayerSource === "manual"
-                  ? { payerDisplayName: fundPayerName.trim(), payerPhone: fundPayerPhone.trim() }
-                  : { payerSource: fundPayerSource }),
+                ...fundPayerSubmitPayload(fundPayerSource, fundPayerName, fundPayerPhone),
                 fundingCountryCode: addFundsCorridorCountry,
                 note: fundNote.trim() || null,
               }),
@@ -2929,9 +2952,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               mobileNetwork: fundMobileNetwork || null,
               fundChannel: "local_mobile",
               fundingCountryCode: ccSave.length === 2 ? ccSave : undefined,
-              ...(fundPayerSource === "manual"
-                ? { payerDisplayName: fundPayerName.trim(), payerPhone: fundPayerPhone.trim() }
-                : { payerSource: fundPayerSource }),
+              ...fundPayerSubmitPayload(fundPayerSource, fundPayerName, fundPayerPhone),
               ...(localMmSelectedDesk?.payment_rotation_line_id && localMmSelectedDesk?.payment_rotation_pool_id
                 ? {
                     paymentRotationLineId: localMmSelectedDesk.payment_rotation_line_id,
@@ -3406,6 +3427,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 }}
                 ugAirtelAccount={ugAirtelMerchantAccount}
                 ugAirtelAccountName={ugAirtelMerchantName}
+                ugDepositRoutes={ugDepositRoutes}
                 gatewayStep={gatewayStep}
                 onGatewayStepChange={setGatewayStep}
                 depositTierLabel={
@@ -3413,8 +3435,8 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                     ? `${fundAmount} ${smartAmountCurrencyForFund}`
                     : customerMinDepositDisplay
                 }
-                payerPhone={ugNetworkIsolatedDeposit ? undefined : fundPayerPhone}
-                onPayerPhoneChange={ugNetworkIsolatedDeposit ? undefined : setFundPayerPhone}
+                payerPhone={fundPayerPhone}
+                onPayerPhoneChange={setFundPayerPhone}
                 payerName={fundPayerName}
                 onPayerNameChange={setFundPayerName}
                 onProceedToInstructions={() => {
@@ -3424,8 +3446,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   }
                   if (
                     !ugNetworkIsolatedDeposit &&
-                    !fundPayerPhone.trim() &&
-                    !fundPayerBinding.hasRegisteredLine
+                    !addFundsPayerIsReady(fundPayerSource, fundPayerProfile, fundPayerName, fundPayerPhone)
                   ) {
                     showToast(t("funding.error.senderIdentity"), "error")
                     return false
@@ -3439,7 +3460,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                       showToast(t("funding.error.pickDeskAndTxRef"), "error")
                       return false
                     }
-                    if (!fundPayerName.trim() && fundPayerSource === "manual") {
+                    if (!fundPayerName.trim()) {
                       showToast(t("funding.error.senderIdentity"), "error")
                       return false
                     }
