@@ -137,8 +137,8 @@ export function NexusPaymentGatewayCard({
   depositTierLabel,
   payerPhone = "",
   onPayerPhoneChange,
-  payeeName = "Jamadah Kayemba",
-  payeeAccount = "0791226253",
+  payeeName,
+  payeeAccount,
   fundTxReference = "",
   onTxReferenceChange,
   onProceedToInstructions,
@@ -355,12 +355,12 @@ export function NexusPaymentGatewayCard({
             <PaymentNetworkBadge
               network={activeMethod === "crypto" ? "USDT" : activeMethod === "mobile_money" ? "MTN" : "BANK"}
             />
-            <p className="text-sm font-medium text-white">Manual copy &amp; pay</p>
+            <p className="text-sm font-medium text-white">{t("funding.payment.instructionPanelTitle")}</p>
           </div>
 
-          {activeMethod === "crypto" ? (
-            <div className="nexus-gateway-rail-details">{children}</div>
-          ) : (
+          {children ? (
+            <div className="nexus-gateway-rail-details space-y-3">{children}</div>
+          ) : payeeName && payeeAccount ? (
             <div className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-zinc-500">Receiving name</p>
@@ -381,13 +381,15 @@ export function NexusPaymentGatewayCard({
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
-          <p className="text-[11px] leading-relaxed text-zinc-400">
-            Copy these details, complete the transfer in your provider app, and return here.
-          </p>
+          {!children ? (
+            <p className="text-[11px] leading-relaxed text-zinc-400">
+              Copy these details, complete the transfer in your provider app, and return here.
+            </p>
+          ) : null}
 
-          {onTxReferenceChange ? (
+          {!children && onTxReferenceChange ? (
             <div>
               <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                 {t("funding.txRefLabel")}
@@ -518,11 +520,7 @@ export function NexusPaymentGatewayCard({
         <div className="relative border-t border-white/5 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">{children}</div>
       ) : null}
 
-      {mode === "withdraw" && !selfService ? (
-        <div className="relative border-t border-white/5 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">{children}</div>
-      ) : null}
-
-      {isProcessing && !selfService ? (
+      {isProcessing && !selfService && mode !== "withdraw" ? (
         <div
           className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[#0d1117]/88 backdrop-blur-sm"
           role="status"

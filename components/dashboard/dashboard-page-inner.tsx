@@ -334,6 +334,8 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const [gatewayStep, setGatewayStep] = useState<NexusGatewayStep>(1)
   const [paymentVerificationStatus, setPaymentVerificationStatus] =
     useState<PaymentVerificationStatus>("idle")
+  const [withdrawPendingAckOpen, setWithdrawPendingAckOpen] = useState(false)
+  const [withdrawPendingAckAmount, setWithdrawPendingAckAmount] = useState<string | null>(null)
 
   const setTabProgrammatic = useCallback(
     (tab: string, source: string) => {
@@ -2225,6 +2227,22 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   }, [showFundModal])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const raw = sessionStorage.getItem("nexus_withdraw_submitted")
+      if (!raw) return
+      sessionStorage.removeItem("nexus_withdraw_submitted")
+      const parsed = JSON.parse(raw) as { amountLabel?: string }
+      setWithdrawPendingAckAmount(parsed.amountLabel ?? null)
+      setWithdrawPendingAckOpen(true)
+      broadcastOperationalBump("notifications")
+    } catch {
+      setWithdrawPendingAckOpen(true)
+      broadcastOperationalBump("notifications")
+    }
+  }, [])
+
+  useEffect(() => {
     if (!fundPageOnly) return
     setShowFundModal(fundPageOnly)
     setFundAmount("")
@@ -2236,7 +2254,8 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   useBodyScrollLock(Boolean(showFundModal) && !fundPageOnly)
 
   useEffect(() => {
-    if (showFundModal !== "add" || l1FundSource !== "crypto") return
+    const addOpen = showFundModal === "add" || fundPageOnly === "add"
+    if (!addOpen || l1FundSource !== "crypto") return
     let cancelled = false
     ;(async () => {
       try {
@@ -2258,7 +2277,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     return () => {
       cancelled = true
     }
-  }, [showFundModal, l1FundSource])
+  }, [showFundModal, fundPageOnly, l1FundSource])
 
   const loadWithdrawalEligibility = useCallback(async () => {
     if (isGuestSession || !user || operationalWorkspace) {
@@ -2605,6 +2624,21 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
           if (!res.ok) throw new Error(localizeFundingWithdrawalApiMessage(out.error, t))
           setMainBalance(Number(out.balances?.available_balance ?? mainBalance))
           setWithdrawalPendingBalance(Number(out.balances?.withdrawal_pending_balance ?? withdrawalPendingBalance))
+          dispatchCustomerLedgerBump("withdrawal_requests")
+          if (fundPageOnly) {
+            try {
+              sessionStorage.setItem(
+                "nexus_withdraw_submitted",
+                JSON.stringify({
+                  amountLabel: formatLocalFiatAmount(amountRaw || amount, currency, locale),
+                }),
+              )
+            } catch {
+              /* private mode */
+            }
+            router.replace("/dashboard?tab=container")
+            return
+          }
           showToast(t("withdrawal.toast.success"), "success")
           setShowFundModal(null)
           setFundAmount("")
@@ -2858,6 +2892,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     localMmWizardStep,
     fundPaymentProofDataUrl,
     t,
+    fundPageOnly,
+    router,
+    locale,
+    dispatchCustomerLedgerBump,
   ])
 
   const handleAdminFundingAction = useCallback(async (requestId: string, action: "approve" | "reject" | "resolve") => {
@@ -3192,6 +3230,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             {showFundModal === "withdraw" && customerRetailFunding ? (
               <NexusPaymentGatewayCard
                 mode="withdraw"
+                useSelfServiceFlow={false}
                 fundAmount={fundAmount}
                 onFundAmountChange={handleFundAmountChange}
                 fundAmountLocale={smartAmountLocale}
@@ -3256,12 +3295,6 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 }
                 payerPhone={fundPayerPhone}
                 onPayerPhoneChange={setFundPayerPhone}
-                payeeName={fundPayerName.trim() || fundPayerBinding.displayName || "Jamadah Kayemba"}
-                payeeAccount={
-                  localMmSelectedDesk
-                    ? String(localMmSelectedDesk.payment_numbers?.[0]?.value ?? "0791226253")
-                    : "0791226253"
-                }
                 onProceedToInstructions={() => {
                   if (!fundPayerPhone.trim() && !fundPayerBinding.hasRegisteredLine) {
                     showToast(t("funding.error.senderIdentity"), "error")
@@ -3332,7 +3365,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 t={t}
               >
                 <div className="nexus-gateway-rail-details space-y-2 sm:space-y-3 [&_.bg-background]:bg-[#080b10] [&_.bg-card]:bg-[#080b10] [&_.bg-muted]:bg-white/5 [&_.border-border]:border-white/10 [&_.text-foreground]:text-zinc-100 [&_.text-muted-foreground]:text-zinc-400">
-                {l1FundSource === "crypto" ? (
+                {(l1FundSource === "crypto" ||
+                  l1FundSource === "airtel" ||
+                  l1FundSource === "mpesa_ke") ? (
                 <FundingPaymentPanel
                   detailsOnly
                   hideInlineAmount
@@ -3374,7 +3409,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 />
                 ) : null}
 
-                {l1FundSource === "crypto" && showFundRegisteredPayerPicker ? (
+                {showFundRegisteredPayerPicker &&
+                (l1FundSource === "airtel" ||
+                  l1FundSource === "mpesa_ke" ||
+                  l1FundSource === "crypto") ? (
                   <RegisteredPayerPicker
                     options={fundPayerOptions}
                     selectedSource={fundPayerSource}
@@ -4507,6 +4545,39 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
           router.push("/settings/deposit-withdraw")
         }}
       />
+
+      {withdrawPendingAckOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="withdraw-pending-ack-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-emerald-500/30 bg-[#0d1117] p-5 shadow-2xl">
+            <h2 id="withdraw-pending-ack-title" className="text-lg font-semibold text-white">
+              Waiting for approval
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {withdrawPendingAckAmount
+                ? `Your withdrawal of ${withdrawPendingAckAmount} has been submitted and is pending review.`
+                : "Your withdrawal has been submitted and is pending review."}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">
+              We sent a notification to your inbox. You will be updated when processing completes.
+            </p>
+            <button
+              type="button"
+              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+              onClick={() => {
+                setWithdrawPendingAckOpen(false)
+                setWithdrawPendingAckAmount(null)
+              }}
+            >
+              Back to dashboard
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {!isGuestSession ? <TradeCelebrationBootstrap /> : null}
       </>
