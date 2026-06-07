@@ -3501,6 +3501,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 }
                 showAmountField={!(l1FundSource === "local" && localMmWizardStep === 1)}
                 isProcessing={isFundProcessing}
+                userEmail={user?.email ?? currentUser?.email ?? ""}
                 t={t}
               >
                 {!ugNetworkIsolatedDeposit ? (

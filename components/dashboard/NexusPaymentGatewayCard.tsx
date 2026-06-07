@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Building2, Check, Copy, Loader2, Lock, RefreshCw, Smartphone, Wallet } from "lucide-react"
+import { Building2, Check, ChevronLeft, Copy, Loader2, Lock, RefreshCw, Smartphone, Wallet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { PaymentNetworkBadge, type NetworkBadgeKey } from "@/components/brand/payment-network-badge"
@@ -61,6 +61,8 @@ type Props = {
   onRefreshPaymentStatus?: () => void | Promise<void>
   paymentVerificationStatus?: PaymentVerificationStatus
   paymentStatusMessage?: string
+  /** Nexus login email — shown in MTN MoMo reason / reference step. */
+  userEmail?: string
 }
 
 function corridorCc(raw: string): string {
@@ -198,6 +200,94 @@ function NetworkPayeeBlock({
   )
 }
 
+function WizardBackButton({ onClick, label = "Back" }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition-colors hover:border-white/25 hover:text-white"
+    >
+      <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+      {label}
+    </button>
+  )
+}
+
+function MtnMoMoQuickGuide({
+  recipientNumber,
+  recipientName,
+  amountLabel,
+  reasonEmail,
+}: {
+  recipientNumber: string
+  recipientName: string
+  amountLabel: string
+  reasonEmail: string
+}) {
+  const steps = [
+    { title: "Dial the USSD code", detail: "Open your phone dialer and enter *165#." },
+    { title: "Select Send Money", detail: "Choose Send Money (usually option 1)." },
+    { title: "Choose Mobile User", detail: "Select MTN User or Mobile User." },
+    {
+      title: "Enter the phone number",
+      detail: (
+        <>
+          Recipient MTN number:{" "}
+          <span className="font-mono font-semibold text-[#FFCC00]">{recipientNumber}</span>
+          {recipientName ? (
+            <>
+              {" "}
+              · <span className="font-medium text-white">{recipientName}</span>
+            </>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      title: "Enter amount",
+      detail: (
+        <>
+          Send exactly{" "}
+          <span className="font-mono font-semibold text-emerald-300">{amountLabel || "your Step 1 amount"}</span>.
+        </>
+      ),
+    },
+    {
+      title: "Enter reason",
+      detail: (
+        <>
+          Use your Nexus login email:{" "}
+          <span className="break-all font-medium text-white">{reasonEmail}</span>
+        </>
+      ),
+    },
+    { title: "Confirm with PIN", detail: "Enter your Mobile Money PIN to authorize the transfer." },
+  ]
+
+  return (
+    <div className="rounded-xl border border-[#FFCC00]/30 bg-[#FFCC00]/5 p-3.5 sm:p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#FFCC00]">
+        MTN MoMo quick guide
+      </p>
+      <ol className="mt-3 space-y-2.5">
+        {steps.map((item, index) => (
+          <li key={item.title} className="flex gap-2.5 text-[11px] leading-snug text-zinc-300">
+            <span
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FFCC00]/20 text-[10px] font-bold text-[#FFCC00]"
+              aria-hidden
+            >
+              {index + 1}
+            </span>
+            <span>
+              <span className="font-semibold text-white">{item.title}.</span> {item.detail}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 export function NexusPaymentGatewayCard({
   mode,
   activeSource = "crypto",
@@ -236,6 +326,7 @@ export function NexusPaymentGatewayCard({
   onRefreshPaymentStatus,
   paymentVerificationStatus = "idle",
   paymentStatusMessage,
+  userEmail = "",
 }: Props) {
   const [internalStep, setInternalStep] = useState<NexusGatewayStep>(1)
   const [internalUgNetwork, setInternalUgNetwork] = useState<UgMoMoNetwork>("MTN")
@@ -331,6 +422,14 @@ export function NexusPaymentGatewayCard({
       if (result === true) setStep(ugIsolated ? 4 : 3)
     })
   }
+
+  const mtnGuideAmountLabel = useMemo(() => {
+    if (depositTierLabel?.trim()) return depositTierLabel
+    if (fundAmount.trim()) return `${fundAmount} ${fundAmountCurrency}`.trim()
+    return ""
+  }, [depositTierLabel, fundAmount, fundAmountCurrency])
+
+  const mtnReasonEmail = userEmail.trim() || t("funding.payment.yourLoginEmail")
 
   const statusLine =
     paymentStatusMessage ??
@@ -485,24 +584,43 @@ export function NexusPaymentGatewayCard({
             onCopy={() => void copyAccount(ugPayee.account)}
           />
 
-          <p className="text-[11px] leading-relaxed text-zinc-400">
-            Copy these exact details, open your mobile provider app, make the manual transfer, and
-            return here.
-          </p>
+          {ugNetwork === "MTN" ? (
+            <MtnMoMoQuickGuide
+              recipientNumber={ugPayee.account}
+              recipientName={ugPayee.name}
+              amountLabel={mtnGuideAmountLabel}
+              reasonEmail={mtnReasonEmail}
+            />
+          ) : (
+            <p className="text-[11px] leading-relaxed text-zinc-400">
+              Copy these exact details, open your Airtel Money app, make the manual transfer, and
+              return here.
+            </p>
+          )}
 
-          <button
-            type="button"
-            onClick={handleSentMoney}
-            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
-          >
-            I Have Sent the Money
-          </button>
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2">
+            <WizardBackButton onClick={() => setStep(1)} label="Edit amount" />
+            <button
+              type="button"
+              onClick={handleSentMoney}
+              className="flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              I Have Sent the Money
+            </button>
+          </div>
         </div>
       ) : null}
 
       {ugIsolated && step === 3 ? (
         <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
           <p className="text-sm font-medium text-white">Confirm your transfer</p>
+
+          {ugNetwork === "MTN" ? (
+            <p className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+              Paste the MTN confirmation code from your SMS. Reason on the transfer should match{" "}
+              <span className="break-all font-medium text-white">{mtnReasonEmail}</span>.
+            </p>
+          ) : null}
 
           {onTxReferenceChange ? (
             <div>
@@ -536,15 +654,18 @@ export function NexusPaymentGatewayCard({
             </div>
           ) : null}
 
-          <button
-            type="button"
-            onClick={handleConfirmPaid}
-            disabled={isProcessing}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {isProcessing ? "Submitting request…" : "Confirm Payment Completed"}
-          </button>
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2">
+            <WizardBackButton onClick={() => setStep(2)} label="Back" />
+            <button
+              type="button"
+              onClick={handleConfirmPaid}
+              disabled={isProcessing}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {isProcessing ? "Submitting request…" : "Confirm Payment Completed"}
+            </button>
+          </div>
         </div>
       ) : null}
 
