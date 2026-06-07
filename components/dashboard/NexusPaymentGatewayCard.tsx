@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Building2, Check, ChevronLeft, Copy, Loader2, Lock, RefreshCw, Smartphone, Wallet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
@@ -20,6 +20,7 @@ export type PaymentVerificationStatus = "idle" | "pending" | "confirmed" | "fail
 
 const NEXUS_GATE_EMERALD = "#00b87c"
 const NEXUS_GATE_OBSIDIAN = "#0d1117"
+const DEPOSIT_TRANSMISSION_SECONDS = 45
 
 type Props = {
   mode: "add" | "withdraw"
@@ -62,6 +63,8 @@ type Props = {
   onProceedToProof?: () => boolean | void
   /** Return true to open Step 4 in-card processing after submit. */
   onConfirmPaid?: () => void | boolean | Promise<void | boolean>
+  /** After 45s handoff success — release user to dashboard with under-review banner. */
+  onDepositHandoffComplete?: () => void
   onRefreshPaymentStatus?: () => void | Promise<void>
   paymentVerificationStatus?: PaymentVerificationStatus
   paymentStatusMessage?: string
@@ -328,6 +331,7 @@ export function NexusPaymentGatewayCard({
   onProceedToInstructions,
   onProceedToProof,
   onConfirmPaid,
+  onDepositHandoffComplete,
   onRefreshPaymentStatus,
   paymentVerificationStatus = "idle",
   paymentStatusMessage,
@@ -336,7 +340,15 @@ export function NexusPaymentGatewayCard({
   const [internalStep, setInternalStep] = useState<NexusGatewayStep>(1)
   const [internalUgNetwork, setInternalUgNetwork] = useState<UgMoMoNetwork>("MTN")
   const [copied, setCopied] = useState(false)
-  const [countdownTick, setCountdownTick] = useState(0)
+  const [transmissionSecondsLeft, setTransmissionSecondsLeft] = useState(DEPOSIT_TRANSMISSION_SECONDS)
+  const [handoffReady, setHandoffReady] = useState(false)
+  const handoffReleasedRef = useRef(false)
+
+  const releaseHandoff = useCallback(() => {
+    if (handoffReleasedRef.current) return
+    handoffReleasedRef.current = true
+    onDepositHandoffComplete?.()
+  }, [onDepositHandoffComplete])
 
   const step = controlledStep ?? internalStep
   const setStep = useCallback(
@@ -392,16 +404,41 @@ export function NexusPaymentGatewayCard({
   )
 
   useEffect(() => {
-    if (step !== stepTotal || paymentVerificationStatus !== "pending") return
-    const id = window.setInterval(() => setCountdownTick((n) => n + 1), 30_000)
+    if (!ugIsolated || step !== 4) {
+      handoffReleasedRef.current = false
+      return
+    }
+    if (paymentVerificationStatus === "confirmed") {
+      setHandoffReady(true)
+      return
+    }
+    if (paymentVerificationStatus !== "pending") return
+    setHandoffReady(false)
+    handoffReleasedRef.current = false
+    setTransmissionSecondsLeft(DEPOSIT_TRANSMISSION_SECONDS)
+    const id = window.setInterval(() => {
+      setTransmissionSecondsLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(id)
+          setHandoffReady(true)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
     return () => window.clearInterval(id)
-  }, [step, paymentVerificationStatus, stepTotal])
+  }, [ugIsolated, step, paymentVerificationStatus])
 
   useEffect(() => {
-    if (ugIsolated && step === 4 && paymentVerificationStatus === "pending") {
-      void onRefreshPaymentStatus?.()
-    }
-  }, [ugIsolated, step, paymentVerificationStatus, onRefreshPaymentStatus])
+    if (!ugIsolated || step !== 4 || !handoffReady || paymentVerificationStatus === "failed") return
+    const id = window.setTimeout(() => releaseHandoff(), 3500)
+    return () => window.clearTimeout(id)
+  }, [ugIsolated, step, handoffReady, paymentVerificationStatus, releaseHandoff])
+
+  const transmissionProgressPct = useMemo(() => {
+    const elapsed = DEPOSIT_TRANSMISSION_SECONDS - transmissionSecondsLeft
+    return Math.min(100, Math.max(0, (elapsed / DEPOSIT_TRANSMISSION_SECONDS) * 100))
+  }, [transmissionSecondsLeft])
 
   const copyAccount = useCallback(async (value: string) => {
     if (!value) return
@@ -683,32 +720,73 @@ export function NexusPaymentGatewayCard({
 
       {ugIsolated && step === 4 ? (
         <div className="relative space-y-4 px-3 py-4 sm:px-5 sm:py-5">
-          <div className="flex items-center gap-3">
-            {paymentVerificationStatus === "confirmed" ? (
-              <Check className="h-8 w-8 text-emerald-400" aria-hidden />
-            ) : (
-              <Loader2 className="h-8 w-8 animate-spin text-emerald-400" aria-hidden />
-            )}
-            <div>
-              <p className="text-sm font-semibold text-white">{statusLine}</p>
-              {paymentVerificationStatus === "pending" ? (
-                <p className="mt-1 text-[11px] text-zinc-400">
-                  Verifying your {ugNetwork} transfer — typical window 2–10 minutes
-                  {countdownTick > 0 ? ` · checking (${countdownTick})` : ""}
+          {paymentVerificationStatus === "failed" ? (
+            <>
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-8 w-8 text-amber-400" aria-hidden />
+                <div>
+                  <p className="text-sm font-semibold text-white">{statusLine}</p>
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    We could not verify this payment yet. Tap refresh or contact support.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void onRefreshPaymentStatus?.()}
+                disabled={isProcessing}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
+              >
+                <RefreshCw className={cn("h-4 w-4", isProcessing && "animate-spin")} aria-hidden />
+                Refresh Payment Status
+              </button>
+            </>
+          ) : !handoffReady && paymentVerificationStatus === "pending" ? (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-7 w-7 animate-spin text-emerald-400" aria-hidden />
+                  <p className="text-sm font-semibold text-white">Secure transmission in progress</p>
+                </div>
+                <p className="text-[11px] leading-relaxed text-zinc-400">
+                  Transmitting transaction proof to secure validation node… Please do not close this window (
+                  {transmissionSecondsLeft}s)
                 </p>
-              ) : null}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void onRefreshPaymentStatus?.()}
-            disabled={isProcessing}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
-          >
-            <RefreshCw className={cn("h-4 w-4", isProcessing && "animate-spin")} aria-hidden />
-            Refresh Payment Status
-          </button>
+                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-[width] duration-1000 ease-linear"
+                    style={{ width: `${transmissionProgressPct}%` }}
+                    role="progressbar"
+                    aria-valuenow={transmissionProgressPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-start gap-3">
+                <Check className="mt-0.5 h-9 w-9 shrink-0 text-emerald-400" aria-hidden />
+                <div>
+                  <p className="text-base font-semibold text-white">
+                    {paymentVerificationStatus === "confirmed" ? "Payment Confirmed" : "Deposit Received"}
+                  </p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+                    Your transfer proof has been securely logged. Retailer manual validation typically takes 2–10
+                    minutes. Your funds will reflect automatically once verified.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={releaseHandoff}
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+              >
+                Return to Dashboard Workspace
+              </button>
+            </>
+          )}
         </div>
       ) : null}
 
@@ -874,7 +952,6 @@ export function NexusPaymentGatewayCard({
               {paymentVerificationStatus === "pending" ? (
                 <p className="mt-1 text-[11px] text-zinc-400">
                   Awaiting payment — typical window 2–10 minutes
-                  {countdownTick > 0 ? ` · checking (${countdownTick})` : ""}
                 </p>
               ) : null}
             </div>

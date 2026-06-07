@@ -274,6 +274,12 @@ function fundRequestReceiptLabel(r: {
   })
 }
 
+const PENDING_FUND_STATUSES = new Set(["pending", "under_review", "appealed", "escalated"])
+
+function isPendingFundStatus(status: string | null | undefined): boolean {
+  return PENDING_FUND_STATUSES.has(String(status ?? "").trim().toLowerCase())
+}
+
 const initialMarketFeed: MarketFeedState = {
   status: "loading",
   gainers: [],
@@ -346,6 +352,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const [ugAirtelMerchantName, setUgAirtelMerchantName] = useState<string | undefined>()
   const [ugDepositRoutes, setUgDepositRoutes] = useState<UgDepositReceiveRoutesClient | null>(null)
   const [pendingDepositAmountLabel, setPendingDepositAmountLabel] = useState<string | null>(null)
+  const [depositUnderReviewAmountLabel, setDepositUnderReviewAmountLabel] = useState<string | null>(null)
 
   const setTabProgrammatic = useCallback(
     (tab: string, source: string) => {
@@ -2531,8 +2538,25 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     t,
   ])
 
+  const depositUnderReviewBannerLabel = useMemo(() => {
+    const pending = fundRequests.find((r) => isPendingFundStatus(r.status))
+    if (pending) return fundRequestReceiptLabel(pending)
+    return depositUnderReviewAmountLabel
+  }, [fundRequests, depositUnderReviewAmountLabel])
+
   const completeDepositSubmission = useCallback(
     (amountLabel: string, toastKey: string) => {
+      if (amountLabel.trim()) {
+        setDepositUnderReviewAmountLabel(amountLabel.trim())
+        try {
+          sessionStorage.setItem(
+            "nexus_deposit_under_review",
+            JSON.stringify({ amountLabel: amountLabel.trim() }),
+          )
+        } catch {
+          /* private mode */
+        }
+      }
       setGatewayStep(1)
       setPaymentVerificationStatus("idle")
       setFundTxReference("")
@@ -2569,6 +2593,52 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     [addFundsCorridorCountry, fundPageOnly, router, showToast, t],
   )
 
+  const releaseDepositToDashboard = useCallback(() => {
+    const amountLabel = pendingDepositAmountLabel ?? depositUnderReviewBannerLabel
+    if (amountLabel) {
+      setDepositUnderReviewAmountLabel(amountLabel)
+    }
+    setGatewayStep(1)
+    setPaymentVerificationStatus("idle")
+    setFundTxReference("")
+    setFundNote("")
+    setFundPayerName("")
+    setFundPayerPhone("")
+    setFundAmount("")
+    setUgMoMoNetwork("MTN")
+    setPendingDepositAmountLabel(null)
+    setQualifiedRetailers([])
+    setOfficialCorridorFallback(null)
+    setSelectedOfficialRouteId("")
+    setSelectedRetailerId("")
+    setLocalMmWizardStep(1)
+    setLocalMmRetailersSearched(false)
+    setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
+
+    if (fundPageOnly) {
+      try {
+        if (amountLabel) {
+          sessionStorage.setItem(
+            "nexus_deposit_under_review",
+            JSON.stringify({ amountLabel }),
+          )
+        }
+      } catch {
+        /* private mode */
+      }
+      router.replace("/dashboard?tab=container")
+      return
+    }
+
+    setShowFundModal(null)
+  }, [
+    addFundsCorridorCountry,
+    depositUnderReviewBannerLabel,
+    fundPageOnly,
+    pendingDepositAmountLabel,
+    router,
+  ])
+
   const refreshGatewayPaymentStatus = useCallback(async () => {
     try {
       const {
@@ -2582,47 +2652,74 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
       })
       if (!res.ok) return
       const json = (await res.json()) as {
-        requests?: Array<{ status?: string }>
+        requests?: RetailerFundingRequest[]
+      }
+      if (json.requests?.length) {
+        setFundRequests(json.requests)
       }
       const latest = json.requests?.[0]
       const st = String(latest?.status ?? "")
       if (st === "approved" || st === "resolved") {
         setPaymentVerificationStatus("confirmed")
+        setDepositUnderReviewAmountLabel(null)
+        try {
+          sessionStorage.removeItem("nexus_deposit_under_review")
+        } catch {
+          /* ignore */
+        }
         void refreshMainBalances()
-        if (pendingDepositAmountLabel) {
-          completeDepositSubmission(
-            pendingDepositAmountLabel,
-            "funding.toast.adminAirtelQueued",
-          )
+        if (gatewayStep === 4 && showFundModal === "add") {
           return
         }
-        if (fundPageOnly) {
-          setTimeout(() => router.push("/dashboard"), 1200)
-        } else {
-          setShowFundModal(null)
-        }
+        showToast(t("funding.toast.depositApproved"), "success")
       } else if (st === "rejected") {
         setPaymentVerificationStatus("failed")
-      } else if (st) {
+        setDepositUnderReviewAmountLabel(null)
+        try {
+          sessionStorage.removeItem("nexus_deposit_under_review")
+        } catch {
+          /* ignore */
+        }
+      } else if (st && isPendingFundStatus(st)) {
         setPaymentVerificationStatus("pending")
+        if (latest) {
+          setDepositUnderReviewAmountLabel(fundRequestReceiptLabel(latest))
+        }
       }
     } catch {
       /* ignore */
     }
   }, [
-    fundPageOnly,
+    gatewayStep,
     refreshMainBalances,
-    router,
-    pendingDepositAmountLabel,
-    completeDepositSubmission,
+    showFundModal,
+    showToast,
+    t,
   ])
 
   useEffect(() => {
-    if (gatewayStep !== 4 || paymentVerificationStatus !== "pending") return
+    const hasPendingReview =
+      Boolean(depositUnderReviewBannerLabel) ||
+      fundRequests.some((r) => isPendingFundStatus(r.status))
+    if (!hasPendingReview) return
     void refreshGatewayPaymentStatus()
     const id = window.setInterval(() => void refreshGatewayPaymentStatus(), 30_000)
     return () => window.clearInterval(id)
-  }, [gatewayStep, paymentVerificationStatus, refreshGatewayPaymentStatus])
+  }, [depositUnderReviewBannerLabel, fundRequests, refreshGatewayPaymentStatus])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const raw = sessionStorage.getItem("nexus_deposit_under_review")
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { amountLabel?: string }
+      if (parsed.amountLabel?.trim()) {
+        setDepositUnderReviewAmountLabel(parsed.amountLabel.trim())
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseCustomerLocalAmountInput(fundAmount)
@@ -3475,6 +3572,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   return false
                 }}
                 onRefreshPaymentStatus={refreshGatewayPaymentStatus}
+                onDepositHandoffComplete={releaseDepositToDashboard}
                 paymentVerificationStatus={paymentVerificationStatus}
                 fundTxReference={fundTxReference}
                 onTxReferenceChange={(v) => {
@@ -4572,6 +4670,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 }}
                 onWithdraw={() => router.push("/recharge?mode=withdraw")}
                 onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
+                depositUnderReviewLabel={depositUnderReviewBannerLabel}
               />
             ) : null}
             {!operationalWorkspace ? (

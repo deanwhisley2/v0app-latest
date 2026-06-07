@@ -196,6 +196,9 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "funding.error.enterFundedAmount": "Enter funded amount.",
   "funding.error.pickDeskAndTxRef": "Select payee and enter payment reference.",
   "funding.error.senderIdentity": "Enter sender name and mobile number.",
+  "funding.toast.depositApproved": "Deposit verified — your Nexus Main balance has been updated.",
+  "funding.depositUnderReviewBanner":
+    "⏳ {{amount}} Deposit Under Review — Awaiting retailer confirmation. You are free to navigate the platform; your balance will update automatically.",
   "funding.error.corridorRailMismatch": "This payment method is not available in your country corridor.",
   "funding.error.unsupportedAction": "Unsupported action.",
   "funding.error.fundActionFailed": "Funding action failed",

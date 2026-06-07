@@ -4,6 +4,7 @@ import type { ComponentType, ReactNode } from "react"
 import {
   ArrowDownLeft,
   ArrowRightLeft,
+  Clock,
   Eye,
   EyeOff,
   Lock,
@@ -49,6 +50,7 @@ type RetailBalanceHomePanelsProps = {
   onAddFunds: () => void
   onWithdraw: () => void
   onTransferToMain: () => void
+  depositUnderReviewLabel?: string | null
 }
 
 const panelClass = cn("nexus-home-panel nexus-flat-card block w-full", NX_PANEL)
@@ -111,6 +113,7 @@ export function RetailBalanceHomePanels({
   onAddFunds,
   onWithdraw,
   onTransferToMain,
+  depositUnderReviewLabel = null,
 }: RetailBalanceHomePanelsProps) {
   const masked = "••••••••"
   const mainDisplay = showBalance ? formatUserMoney(mainBalance) : masked
@@ -191,6 +194,21 @@ export function RetailBalanceHomePanels({
           </Button>
         </div>
       </section>
+
+      {depositUnderReviewLabel ? (
+        <div
+          className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-relaxed text-amber-700 dark:text-amber-100"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="flex items-start gap-2 font-medium">
+            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+            <span>
+              {t("funding.depositUnderReviewBanner").replace("{{amount}}", depositUnderReviewLabel)}
+            </span>
+          </p>
+        </div>
+      ) : null}
 
       {/* Pocket balance */}
       <section className={cn(panelClass, "nexus-transfer-panel p-5 sm:p-6")} aria-label={t("funding.balance.liquidTitle")}>
