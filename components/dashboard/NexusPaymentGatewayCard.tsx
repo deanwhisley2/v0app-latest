@@ -6,9 +6,14 @@ import { cn } from "@/lib/utils"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { PaymentNetworkBadge, type NetworkBadgeKey } from "@/components/brand/payment-network-badge"
 import type { L1FundSource } from "@/components/dashboard/funding-payment-panel"
+import {
+  type UgMoMoNetwork,
+  ugMoMoPayeeForNetwork,
+  UG_MTN_RECEIVE,
+} from "@/lib/client/ug-momo-payment-rails"
 
 export type NexusGatewayMethod = "mobile_money" | "bank_transfer" | "crypto"
-export type NexusGatewayStep = 1 | 2 | 3
+export type NexusGatewayStep = 1 | 2 | 3 | 4
 export type PaymentVerificationStatus = "idle" | "pending" | "confirmed" | "failed"
 
 const NEXUS_GATE_EMERALD = "#00b87c"
@@ -29,19 +34,29 @@ type Props = {
   isProcessing?: boolean
   t: (key: string) => string
   children?: React.ReactNode
-  /** 3-step self-service deposit pipeline (add mode). */
+  /** Self-service deposit pipeline (add mode). */
   useSelfServiceFlow?: boolean
+  /** Uganda corridor: MTN / Airtel isolated 4-step wizard. */
+  useUgNetworkIsolatedFlow?: boolean
+  ugMoMoNetwork?: UgMoMoNetwork
+  onUgMoMoNetworkChange?: (network: UgMoMoNetwork) => void
+  /** Optional Airtel override from `/api/user/funding-payment-config`. */
+  ugAirtelAccount?: string
+  ugAirtelAccountName?: string
   gatewayStep?: NexusGatewayStep
   onGatewayStepChange?: (step: NexusGatewayStep) => void
   depositTierLabel?: string
   payerPhone?: string
   onPayerPhoneChange?: (value: string) => void
+  payerName?: string
+  onPayerNameChange?: (value: string) => void
   payeeName?: string
   payeeAccount?: string
   fundTxReference?: string
   onTxReferenceChange?: (value: string) => void
   onProceedToInstructions?: () => boolean | void
-  /** Return true only when Step 3 in-card polling should open (default: close after submit). */
+  onProceedToProof?: () => boolean | void
+  /** Return true to open Step 4 in-card processing after submit. */
   onConfirmPaid?: () => void | boolean | Promise<void | boolean>
   onRefreshPaymentStatus?: () => void | Promise<void>
   paymentVerificationStatus?: PaymentVerificationStatus
@@ -52,11 +67,8 @@ function corridorCc(raw: string): string {
   return raw.trim().toUpperCase().slice(0, 2)
 }
 
-/** Uganda MoMo self-service rail — structured copy & pay (Step 2). */
-export const UG_MOBILE_MONEY_PAYEE = {
-  account: "0791226253",
-  name: "Jamadah Kayemba",
-} as const
+/** @deprecated Use UG_MTN_RECEIVE — kept for import compatibility. */
+export const UG_MOBILE_MONEY_PAYEE = UG_MTN_RECEIVE
 
 export function isUgMobileMoneyCorridor(country: string, source: L1FundSource): boolean {
   return corridorCc(country) === "UG" && gatewayMethodFromFundSource(source) === "mobile_money"
@@ -110,10 +122,32 @@ const METHODS: Array<{
   },
 ]
 
-function StepIndicator({ step }: { step: NexusGatewayStep }) {
+function MtnTabIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden>
+      <rect width="48" height="48" rx="10" fill="#FFCC00" />
+      <text x="24" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1a1a1a">
+        MTN
+      </text>
+    </svg>
+  )
+}
+
+function AirtelTabIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden>
+      <rect width="48" height="48" rx="10" fill="#ED1C24" />
+      <text x="24" y="30" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">
+        Airtel
+      </text>
+    </svg>
+  )
+}
+
+function StepIndicator({ step, total }: { step: NexusGatewayStep; total: number }) {
   return (
     <div className="flex items-center gap-2">
-      {[1, 2, 3].map((n) => (
+      {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
         <div
           key={n}
           className={cn(
@@ -123,6 +157,43 @@ function StepIndicator({ step }: { step: NexusGatewayStep }) {
           aria-hidden
         />
       ))}
+    </div>
+  )
+}
+
+function NetworkPayeeBlock({
+  accountLabel,
+  account,
+  name,
+  copied,
+  onCopy,
+}: {
+  accountLabel: string
+  account: string
+  name: string
+  copied: boolean
+  onCopy: () => void
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-zinc-500">Account Name</p>
+        <p className="mt-1 text-base font-semibold text-white">{name}</p>
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-zinc-500">{accountLabel}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <p className="font-mono text-lg font-semibold text-emerald-300">{account}</p>
+          <button
+            type="button"
+            onClick={() => void onCopy()}
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -143,22 +214,31 @@ export function NexusPaymentGatewayCard({
   t,
   children,
   useSelfServiceFlow = true,
+  useUgNetworkIsolatedFlow = false,
+  ugMoMoNetwork: controlledUgNetwork,
+  onUgMoMoNetworkChange,
+  ugAirtelAccount,
+  ugAirtelAccountName,
   gatewayStep: controlledStep,
   onGatewayStepChange,
   depositTierLabel,
   payerPhone = "",
   onPayerPhoneChange,
+  payerName = "",
+  onPayerNameChange,
   payeeName,
   payeeAccount,
   fundTxReference = "",
   onTxReferenceChange,
   onProceedToInstructions,
+  onProceedToProof,
   onConfirmPaid,
   onRefreshPaymentStatus,
   paymentVerificationStatus = "idle",
   paymentStatusMessage,
 }: Props) {
   const [internalStep, setInternalStep] = useState<NexusGatewayStep>(1)
+  const [internalUgNetwork, setInternalUgNetwork] = useState<UgMoMoNetwork>("MTN")
   const [copied, setCopied] = useState(false)
   const [countdownTick, setCountdownTick] = useState(0)
 
@@ -171,40 +251,65 @@ export function NexusPaymentGatewayCard({
     [controlledStep, onGatewayStepChange],
   )
 
+  const ugNetwork = controlledUgNetwork ?? internalUgNetwork
+  const setUgNetwork = useCallback(
+    (next: UgMoMoNetwork) => {
+      onUgMoMoNetworkChange?.(next)
+      if (controlledUgNetwork == null) setInternalUgNetwork(next)
+    },
+    [controlledUgNetwork, onUgMoMoNetworkChange],
+  )
+
   const activeMethod = useMemo(
     () => gatewayMethodFromFundSource(activeSource),
     [activeSource],
   )
 
   const selfService = mode === "add" && useSelfServiceFlow
+  const ugIsolated = selfService && useUgNetworkIsolatedFlow
+  const stepTotal = ugIsolated ? 4 : 3
 
-  const ugMobileCopyPay = isUgMobileMoneyCorridor(customerFundingCountry, activeSource)
-  const resolvedPayeeName = ugMobileCopyPay
-    ? (payeeName ?? UG_MOBILE_MONEY_PAYEE.name)
-    : payeeName
-  const resolvedPayeeAccount = ugMobileCopyPay
-    ? (payeeAccount ?? UG_MOBILE_MONEY_PAYEE.account)
-    : payeeAccount
-  const showNativeCopyPay = Boolean(
-    ugMobileCopyPay || (resolvedPayeeName && resolvedPayeeAccount),
+  const ugPayee = useMemo(() => {
+    const base = ugMoMoPayeeForNetwork(ugNetwork)
+    if (ugNetwork === "Airtel") {
+      return {
+        ...base,
+        account: ugAirtelAccount ?? base.account,
+        name: ugAirtelAccountName ?? base.name,
+      }
+    }
+    return base
+  }, [ugNetwork, ugAirtelAccount, ugAirtelAccountName])
+
+  const legacyCopyPay = !ugIsolated && isUgMobileMoneyCorridor(customerFundingCountry, activeSource)
+  const resolvedPayeeName = legacyCopyPay ? (payeeName ?? UG_MTN_RECEIVE.name) : payeeName
+  const resolvedPayeeAccount = legacyCopyPay ? (payeeAccount ?? UG_MTN_RECEIVE.account) : payeeAccount
+  const showLegacyNativeCopyPay = Boolean(
+    legacyCopyPay || (resolvedPayeeName && resolvedPayeeAccount),
   )
 
   useEffect(() => {
-    if (step !== 3 || paymentVerificationStatus !== "pending") return
+    if (step !== stepTotal || paymentVerificationStatus !== "pending") return
     const id = window.setInterval(() => setCountdownTick((n) => n + 1), 30_000)
     return () => window.clearInterval(id)
-  }, [step, paymentVerificationStatus])
+  }, [step, paymentVerificationStatus, stepTotal])
 
-  const copyAccount = useCallback(async () => {
-    if (!resolvedPayeeAccount) return
+  useEffect(() => {
+    if (ugIsolated && step === 4 && paymentVerificationStatus === "pending") {
+      void onRefreshPaymentStatus?.()
+    }
+  }, [ugIsolated, step, paymentVerificationStatus, onRefreshPaymentStatus])
+
+  const copyAccount = useCallback(async (value: string) => {
+    if (!value) return
     try {
-      await navigator.clipboard.writeText(resolvedPayeeAccount)
+      await navigator.clipboard.writeText(value)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
       /* clipboard blocked */
     }
-  }, [resolvedPayeeAccount])
+  }, [])
 
   const title =
     mode === "add" ? t("funding.modal.titleAdd") : t("funding.modal.titleWithdraw")
@@ -215,9 +320,15 @@ export function NexusPaymentGatewayCard({
     setStep(2)
   }
 
+  const handleSentMoney = () => {
+    const ok = onProceedToProof?.()
+    if (ok === false) return
+    setStep(3)
+  }
+
   const handleConfirmPaid = () => {
     void Promise.resolve(onConfirmPaid?.()).then((result) => {
-      if (result === true) setStep(3)
+      if (result === true) setStep(ugIsolated ? 4 : 3)
     })
   }
 
@@ -227,7 +338,9 @@ export function NexusPaymentGatewayCard({
       ? "Payment confirmed — refreshing your Nexus Main balance."
       : paymentVerificationStatus === "failed"
         ? "We could not verify this payment yet. Tap refresh or contact support."
-        : "Checking payment status… Expected completion within 2–10 minutes.")
+        : ugIsolated && step === 4
+          ? "Processing… Expected in 2–10 minutes."
+          : "Checking payment status… Expected completion within 2–10 minutes.")
 
   return (
     <div
@@ -252,16 +365,20 @@ export function NexusPaymentGatewayCard({
               {title}
             </h3>
             <p className="mt-1 text-[11px] leading-snug text-zinc-400">
-              {selfService
-                ? "Self-service deposit — three quick steps."
-                : mode === "add"
-                  ? "Secure deposit checkout — native to your Nexus workspace."
-                  : "Secure withdrawal gateway — funds route to your verified payout line."}
+              {ugIsolated
+                ? "Uganda Mobile Money — network-isolated deposit wizard."
+                : selfService
+                  ? "Self-service deposit — three quick steps."
+                  : mode === "add"
+                    ? "Secure deposit checkout — native to your Nexus workspace."
+                    : "Secure withdrawal gateway — funds route to your verified payout line."}
             </p>
             {selfService ? (
               <div className="mt-3 max-w-xs">
-                <StepIndicator step={step} />
-                <p className="mt-1 text-[10px] text-zinc-500">Step {step} of 3</p>
+                <StepIndicator step={step} total={stepTotal} />
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  Step {step} of {stepTotal}
+                </p>
               </div>
             ) : null}
           </div>
@@ -278,7 +395,191 @@ export function NexusPaymentGatewayCard({
         </div>
       </div>
 
-      {selfService && step === 1 ? (
+      {ugIsolated && step === 1 ? (
+        <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Select network
+            </p>
+            <div className="grid grid-cols-2 gap-2" role="tablist">
+              {(["MTN", "Airtel"] as const).map((network) => {
+                const selected = ugNetwork === network
+                return (
+                  <button
+                    key={network}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setUgNetwork(network)}
+                    className={cn(
+                      "flex min-h-[56px] items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all",
+                      selected
+                        ? network === "MTN"
+                          ? "border-[#FFCC00]/50 bg-[#FFCC00]/10 shadow-[0_0_20px_rgba(255,204,0,0.12)]"
+                          : "border-[#ED1C24]/50 bg-[#ED1C24]/10 shadow-[0_0_20px_rgba(237,28,36,0.12)]"
+                        : "border-white/8 bg-white/[0.03] hover:border-emerald-500/25",
+                    )}
+                  >
+                    {network === "MTN" ? (
+                      <MtnTabIcon className="h-9 w-9 shrink-0" />
+                    ) : (
+                      <AirtelTabIcon className="h-9 w-9 shrink-0" />
+                    )}
+                    <span className="text-xs font-semibold text-white">
+                      {network === "MTN" ? "MTN Mobile Money" : "Airtel Money"}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {showAmountField ? (
+            <div>
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                {t("funding.field.fundingAmount").replace("{{currency}}", fundAmountCurrency)}
+              </label>
+              <div
+                className="rounded-xl border px-3 py-2"
+                style={{ borderColor: `${NEXUS_GATE_EMERALD}44`, backgroundColor: "#080b10" }}
+              >
+                <SmartAmountInput
+                  value={fundAmount}
+                  onValueChange={onFundAmountChange}
+                  locale={fundAmountLocale}
+                  currency={fundAmountCurrency}
+                  placeholder="0"
+                  className="w-full border-0 bg-transparent py-1 font-mono text-xl font-semibold text-white outline-none placeholder:text-zinc-600"
+                />
+              </div>
+              {minDepositLabel ? (
+                <p className="mt-1 text-[10px] font-medium text-emerald-400/80">{minDepositLabel}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleProceed}
+            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white shadow-[0_0_24px_rgba(0,184,124,0.2)] hover:bg-emerald-500"
+          >
+            Proceed to Payment Details
+          </button>
+        </div>
+      ) : null}
+
+      {ugIsolated && step === 2 ? (
+        <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex items-center gap-2">
+            <PaymentNetworkBadge network={ugNetwork === "MTN" ? "MTN" : "Airtel"} />
+            <p className="text-sm font-medium text-white">
+              {ugNetwork === "MTN" ? "MTN Mobile Money" : "Airtel Money"} transfer details
+            </p>
+          </div>
+
+          <NetworkPayeeBlock
+            accountLabel={ugPayee.accountLabel}
+            account={ugPayee.account}
+            name={ugPayee.name}
+            copied={copied}
+            onCopy={() => void copyAccount(ugPayee.account)}
+          />
+
+          <p className="text-[11px] leading-relaxed text-zinc-400">
+            Copy these exact details, open your mobile provider app, make the manual transfer, and
+            return here.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleSentMoney}
+            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+          >
+            I Have Sent the Money
+          </button>
+        </div>
+      ) : null}
+
+      {ugIsolated && step === 3 ? (
+        <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
+          <p className="text-sm font-medium text-white">Confirm your transfer</p>
+
+          {onTxReferenceChange ? (
+            <div>
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                Transaction ID / TX Reference Number
+              </label>
+              <input
+                type="text"
+                value={fundTxReference}
+                onChange={(e) => onTxReferenceChange(e.target.value)}
+                placeholder="Paste your network confirmation code"
+                autoComplete="off"
+                className="w-full rounded-xl border border-white/10 bg-[#080b10] px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/40"
+              />
+            </div>
+          ) : null}
+
+          {onPayerNameChange ? (
+            <div>
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                Sender&apos;s Mobile Name
+              </label>
+              <input
+                type="text"
+                value={payerName}
+                onChange={(e) => onPayerNameChange(e.target.value)}
+                placeholder="Exact legal name on the wallet you paid from"
+                autoComplete="name"
+                className="w-full rounded-xl border border-white/10 bg-[#080b10] px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/40"
+              />
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleConfirmPaid}
+            disabled={isProcessing}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            {isProcessing ? "Submitting request…" : "Confirm Payment Completed"}
+          </button>
+        </div>
+      ) : null}
+
+      {ugIsolated && step === 4 ? (
+        <div className="relative space-y-4 px-3 py-4 sm:px-5 sm:py-5">
+          <div className="flex items-center gap-3">
+            {paymentVerificationStatus === "confirmed" ? (
+              <Check className="h-8 w-8 text-emerald-400" aria-hidden />
+            ) : (
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-400" aria-hidden />
+            )}
+            <div>
+              <p className="text-sm font-semibold text-white">{statusLine}</p>
+              {paymentVerificationStatus === "pending" ? (
+                <p className="mt-1 text-[11px] text-zinc-400">
+                  Verifying your {ugNetwork} transfer — typical window 2–10 minutes
+                  {countdownTick > 0 ? ` · checking (${countdownTick})` : ""}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void onRefreshPaymentStatus?.()}
+            disabled={isProcessing}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-4 w-4", isProcessing && "animate-spin")} aria-hidden />
+            Refresh Payment Status
+          </button>
+        </div>
+      ) : null}
+
+      {!ugIsolated && selfService && step === 1 ? (
         <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
           {depositTierLabel ? (
             <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5">
@@ -373,7 +674,7 @@ export function NexusPaymentGatewayCard({
         </div>
       ) : null}
 
-      {selfService && step === 2 ? (
+      {!ugIsolated && selfService && step === 2 ? (
         <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center gap-2">
             <PaymentNetworkBadge
@@ -382,43 +683,25 @@ export function NexusPaymentGatewayCard({
             <p className="text-sm font-medium text-white">{t("funding.payment.instructionPanelTitle")}</p>
           </div>
 
-          {showNativeCopyPay ? (
-            <div className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  {ugMobileCopyPay ? "Account Name" : "Receiving name"}
-                </p>
-                <p className="mt-1 text-base font-semibold text-white">{resolvedPayeeName}</p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  {ugMobileCopyPay ? "MTN Account" : "Account number"}
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <p className="font-mono text-lg font-semibold text-emerald-300">{resolvedPayeeAccount}</p>
-                  <button
-                    type="button"
-                    onClick={() => void copyAccount()}
-                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300"
-                  >
-                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              </div>
-            </div>
+          {showLegacyNativeCopyPay ? (
+            <NetworkPayeeBlock
+              accountLabel={legacyCopyPay ? "MTN Account" : "Account number"}
+              account={resolvedPayeeAccount ?? ""}
+              name={resolvedPayeeName ?? ""}
+              copied={copied}
+              onCopy={() => void copyAccount(resolvedPayeeAccount ?? "")}
+            />
           ) : children ? (
             <div className="nexus-gateway-rail-details space-y-3">{children}</div>
           ) : null}
 
-          {showNativeCopyPay ? (
+          {showLegacyNativeCopyPay ? (
             <p className="text-[11px] leading-relaxed text-zinc-400">
-              Send the exact amount from Step 1 to this MTN line in your Mobile Money app, then tap
-              &ldquo;I Have Paid&rdquo;.
+              Send the exact amount from Step 1 to this line in your Mobile Money app, then continue.
             </p>
           ) : null}
 
-          {showNativeCopyPay && onTxReferenceChange ? (
+          {showLegacyNativeCopyPay && onTxReferenceChange ? (
             <div>
               <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                 {t("funding.txRefLabel")}
@@ -445,7 +728,7 @@ export function NexusPaymentGatewayCard({
         </div>
       ) : null}
 
-      {selfService && step === 3 ? (
+      {!ugIsolated && selfService && step === 3 ? (
         <div className="relative space-y-4 px-3 py-4 sm:px-5 sm:py-5">
           <div className="flex items-center gap-3">
             {paymentVerificationStatus === "confirmed" ? (
