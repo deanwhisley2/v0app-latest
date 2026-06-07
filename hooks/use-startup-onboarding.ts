@@ -14,6 +14,9 @@ export type StartupOnboardingSnapshot = {
   starterFixPersonaId: string
   showCampaignPromo: boolean
   campaignContentRevision: string
+  accountCreatedAt: string | null
+  hasClaimedStartupCapital: boolean
+  suppressOnboardingPromos: boolean
 }
 
 const EMPTY: StartupOnboardingSnapshot = {
@@ -27,6 +30,9 @@ const EMPTY: StartupOnboardingSnapshot = {
   starterFixPersonaId: "fix_l1_t1",
   showCampaignPromo: false,
   campaignContentRevision: "",
+  accountCreatedAt: null,
+  hasClaimedStartupCapital: false,
+  suppressOnboardingPromos: false,
 }
 
 export function useStartupOnboarding(enabled = true) {
@@ -70,6 +76,9 @@ export function useStartupOnboarding(enabled = true) {
         starterFixPersonaId: json.starterFixPersonaId ?? "fix_l1_t1",
         showCampaignPromo: Boolean(json.showCampaignPromo),
         campaignContentRevision: String(json.campaignContentRevision ?? ""),
+        accountCreatedAt: json.accountCreatedAt ?? null,
+        hasClaimedStartupCapital: Boolean(json.hasClaimedStartupCapital),
+        suppressOnboardingPromos: Boolean(json.suppressOnboardingPromos),
       }
       setData(next)
       setError(null)

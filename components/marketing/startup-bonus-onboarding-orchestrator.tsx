@@ -72,6 +72,7 @@ export function StartupBonusOnboardingOrchestrator({
   const shouldEngage =
     enabled &&
     !loading &&
+    !data.suppressOnboardingPromos &&
     data.hasStartupBonus &&
     data.showCampaignPromo &&
     !isStartupCapitalBannerDismissed()

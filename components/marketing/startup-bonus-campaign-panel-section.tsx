@@ -43,7 +43,7 @@ export function StartupBonusCampaignPanelSection({ onStartTrading }: StartupBonu
     storeLiveCampaignRevision(data.campaignContentRevision)
   }, [data.campaignContentRevision])
 
-  if (loading || !data.hasStartupBonus || !data.showCampaignPromo || dismissed) return null
+  if (loading || data.suppressOnboardingPromos || !data.hasStartupBonus || !data.showCampaignPromo || dismissed) return null
 
   return (
     <>

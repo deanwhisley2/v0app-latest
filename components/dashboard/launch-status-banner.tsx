@@ -2,12 +2,15 @@
 
 import { useMemo } from "react"
 import { Sparkles } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 import { usePlatformLaunch } from "@/hooks/use-platform-launch"
+import { useStartupOnboarding } from "@/hooks/use-startup-onboarding"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import {
   STARTUP_CAPITAL_USD_REWARD,
   type LaunchProgramsConfig,
 } from "@/lib/platform-launch-config"
+import { isAccountOlderThanPromoWindow } from "@/lib/marketing/onboarding-lifecycle"
 import { cn } from "@/lib/utils"
 
 function campaignVisible(programs: LaunchProgramsConfig | undefined, active: boolean): boolean {
@@ -18,10 +21,16 @@ function campaignVisible(programs: LaunchProgramsConfig | undefined, active: boo
 
 /** Premium conversion strip — new member welcome bonus + platform strengths. */
 export function LaunchStatusBanner() {
+  const { user } = useAuth()
   const { launch, active, loading } = usePlatformLaunch()
+  const { data: onboarding, loading: onboardingLoading } = useStartupOnboarding(Boolean(user))
   const { t, formatUserMoney } = useUserPreferences()
 
-  const show = !loading && campaignVisible(launch?.programs, active)
+  const accountCreatedAt = user?.created_at ?? onboarding.accountCreatedAt
+  const suppressForUser =
+    onboarding.suppressOnboardingPromos || isAccountOlderThanPromoWindow(accountCreatedAt)
+
+  const show = !loading && !onboardingLoading && !suppressForUser && campaignVisible(launch?.programs, active)
   const amount = useMemo(() => {
     const usd =
       typeof launch?.programs.new_member_welcome?.usd_reward === "number"

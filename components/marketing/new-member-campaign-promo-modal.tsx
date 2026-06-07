@@ -43,6 +43,7 @@ export function NewMemberCampaignPromoModal({ enabled = true }: NewMemberCampaig
     enabled &&
       !loading &&
       !onboardingLoading &&
+      !onboarding.suppressOnboardingPromos &&
       !onboarding.hasStartupBonus &&
       launch?.programs.new_member_welcome?.enabled !== false &&
       launch?.programs.new_member_welcome?.promo_modal !== false &&

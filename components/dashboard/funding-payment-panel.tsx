@@ -73,6 +73,10 @@ type Props = {
   onTxReferenceBlur?: () => void
   /** When true, sender identity is chosen via RegisteredPayerPicker (parent) — no manual fields. */
   hidePayerIdentityFields?: boolean
+  /** Gateway card owns method tabs — render expanded rail content only. */
+  detailsOnly?: boolean
+  /** Gateway card shows unified amount — hide crypto inline amount field. */
+  hideInlineAmount?: boolean
   t: (key: string) => string
 }
 
@@ -105,6 +109,8 @@ export function FundingPaymentPanel({
   txReferenceError,
   onTxReferenceBlur,
   hidePayerIdentityFields = false,
+  detailsOnly = false,
+  hideInlineAmount = false,
   t,
 }: Props) {
   const [config, setConfig] = useState<PaymentConfig | null>(null)
@@ -382,7 +388,7 @@ export function FundingPaymentPanel({
         </div>
       </div>
 
-      {onFundAmountChange ? (
+      {onFundAmountChange && !hideInlineAmount ? (
         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
           <label className="block text-[10px] font-medium text-foreground" htmlFor="fund-crypto-amount-inline">
             {t("funding.amount.matchSend").replace("{{currency}}", "USD")}
@@ -519,6 +525,26 @@ export function FundingPaymentPanel({
       </button>
     ) : null
 
+  const railDetails = (
+    <>
+      {!detailsOnly ? changeMethod : null}
+      {cryptoExpanded}
+      {airtelExpanded}
+      {mpesaKeExpanded}
+      {showUgandaAirtel && activeSource === "airtel" && !config?.ugandaAirtel ? (
+        <p className="text-[11px] text-muted-foreground">Loading Uganda payment corridor…</p>
+      ) : null}
+      {showKenyaMpesa && activeSource === "mpesa_ke" && !config?.kenyaMpesaTill ? (
+        <p className="text-[11px] text-muted-foreground">Loading Kenya payment corridor…</p>
+      ) : null}
+      {localExpanded}
+    </>
+  )
+
+  if (detailsOnly) {
+    return <div className="space-y-2 sm:space-y-3">{railDetails}</div>
+  }
+
   return (
     <div className="mb-1 space-y-2 sm:mb-3 sm:space-y-3">
       {activeSource === "pick" ? (
@@ -527,19 +553,7 @@ export function FundingPaymentPanel({
           {pickHint}
         </>
       ) : (
-        <>
-          {changeMethod}
-          {cryptoExpanded}
-          {airtelExpanded}
-          {mpesaKeExpanded}
-          {showUgandaAirtel && activeSource === "airtel" && !config?.ugandaAirtel ? (
-            <p className="text-[11px] text-muted-foreground">Loading Uganda payment corridor…</p>
-          ) : null}
-          {showKenyaMpesa && activeSource === "mpesa_ke" && !config?.kenyaMpesaTill ? (
-            <p className="text-[11px] text-muted-foreground">Loading Kenya payment corridor…</p>
-          ) : null}
-          {localExpanded}
-        </>
+        railDetails
       )}
     </div>
   )

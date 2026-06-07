@@ -127,6 +127,12 @@ import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
 import {
+  NexusPaymentGatewayCard,
+  fundSourceFromGatewayMethod,
+  type NexusGatewayStep,
+  type PaymentVerificationStatus,
+} from "@/components/dashboard/NexusPaymentGatewayCard"
+import {
   addFundsPayerIsReady,
   bindFundPayerFromOption,
   bindFundPayerFromProfile,
@@ -286,7 +292,7 @@ function normalizeSymbol(value: string): string {
   return upper.endsWith("USDT") ? upper.slice(0, -4) : upper
 }
 
-export function DashboardPageInner() {
+export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "add" | "withdraw" | null } = {}) {
   const router = useRouter()
   const { registerAppNavigator } = useNexusNotifications()
   const { user, isLoading: authLoading, authReady, signOut, isGuestSession } = useAuth()
@@ -325,6 +331,9 @@ export function DashboardPageInner() {
   const [startupActivateRequest, setStartupActivateRequest] = useState(0)
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
   const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
+  const [gatewayStep, setGatewayStep] = useState<NexusGatewayStep>(1)
+  const [paymentVerificationStatus, setPaymentVerificationStatus] =
+    useState<PaymentVerificationStatus>("idle")
 
   const setTabProgrammatic = useCallback(
     (tab: string, source: string) => {
@@ -2208,10 +2217,23 @@ export function DashboardPageInner() {
   ])
 
   useEffect(() => {
-    if (showFundModal !== "add") setLocalMmWizardStep(1)
+    if (showFundModal !== "add") {
+      setLocalMmWizardStep(1)
+      setGatewayStep(1)
+      setPaymentVerificationStatus("idle")
+    }
   }, [showFundModal])
 
-  useBodyScrollLock(Boolean(showFundModal))
+  useEffect(() => {
+    if (!fundPageOnly) return
+    setShowFundModal(fundPageOnly)
+    setFundAmount("")
+    setGatewayStep(1)
+    setPaymentVerificationStatus("idle")
+    setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
+  }, [fundPageOnly, addFundsCorridorCountry])
+
+  useBodyScrollLock(Boolean(showFundModal) && !fundPageOnly)
 
   useEffect(() => {
     if (showFundModal !== "add" || l1FundSource !== "crypto") return
@@ -2358,7 +2380,7 @@ export function DashboardPageInner() {
       setFundAmount("")
       setFundModalError(null)
       if (mode === "add") {
-        setL1FundSource("crypto")
+        setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
         setQualifiedRetailers([])
         setSelectedRetailerId("")
         setFundTxReference("")
@@ -2376,7 +2398,7 @@ export function DashboardPageInner() {
         }
       }
     },
-    [isGuestSession, showToast, t, applyRegisteredFundPayer],
+    [isGuestSession, showToast, t, applyRegisteredFundPayer, addFundsCorridorCountry],
   )
 
   const withdrawSubmitBlockedReason = useMemo(() => {
@@ -2412,6 +2434,41 @@ export function DashboardPageInner() {
     withdrawalEligibility,
     t,
   ])
+
+  const refreshGatewayPaymentStatus = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/retailer-funding?requestsOnly=1", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      if (!res.ok) return
+      const json = (await res.json()) as {
+        requests?: Array<{ status?: string }>
+      }
+      const latest = json.requests?.[0]
+      const st = String(latest?.status ?? "")
+      if (st === "approved" || st === "resolved") {
+        setPaymentVerificationStatus("confirmed")
+        void refreshMainBalances()
+        if (fundPageOnly) {
+          setTimeout(() => router.push("/dashboard"), 1200)
+        } else {
+          setShowFundModal(null)
+        }
+      } else if (st === "rejected") {
+        setPaymentVerificationStatus("failed")
+      } else if (st) {
+        setPaymentVerificationStatus("pending")
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [fundPageOnly, refreshMainBalances, router])
 
   const handleFundSubmit = useCallback(() => {
     const amountRaw = parseCustomerLocalAmountInput(fundAmount)
@@ -2743,7 +2800,7 @@ export function DashboardPageInner() {
           setSelectedOfficialRouteId("")
           setSelectedRetailerId("")
           setFundTxReference("")
-          setL1FundSource("pick")
+          setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
           setLocalMmRetailersSearched(false)
           setLocalMmWizardStep(1)
           setShowFundModal(null)
@@ -2859,8 +2916,14 @@ export function DashboardPageInner() {
 
   return (
     <div
-      className="nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
+      className={
+        fundPageOnly
+          ? "w-full"
+          : "nexus-mobile-stable nexus-app-shell min-h-screen overflow-x-hidden bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
+      }
     >
+      {!fundPageOnly ? (
+      <>
       {/* Unified mobile app bar — single search/nav hierarchy */}
       <MobileAppBar
         header={
@@ -3053,16 +3116,50 @@ export function DashboardPageInner() {
         ) : null}
       </div>
       ) : null}
+      </>
+      ) : null}
 
       {/* Add Fund / Withdraw Modal */}
       {showFundModal && (
         <div
-          className="fixed inset-0 z-[100] flex flex-col bg-black/75 pt-[max(0px,env(safe-area-inset-top,0px))] sm:items-center sm:justify-center sm:bg-black/65 sm:p-4 sm:pt-4 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
+          className={
+            fundPageOnly
+              ? "relative w-full"
+              : "fixed inset-0 z-[100] flex flex-col bg-black/75 pt-[max(0px,env(safe-area-inset-top,0px))] sm:items-center sm:justify-center sm:bg-black/65 sm:p-4 sm:pt-4 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
+          }
           role="dialog"
           aria-modal="true"
           aria-labelledby="fund-modal-title"
         >
-          <div className="flex min-h-0 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md flex-1 flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[min(92dvh,720px)] sm:flex-none sm:rounded-2xl sm:p-5">
+          <div
+            className={`flex min-h-0 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md flex-1 flex-col overflow-hidden sm:max-h-[min(92dvh,720px)] sm:flex-none ${
+              customerRetailFunding && showFundModal
+                ? "rounded-t-2xl border-0 bg-transparent shadow-none sm:rounded-2xl sm:p-0"
+                : "rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl sm:p-5"
+            }`}
+          >
+            {customerRetailFunding && showFundModal ? (
+              <div className="flex shrink-0 justify-end px-3 pb-1 pt-2 max-sm:pt-3 sm:absolute sm:right-0 sm:top-0 sm:z-30 sm:p-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (fundPageOnly) {
+                      router.push("/dashboard")
+                      return
+                    }
+                    setShowFundModal(null)
+                    setFundModalError(null)
+                  }}
+                  aria-label={t("funding.button.close")}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#0d1117]/90 text-zinc-300 hover:bg-white/10 max-sm:h-11 max-sm:w-11"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+            <>
             {/* Modal Header */}
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 pb-2 pt-2 max-sm:pt-3 sm:px-0 sm:pb-3 sm:pt-0">
               <h2 id="fund-modal-title" className="text-lg font-bold sm:text-xl">
@@ -3082,6 +3179,8 @@ export function DashboardPageInner() {
                 </svg>
               </button>
             </div>
+            </>
+            )}
 
             {showFundModal === "withdraw" ? null : retailerCreditDesk && retailerOpsBlocked ? (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[11px] text-muted-foreground">
@@ -3090,33 +3189,156 @@ export function DashboardPageInner() {
             ) : null}
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-36 px-3 pb-4 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(13rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
+            {showFundModal === "withdraw" && customerRetailFunding ? (
+              <NexusPaymentGatewayCard
+                mode="withdraw"
+                fundAmount={fundAmount}
+                onFundAmountChange={handleFundAmountChange}
+                fundAmountLocale={smartAmountLocale}
+                fundAmountCurrency={currency}
+                isProcessing={isFundProcessing}
+                amountHint={`${t("withdrawal.availableLabel")} ${showBalance ? formatUserMoney(mainBalance) : "••••"}`}
+                t={t}
+              >
+                {withdrawPayoutOptionsList.length ? (
+                  <div className="space-y-2">
+                    <RegisteredPayerPicker
+                      options={withdrawPayoutOptionsList}
+                      selectedSource={(selectedWithdrawPayoutId ?? "manual") as FundPayerSource}
+                      onSelect={(opt) => setSelectedWithdrawPayoutId(opt.id)}
+                      t={t}
+                    />
+                    <p className="text-[10px] text-zinc-500">{t("withdrawal.payoutLockedHint")}</p>
+                  </div>
+                ) : null}
+                {withdrawalEligibility ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-snug text-zinc-400">
+                    <p>
+                      {t("withdrawal.modal.ruleOnce")}
+                      {withdrawalEligibility.cooldownActive
+                        ? ` ${t("withdrawal.modal.waitHours").replace(
+                            "{{hours}}",
+                            String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
+                          )}`
+                        : ` ${t("withdrawal.modal.readyNow")}`}
+                    </p>
+                    <p className="mt-1">
+                      {t("withdrawal.modal.minLine").replace(
+                        "{{min}}",
+                        formatUserMoney(withdrawalEligibility.minUsd),
+                      )}
+                    </p>
+                    {withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd ? (
+                      <p className="mt-1 font-medium text-amber-300">
+                        {t("withdrawal.error.nothingWithdrawable")}
+                      </p>
+                    ) : null}
+                    <p className="mt-0.5">
+                      {t("withdrawal.modal.maxLine").replace(
+                        "{{max}}",
+                        formatUserMoney(withdrawalEligibility.maxUsd),
+                      )}
+                    </p>
+                  </div>
+                ) : null}
+              </NexusPaymentGatewayCard>
+            ) : null}
             {showFundModal === "withdraw" ? null : customerRetailFunding && showFundModal === "add" ? (
-              <div className="mb-3 space-y-2">
+              <NexusPaymentGatewayCard
+                mode="add"
+                useSelfServiceFlow
+                gatewayStep={gatewayStep}
+                onGatewayStepChange={setGatewayStep}
+                depositTierLabel={
+                  fundAmount.trim()
+                    ? `${fundAmount} ${smartAmountCurrencyForFund}`
+                    : customerMinDepositDisplay
+                }
+                payerPhone={fundPayerPhone}
+                onPayerPhoneChange={setFundPayerPhone}
+                payeeName={fundPayerName.trim() || fundPayerBinding.displayName || "Jamadah Kayemba"}
+                payeeAccount={
+                  localMmSelectedDesk
+                    ? String(localMmSelectedDesk.payment_numbers?.[0]?.value ?? "0791226253")
+                    : "0791226253"
+                }
+                onProceedToInstructions={() => {
+                  if (!fundPayerPhone.trim() && !fundPayerBinding.hasRegisteredLine) {
+                    showToast(t("funding.error.senderIdentity"), "error")
+                    return false
+                  }
+                  if (!(parseCustomerLocalAmountInput(fundAmount) > 0)) {
+                    showToast(t("funding.error.enterFundedAmount"), "error")
+                    return false
+                  }
+                  return true
+                }}
+                onConfirmPaid={() => {
+                  if (!fundTxReference.trim() && l1FundSource !== "crypto") {
+                    showToast(t("funding.error.pickDeskAndTxRef"), "error")
+                    return
+                  }
+                  setPaymentVerificationStatus("pending")
+                  handleFundSubmit()
+                }}
+                onRefreshPaymentStatus={refreshGatewayPaymentStatus}
+                paymentVerificationStatus={paymentVerificationStatus}
+                fundTxReference={fundTxReference}
+                onTxReferenceChange={(v) => {
+                  setFundTxReference(v)
+                  setFundTxRefError(null)
+                }}
+                activeSource={l1FundSource}
+                onSourceChange={(s) => {
+                  setL1FundSource(s)
+                  if (fundPayerProfile) {
+                    const net =
+                      s === "airtel"
+                        ? "Airtel"
+                        : s === "mpesa_ke"
+                          ? "MPesa"
+                          : s === "local"
+                            ? fundMobileNetwork
+                            : null
+                    applyRegisteredFundPayer(fundPayerProfile, net)
+                  }
+                  if (s === "local") {
+                    setLocalMmWizardStep(1)
+                    setQualifiedRetailers([])
+                    setOfficialCorridorFallback(null)
+                    setSelectedOfficialRouteId(null)
+                    setSelectedRetailerId("")
+                    setLocalMmRetailersSearched(false)
+                  }
+                }}
+                customerFundingCountry={addFundsCorridorCountry}
+                fundAmount={fundAmount}
+                onFundAmountChange={handleFundAmountChange}
+                fundAmountLocale={smartAmountLocale}
+                fundAmountCurrency={smartAmountCurrencyForFund}
+                minDepositLabel={t("funding.amount.minimumLine").replace(
+                  "{{amount}}",
+                  customerMinDepositDisplay,
+                )}
+                amountHint={
+                  l1FundSource === "airtel" || l1FundSource === "mpesa_ke"
+                    ? t("funding.amount.hintMatchSend")
+                    : l1FundSource === "crypto"
+                      ? t("funding.payment.cryptoAmountUsdHint")
+                      : undefined
+                }
+                showAmountField={!(l1FundSource === "local" && localMmWizardStep === 1)}
+                isProcessing={isFundProcessing}
+                t={t}
+              >
+                <div className="nexus-gateway-rail-details space-y-2 sm:space-y-3 [&_.bg-background]:bg-[#080b10] [&_.bg-card]:bg-[#080b10] [&_.bg-muted]:bg-white/5 [&_.border-border]:border-white/10 [&_.text-foreground]:text-zinc-100 [&_.text-muted-foreground]:text-zinc-400">
+                {l1FundSource === "crypto" ? (
                 <FundingPaymentPanel
+                  detailsOnly
+                  hideInlineAmount
                   customerFundingCountry={addFundsCorridorCountry}
                   activeSource={l1FundSource}
-                  onSourceChange={(s) => {
-                    setL1FundSource(s)
-                    if (fundPayerProfile) {
-                      const net =
-                        s === "airtel"
-                          ? "Airtel"
-                          : s === "mpesa_ke"
-                            ? "MPesa"
-                            : s === "local"
-                              ? fundMobileNetwork
-                              : null
-                      applyRegisteredFundPayer(fundPayerProfile, net)
-                    }
-                    if (s === "local") {
-                      setLocalMmWizardStep(1)
-                      setQualifiedRetailers([])
-                      setOfficialCorridorFallback(null)
-                      setSelectedOfficialRouteId(null)
-                      setSelectedRetailerId("")
-                      setLocalMmRetailersSearched(false)
-                    }
-                  }}
+                  onSourceChange={setL1FundSource}
                   userEmail={user?.email ?? currentUser?.email ?? ""}
                   fundAmount={fundAmount}
                   onFundAmountChange={handleFundAmountChange}
@@ -3141,13 +3363,7 @@ export function DashboardPageInner() {
                   }
                   savedPayerNetwork={fundPayerBinding.network}
                   savedPayerNetworkLabel={
-                    fundPayerBinding.networkLabel
-                      ? `${fundPayerBinding.networkLabel} Money`
-                      : l1FundSource === "airtel"
-                        ? "Airtel Money"
-                        : l1FundSource === "mpesa_ke"
-                          ? "M-Pesa"
-                          : null
+                    fundPayerBinding.networkLabel ? `${fundPayerBinding.networkLabel} Money` : null
                   }
                   t={t}
                   minDepositLabel={t("funding.amount.minimumLine").replace(
@@ -3156,8 +3372,9 @@ export function DashboardPageInner() {
                   )}
                   hidePayerIdentityFields={showFundRegisteredPayerPicker}
                 />
+                ) : null}
 
-                {showFundRegisteredPayerPicker ? (
+                {l1FundSource === "crypto" && showFundRegisteredPayerPicker ? (
                   <RegisteredPayerPicker
                     options={fundPayerOptions}
                     selectedSource={fundPayerSource}
@@ -3627,7 +3844,8 @@ export function DashboardPageInner() {
                     </div>
                   </details>
                 ) : null}
-              </div>
+                </div>
+              </NexusPaymentGatewayCard>
             ) : null}
 
             {showFundModal === "withdraw" ? null : retailerCreditDesk && showFundModal === "add" ? (
@@ -3870,10 +4088,14 @@ export function DashboardPageInner() {
                 </p>
               </div>
             ) : (
-            <div className="shrink-0 space-y-2 border-t border-border/80 bg-card px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-6px_24px_rgba(0,0,0,0.16)] max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:rounded-t-xl max-sm:border-border max-sm:bg-card max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px))] max-sm:pt-2.5 max-sm:shadow-[0_-10px_32px_rgba(0,0,0,0.32)] sm:relative sm:z-20 sm:rounded-none sm:px-0 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:pt-3">
-            {(showFundModal === "withdraw" ||
-              retailerCreditDesk ||
-              (customerRetailFunding && (l1FundSource === "airtel" || l1FundSource === "pick"))) && (
+            <div
+              className={`shrink-0 space-y-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[110] max-sm:mx-auto max-sm:max-w-md max-sm:w-full max-sm:px-3 max-sm:pb-[max(1rem,env(safe-area-inset-bottom,0px))] max-sm:pt-2.5 sm:relative sm:z-20 sm:rounded-none sm:px-0 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:pt-3 ${
+                customerRetailFunding && showFundModal
+                  ? "border-t border-white/5 bg-[#0d1117]/95 max-sm:rounded-t-xl max-sm:shadow-[0_-10px_32px_rgba(0,0,0,0.45)] sm:border-0 sm:bg-transparent sm:shadow-none"
+                  : "border-t border-border/80 bg-card shadow-[0_-6px_24px_rgba(0,0,0,0.16)] max-sm:rounded-t-xl max-sm:border-border max-sm:bg-card max-sm:shadow-[0_-10px_32px_rgba(0,0,0,0.32)]"
+              }`}
+            >
+            {retailerCreditDesk && (
               <div className="mb-0">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground sm:text-sm">
                   {showFundModal === "withdraw"
@@ -4074,7 +4296,11 @@ export function DashboardPageInner() {
                       !(parseCustomerLocalAmountInput(fundAmount) > 0)))
                 }
                 className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold text-white transition-colors disabled:opacity-50 ${
-                  showFundModal === "add" ? "bg-success hover:bg-success/90" : "bg-primary hover:bg-primary/90"
+                  showFundModal === "add"
+                    ? customerRetailFunding
+                      ? "bg-emerald-600 shadow-[0_0_24px_rgba(0,184,124,0.25)] hover:bg-emerald-500"
+                      : "bg-success hover:bg-success/90"
+                    : "bg-primary hover:bg-primary/90"
                 }`}
               >
                 {isFundProcessing ? (
@@ -4092,14 +4318,10 @@ export function DashboardPageInner() {
                         formatLocalFiatAmount(parseCustomerLocalAmountInput(fundAmount) || 0, currency, locale),
                       )
                     : t("withdrawal.cta.withdraw")
-                ) : customerRetailFunding && l1FundSource === "local" ? (
+                ) : customerRetailFunding && showFundModal === "add" && l1FundSource === "local" && localMmWizardStep === 2 ? (
                   t("funding.cta.confirmPayment")
-                ) : customerRetailFunding && l1FundSource === "crypto" ? (
-                  t("funding.cta.submitCryptoDeposit")
-                ) : customerRetailFunding && l1FundSource === "airtel" ? (
-                  t("funding.cta.submitAdminPayment")
-                ) : customerRetailFunding ? (
-                  t("funding.cta.chooseLocalPath")
+                ) : customerRetailFunding && showFundModal === "add" ? (
+                  "Proceed to Deposit"
                 ) : (
                   t("funding.cta.addFunds")
                 )}
@@ -4111,6 +4333,8 @@ export function DashboardPageInner() {
         </div>
       )}
 
+      {!fundPageOnly ? (
+      <>
       {/* Main Content — Container desk + Chat hub (no legacy Wallstreet deck). */}
       <div
         key={activeTab}
@@ -4142,17 +4366,9 @@ export function DashboardPageInner() {
                 isContainerFlowBusy={isContainerFlowBusy}
                 withdrawalEligibility={withdrawalEligibility}
                 onAddFunds={() => {
-                  setShowFundModal("add")
-                  setFundAmount("")
-                  setL1FundSource("pick")
-                  setQualifiedRetailers([])
-                  setSelectedRetailerId("")
-                  setFundTxReference("")
-                  setFundNote("")
-                  setFundMobileNetwork("")
-                  setCryptoFundingMeta(null)
+                  router.push("/recharge")
                 }}
-                onWithdraw={() => void tryOpenFundModal("withdraw")}
+                onWithdraw={() => router.push("/recharge?mode=withdraw")}
                 onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
               />
             ) : null}
@@ -4293,6 +4509,8 @@ export function DashboardPageInner() {
       />
 
       {!isGuestSession ? <TradeCelebrationBootstrap /> : null}
+      </>
+      ) : null}
 
     </div>
   )

@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { getLaunchStarterFixPersonaId, getPlatformLaunchStatus, launchPromotionsActive } from "@/lib/server/platform-launch"
 import { getPublicSecurityProfile } from "@/lib/server/user-security-profile-service"
+import {
+  hasClaimedStartupCapital,
+  shouldSuppressOnboardingPromos,
+} from "@/lib/marketing/onboarding-lifecycle"
 
 /** Internal ops window — not communicated to customers. */
 export const STARTUP_BONUS_CAMPAIGN_MONTHS = 2
@@ -17,6 +21,9 @@ export type StartupBonusOnboardingStatus = {
   starterFixPersonaId: string
   showCampaignPromo: boolean
   campaignContentRevision: string
+  accountCreatedAt: string | null
+  hasClaimedStartupCapital: boolean
+  suppressOnboardingPromos: boolean
 }
 
 function campaignEndsAtFromReceived(receivedAt: string): string {
@@ -49,7 +56,7 @@ export async function buildStartupBonusOnboardingStatus(
   const [profileRes, fixedRes, launch, securityProfile] = await Promise.all([
     admin
       .from("profiles")
-      .select("startup_bonus_received_at,startup_capital_locked_usd,startup_bonus_campaign_ends_at")
+      .select("startup_bonus_received_at,startup_capital_locked_usd,startup_bonus_campaign_ends_at,created_at")
       .eq("id", userId)
       .maybeSingle(),
     admin
@@ -75,8 +82,19 @@ export async function buildStartupBonusOnboardingStatus(
   const starterFixPersonaId = getLaunchStarterFixPersonaId(launch.programs)
 
   const welcome = launch.programs.new_member_welcome
+  const accountCreatedAt =
+    typeof profile?.created_at === "string" ? profile.created_at : null
+  const lifecycleInput = {
+    startupBonusReceivedAt: receivedAt,
+    accountCreatedAt,
+    hasFixedTrade,
+  }
+  const suppressOnboardingPromos = shouldSuppressOnboardingPromos(lifecycleInput)
+  const claimed = hasClaimedStartupCapital(lifecycleInput)
+
   const showCampaignPromo =
     hasStartupBonus &&
+    !suppressOnboardingPromos &&
     isWithinStartupBonusCampaignWindow(
       receivedAt,
       typeof profile?.startup_bonus_campaign_ends_at === "string"
@@ -103,5 +121,8 @@ export async function buildStartupBonusOnboardingStatus(
     starterFixPersonaId,
     showCampaignPromo,
     campaignContentRevision,
+    accountCreatedAt,
+    hasClaimedStartupCapital: claimed,
+    suppressOnboardingPromos,
   }
 }
