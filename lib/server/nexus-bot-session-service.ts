@@ -43,10 +43,22 @@ export function resolveUserDisplayPhase(params: {
   endAt: string
   displayPhase?: string | null
   now?: Date
+  financiallyResolved?: boolean
 }): TradeSessionPhaseKey {
+  const timePhase = resolveTradeSessionPhaseKey({
+    status: params.status,
+    startAt: params.startAt,
+    endAt: params.endAt,
+    now: params.now,
+    financiallyResolved: params.financiallyResolved,
+  })
   if (params.displayPhase) {
     const key = params.displayPhase as TradeSessionPhaseKey
+    const staleEarlyPhase =
+      ["booked", "ready", "waiting_window"].includes(key) &&
+      !["booked", "ready", "waiting_window"].includes(timePhase)
     if (
+      !staleEarlyPhase &&
       [
         "booked",
         "ready",
@@ -62,7 +74,7 @@ export function resolveUserDisplayPhase(params: {
       return key
     }
   }
-  return resolveTradeSessionPhaseKey(params)
+  return timePhase
 }
 
 async function awardAttendancePoints(

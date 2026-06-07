@@ -229,6 +229,29 @@ export async function getTradeSessionByCode(
   }
 }
 
+/** Time-based booked → running → settled lifecycle (replaces legacy reserve triggers). */
+export async function advanceTradeSessionLifecycle(
+  admin: SupabaseClient,
+  opts?: { userId?: string },
+): Promise<{
+  expiredTradeSessions: number
+  legacyCompleted: number
+  repair: Awaited<
+    ReturnType<
+      typeof import("@/lib/server/nexus-bot-settlement-integrity").repairUnsettledTradeSessionParticipants
+    >
+  >
+}> {
+  const { completeDueNexusBotSessions } = await import("@/lib/server/nexus-bot-session-service")
+  const { repairUnsettledTradeSessionParticipants } = await import(
+    "@/lib/server/nexus-bot-settlement-integrity"
+  )
+  const legacyCompleted = await completeDueNexusBotSessions(admin, opts?.userId)
+  const expiredTradeSessions = await expireDueTradeSessions(admin)
+  const repair = await repairUnsettledTradeSessionParticipants(admin, { userId: opts?.userId })
+  return { expiredTradeSessions, legacyCompleted, repair }
+}
+
 export async function expireDueTradeSessions(admin: SupabaseClient): Promise<number> {
   const now = new Date().toISOString()
   const { data, error } = await admin

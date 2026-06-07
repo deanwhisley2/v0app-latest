@@ -5,6 +5,7 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { currencyEngine } from "@/lib/financial/currency-engine"
 import { treasury } from "@/lib/financial/treasury-authority"
 import { sumActiveSessionAccrualUsd } from "@/lib/server/container-session-accruals"
+import { advanceTradeSessionLifecycle } from "@/lib/server/trade-sessions"
 
 export async function GET(request: Request) {
   const blocked = externalApisBlockedResponse()
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
     const { user } = auth
 
     const admin = createAdminClient()
+    await advanceTradeSessionLifecycle(admin, { userId: user.id })
     const { data, error } = await admin
       .from("user_balances")
       .select(

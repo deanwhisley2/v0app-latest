@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import {
-  completeDueNexusBotSessions,
-  syncTradeSessionBotStates,
-} from "@/lib/server/nexus-bot-session-service"
-import { repairUnsettledTradeSessionParticipants } from "@/lib/server/nexus-bot-settlement-integrity"
 import { computeTradeSessionSettlementMonitoring } from "@/lib/server/trade-session-settlement-monitoring"
-import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
+import { advanceTradeSessionLifecycle } from "@/lib/server/trade-sessions"
 
 /**
  * Promote booked trade sessions to running at scheduled start and settle at end.
@@ -23,10 +18,8 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
-    await syncTradeSessionBotStates(admin)
-    const completedLegacyBotSessions = await completeDueNexusBotSessions(admin)
-    const expiredTradeSessions = await expireDueTradeSessions(admin)
-    const repairResult = await repairUnsettledTradeSessionParticipants(admin)
+    const { expiredTradeSessions, legacyCompleted: completedLegacyBotSessions, repair: repairResult } =
+      await advanceTradeSessionLifecycle(admin)
     const settlementMonitoring = await computeTradeSessionSettlementMonitoring(admin)
 
     if (settlementMonitoring.hasStrandedCapital) {

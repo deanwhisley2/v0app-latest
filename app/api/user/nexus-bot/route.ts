@@ -12,6 +12,7 @@ import { sessionProgressPct } from "@/lib/nexus-bot/session-earnings-ux"
 import { userSessionPresentation, TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
+import { advanceTradeSessionLifecycle } from "@/lib/server/trade-sessions"
 import { NEXUS_AUTO_TRADE_PLANS } from "@/lib/nexus-bot/plans"
 
 function mapTradeSessionForUser(row: Record<string, unknown>) {
@@ -20,11 +21,16 @@ function mapTradeSessionForUser(row: Record<string, unknown>) {
   const endAt = ts?.end_at ? String(ts.end_at) : String(row.ends_at ?? "")
   const sessionSlot = String(ts?.session_slot ?? "morning")
   const status = String(row.status ?? "")
+  const now = new Date()
+  const endMs = endAt ? new Date(endAt).getTime() : NaN
+  const pastEnd = Number.isFinite(endMs) && now.getTime() >= endMs
   const phaseKey = resolveUserDisplayPhase({
     status,
     startAt,
     endAt,
     displayPhase: row.display_phase ? String(row.display_phase) : null,
+    now,
+    financiallyResolved: status === "completed" || !pastEnd,
   })
   const presentation = userSessionPresentation(phaseKey)
   const stake = Number(row.stake_usd ?? 0)
@@ -55,6 +61,8 @@ export async function GET(request: Request) {
     if ("response" in auth) return auth.response
     const { user } = auth
     const admin = createAdminClient()
+
+    await advanceTradeSessionLifecycle(admin, { userId: user.id })
 
     const streak = await recordAttendanceVisit(admin, user.id)
     const grants = await getAutoTradeGrantsMap(admin, user.id)

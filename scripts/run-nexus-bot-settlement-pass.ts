@@ -3,7 +3,7 @@
  * Executes a single Nexus Bot settlement pass (admin/service role):
  * - syncTradeSessionBotStates: settle ended trade sessions and mark participants completed
  * - completeDueNexusBotSessions: handle legacy bot sessions without trade_session_id
- * - expireDueTradeSessions: expire ended sessions and run forfeitures after settlements
+ * - expireDueTradeSessions: mark ended trade_sessions rows as expired
  *
  * This is intended for ops/incident recovery when cron hasn't run yet.
  *
@@ -15,10 +15,8 @@
 import { config } from "dotenv"
 import { resolve } from "node:path"
 import { createAdminClient } from "../lib/supabaseAdmin"
-import { completeDueNexusBotSessions, syncTradeSessionBotStates } from "../lib/server/nexus-bot-session-service"
-import { repairUnsettledTradeSessionParticipants } from "../lib/server/nexus-bot-settlement-integrity"
 import { computeTradeSessionSettlementMonitoring } from "../lib/server/trade-session-settlement-monitoring"
-import { expireDueTradeSessions } from "../lib/server/trade-sessions"
+import { advanceTradeSessionLifecycle } from "../lib/server/trade-sessions"
 
 config({ path: resolve(process.cwd(), ".env.local") })
 
@@ -32,10 +30,8 @@ async function main() {
   const admin = createAdminClient()
   const userId = argValue("--user-id") ?? undefined
 
-  await syncTradeSessionBotStates(admin, userId)
-  const legacyCompleted = await completeDueNexusBotSessions(admin, userId)
-  const expiredTradeSessions = await expireDueTradeSessions(admin)
-  const repairResult = await repairUnsettledTradeSessionParticipants(admin, { userId })
+  const { expiredTradeSessions, legacyCompleted, repair: repairResult } =
+    await advanceTradeSessionLifecycle(admin, { userId })
   const settlementMonitoring = await computeTradeSessionSettlementMonitoring(admin)
 
   console.log(

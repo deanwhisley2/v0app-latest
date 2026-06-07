@@ -76,9 +76,15 @@ export function resolveTradeSessionPhaseKey(params: {
     return params.financiallyResolved === false ? "settlement_pending" : "completed"
   }
   if (params.status === "booked" || params.status === "ready" || params.status === "pending") {
+    if (t >= end) {
+      return params.financiallyResolved === false ? "settlement_pending" : "completed"
+    }
+    if (t >= start) return "active_analysing"
     return "booked"
   }
-  if (t >= end) return "capturing"
+  if (t >= end) {
+    return params.financiallyResolved === false ? "settlement_pending" : "capturing"
+  }
   if (t < start) return "booked"
 
   const progress = (t - start) / Math.max(1, end - start)
