@@ -386,7 +386,7 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
       "",
       NEXUS_BALANCE_EXPLAINER,
       "",
-      "Ask for Copy Trading, Fixed Trading, withdrawals, or referrals if you want more detail.",
+      "Ask for Nexus Bot trade sessions, withdrawals, or referrals if you want more detail.",
     ].join("\n")
   }
 
@@ -640,7 +640,7 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
     ])
   ) {
     return [
-      "Open the trading workspace from your dashboard to run Copy Trading (~24h) or Fixed Trading (1 / 3 / 6 months). Read duration and fees on the confirm screen before you commit.",
+      "Open the trading workspace from your dashboard to join a Nexus Bot trade session. Paste your signal code, verify, choose capital, and activate.",
       "",
       containerCustomerEarningsStory(),
       "",
@@ -651,8 +651,8 @@ export function runNexusAssistant(input: NexusAssistantInput): string {
       "Funding rule: allocations spend from available Nexus Main balance — if balance is short, reduce size or Add Funds first.",
       "",
       focusSymbol
-        ? `You have ${focusSymbol} in context on Trade — that view is separate from Copy/Fixed allocations; pick the trade type that matches your plan.`
-        : "Expand the trading workspace on Home to compare Copy and Fixed options.",
+        ? `You have ${focusSymbol} in context on Trade — that view is separate from Nexus Bot sessions; join a session when you are ready.`
+        : "Expand the trading workspace on Home to open Nexus Bot and join a trade session.",
     ].join("\n")
   }
 

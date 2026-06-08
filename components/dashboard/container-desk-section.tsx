@@ -11,7 +11,7 @@ type Props = {
   children: ReactNode
   expandLabel?: string
   collapseLabel?: string
-  /** Active copy + fixed sessions — auto-expands desk on mobile when > 0. */
+  /** Active trade sessions — auto-expands desk on mobile when > 0. */
   activeTradeCount?: number
   /** Bump from dashboard (e.g. trade notification) to force mobile desk open. */
   deskOpenNonce?: number

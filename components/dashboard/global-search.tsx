@@ -68,7 +68,7 @@ const appNavItems: Omit<SearchResult, "id">[] = [
   { title: "History", description: "Deposits, withdrawals, and activity", category: "wallet", icon: <History className="h-4 w-4" />, path: "history" },
   { title: "Deposit funds", description: "Add money to your account", category: "wallet", icon: <Wallet className="h-4 w-4" />, path: "settings" },
   { title: "Withdraw", description: "Cash out to your pocket", category: "wallet", icon: <ArrowUpDown className="h-4 w-4" />, path: "settings" },
-  { title: "Container desk", description: "Copy and fixed trades", category: "action", icon: <TrendingUp className="h-4 w-4" />, path: "container" },
+  { title: "Trading workspace", description: "Nexus Bot trade sessions", category: "action", icon: <TrendingUp className="h-4 w-4" />, path: "container" },
   { title: "Account balances", description: "Main, container, and exchange", category: "wallet", icon: <Receipt className="h-4 w-4" />, path: "settings" },
 ]
 

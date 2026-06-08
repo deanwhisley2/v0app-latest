@@ -195,7 +195,7 @@ export async function grantNewMemberWelcomeBonusToProfile(
     reason: "New member welcome bonus (startup trading capital)",
     notificationType: "startup_trading_capital",
     notificationTitle: "New member welcome bonus credited",
-    notificationBody: `${bonusFmt} is in your Nexus Main balance. Explore copy trading, fixed trades, and fast withdrawals.`,
+    notificationBody: `${bonusFmt} is in your Nexus Main balance. Explore Nexus Bot trade sessions and fast withdrawals.`,
     sourceKind: "startup_trading_capital",
   })
   if (!ok) return

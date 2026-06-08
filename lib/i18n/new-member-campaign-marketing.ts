@@ -3,16 +3,16 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
   "marketing.newMember.bannerBadge": "Live campaign",
   "marketing.newMember.bannerTitle": "New member bonus — {{amount}} trading capital on signup",
   "marketing.newMember.bannerSubtitle":
-    "Real-time crypto intelligence · Copy trading · Fixed trades · Fast withdrawals",
+    "Real-time crypto intelligence · Nexus Bot sessions · Fast withdrawals",
   "marketing.newMember.bannerCta": "Join serious traders on Nexus Pro today.",
 
   "marketing.newMember.registerBadge": "Limited welcome offer",
   "marketing.newMember.registerTitle": "Get {{amount}} in Nexus Main when you join",
   "marketing.newMember.registerLead":
-    "Professional trading infrastructure with copy trading, fixed-trade desks, and corridor-fast withdrawals.",
+    "Professional trading infrastructure with Nexus Bot sessions and corridor-fast withdrawals.",
   "marketing.newMember.bulletIntelligence": "Real-time crypto market intelligence",
-  "marketing.newMember.bulletCopy": "Institutional copy-trading desks",
-  "marketing.newMember.bulletFixed": "Fixed-trade sessions with clear outcomes",
+  "marketing.newMember.bulletCopy": "Live signal-driven trade sessions",
+  "marketing.newMember.bulletFixed": "Clear session outcomes and earnings settlement",
   "marketing.newMember.bulletWithdraw": "Fast, corridor-native withdrawals",
   "marketing.newMember.bulletBonus": "One-time startup capital on registration (not a deposit bonus)",
 
@@ -21,7 +21,7 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
     "New members receive one-time startup capital in Nexus Main. Built for serious traders who want speed, clarity, and professional execution.",
   "marketing.newMember.modalReward": "Your welcome bonus: {{amount}} credited to Nexus Main",
   "marketing.newMember.modalFooter":
-    "Use startup capital to open Copy Trading or Fixed Trading. When a trade completes, earnings settle per platform rules — transfer to Nexus Main when you are ready.",
+    "Use startup capital to open a Nexus Bot trade session. When a session completes, earnings settle per platform rules — transfer to Nexus Main when you are ready.",
   "marketing.newMember.modalContinue": "Explore the platform",
 
   "marketing.newMember.howToTradeButton": "Quick guide",
@@ -32,7 +32,7 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
   "marketing.newMember.onboardProgress": "Step {{step}} of {{total}}",
   "marketing.newMember.onboardStep1Title": "Congratulations! You received your startup capital.",
   "marketing.newMember.onboardStep1Body":
-    "{{amount}} is in Nexus Main — choose Copy Trading or Fixed Trading from your dashboard.",
+    "{{amount}} is in Nexus Main — open a Nexus Bot trade session from your dashboard.",
   "marketing.newMember.onboardStep1Cta": "Open trading workspace",
   "marketing.newMember.onboardStep2Title": "Start your first allocation",
   "marketing.newMember.onboardStep2Body":
@@ -44,7 +44,7 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
   "marketing.newMember.onboardSkipForNow": "Skip for now",
 
   "marketing.newMember.activateLabel": "Startup capital ready",
-  "marketing.newMember.activateHint": "Copy Trading or Fixed Trading",
+  "marketing.newMember.activateHint": "Nexus Bot trade session",
   "marketing.newMember.releaseBullish": "Transfer earnings",
   "marketing.newMember.activateOpening": "Opening your trade…",
   "marketing.newMember.activateSuccess": "Trade opened. Track progress on your dashboard; earnings credit when the session completes.",
@@ -59,7 +59,7 @@ export const newMemberCampaignMarketingEn: Record<string, string> = {
   "marketing.newMember.panelViewTrades": "View my trades",
 
   "marketing.newMember.testimonial1":
-    "“I opened Fixed Trading on day one — earnings settled clearly, then I transferred to Nexus Main.” — James K., Kenya",
+    "“I joined a Nexus Bot session on day one — earnings settled clearly, then I transferred to Nexus Main.” — James K., Kenya",
   "marketing.newMember.testimonial2":
     "“Simple steps: fund, trade, track, transfer. I control when earnings move.” — Amina M., Uganda",
   "marketing.newMember.testimonial3":

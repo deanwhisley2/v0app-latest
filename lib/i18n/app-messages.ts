@@ -234,7 +234,7 @@ const en: Record<string, string> = {
   "notifications.center.detailBalancePlain": "Transfer completed.",
   "notifications.trade.fixedFinishedTitle": "Completed",
   "notifications.trade.fixedFinishedMessage": "Principal {{principal}} · Bullish Trades {{pocket}}",
-  "notifications.trade.fixedFinishedDetail": "Fixed trade closed.",
+  "notifications.trade.fixedFinishedDetail": "Trade session closed.",
   "notifications.trade.scheduleActiveTitle": "Active",
   "notifications.trade.scheduleActiveMessage": "{{amount}} · {{months}} mo",
   "notifications.trade.copyCycleTitle": "Completed",

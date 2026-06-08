@@ -1678,7 +1678,7 @@ export function ContainerMode({
           <div className="flex gap-3 text-sm">
             <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
             <div className="min-w-0">
-              <p className="font-semibold text-destructive">Fixed trades paused — pending retailer funding</p>
+              <p className="font-semibold text-destructive">Trade sessions paused — pending retailer funding</p>
               <p className="mt-1 text-muted-foreground">
                 You have inbound local mobile-money approvals waiting. Unlock new fixed-trade locks once the queue clears
                 (Dashboard → Add Funds → incoming requests).

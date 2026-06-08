@@ -15,17 +15,17 @@ export const quickGuideCopyEn: Record<string, string> = {
   "guide.quickStart.step1.learnMore":
     "Use Add Funds for crypto (USDT TRC20) or local mobile money. While a deposit is being reviewed, it may show as processing balance — only confirmed funds count as available.",
 
-  "guide.quickStart.step2.title": "Choose a trading option",
+  "guide.quickStart.step2.title": "Open a trade session",
   "guide.quickStart.step2.body":
-    "Select Copy Trading or Fixed Trading. Review duration, requirements, and how much you can allocate before you continue.",
+    "Open the trading workspace, paste your signal code from our WhatsApp channel, and review how much capital you want to allocate.",
   "guide.quickStart.step2.learnMore":
-    "Copy Trading runs for about 24 hours. Fixed Trading locks your allocation for 1, 3, or 6 months. Open the trading workspace from your dashboard to compare options.",
+    "Nexus Bot runs scheduled trade sessions. Open the trading workspace from your dashboard, verify your code, choose capital, and activate.",
 
   "guide.quickStart.step3.title": "Start your allocation",
   "guide.quickStart.step3.body":
     "Confirm the amount from Nexus Main. Those funds move into an active trading position and stay unavailable for withdrawal until released under platform rules.",
   "guide.quickStart.step3.learnMore":
-    "Your stake remains yours. It is reserved for the open trade until the session completes or you use an allowed early exit on Fixed Trading (fees shown before you confirm).",
+    "Your stake remains yours. It is reserved for the open trade session until the session completes under platform rules.",
 
   "guide.quickStart.step4.title": "Track progress",
   "guide.quickStart.step4.body":
@@ -43,7 +43,7 @@ export const quickGuideCopyEn: Record<string, string> = {
   "guide.quickStart.step6.body":
     "Use available Nexus Main funds for a new trade, or request a withdrawal from eligible balances.",
   "guide.quickStart.step6.learnMore":
-    "Withdrawals follow the limits and verification shown in Wallet before you submit. Reinvest by funding another Copy or Fixed trade from available balance.",
+    "Withdrawals follow the limits and verification shown in Wallet before you submit. Reinvest by opening another Nexus Bot trade session from available balance.",
 
   "guide.tooltip.nexusMain":
     "Your primary wallet for deposits, opening trades, and withdrawals after earnings are transferred.",
@@ -51,10 +51,10 @@ export const quickGuideCopyEn: Record<string, string> = {
     "Funds you can use right now for new trades or withdrawal (after any holds).",
   "guide.tooltip.processingBalance":
     "Deposits or transfers still being confirmed — not yet spendable.",
-  "guide.tooltip.copyTrading":
-    "Follow a trader strategy for about 24 hours, then settle per platform rules.",
-  "guide.tooltip.fixedTrading":
-    "Lock funds for a fixed term (1, 3, or 6 months) with scheduled settlement.",
+  "guide.tooltip.nexusBot":
+    "Nexus Bot runs live trade sessions from shared signal codes — verify, allocate capital, and activate.",
+  "guide.tooltip.tradeSession":
+    "A scheduled trading session you join with a signal code and capital from Nexus Main.",
   "guide.tooltip.pocketBalance":
     "Holds completed trade earnings until you transfer them to Nexus Main.",
 }

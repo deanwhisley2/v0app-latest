@@ -41,8 +41,8 @@ export const QUICK_START_STEPS: QuickGuideStep[] = [
     bodyKey: "guide.quickStart.step2.body",
     learnMoreKey: "guide.quickStart.step2.learnMore",
     terms: [
-      { phrase: "Copy Trading", tooltipKey: "guide.tooltip.copyTrading" },
-      { phrase: "Fixed Trading", tooltipKey: "guide.tooltip.fixedTrading" },
+      { phrase: "Nexus Bot", tooltipKey: "guide.tooltip.nexusBot" },
+      { phrase: "trade session", tooltipKey: "guide.tooltip.tradeSession" },
     ],
   },
   {
