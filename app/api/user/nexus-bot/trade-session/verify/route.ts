@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin"
 import { normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
 import { VERIFY_STEPS_USER } from "@/lib/nexus-bot/user-session-messaging"
 import { expireDueTradeSessions } from "@/lib/server/trade-sessions"
+import { tradeSignalFailureCopy } from "@/lib/nexus-bot/trade-signal-share"
 import { verifyTradeSessionCode } from "@/lib/server/trade-session-verification"
 
 export async function POST(request: Request) {
@@ -43,17 +44,28 @@ export async function POST(request: Request) {
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Internal error"
-    const status =
-      msg === "CODE_INVALID_OR_EXPIRED" || msg === "SESSION_EXPIRED" ? 400 : 500
+    const knownFailures = new Set([
+      "invalid_format",
+      "not_found",
+      "draft",
+      "expired",
+      "terminated",
+      "not_active",
+      "no_yield_config",
+      "SESSION_EXPIRED",
+    ])
+    const status = knownFailures.has(msg) ? 400 : 500
+    const failureCopy = tradeSignalFailureCopy(msg)
     return NextResponse.json(
       {
         ok: false,
         error:
-          msg === "CODE_INVALID_OR_EXPIRED"
-            ? "This trade code is not active or has expired."
-            : msg === "SESSION_EXPIRED"
-              ? "This session window has ended."
+          msg === "SESSION_EXPIRED"
+            ? "This session window has ended."
+            : knownFailures.has(msg)
+              ? failureCopy.detail
               : msg,
+        code: msg,
       },
       { status },
     )

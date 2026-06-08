@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 import { NexusTradeSignalCard } from "@/components/marketing/nexus-trade-signal-card"
-import { normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
+import { isValidTradeCodeFormat, normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
 import { buildTradeSignalShareUrl } from "@/lib/nexus-bot/trade-signal-share"
 import { resolvePublicTradeSignal } from "@/lib/server/trade-signal-public"
 import { createAdminClient } from "@/lib/supabaseAdmin"
@@ -41,8 +42,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TradeSignalSharePage({ params }: PageProps) {
   const { code: raw } = await params
+  const code = normalizeTradeCode(raw)
+  if (code && code !== raw.trim() && isValidTradeCodeFormat(code)) {
+    redirect(`/signal/${encodeURIComponent(code)}`)
+  }
   const admin = createAdminClient()
-  const signal = await resolvePublicTradeSignal(admin, raw)
+  const signal = await resolvePublicTradeSignal(admin, code || raw)
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#05070d] text-foreground">

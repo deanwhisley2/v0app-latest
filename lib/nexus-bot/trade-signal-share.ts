@@ -96,11 +96,50 @@ export function buildWhatsAppShareTemplate(params: {
   ].join("\n")
 }
 
+export function tradeSignalFailureCopy(reason: string): { headline: string; detail: string } {
+  switch (reason) {
+    case "invalid_format":
+      return {
+        headline: "Invalid Signal Link",
+        detail:
+          "The link may be broken (extra characters from WhatsApp). Copy the trade code NXP-XXXX-XXXX manually into Nexus Bot.",
+      }
+    case "not_found":
+      return {
+        headline: "Code Not Registered",
+        detail: "This code was generated but never registered as an active session. Ask for today's live signal.",
+      }
+    case "draft":
+      return {
+        headline: "Signal Not Published",
+        detail: "This session is still a draft and is not open for participants yet.",
+      }
+    case "expired":
+      return STATE_COPY.expired
+    case "terminated":
+      return {
+        headline: "Signal Ended Early",
+        detail: "This session was closed by admin and is no longer accepting participants.",
+      }
+    case "no_yield_config":
+      return {
+        headline: "Signal Unavailable",
+        detail: "This session is not fully configured. Contact support for today's active code.",
+      }
+    case "not_active":
+      return STATE_COPY.unregistered
+    default:
+      return STATE_COPY.unregistered
+  }
+}
+
 export function buildTradeSignalPublicView(params: {
   codeRaw: string
   state: TradeSignalPublicState
   sessionSlot?: string | null
   origin?: string
+  headline?: string
+  detail?: string
 }): TradeSignalPublicView {
   const code = normalizeTradeCode(params.codeRaw)
   const copy = STATE_COPY[params.state]
@@ -112,8 +151,8 @@ export function buildTradeSignalPublicView(params: {
       params.sessionSlot === "morning" || params.sessionSlot === "evening" ? params.sessionSlot : null,
     sessionLabel,
     statusLabel: params.state === "active" ? copy.statusLabel : null,
-    headline: copy.headline,
-    detail: copy.detail,
+    headline: params.headline ?? copy.headline,
+    detail: params.detail ?? copy.detail,
     shareUrl: buildTradeSignalShareUrl(code, params.origin),
     copyHint: "Paste this code into Nexus Bot",
   }

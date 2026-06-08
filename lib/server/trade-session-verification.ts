@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { normalizeTradeCode } from "@/lib/nexus-bot/trade-code"
-import { findActiveTradeSessionByCode } from "@/lib/server/trade-sessions"
+import { diagnoseTradeSessionCode } from "@/lib/server/trade-sessions"
 
 export async function verifyTradeSessionCode(
   admin: SupabaseClient,
@@ -17,8 +17,9 @@ export async function verifyTradeSessionCode(
   }
 }> {
   const code = normalizeTradeCode(codeRaw)
-  const session = await findActiveTradeSessionByCode(admin, code)
-  if (!session) throw new Error("CODE_INVALID_OR_EXPIRED")
+  const diagnosis = await diagnoseTradeSessionCode(admin, code)
+  if (!diagnosis.ok) throw new Error(diagnosis.reason)
+  const session = diagnosis.session
 
   const now = new Date()
   const endMs = new Date(session.endAt).getTime()

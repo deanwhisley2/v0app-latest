@@ -1,6 +1,31 @@
-/** Normalize trade session codes (NXP-7A82-X91K). */
+const TRADE_CODE_EXTRACT = /NXP-[A-Z0-9]{4}-[A-Z0-9]{4}/i
+const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF\u202A-\u202E]/g
+
+/**
+ * Normalize trade session codes (NXP-7A82-X91K).
+ * Tolerates messenger link junk: trailing `.` `!` `)`, pasted full URLs, zero-width chars.
+ */
 export function normalizeTradeCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/\s+/g, "")
+  let s = String(raw ?? "").replace(INVISIBLE_CHARS, "").trim()
+  if (!s) return ""
+
+  try {
+    if (/%[0-9A-Fa-f]{2}/.test(s)) {
+      s = decodeURIComponent(s)
+    }
+  } catch {
+    /* keep original */
+  }
+
+  const fromSignalPath = s.match(/\/signal\/([^/?#\s]+)/i)
+  const fromTradeQuery = s.match(/[?&]tradeCode=([^&#\s]+)/i)
+  if (fromSignalPath?.[1]) s = fromSignalPath[1]
+  else if (fromTradeQuery?.[1]) s = fromTradeQuery[1]
+
+  const extracted = s.match(TRADE_CODE_EXTRACT)
+  if (extracted) return extracted[0].toUpperCase()
+
+  return s.toUpperCase().replace(/\s+/g, "").replace(/[.,;:!?)>\]}"']+$/g, "")
 }
 
 export const TRADE_CODE_PATTERN = /^NXP-[A-Z0-9]{4}-[A-Z0-9]{4}$/

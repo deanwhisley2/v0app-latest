@@ -163,6 +163,62 @@ export function previewRegisteredTradeSessionYield(
   }
 }
 
+/** Why a trade code cannot be verified or joined — used for clearer user messaging. */
+export type TradeSessionCodeFailure =
+  | "invalid_format"
+  | "not_found"
+  | "draft"
+  | "expired"
+  | "terminated"
+  | "not_active"
+  | "no_yield_config"
+
+export async function diagnoseTradeSessionCode(
+  admin: SupabaseClient,
+  codeRaw: string,
+  now = new Date(),
+): Promise<
+  | {
+      ok: true
+      session: NonNullable<Awaited<ReturnType<typeof findActiveTradeSessionByCode>>>
+    }
+  | { ok: false; code: string; reason: TradeSessionCodeFailure }
+> {
+  const code = normalizeTradeCode(codeRaw)
+  if (!isValidTradeCodeFormat(code)) {
+    return { ok: false, code, reason: "invalid_format" }
+  }
+
+  const { data, error } = await admin
+    .from("trade_sessions")
+    .select(
+      "id,code,session_name,display_label,session_slot,start_at,end_at,status,max_yield_percent,admin_terminated_at",
+    )
+    .eq("code", code)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) return { ok: false, code, reason: "not_found" }
+
+  if (data.admin_terminated_at) return { ok: false, code, reason: "terminated" }
+
+  const status = String(data.status)
+  const endMs = new Date(String(data.end_at)).getTime()
+  if (status === "expired" || endMs <= now.getTime()) {
+    return { ok: false, code, reason: "expired" }
+  }
+  if (status === "draft") return { ok: false, code, reason: "draft" }
+  if (status !== "active") return { ok: false, code, reason: "not_active" }
+
+  const maxYield = data.max_yield_percent != null ? Number(data.max_yield_percent) : null
+  if (!(maxYield != null && maxYield > 0)) {
+    return { ok: false, code, reason: "no_yield_config" }
+  }
+
+  const session = await findActiveTradeSessionByCode(admin, code, now)
+  if (!session) return { ok: false, code, reason: "not_active" }
+  return { ok: true, session }
+}
+
 export async function findActiveTradeSessionByCode(
   admin: SupabaseClient,
   codeRaw: string,
