@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import { SECURITY_SETUP_INPUT_CLASS } from "@/lib/nexus-security-setup-field-styles"
 
 type Props = {
   network: "MTN" | "Airtel"
@@ -51,22 +52,22 @@ export function SecurityNetworkSetupCard({
 
       <div className="space-y-2.5">
         <div>
-          <Label className="text-[10px] font-medium text-muted-foreground">Mobile money number</Label>
+          <Label className="text-xs font-medium text-foreground">Mobile money number</Label>
           <Input
             value={number}
             onChange={(e) => onNumberChange(e.target.value)}
-            className="mt-1 min-h-[44px] bg-background/90"
+            className={SECURITY_SETUP_INPUT_CLASS}
             placeholder="+256…"
             inputMode="tel"
             autoComplete="tel"
           />
         </div>
         <div>
-          <Label className="text-[10px] font-medium text-muted-foreground">Registered account name</Label>
+          <Label className="text-xs font-medium text-foreground">Registered account name</Label>
           <Input
             value={accountNames}
             onChange={(e) => onAccountNamesChange(e.target.value)}
-            className="mt-1 min-h-[44px] bg-background/90"
+            className={SECURITY_SETUP_INPUT_CLASS}
             placeholder="e.g. RICHARD KATO"
             autoComplete="name"
           />
@@ -85,7 +86,7 @@ export function SecurityNetworkSetupCard({
             <Input
               value={withdrawalNumber}
               onChange={(e) => onWithdrawalNumberChange?.(e.target.value)}
-              className="min-h-[44px] bg-background/90"
+              className={SECURITY_SETUP_INPUT_CLASS}
               placeholder="+256… withdrawal"
               inputMode="tel"
               autoComplete="tel"
@@ -93,7 +94,7 @@ export function SecurityNetworkSetupCard({
             <Input
               value={withdrawalNames}
               onChange={(e) => onWithdrawalNamesChange?.(e.target.value)}
-              className="min-h-[44px] bg-background/90"
+              className={SECURITY_SETUP_INPUT_CLASS}
               placeholder="Registered name(s) for withdrawal"
               autoComplete="name"
             />

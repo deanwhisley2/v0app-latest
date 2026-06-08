@@ -3,13 +3,7 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { normalizeReferralCodeInput } from "@/lib/referral-code"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
-import { isSupportedOperatingCountry } from "@/lib/operating-countries"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
-import {
-  COUNTRY_CORRIDOR_REQUIRED_MESSAGE,
-  enforceCountryCorridor,
-  recordSignupCorridorEvent,
-} from "@/lib/server/country-corridor-guard"
 import { getRequestIpAddress } from "@/lib/server/request-geo"
 import { normalizeCampaignSlugInput } from "@/lib/marketing/campaign-slug"
 import {
@@ -27,29 +21,34 @@ import {
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { createAuthSessionForEmail } from "@/lib/server/email-verification-session"
 import { trackLoginSession } from "@/lib/server/login-session"
-import { markProfilePendingVerificationEmail } from "@/lib/server/pending-verification-email"
 import {
   authEmailConfirmedAtRegister,
   confirmAuthEmailForPasswordLogin,
 } from "@/lib/server/register-auth-access"
 import { syncRegisterProfileContact } from "@/lib/server/register-profile-sync"
-import { attemptRegisterEmailVerification } from "@/lib/server/register-email-verification"
+import { setupSecurityProfile } from "@/lib/server/user-security-profile-service"
+
+/** Default corridor when signup no longer asks for country (UG-first product). */
+const DEFAULT_FUNDING_COUNTRY = "UG"
 
 type RegisterBody = {
-  email?: string
+  phone?: string
   password?: string
   full_name?: string
-  phone?: string
+  security_pin?: string
   preferred_language?: string
   preferred_currency?: string
-  funding_country_code?: string
   referral_code?: string
   campaign_slug?: string
+  /** Legacy fields — ignored for new phone-only signups */
+  email?: string
+  funding_country_code?: string
 }
 
 export async function POST(request: Request) {
   const blocked = externalApisBlockedResponse()
   if (blocked) return blocked
+
   let body: RegisterBody
   try {
     body = (await request.json()) as RegisterBody
@@ -57,21 +56,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const emailRaw = typeof body.email === "string" ? body.email.trim() : ""
+  const phoneRaw = typeof body.phone === "string" ? body.phone.trim() : ""
   const password = typeof body.password === "string" ? body.password : ""
   const full_name = typeof body.full_name === "string" ? body.full_name.trim() : ""
-  const phoneRaw = typeof body.phone === "string" ? body.phone.trim() : ""
+  const securityPin = typeof body.security_pin === "string" ? body.security_pin.trim() : ""
   const preferred_language =
     typeof body.preferred_language === "string" ? body.preferred_language.trim().slice(0, 12) : ""
   const preferred_currency_raw =
     typeof body.preferred_currency === "string" ? body.preferred_currency.trim().toUpperCase().slice(0, 8) : ""
-  const funding_country_raw =
-    typeof body.funding_country_code === "string" ? body.funding_country_code.trim().toUpperCase().slice(0, 2) : ""
-  const funding_country_code = /^[A-Z]{2}$/.test(funding_country_raw) ? funding_country_raw : ""
-  const preferred_currency = displayCurrencyForCustomer(
-    funding_country_code,
-    preferred_currency_raw || null,
-  )
+  const preferred_currency = displayCurrencyForCustomer(DEFAULT_FUNDING_COUNTRY, preferred_currency_raw || null)
   const referralInvite = normalizeReferralCodeInput(
     typeof body.referral_code === "string" ? body.referral_code : "",
   )
@@ -79,7 +72,7 @@ export async function POST(request: Request) {
     typeof body.campaign_slug === "string" ? body.campaign_slug : "",
   )
 
-  const contactErr = validateRegisterContact(emailRaw, phoneRaw)
+  const contactErr = validateRegisterContact(phoneRaw, securityPin)
   if (contactErr) {
     return NextResponse.json({ error: contactErr }, { status: 400 })
   }
@@ -90,42 +83,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter your full name." }, { status: 400 })
   }
 
-  const resolved = resolveRegisterAuthEmail(emailRaw, phoneRaw)
-  const { authEmail, phone, requiresEmailVerification } = resolved
+  const resolved = resolveRegisterAuthEmail(phoneRaw)
+  const { authEmail, phone } = resolved
 
-  if (!funding_country_code || !isSupportedOperatingCountry(funding_country_code)) {
-    return NextResponse.json({ error: COUNTRY_CORRIDOR_REQUIRED_MESSAGE }, { status: 400 })
-  }
-
-  const corridor = await enforceCountryCorridor(request, funding_country_code)
+  const admin = createAdminClient()
   const ip = getRequestIpAddress(request)
   const userAgent = request.headers.get("user-agent")
 
-  try {
-    const adminAudit = createAdminClient()
-    await recordSignupCorridorEvent(adminAudit, {
-      action: "register",
-      selectedCountry: funding_country_code,
-      detectedCountry: corridor.ok ? corridor.detectedCountry : corridor.detectedCountry,
-      ipAddress: ip,
-      blocked: !corridor.ok,
-      email: authEmail,
-      userAgent,
-      detail: corridor.ok ? corridor.warning ?? null : corridor.message,
-    })
-  } catch {
-    /* audit best-effort */
-  }
-
-  if (!corridor.ok) {
-    return NextResponse.json({ error: corridor.message }, { status: 403 })
-  }
-
-  const admin = createAdminClient()
   const userMetadata: Record<string, unknown> = {
     full_name,
-    ...(phone ? { phone } : {}),
-    security_profile_required: true,
+    phone,
+    security_profile_required: false,
+    phone_signup: true,
     ...(preferred_language ? { preferred_language } : {}),
     ...(preferred_currency ? { preferred_currency } : {}),
   }
@@ -133,7 +102,7 @@ export async function POST(request: Request) {
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: authEmail,
     password,
-    email_confirm: authEmailConfirmedAtRegister(requiresEmailVerification, phone),
+    email_confirm: authEmailConfirmedAtRegister(false, phone),
     user_metadata: userMetadata,
   })
 
@@ -144,159 +113,92 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
-    try {
-      const existingId =
-        (await findAuthUserIdByEmail(admin, authEmail)) ??
-        (phone ? await resolveExistingUserIdByPhone(admin, phone) : null)
-      if (!existingId) {
-        return NextResponse.json(
-          { error: friendlyRegisterAuthError(createError.message) },
-          { status: 400 },
-        )
-      }
-      const { data: profRow } = await admin
-        .from("profiles")
-        .select("is_verified")
-        .eq("id", existingId)
-        .maybeSingle()
-      if (profRow?.is_verified === true) {
-        return NextResponse.json(
-          {
-            error:
-              "This account is already registered. Sign in with your password, or use recovery if you need help.",
-          },
-          { status: 400 },
-        )
-      }
-      await syncRegisterProfileContact(admin, existingId, {
-        phone,
-        full_name,
-        funding_country_code,
-      })
-      let verificationEmailStatus: "sent" | "delivery_pending" | "generation_failed" | undefined
-      let verificationEmailError: string | undefined
-      if (requiresEmailVerification && emailRaw) {
-        const pendingEmail = emailRaw.toLowerCase()
-        await markProfilePendingVerificationEmail(admin, existingId, pendingEmail, userMetadata)
-        const emailAttempt = await attemptRegisterEmailVerification({
-          userId: existingId,
-          emailRaw,
-          ipAddress: ip,
-          userAgent,
-        })
-        verificationEmailStatus = emailAttempt.status
-        verificationEmailError = emailAttempt.error
-      }
-      await confirmAuthEmailForPasswordLogin(admin, existingId)
-      await grantRegisterWelcomeBonus(admin, existingId)
-      return NextResponse.json({
-        ok: true,
-        requiresEmailVerification,
-        email: requiresEmailVerification ? emailRaw.toLowerCase() : undefined,
-        ...(verificationEmailStatus
-          ? {
-              verificationEmailStatus,
-              ...(verificationEmailError ? { verificationEmailError } : {}),
-            }
-          : {}),
-      })
-    } catch (e) {
-      console.warn("[register] duplicate resend path:", e instanceof Error ? e.message : String(e))
-      return NextResponse.json(
-        { error: friendlyRegisterAuthError(createError.message) },
-        { status: 400 },
-      )
-    }
+    const existingId =
+      (await findAuthUserIdByEmail(admin, authEmail)) ??
+      (await resolveExistingUserIdByPhone(admin, phone))
+    return NextResponse.json(
+      {
+        error:
+          "This phone number is already registered. Sign in with your password, or contact support if you need help.",
+      },
+      { status: 400 },
+    )
   }
 
   const newUserId = created.user?.id
-  if (newUserId) {
-    await syncRegisterProfileContact(admin, newUserId, {
-      phone,
-      full_name,
-      funding_country_code,
-    })
-    if (requiresEmailVerification && resolved.displayEmail) {
-      await markProfilePendingVerificationEmail(
-        admin,
-        newUserId,
-        resolved.displayEmail,
-        userMetadata,
-      )
-    }
-    await grantRegisterWelcomeBonus(admin, newUserId)
-    runRegisterPostSignup(admin, {
-      userId: newUserId,
-      authEmail,
-      phone,
-      fundingCountryCode: funding_country_code,
-      referralInvite,
-      campaignSlug,
-      userMetadata,
-    })
-
-    if (!requiresEmailVerification) {
-      const { error: profErr } = await admin
-        .from("profiles")
-        .update({ is_verified: true })
-        .eq("id", newUserId)
-      if (profErr) {
-        console.warn("[register] phone-only is_verified:", profErr.message)
-      }
-
-      const sessionResult = await createAuthSessionForEmail(authEmail)
-      if (sessionResult.ok) {
-        try {
-          const { createRouteHandlerSupabaseClient } = await import("@/lib/supabase/route-handler")
-          const supabase = await createRouteHandlerSupabaseClient()
-          const { data: sessionData } = await supabase.auth.getSession()
-          const accessToken = sessionData.session?.access_token
-          if (accessToken) {
-            await trackLoginSession({
-              userId: sessionResult.userId,
-              bearerToken: accessToken,
-              userAgent: userAgent ?? "",
-              ipAddress: ip,
-            })
-          }
-        } catch (e) {
-          console.warn("[register] session track:", e instanceof Error ? e.message : e)
-        }
-        return NextResponse.json({
-          ok: true,
-          session: true,
-          requiresEmailVerification: false,
-        })
-      }
-    }
+  if (!newUserId) {
+    return NextResponse.json({ error: "Account was not created. Try again." }, { status: 500 })
   }
 
-  if (requiresEmailVerification && emailRaw) {
-    const emailAttempt = await attemptRegisterEmailVerification({
-      userId: newUserId!,
-      emailRaw,
-      ipAddress: ip,
-      userAgent,
-    })
+  await syncRegisterProfileContact(admin, newUserId, {
+    phone,
+    full_name,
+    funding_country_code: DEFAULT_FUNDING_COUNTRY,
+  })
 
-    const sessionGranted = await grantRegisterAuthSession({
-      authEmail,
-      userId: newUserId!,
-      userAgent: userAgent ?? "",
-      ipAddress: ip,
+  try {
+    await setupSecurityProfile(admin, {
+      userId: newUserId,
+      securityCode: securityPin,
+      payoutMethod: "mobile_money",
     })
+  } catch (pinErr) {
+    console.error("[register] security PIN:", pinErr)
+    try {
+      await admin.auth.admin.deleteUser(newUserId)
+    } catch {
+      /* best-effort rollback */
+    }
+    return NextResponse.json(
+      {
+        error:
+          pinErr instanceof Error ? pinErr.message : "Could not save your Security PIN. Try again.",
+      },
+      { status: 400 },
+    )
+  }
 
+  await confirmAuthEmailForPasswordLogin(admin, newUserId)
+
+  const { error: profErr } = await admin
+    .from("profiles")
+    .update({ is_verified: true })
+    .eq("id", newUserId)
+  if (profErr) {
+    console.warn("[register] is_verified:", profErr.message)
+  }
+
+  await grantRegisterWelcomeBonus(admin, newUserId)
+  runRegisterPostSignup(admin, {
+    userId: newUserId,
+    authEmail,
+    phone,
+    fundingCountryCode: DEFAULT_FUNDING_COUNTRY,
+    referralInvite,
+    campaignSlug,
+    userMetadata,
+  })
+
+  const sessionGranted = await grantRegisterAuthSession({
+    authEmail,
+    userId: newUserId,
+    userAgent: userAgent ?? "",
+    ipAddress: ip,
+  })
+
+  if (!sessionGranted) {
     return NextResponse.json({
       ok: true,
-      requiresEmailVerification: true,
-      email: emailRaw.toLowerCase(),
-      session: sessionGranted,
-      verificationEmailStatus: emailAttempt.status,
-      ...(emailAttempt.error ? { verificationEmailError: emailAttempt.error } : {}),
+      session: false,
+      message: "Account created. Sign in with your phone number and password.",
     })
   }
 
-  return NextResponse.json({ ok: true, requiresEmailVerification: false })
+  return NextResponse.json({
+    ok: true,
+    session: true,
+    requiresEmailVerification: false,
+  })
 }
 
 async function resolveExistingUserIdByPhone(

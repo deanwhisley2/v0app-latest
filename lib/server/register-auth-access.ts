@@ -1,7 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const PHONE_AUTH_EMAIL_DOMAIN = "accounts.nexuspro.it.com"
-
 /**
  * Email stabilization phase: confirm Supabase auth email at register so password login works
  * while profiles.is_verified stays false until the inbox verification code is entered.
@@ -30,6 +28,4 @@ export async function confirmAuthEmailForPasswordLogin(
 export const confirmAuthEmailForPhonePasswordLogin = confirmAuthEmailForPasswordLogin
 
 /** Internal routing address for phone-only auth users. */
-export function phoneAuthEmailFromDigits(digits: string): string {
-  return `p${digits}@${PHONE_AUTH_EMAIL_DOMAIN}`
-}
+export { phoneAuthEmailFromDigits } from "@/lib/auth/register-contact"

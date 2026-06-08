@@ -9,42 +9,51 @@ export function isValidRegisterPhone(raw: string): boolean {
   return digits.length >= 9 && digits.length <= 15
 }
 
+export function isValidRegisterSecurityPin(raw: string): boolean {
+  return /^\d{6}$/.test(raw.trim())
+}
+
+/** @deprecated Legacy email register — new signups are phone-only. */
 export function isValidRegisterEmail(raw: string): boolean {
   const trimmed = raw.trim()
   if (!trimmed) return false
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
 }
 
-/** Email is required; phone is optional secondary contact. */
-export function validateRegisterContact(emailRaw: string, phoneRaw: string): string | null {
-  const email = emailRaw.trim()
-  const phone = normalizeRegisterPhone(phoneRaw)
-  const hasEmail = isValidRegisterEmail(email)
-  const hasPhone = isValidRegisterPhone(phone)
-  if (!hasEmail) return "Enter a valid email address."
-  if (phone && !hasPhone) return "Enter a valid phone number (at least 9 digits) or leave it blank."
+export function isInternalPhoneAuthEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(`@${PHONE_AUTH_EMAIL_DOMAIN}`)
+}
+
+/** Internal Supabase auth email for phone-only users (shared with server login resolver). */
+export function phoneAuthEmailFromDigits(digits: string): string {
+  return `p${digits.replace(/\D/g, "")}@${PHONE_AUTH_EMAIL_DOMAIN}`
+}
+
+/** Phone-only signup validation (name/password checked in route). */
+export function validateRegisterContact(phoneRaw: string, securityPinRaw?: string): string | null {
+  if (!isValidRegisterPhone(phoneRaw)) {
+    return "Enter a valid phone number (at least 9 digits)."
+  }
+  if (securityPinRaw !== undefined && !isValidRegisterSecurityPin(securityPinRaw)) {
+    return "Security PIN must be exactly 6 digits."
+  }
   return null
 }
 
-/** Canonical auth email is always the user's real inbox address. */
-export function resolveRegisterAuthEmail(emailRaw: string, phoneRaw: string): {
+/**
+ * Canonical Supabase auth email for phone-only registration.
+ * Login resolves the same internal address via phone digits.
+ */
+export function resolveRegisterAuthEmail(phoneRaw: string): {
   authEmail: string
-  displayEmail: string | null
-  phone: string | null
-  requiresEmailVerification: boolean
+  phone: string
+  requiresEmailVerification: false
 } {
-  const email = emailRaw.trim().toLowerCase()
   const phone = normalizeRegisterPhone(phoneRaw)
-  const hasPhone = isValidRegisterPhone(phone)
-
+  const digits = phone.replace(/\D/g, "")
   return {
-    authEmail: email,
-    displayEmail: email,
-    phone: hasPhone ? phone : null,
-    requiresEmailVerification: true,
+    authEmail: phoneAuthEmailFromDigits(digits),
+    phone,
+    requiresEmailVerification: false,
   }
-}
-
-export function isInternalPhoneAuthEmail(email: string): boolean {
-  return email.trim().toLowerCase().endsWith(`@${PHONE_AUTH_EMAIL_DOMAIN}`)
 }

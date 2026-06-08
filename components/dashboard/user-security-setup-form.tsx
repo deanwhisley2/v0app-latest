@@ -15,6 +15,10 @@ import {
   type NexusPayoutMethod,
 } from "@/lib/nexus-payout-methods"
 import { cn } from "@/lib/utils"
+import {
+  SECURITY_SETUP_FIELD_GROUP_CLASS,
+  SECURITY_SETUP_INPUT_CLASS,
+} from "@/lib/nexus-security-setup-field-styles"
 
 type Props = {
   variant?: "settings"
@@ -289,33 +293,52 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
       ) : null}
 
       <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs">
-              {hasExistingPin ? "Confirm 6-digit PIN" : "6-digit Nexus Security PIN"}
-            </Label>
-            <Input
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              className="mt-1 min-h-[44px] font-mono tracking-widest"
-              autoComplete="off"
-            />
+        <div className={SECURITY_SETUP_FIELD_GROUP_CLASS}>
+          <p className="text-xs font-semibold text-foreground">Step 1 — Security PIN</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            Tap each box below and enter your 6-digit PIN twice.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label className="text-xs font-medium text-foreground">
+                {hasExistingPin ? "Confirm 6-digit PIN" : "6-digit Nexus Security PIN"}
+              </Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className={cn(SECURITY_SETUP_INPUT_CLASS, "font-mono tracking-[0.35em] text-center")}
+                placeholder="000000"
+                autoComplete="off"
+                aria-label={hasExistingPin ? "Confirm 6-digit security PIN" : "6-digit Nexus Security PIN"}
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-foreground">
+                {hasExistingPin ? "Re-enter PIN" : "Confirm PIN"}
+              </Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={codeConfirm}
+                onChange={(e) => setCodeConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className={cn(SECURITY_SETUP_INPUT_CLASS, "font-mono tracking-[0.35em] text-center")}
+                placeholder="000000"
+                autoComplete="off"
+                aria-label={hasExistingPin ? "Re-enter security PIN" : "Confirm security PIN"}
+              />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs">{hasExistingPin ? "Re-enter PIN" : "Confirm PIN"}</Label>
-            <Input
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={codeConfirm}
-              onChange={(e) => setCodeConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              className="mt-1 min-h-[44px] font-mono tracking-widest"
-              autoComplete="off"
-            />
-          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-foreground">Step 2 — Mobile money details</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            Fill in at least one network. Each field below is a tap-to-type box.
+          </p>
         </div>
 
         <SecurityNetworkSetupCard
@@ -376,7 +399,7 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
               <Input
                 value={cryptoWallet}
                 onChange={(e) => setCryptoWallet(e.target.value.trim())}
-                className="min-h-[44px] font-mono text-xs"
+                className={cn(SECURITY_SETUP_INPUT_CLASS, "font-mono text-xs")}
                 placeholder="TRC20 wallet address"
               />
               <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">{CRYPTO_WITHDRAWAL_NOTICE}</p>

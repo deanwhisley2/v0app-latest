@@ -5,16 +5,17 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { isDevLocalOnly } from "@/lib/dev-local-mode"
+import { isValidRegisterPhone, normalizeRegisterPhone } from "@/lib/auth/register-contact"
+import {
+  clearRegisterDraft,
+  getRegisterDraft,
+  getRegisterDraftPassword,
+  patchRegisterDraft,
+  setRegisterDraftPassword,
+} from "@/lib/auth/register-draft"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
@@ -27,45 +28,23 @@ import { WelcomePlatformModal } from "@/components/marketing/welcome-platform-mo
 import { NewMemberCampaignRegisterStrip } from "@/components/marketing/new-member-campaign-register-strip"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 import { getRegisterMessages } from "@/lib/i18n/register-messages"
-import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
-import { isValidRegisterEmail } from "@/lib/auth/register-contact"
-import {
-  getPendingEmailVerification,
-  recordVerificationResendSent,
-  setPendingEmailVerification,
-} from "@/lib/auth/pending-email-verification"
-import {
-  isVerificationEmailSent,
-  type VerificationEmailStatus,
-} from "@/lib/auth/verification-email-status"
-import {
-  clearRegisterDraft,
-  getRegisterDraft,
-  getRegisterDraftPassword,
-  patchRegisterDraft,
-  setRegisterDraftPassword,
-} from "@/lib/auth/register-draft"
-import { suggestPreferencesForCountry } from "@/lib/i18n/region-defaults"
 import { displayCurrencyForCustomer } from "@/lib/customer-display-currency"
 import type { AppLanguage } from "@/lib/user-preferences"
-import { LANGUAGE_OPTIONS, markLanguageUserSet } from "@/lib/user-preferences"
-import {
-  isSupportedOperatingCountry,
-  operatingCountriesByRegion,
-} from "@/lib/operating-countries"
-import { cn } from "@/lib/utils"
+import { markLanguageUserSet } from "@/lib/user-preferences"
 
 const REGISTER_JOELIN_CHIPS = [
-  { label: "Registration steps", prompt: "What happens step by step after I submit this registration form?" },
-  { label: "Email verification", prompt: "Why do I need to verify my email and how long does it take?" },
+  { label: "Registration steps", prompt: "What happens after I submit this registration form?" },
+  { label: "Security PIN", prompt: "What is my 6-digit Security PIN used for on Nexus Pro?" },
+  { label: "Phone login", prompt: "How do I sign in with my phone number and password?" },
   { label: "Referral field", prompt: "How does the referral id or signup link help me or my inviter?" },
-  { label: "Security PIN later", prompt: "When do I set my Nexus Security PIN and payout details after signup?" },
-  { label: "Currency choice", prompt: "How should I choose my display currency on Nexus Pro?" },
   { label: "Wallet basics", prompt: "Explain Nexus Main wallet vs Container mode at a simple level for a new user." },
-  { label: "Trust & fees", prompt: "What should a new member know about deposits and Container Mode fees?" },
 ]
 
 const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
+
+function isValidSecurityPin(pin: string): boolean {
+  return /^\d{6}$/.test(pin.trim())
+}
 
 export default function RegisterForm() {
   const router = useRouter()
@@ -77,21 +56,17 @@ export default function RegisterForm() {
   })
 
   const [step, setStep] = useState(1)
-  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [securityPin, setSecurityPin] = useState("")
+  const [confirmSecurityPin, setConfirmSecurityPin] = useState("")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
-  const [language, setLanguage] = useState<AppLanguage>(ctxLang)
+  const [language] = useState<AppLanguage>(ctxLang)
   const [referralCode, setReferralCode] = useState("")
   const [campaignSlug, setCampaignSlug] = useState("")
-  const [operatingCountry, setOperatingCountry] = useState("UG")
-  const currency = useMemo(
-    () => displayCurrencyForCustomer(operatingCountry, null),
-    [operatingCountry],
-  )
+  const currency = useMemo(() => displayCurrencyForCustomer("UG", null), [])
   const [error, setError] = useState<string | null>(null)
-  const [corridorWarning, setCorridorWarning] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const authT = getAuthMessages(language)
@@ -99,15 +74,11 @@ export default function RegisterForm() {
 
   const steps = useMemo(
     () => [
-      { id: 1, label: authT.register.stepPersonal },
-      { id: 2, label: "Password & region" },
+      { id: 1, label: "Your details" },
+      { id: 2, label: "Password & PIN" },
     ],
-    [authT],
+    [],
   )
-
-  useEffect(() => {
-    setLanguage(ctxLang)
-  }, [ctxLang])
 
   useEffect(() => {
     try {
@@ -116,27 +87,19 @@ export default function RegisterForm() {
       if (r) setReferralCode(r.trim())
       const c = sp.get("campaign")
       if (c) setCampaignSlug(c.trim())
-      const prefillEmail = sp.get("email")?.trim()
-      if (prefillEmail && isValidRegisterEmail(prefillEmail)) setEmail(prefillEmail)
+      const prefillPhone = sp.get("phone")?.trim()
+      if (prefillPhone && isValidRegisterPhone(prefillPhone)) setPhone(prefillPhone)
     } catch {
       /* ignore */
     }
   }, [])
 
   useEffect(() => {
-    const pending = getPendingEmailVerification()
-    if (pending?.email && pending.email.includes("@") && !pending.email.endsWith("@accounts.nexuspro.it.com")) {
-      router.replace("/auth/verify")
-      return
-    }
     const draft = getRegisterDraft()
     if (draft) {
       setStep(draft.step)
-      setEmail(draft.email)
       setPhone(draft.phone)
       setFullName(draft.full_name)
-      setLanguage((draft.language as AppLanguage) || ctxLang)
-      if (draft.operating_country) setOperatingCountry(draft.operating_country)
       setReferralCode(draft.referral_code)
       setCampaignSlug(draft.campaign_slug)
       const pw = getRegisterDraftPassword()
@@ -145,71 +108,47 @@ export default function RegisterForm() {
         setConfirmPassword(pw.confirmPassword)
       }
     }
-  }, [router, ctxLang])
+  }, [])
 
   useEffect(() => {
     patchRegisterDraft({
       step: step as 1 | 2,
-      email,
+      email: "",
       phone,
       full_name: fullName,
       language,
-      operating_country: operatingCountry,
+      operating_country: "",
       referral_code: referralCode,
       campaign_slug: campaignSlug,
     })
     if (step === 2 && (password || confirmPassword)) {
       setRegisterDraftPassword(password, confirmPassword)
     }
-  }, [step, email, phone, fullName, language, operatingCountry, referralCode, campaignSlug, password, confirmPassword])
+  }, [step, phone, fullName, language, referralCode, campaignSlug, password, confirmPassword])
 
   function validateStep(s: number): string | null {
     if (s === 1) {
       if (!fullName.trim()) return "Enter your full name."
-      if (!isValidRegisterEmail(email.trim())) return "Enter a valid email address."
-      const hasPhone = phone.trim().replace(/\D/g, "").length >= 9
-      if (phone.trim() && !hasPhone) return "Enter a valid phone number (at least 9 digits) or leave it blank."
+      if (!isValidRegisterPhone(phone)) {
+        return "Enter a valid phone number (at least 9 digits)."
+      }
       return null
     }
     if (s === 2) {
-      if (!operatingCountry || !isSupportedOperatingCountry(operatingCountry)) {
-        return authT.register.countryRequired ?? "Select your operating country."
-      }
       if (password.length < 6) return reg.passwordHint
       if (password !== confirmPassword) return "Passwords do not match."
+      if (!isValidSecurityPin(securityPin)) return "Enter a 6-digit Security PIN (numbers only)."
+      if (securityPin !== confirmSecurityPin) return "Security PIN entries do not match."
       return null
     }
     return null
   }
 
-  async function goNext() {
+  function goNext() {
     const err = validateStep(step)
     if (err) {
       setError(err)
       return
-    }
-    if (step === 2 && operatingCountry) {
-      try {
-        const res = await fetch(
-          `/api/auth/corridor-check?country=${encodeURIComponent(operatingCountry)}`,
-          { credentials: "same-origin" },
-        )
-        const json = (await res.json().catch(() => ({}))) as {
-          allowed?: boolean
-          error?: string
-          warning?: string | null
-        }
-        if (!res.ok || json.allowed === false) {
-          setCorridorWarning(null)
-          setError(json.error || authT.register.countryMismatch)
-          return
-        }
-        setCorridorWarning(json.warning?.trim() || null)
-      } catch {
-        setCorridorWarning(null)
-        setError("Could not verify your region. Try again.")
-        return
-      }
     }
     setError(null)
     setStep((s) => Math.min(2, s + 1))
@@ -233,25 +172,23 @@ export default function RegisterForm() {
     setPreferences({
       language,
       currency,
-      ...(operatingCountry ? { country: operatingCountry } : {}),
+      country: "UG",
     })
     try {
-      const trimmedEmail = email.trim()
       const trimmedName = fullName.trim()
-      const trimmedPhone = phone.trim()
+      const trimmedPhone = normalizeRegisterPhone(phone)
 
       const res = await fetch("/api/auth/register", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: trimmedEmail,
+          phone: trimmedPhone,
           password,
           full_name: trimmedName,
-          phone: trimmedPhone,
+          security_pin: securityPin.trim(),
           preferred_language: language,
           preferred_currency: currency,
-          ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
           ...(referralCode.trim() ? { referral_code: referralCode.trim() } : {}),
           ...(campaignSlug.trim() ? { campaign_slug: campaignSlug.trim() } : {}),
         }),
@@ -259,46 +196,14 @@ export default function RegisterForm() {
 
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
-        requiresEmailVerification?: boolean
-        email?: string
-        session?: boolean
-        verificationEmailStatus?: VerificationEmailStatus
-        verificationEmailError?: string
+        ok?: boolean
       }
       if (!res.ok) {
         setError(json.error || "Registration failed")
         return
       }
 
-      if (json.requiresEmailVerification) {
-        const verifyEmail = json.email ?? trimmedEmail
-        if (verifyEmail) {
-          const verificationStatus = json.verificationEmailStatus ?? "generation_failed"
-          setPendingEmailVerification({
-            email: verifyEmail,
-            ...(operatingCountry ? { funding_country_code: operatingCountry } : {}),
-            verification_email_status: verificationStatus,
-          })
-          if (isVerificationEmailSent(verificationStatus)) {
-            recordVerificationResendSent()
-          }
-          clearRegisterDraft()
-          if (json.session) {
-            window.location.replace("/dashboard")
-            return
-          }
-          router.replace("/auth/verify")
-          router.refresh()
-          return
-        }
-      }
-
       clearRegisterDraft()
-      if (json.session) {
-        window.location.replace("/dashboard")
-        return
-      }
-
       window.location.replace("/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -342,7 +247,9 @@ export default function RegisterForm() {
       <AuthLayoutShell language={language}>
         <header className="mb-2 text-center">
           <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{authT.register.title}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{authT.register.subtitle}</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Phone, password, and a 6-digit PIN — no email required.
+          </p>
         </header>
 
         <RegisterStepIndicator steps={steps} current={step} />
@@ -370,23 +277,7 @@ export default function RegisterForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="register-email">{reg.email}</Label>
-                <Input
-                  id="register-email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isSubmitting}
-                  placeholder="you@example.com"
-                  className={inputClass}
-                />
-                <VerificationDeliveryHint />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-phone">Mobile Number (optional)</Label>
+                <Label htmlFor="register-phone">{reg.phone}</Label>
                 <Input
                   id="register-phone"
                   type="tel"
@@ -394,12 +285,13 @@ export default function RegisterForm() {
                   inputMode="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  required
                   disabled={isSubmitting}
                   placeholder="+256 7XX XXX XXX"
                   className={inputClass}
                 />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Used as an additional sign-in and account recovery method.
+                  This is your login number. No SMS code needed — use it with your password to sign in.
                 </p>
               </div>
               <div className="space-y-2">
@@ -449,77 +341,51 @@ export default function RegisterForm() {
                 disabled={isSubmitting}
                 inputClassName={inputClass}
               />
-              <p className="text-xs text-muted-foreground">
-                Set your 6-digit Security PIN and payment details later in Settings → Security & Recovery.
-              </p>
               <div className="space-y-2">
-                <Label>{reg.language}</Label>
-                <Select
-                  value={language}
-                  onValueChange={(v) => setLanguage(v as AppLanguage)}
+                <Label htmlFor="register-security-pin">6-digit Security PIN</Label>
+                <Input
+                  id="register-security-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={6}
+                  pattern="\d{6}"
+                  value={securityPin}
+                  onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
                   disabled={isSubmitting}
-                >
-                  <SelectTrigger className={cn("w-full", inputClass)}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGE_OPTIONS.map((o) => (
-                      <SelectItem key={o.code} value={o.code}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="••••••"
+                  className={inputClass}
+                />
                 <p className="text-xs text-muted-foreground">
-                  Account balances and trading use USD. Local amounts appear only when you add funds or withdraw via
-                  mobile money.
+                  Required for withdrawals. Choose something you will remember.
                 </p>
               </div>
               <div className="space-y-2">
-                <Label>{reg.operatingCountry ?? "Operating country"}</Label>
-                <Select
-                  value={operatingCountry}
-                  onValueChange={(v) => {
-                    const code = v
-                    setOperatingCountry(code)
-                    setCorridorWarning(null)
-                    if (code) {
-                      const hint = suggestPreferencesForCountry(code)
-                      if (hint.language) setLanguage(hint.language)
-                    }
-                  }}
+                <Label htmlFor="register-confirm-security-pin">Confirm Security PIN</Label>
+                <Input
+                  id="register-confirm-security-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={6}
+                  pattern="\d{6}"
+                  value={confirmSecurityPin}
+                  onChange={(e) => setConfirmSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
                   disabled={isSubmitting}
-                >
-                  <SelectTrigger className={cn("w-full", inputClass)}>
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[min(70vh,320px)]">
-                    {operatingCountriesByRegion().map((group) => (
-                      <div key={group.region}>
-                        <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          {group.region}
-                        </p>
-                        {group.countries.map((o) => (
-                          <SelectItem key={o.code} value={o.code}>
-                            {o.label} · {o.currency}
-                          </SelectItem>
-                        ))}
-                      </div>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">{authT.register.countryHint}</p>
-                {corridorWarning ? (
-                  <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-                    {corridorWarning}
-                  </p>
-                ) : null}
+                  placeholder="••••••"
+                  className={inputClass}
+                />
               </div>
             </div>
           ) : null}
 
           {error ? (
-            <p className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive" role="alert">
+            <p
+              className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+              role="alert"
+            >
               {error}
             </p>
           ) : null}
@@ -555,7 +421,6 @@ export default function RegisterForm() {
               </Button>
             )}
           </div>
-
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -568,18 +433,16 @@ export default function RegisterForm() {
             {authT.register.home}
           </Link>
         </p>
-
       </AuthLayoutShell>
 
       <AuthAssistantPanel
         scope="register"
         authStep="signup"
         appLanguage={language}
-        fundingCountryCode={operatingCountry}
         initialMessages={[
           {
             role: "assistant",
-            text: "Hi — I’m the Nexus assistant. Ask me about email verification, optional mobile number, Security PIN in Settings, referrals, or what to expect after you create your account.",
+            text: "Hi — I’m the Nexus assistant. Ask me about phone signup, your 6-digit Security PIN, or what to expect after you create your account.",
           },
         ]}
         chips={REGISTER_JOELIN_CHIPS}
