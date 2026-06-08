@@ -121,6 +121,28 @@ function QuickTradingGuideModal({
   )
 }
 
+function JoinWhatsAppChannelButton() {
+  return (
+    <Button variant="outline" className="min-h-[48px] w-full touch-manipulation gap-2 text-sm" asChild>
+      <a href={WHATSAPP_SIGNAL_CHANNEL_HREF} target="_blank" rel="noopener noreferrer">
+        <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="text-center leading-tight">Join WhatsApp Channel</span>
+      </a>
+    </Button>
+  )
+}
+
+function ShareScreenshotGroupButton() {
+  return (
+    <Button variant="outline" className="min-h-[48px] w-full touch-manipulation gap-2 text-sm" asChild>
+      <a href={WHATSAPP_SCREENSHOT_GROUP_HREF} target="_blank" rel="noopener noreferrer">
+        <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="text-center leading-tight">Share Screenshot to Group</span>
+      </a>
+    </Button>
+  )
+}
+
 function CommunityHubSection({ onOpenGuide }: { onOpenGuide: () => void }) {
   return (
     <div className="space-y-2">
@@ -133,26 +155,7 @@ function CommunityHubSection({ onOpenGuide }: { onOpenGuide: () => void }) {
         <BookOpen className="h-4 w-4 shrink-0 text-primary" aria-hidden />
         Quick Trading Guide
       </Button>
-      <CommunityActionButtons />
-    </div>
-  )
-}
-
-function CommunityActionButtons() {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <Button variant="outline" className="min-h-[48px] touch-manipulation gap-1.5 px-2 text-xs sm:text-sm" asChild>
-        <a href={WHATSAPP_SIGNAL_CHANNEL_HREF} target="_blank" rel="noopener noreferrer">
-          <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="text-center leading-tight">Join WhatsApp Channel</span>
-        </a>
-      </Button>
-      <Button variant="outline" className="min-h-[48px] touch-manipulation gap-1.5 px-2 text-xs sm:text-sm" asChild>
-        <a href={WHATSAPP_SCREENSHOT_GROUP_HREF} target="_blank" rel="noopener noreferrer">
-          <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="text-center leading-tight">Share Screenshot to Group</span>
-        </a>
-      </Button>
+      <JoinWhatsAppChannelButton />
     </div>
   )
 }
@@ -614,6 +617,9 @@ export function NexusBotWorkspace({
             </div>
           </div>
           <NexusBotSessionPanel session={activeSession} formatMoney={formatUserMoney} />
+          <div className="mt-3 border-t border-border/40 pt-3">
+            <ShareScreenshotGroupButton />
+          </div>
         </Card>
       ) : null}
 
@@ -829,9 +835,12 @@ export function NexusBotWorkspace({
               ) : null}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Your trade is booked. Capital is reserved until the session completes.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Your trade is booked. Capital is reserved until the session completes.
+              </p>
+              <ShareScreenshotGroupButton />
+            </div>
           )}
           <div className="border-t border-border/40 pt-3 text-center">
             <SignalGroupLink />
