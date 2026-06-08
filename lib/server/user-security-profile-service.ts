@@ -12,6 +12,7 @@ import {
   verifySecurityCode,
 } from "@/lib/nexus-security-code"
 import { isInternalPhoneAuthEmail } from "@/lib/auth/register-contact"
+import { isValidRegisterPhone, normalizeRegisterPhone } from "@/lib/auth/register-contact"
 import {
   EMAIL_VERIFICATION_REMINDER,
   hasFundingPayoutDetails,
@@ -20,6 +21,7 @@ import {
   hasSecurityPin,
   LEGACY_EMAIL_LOGIN_REMINDER,
   suggestsOptionalSecurityEnhancements,
+  withdrawalPayoutLineReady,
 } from "@/lib/nexus-security-minimum"
 import { buildSecuritySetupProgress } from "@/lib/security-setup-progress"
 import {
@@ -285,8 +287,52 @@ function rowToPublic(
     cooldownUntil,
     inCooldown,
     canChangeSensitive: hasSecurityCode && !inCooldown,
+    canBindLoginPhone: !profilePhone,
+    profilePhoneMasked: profilePhone ? maskSensitiveValue(profilePhone, "phone") : null,
     cryptoNotice: CRYPTO_WITHDRAWAL_NOTICE,
   }
+}
+
+/** First-time login phone bind — instant save, no admin appeal. */
+export async function bindLoginPhone(
+  admin: SupabaseClient,
+  params: { userId: string; phoneRaw: string },
+): Promise<PublicSecurityProfile> {
+  const phone = normalizeRegisterPhone(params.phoneRaw)
+  if (!isValidRegisterPhone(phone)) {
+    throw new Error("Enter a valid phone number (at least 9 digits).")
+  }
+
+  const { data: prof, error: profErr } = await admin
+    .from("profiles")
+    .select("phone")
+    .eq("id", params.userId)
+    .maybeSingle()
+  if (profErr) throw new Error(profErr.message)
+
+  const existing = typeof prof?.phone === "string" ? prof.phone.trim() : ""
+  if (existing) {
+    throw new Error("Login phone is already saved. Contact support if you need to change it.")
+  }
+
+  const { data: taken } = await admin.from("profiles").select("id").eq("phone", phone).limit(2)
+  const other = (taken ?? []).filter((r) => String(r.id) !== params.userId)
+  if (other.length > 0) {
+    throw new Error("This phone number is already linked to another account.")
+  }
+
+  const now = new Date().toISOString()
+  const { error: upErr } = await admin
+    .from("profiles")
+    .update({ phone, updated_at: now })
+    .eq("id", params.userId)
+  if (upErr) throw new Error(upErr.message)
+
+  return getPublicSecurityProfile(admin, params.userId)
+}
+
+export function hasSavedWithdrawalNumber(row: UserSecurityProfileRow): boolean {
+  return withdrawalPayoutLineReady(enrichRowWithdrawalMirrors(row))
 }
 
 export async function getOrCreateSecurityProfile(

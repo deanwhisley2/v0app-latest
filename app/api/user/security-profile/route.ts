@@ -3,6 +3,7 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { routeErrorMessage } from "@/lib/server/route-error-message"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import {
+  bindLoginPhone,
   getPublicSecurityProfile,
   getSecurityProfileSetupFields,
   setupSecurityProfile,
@@ -35,6 +36,12 @@ export async function POST(request: Request) {
       const code = typeof body.security_code === "string" ? body.security_code : ""
       const ok = await verifyUserSecurityCode(admin, auth.user.id, code)
       return NextResponse.json({ ok })
+    }
+
+    if (body.action === "bind_login_phone") {
+      const phone = typeof body.phone === "string" ? body.phone : ""
+      const profile = await bindLoginPhone(admin, { userId: auth.user.id, phoneRaw: phone })
+      return NextResponse.json({ ok: true, profile })
     }
 
     const code = typeof body.security_code === "string" ? body.security_code : ""

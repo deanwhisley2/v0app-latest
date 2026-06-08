@@ -25,7 +25,7 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [appealType, setAppealType] = useState("withdrawal_number")
+  const [appealType, setAppealType] = useState<"withdrawal_number" | "security_code">("withdrawal_number")
   const [appealValue, setAppealValue] = useState("")
   const [appealMessage, setAppealMessage] = useState("")
   const loadedRef = useRef(false)
@@ -133,7 +133,8 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
           Security Appeal Center
         </h3>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Request payout or security detail updates. Operations reviews every change in a secure thread.
+          Submit an appeal only to change an existing withdrawal mobile number or an existing Security PIN. First-time
+          setup is done instantly in Settings — no appeal needed.
         </p>
         {loading ? <p className="mt-2 text-xs text-muted-foreground">Loading appeal center…</p> : null}
       </Card>
@@ -148,21 +149,30 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
               <label className="text-xs text-muted-foreground">Request type</label>
               <select
                 value={appealType}
-                onChange={(e) => setAppealType(e.target.value)}
+                onChange={(e) => setAppealType(e.target.value as "withdrawal_number" | "security_code")}
                 className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
                 disabled={!profile?.canChangeSensitive}
               >
-                <option value="withdrawal_number">Withdrawal number</option>
-                <option value="deposit_number">Deposit number</option>
-                <option value="crypto_wallet">Crypto wallet</option>
-                <option value="payout_method">Payout method</option>
-                <option value="security_code">Security code</option>
+                <option value="withdrawal_number" disabled={!profile?.hasWithdrawalPayoutLine}>
+                  Change withdrawal mobile number
+                </option>
+                <option value="security_code" disabled={!profile?.hasSecurityCode}>
+                  Change Security PIN
+                </option>
               </select>
               <Input
-                placeholder="New value"
+                placeholder={appealType === "security_code" ? "New 6-digit PIN" : "New withdrawal mobile number"}
                 value={appealValue}
-                onChange={(e) => setAppealValue(e.target.value)}
+                onChange={(e) =>
+                  setAppealValue(
+                    appealType === "security_code"
+                      ? e.target.value.replace(/\D/g, "").slice(0, 6)
+                      : e.target.value,
+                  )
+                }
                 disabled={!profile?.canChangeSensitive}
+                inputMode={appealType === "security_code" ? "numeric" : "tel"}
+                maxLength={appealType === "security_code" ? 6 : undefined}
               />
               <textarea
                 rows={4}
@@ -176,7 +186,14 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
                 size="sm"
                 className="touch-manipulation"
                 onClick={() => void submitAppeal()}
-                disabled={busy || !profile?.canChangeSensitive || !appealValue.trim() || !appealMessage.trim()}
+                disabled={
+                  busy ||
+                  !profile?.canChangeSensitive ||
+                  !appealValue.trim() ||
+                  !appealMessage.trim() ||
+                  (appealType === "withdrawal_number" && !profile?.hasWithdrawalPayoutLine) ||
+                  (appealType === "security_code" && !profile?.hasSecurityCode)
+                }
               >
                 Submit secure appeal
               </Button>

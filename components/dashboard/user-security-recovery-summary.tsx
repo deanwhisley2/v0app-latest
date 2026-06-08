@@ -115,7 +115,8 @@ export function UserSecurityRecoverySummary({ appealCenterHref }: Props) {
           </>
         )}
         <p className="mt-3 text-xs text-muted-foreground">
-          Payout and security details cannot be edited directly. Submit a secure request for operations review.
+          First-time setup is instant in Deposit &amp; Withdraw settings. Appeals are only for changing an existing
+          withdrawal number or Security PIN.
         </p>
         <Button variant="outline" className="mt-4 w-full touch-manipulation justify-between" asChild>
           <Link href={appealCenterHref}>

@@ -126,6 +126,7 @@ import { dispatchCustomerLedgerBump, NEXUS_CUSTOMER_LEDGER_BUMP } from "@/lib/cl
 import { useOperationalRealtime } from "@/hooks/use-operational-realtime"
 import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
+import { Input } from "@/components/ui/input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
 import {
   NexusPaymentGatewayCard,
@@ -540,6 +541,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const [containerFeesPaid, setContainerFeesPaid] = useState(0)
   const [isContainerFlowBusy, setIsContainerFlowBusy] = useState(false)
   const [fundAmount, setFundAmount] = useState("")
+  const [withdrawSecurityPin, setWithdrawSecurityPin] = useState("")
   const [isFundProcessing, setIsFundProcessing] = useState(false)
   const [withdrawalEligibility, setWithdrawalEligibility] = useState<{
     minUsd: number
@@ -2482,6 +2484,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
       }
       setShowFundModal(mode)
       setFundAmount("")
+      setWithdrawSecurityPin("")
       setFundModalError(null)
       if (mode === "add") {
         setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
@@ -2516,6 +2519,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     if (!selectedWithdrawPayoutId) {
       return "Select a registered payout method below."
     }
+    if (withdrawSecurityPin.length !== 6) {
+      return "Enter your 6-digit Security PIN to confirm this withdrawal."
+    }
     if (withdrawalEligibility?.cooldownActive) {
       return t("withdrawal.error.cooldownActive").replace(
         "{{hours}}",
@@ -2535,6 +2541,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     fundAmount,
     withdrawPayoutOptionsList,
     selectedWithdrawPayoutId,
+    withdrawSecurityPin,
     withdrawalEligibility,
     t,
   ])
@@ -2839,6 +2846,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
           if (!selectedWithdrawPayoutId) {
             throw new Error("Select a registered payout method.")
           }
+          if (withdrawSecurityPin.length !== 6) {
+            throw new Error("Enter your 6-digit Security PIN to confirm this withdrawal.")
+          }
           const res = await fetch("/api/user/withdrawal/request", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2848,6 +2858,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               amountInputLocal: amountRaw,
               inputCurrency: currency,
               payoutOptionId: selectedWithdrawPayoutId,
+              security_code: withdrawSecurityPin,
             }),
           })
           const out = (await res.json().catch(() => ({}))) as {
@@ -2875,6 +2886,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
           showToast(t("withdrawal.toast.success"), "success")
           setShowFundModal(null)
           setFundAmount("")
+          setWithdrawSecurityPin("")
           setFundTxReference("")
           setFundNote("")
           return
@@ -3480,6 +3492,25 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                     <p className="text-[10px] text-zinc-500">{t("withdrawal.payoutLockedHint")}</p>
                   </div>
                 ) : null}
+                <div className="space-y-1.5">
+                  <label htmlFor="withdraw-security-pin-main" className="text-xs font-medium text-zinc-400">
+                    Security PIN
+                  </label>
+                  <Input
+                    id="withdraw-security-pin-main"
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="off"
+                    placeholder="Security PIN (write or insert pin here...)"
+                    value={withdrawSecurityPin}
+                    onChange={(e) => setWithdrawSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="min-h-[44px] border-white/10 bg-white/[0.04] font-mono tracking-[0.2em] text-zinc-100 touch-manipulation"
+                  />
+                  <p className="text-[10px] text-zinc-500">
+                    Required for every withdrawal. Bot trading does not ask for your PIN.
+                  </p>
+                </div>
                 {withdrawalEligibility ? (
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-snug text-zinc-400">
                     <p>
@@ -4449,6 +4480,27 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                     </p>
                   </div>
                 ) : null}
+                {showFundModal === "withdraw" ? (
+                  <div className="mt-3">
+                    <label htmlFor="withdraw-security-pin" className="text-xs font-medium text-muted-foreground">
+                      Security PIN
+                    </label>
+                    <Input
+                      id="withdraw-security-pin"
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={6}
+                      autoComplete="off"
+                      placeholder="Security PIN (write or insert pin here...)"
+                      value={withdrawSecurityPin}
+                      onChange={(e) => setWithdrawSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className="mt-1 min-h-[44px] font-mono tracking-[0.2em] touch-manipulation"
+                    />
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Required for every withdrawal. Bot trading does not ask for your PIN.
+                    </p>
+                  </div>
+                ) : null}
                 {showFundModal === "withdraw" && withdrawalEligibility ? (
                   <div className="mt-2 rounded-lg border border-border/80 bg-muted/30 p-2 text-[11px] leading-snug text-muted-foreground">
                     <p>
@@ -4552,7 +4604,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                       (withdrawalEligibility != null &&
                         (withdrawalEligibility.cooldownActive ||
                           withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd)))) ||
-                  (showFundModal === "withdraw" && (!fundAmount || parseCustomerLocalAmountInput(fundAmount) <= 0)) ||
+                  (showFundModal === "withdraw" &&
+                    (!fundAmount ||
+                      parseCustomerLocalAmountInput(fundAmount) <= 0 ||
+                      withdrawSecurityPin.length !== 6)) ||
                   (showFundModal === "add" &&
                     customerRetailFunding &&
                     (l1FundSource === "pick" ||

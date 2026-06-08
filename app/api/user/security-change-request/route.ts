@@ -5,17 +5,13 @@ import { bridgeUserOperationalEscalation } from "@/lib/server/operational-suppor
 import {
   assertNotInCooldown,
   getOrCreateSecurityProfile,
+  hasSavedWithdrawalNumber,
   maskChangeRequestValue,
 } from "@/lib/server/user-security-profile-service"
 import { notifyLiquidityAdminsSupportQueue } from "@/lib/support-thread-notifications"
 
-const ALLOWED_TYPES = [
-  "deposit_number",
-  "withdrawal_number",
-  "crypto_wallet",
-  "security_code",
-  "payout_method",
-] as const
+/** Appeals only for changing an existing withdrawal number or security PIN. */
+const ALLOWED_TYPES = ["withdrawal_number", "security_code"] as const
 
 export async function GET(request: Request) {
   try {
@@ -63,6 +59,19 @@ export async function POST(request: Request) {
       assertNotInCooldown(row)
     } catch (err) {
       return NextResponse.json({ error: err instanceof Error ? err.message : "Cooldown active." }, { status: 409 })
+    }
+
+    if (requestType === "withdrawal_number" && !hasSavedWithdrawalNumber(row)) {
+      return NextResponse.json(
+        { error: "Register your first withdrawal number in Settings — appeals are only for changing an existing number." },
+        { status: 400 },
+      )
+    }
+    if (requestType === "security_code" && !row.security_code_hash) {
+      return NextResponse.json(
+        { error: "Set your Security PIN in Settings first — appeals are only for changing an existing PIN." },
+        { status: 400 },
+      )
     }
 
     const oldMasked =

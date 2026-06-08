@@ -67,6 +67,9 @@ export type PublicSecurityProfile = {
   cooldownUntil: string | null
   inCooldown: boolean
   canChangeSensitive: boolean
+  /** True when login phone is not saved — user may bind instantly in Settings. */
+  canBindLoginPhone: boolean
+  profilePhoneMasked: string | null
   cryptoNotice: string
 }
 

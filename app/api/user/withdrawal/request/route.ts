@@ -47,6 +47,7 @@ export async function POST(request: Request) {
         | "crypto"
       payoutRail?: string
       destinationHint?: string
+      security_code?: string
     }
     const amount = Number(body.amount ?? 0)
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
 
     const txRef = crypto.randomUUID()
 
-    const { getOrCreateSecurityProfile, assertNotInCooldown } = await import(
+    const { getOrCreateSecurityProfile, assertNotInCooldown, verifyUserSecurityCode } = await import(
       "@/lib/server/user-security-profile-service"
     )
     const { maskSensitiveValue } = await import("@/lib/nexus-security-code")
@@ -170,6 +171,16 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
+
+    const securityCode = typeof body.security_code === "string" ? body.security_code.trim() : ""
+    if (!securityCode) {
+      return NextResponse.json({ error: "Enter your 6-digit Security PIN to withdraw." }, { status: 400 })
+    }
+    const pinOk = await verifyUserSecurityCode(admin, user.id, securityCode)
+    if (!pinOk) {
+      return NextResponse.json({ error: "Security PIN is incorrect." }, { status: 403 })
+    }
+
     try {
       assertNotInCooldown(secRow)
     } catch (coolErr) {

@@ -1,10 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ArrowDownUp, Check, Loader2, Shield } from "lucide-react"
+import { ArrowDownUp, Check, Loader2, Phone, Shield } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
 import type { PublicSecurityProfile } from "@/lib/nexus-security-profile-types"
 import { cn } from "@/lib/utils"
@@ -46,6 +47,10 @@ export function DepositWithdrawDetailsPanel() {
   const [profile, setProfile] = useState<PublicSecurityProfile | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [loginPhone, setLoginPhone] = useState("")
+  const [phoneBindBusy, setPhoneBindBusy] = useState(false)
+  const [phoneBindError, setPhoneBindError] = useState<string | null>(null)
+  const [phoneBindOk, setPhoneBindOk] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -127,6 +132,87 @@ export function DepositWithdrawDetailsPanel() {
         </p>
       </div>
 
+      {profile?.canBindLoginPhone ? (
+        <GlassSection
+          title="Login phone number"
+          description="Save your mobile number here for faster phone sign-in. No admin appeal is required for your first bind."
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label htmlFor="bind-login-phone" className="text-xs font-medium text-foreground">
+                Mobile number
+              </label>
+              <Input
+                id="bind-login-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="+256 7XX XXX XXX"
+                value={loginPhone}
+                onChange={(e) => {
+                  setLoginPhone(e.target.value)
+                  setPhoneBindError(null)
+                  setPhoneBindOk(null)
+                }}
+                className="mt-1 min-h-[44px] touch-manipulation"
+              />
+            </div>
+            <Button
+              type="button"
+              className="min-h-[44px] touch-manipulation sm:shrink-0"
+              disabled={phoneBindBusy || !loginPhone.trim()}
+              onClick={() => void (async () => {
+                setPhoneBindBusy(true)
+                setPhoneBindError(null)
+                setPhoneBindOk(null)
+                try {
+                  const {
+                    data: { session },
+                  } = await supabase.auth.getSession()
+                  const token = session?.access_token
+                  if (!token) throw new Error("Session expired. Please sign in again.")
+                  const res = await fetch("/api/user/security-profile", {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ action: "bind_login_phone", phone: loginPhone.trim() }),
+                  })
+                  const j = (await res.json().catch(() => ({}))) as { error?: string }
+                  if (!res.ok) throw new Error(j.error ?? "Could not save phone number")
+                  setLoginPhone("")
+                  setPhoneBindOk("Login phone saved. You can sign in with this number next time.")
+                  setRefreshKey((n) => n + 1)
+                } catch (e) {
+                  setPhoneBindError(e instanceof Error ? e.message : "Could not save phone number")
+                } finally {
+                  setPhoneBindBusy(false)
+                }
+              })()}
+            >
+              {phoneBindBusy ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Phone className="mr-2 h-4 w-4" aria-hidden />
+                  Save login phone
+                </>
+              )}
+            </Button>
+          </div>
+          {phoneBindError ? <p className="mt-2 text-sm text-destructive">{phoneBindError}</p> : null}
+          {phoneBindOk ? <p className="mt-2 text-sm text-success">{phoneBindOk}</p> : null}
+        </GlassSection>
+      ) : profile?.profilePhoneMasked ? (
+        <GlassSection title="Login phone number" description="Saved for phone sign-in.">
+          <p className="font-mono text-sm">{profile.profilePhoneMasked}</p>
+        </GlassSection>
+      ) : null}
+
       {profile ? (
         <SecuritySetupProgressTracker
           items={profile.setupProgress}
@@ -186,7 +272,7 @@ export function DepositWithdrawDetailsPanel() {
               onClick={() => (window.location.href = "/dashboard/security/appeals")}
             >
               <Shield className="mr-2 h-4 w-4" aria-hidden />
-              Edit via Security Appeal
+              Change withdrawal number or PIN (appeal)
             </Button>
             <Button type="button" variant="ghost" className="touch-manipulation" onClick={() => void load()}>
               Refresh
@@ -218,7 +304,8 @@ export function DepositWithdrawDetailsPanel() {
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold text-foreground">Setup complete</h4>
               <p className="mt-1 text-xs text-muted-foreground">
-                You can use Add Funds and Withdraw from the dashboard. To change numbers, open a Security Appeal.
+                You can use Add Funds and Withdraw from the dashboard. To change an existing withdrawal number or Security
+                PIN, open a Security Appeal.
               </p>
             </div>
           </div>
