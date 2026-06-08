@@ -48,7 +48,7 @@ export async function openStartupFixedTrade(
     const msg =
       typeof out?.error === "string" && out.error.length > 0
         ? out.error
-        : "Could not open fixed trade. Try again from Container Mode."
+        : "Could not open trade session. Try again from the trading workspace."
     return { ok: false, error: msg }
   }
 

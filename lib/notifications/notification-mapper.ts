@@ -367,10 +367,10 @@ function mapInternalOpsNotification(
   }
   if (/container liquid|earnings transferred|internal_transfer|withdrawable_to_main/i.test(combined)) {
     return {
-      title: "Fixed trade earnings credited",
+      title: "Trade session earnings credited",
       body: amountFmt
-        ? `Fixed trade earnings of ${amountFmt} have been credited to your balance.`
-        : "Fixed trade earnings have been credited to your balance.",
+        ? `Trade session earnings of ${amountFmt} have been credited to your balance.`
+        : "Trade session earnings have been credited to your balance.",
     }
   }
   if (/login|sign[- ]?in/i.test(combined)) {
