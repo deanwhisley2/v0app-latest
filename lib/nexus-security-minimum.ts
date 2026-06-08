@@ -63,3 +63,6 @@ export const OPTIONAL_SECURITY_REMINDER =
 
 export const EMAIL_VERIFICATION_REMINDER =
   "Your email address has not yet been verified. Verify your email to strengthen account security and recovery options."
+
+export const LEGACY_EMAIL_LOGIN_REMINDER =
+  "Logged in via email? Please visit Settings to add your Phone Number and 6-digit Security PIN for a smoother login experience."

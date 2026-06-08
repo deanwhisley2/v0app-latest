@@ -47,6 +47,8 @@ export type PublicSecurityProfile = {
   fundingReminder: string | null
   /** Non-blocking — shown when email is not verified. */
   emailVerificationReminder: string | null
+  /** Legacy email accounts missing phone and/or PIN for phone-first login. */
+  legacyEmailLoginReminder: string | null
   /** @deprecated Use hasMinimumPayoutLine — kept for API compat. */
   hasTransactionNumber: boolean
   hasMinimumPayoutLine: boolean

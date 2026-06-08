@@ -11,12 +11,14 @@ import {
   maskSensitiveValue,
   verifySecurityCode,
 } from "@/lib/nexus-security-code"
+import { isInternalPhoneAuthEmail } from "@/lib/auth/register-contact"
 import {
   EMAIL_VERIFICATION_REMINDER,
   hasFundingPayoutDetails,
   hasMinimumPayoutLine,
   hasMinimumSecurity,
   hasSecurityPin,
+  LEGACY_EMAIL_LOGIN_REMINDER,
   suggestsOptionalSecurityEnhancements,
 } from "@/lib/nexus-security-minimum"
 import { buildSecuritySetupProgress } from "@/lib/security-setup-progress"
@@ -222,7 +224,7 @@ export function defaultWithdrawPayoutOptionId(
 
 function rowToPublic(
   row: UserSecurityProfileRow | null,
-  account?: { phone?: string | null; is_verified?: boolean | null },
+  account?: { phone?: string | null; is_verified?: boolean | null; authEmail?: string | null },
 ): PublicSecurityProfile {
   const enriched = row ? enrichRowWithdrawalMirrors(row) : null
   const hasSecurityCode = enriched ? hasSecurityPin(enriched) : false
@@ -244,6 +246,11 @@ function rowToPublic(
   const needsSecurityPin = !hasSecurityCode
   const emailVerificationReminder =
     account?.is_verified === false ? EMAIL_VERIFICATION_REMINDER : null
+  const profilePhone = typeof account?.phone === "string" ? account.phone.trim() : ""
+  const authEmail = typeof account?.authEmail === "string" ? account.authEmail.trim().toLowerCase() : ""
+  const isLegacyEmailAccount = Boolean(authEmail) && !isInternalPhoneAuthEmail(authEmail)
+  const legacyEmailLoginReminder =
+    isLegacyEmailAccount && (!profilePhone || !hasSecurityCode) ? LEGACY_EMAIL_LOGIN_REMINDER : null
   return {
     hasSecurityCode,
     hasMinimumSecurity: minimumSecurity,
@@ -260,6 +267,7 @@ function rowToPublic(
         ? "Complete your payment details to enable deposits and withdrawals."
         : null,
     emailVerificationReminder,
+    legacyEmailLoginReminder,
     suggestsOptionalEnhancements: enriched ? suggestsOptionalSecurityEnhancements(enriched) : false,
     payoutMethod: (enriched?.payout_method as NexusPayoutMethod) ?? "mobile_money",
     depositNumberMasked: enriched?.deposit_number
@@ -313,9 +321,23 @@ export async function getPublicSecurityProfile(
     .select("phone, is_verified")
     .eq("id", userId)
     .maybeSingle()
+
+  let authEmail: string | null = null
+  try {
+    const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId)
+    if (authErr) {
+      console.warn("[security-profile] auth user lookup:", authErr.message)
+    } else {
+      authEmail = authUser.user?.email?.trim().toLowerCase() ?? null
+    }
+  } catch (e) {
+    console.warn("[security-profile] auth user lookup:", e instanceof Error ? e.message : e)
+  }
+
   return rowToPublic(row, {
     phone: typeof prof?.phone === "string" ? prof.phone : null,
     is_verified: prof?.is_verified === true,
+    authEmail,
   })
 }
 

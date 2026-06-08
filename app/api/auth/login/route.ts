@@ -3,10 +3,13 @@ import { externalApisBlockedResponse } from "@/lib/dev-local-api-guard"
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler"
 import { createAdminClient } from "@/lib/supabaseAdmin"
 import { findAuthUserIdByEmail } from "@/lib/auth-users"
+import { isValidRegisterPhone } from "@/lib/auth/register-contact"
 import { resolveIdentifierToEmail } from "@/lib/server/auth-identifier"
 import { confirmAuthEmailForPasswordLogin } from "@/lib/server/register-auth-access"
 
 type LoginBody = {
+  phone?: string
+  /** @deprecated Legacy clients — prefer `phone`. Email still accepted for existing accounts. */
   email?: string
   password?: string
 }
@@ -26,19 +29,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const identifier = typeof body.email === "string" ? body.email.trim() : ""
+  const phoneRaw = typeof body.phone === "string" ? body.phone.trim() : ""
+  const emailRaw = typeof body.email === "string" ? body.email.trim() : ""
+  const identifier = phoneRaw || emailRaw
   const password = typeof body.password === "string" ? body.password : ""
+
   if (!identifier || !password) {
-    return NextResponse.json({ error: "Email or phone and password are required." }, { status: 400 })
+    return NextResponse.json({ error: "Phone and password are required." }, { status: 400 })
+  }
+
+  const isEmailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)
+  if (!isEmailLike && !isValidRegisterPhone(identifier)) {
+    return NextResponse.json({ error: "Enter a valid phone number (at least 9 digits)." }, { status: 400 })
   }
 
   const admin = createAdminClient()
-  const resolvedEmail = (await resolveIdentifierToEmail(admin, identifier)) ?? identifier
+  const resolvedEmail = await resolveIdentifierToEmail(admin, identifier)
+  if (!resolvedEmail) {
+    return NextResponse.json(
+      { error: "No account has this phone linked. Open a new Nexus account or contact support." },
+      { status: 404 },
+    )
+  }
+  const authEmail = resolvedEmail
+
   const supabase = await createRouteHandlerSupabaseClient()
 
   async function signIn() {
     return supabase.auth.signInWithPassword({
-      email: resolvedEmail,
+      email: authEmail,
       password,
     })
   }
@@ -48,10 +67,10 @@ export async function POST(request: Request) {
   if (
     error &&
     /email not confirmed|confirm your email/i.test(error.message) &&
-    resolvedEmail.includes("@")
+    authEmail.includes("@")
   ) {
     try {
-      const userId = await findAuthUserIdByEmail(admin, resolvedEmail)
+      const userId = await findAuthUserIdByEmail(admin, authEmail)
       if (userId && (await confirmAuthEmailForPasswordLogin(admin, userId))) {
         const retry = await signIn()
         data = retry.data
@@ -72,21 +91,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No session returned. Try again or contact support." }, { status: 500 })
   }
 
-  let emailVerificationPending = false
-  try {
-    const { data: prof } = await admin
-      .from("profiles")
-      .select("is_verified")
-      .eq("id", data.user.id)
-      .maybeSingle()
-    emailVerificationPending = prof?.is_verified !== true
-  } catch (e) {
-    console.warn("[auth/login] profile read:", e instanceof Error ? e.message : e)
-  }
-
   return NextResponse.json({
     ok: true,
     userId: data.user.id,
-    ...(emailVerificationPending ? { emailVerificationPending: true } : {}),
   })
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
@@ -12,23 +12,18 @@ import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { AuthCollapsibleSection } from "@/components/auth/auth-collapsible-section"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
-import { AuthTabSwitcher } from "@/components/auth/auth-tab-switcher"
-import { VerificationCodeSentPanel } from "@/components/auth/verification-code-sent-panel"
-import { VerificationDeliveryHint } from "@/components/auth/verification-delivery-hint"
 import { markFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { sanitizeInternalRedirect } from "@/lib/nexus-bot/trade-signal-share"
-import { isValidRegisterEmail } from "@/lib/auth/register-contact"
+import { isValidRegisterPhone } from "@/lib/auth/register-contact"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PasswordField } from "@/components/auth/password-field"
 import { Checkbox } from "@/components/ui/checkbox"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
-import { setPendingEmailVerification } from "@/lib/auth/pending-email-verification"
 
 const REMEMBER_KEY = "nexus_auth_remember_id"
 const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL ?? ""
-const CODE_RESEND_SECONDS = 60
 
 const LOGIN_JOELIN_CHIPS = [
   { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
@@ -38,32 +33,17 @@ const LOGIN_JOELIN_CHIPS = [
 
 const inputClass = "min-h-12 text-base sm:text-sm touch-manipulation"
 
-type SignInChannel = "email" | "phone"
-type EmailMethod = "password" | "code"
-type AccountHint = "unknown" | "existing" | "new"
-
 export default function LoginForm() {
   const router = useRouter()
   const { reenterGuestMode } = useAuth()
   const { language } = useUserPreferences()
   const t = getAuthMessages(language)
 
-  const [signInChannel, setSignInChannel] = useState<SignInChannel>("email")
-  const [emailMethod, setEmailMethod] = useState<EmailMethod>("password")
-  const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [loginCodeSent, setLoginCodeSent] = useState(false)
-  const [loginCodeEmail, setLoginCodeEmail] = useState("")
-  const [loginCode, setLoginCode] = useState("")
-  const [codeSentAt, setCodeSentAt] = useState<number | null>(null)
-  const [resendSecondsLeft, setResendSecondsLeft] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [accountHint, setAccountHint] = useState<AccountHint>("unknown")
-  const [accountHintLoading, setAccountHintLoading] = useState(false)
 
   const [resetSuccess, setResetSuccess] = useState(false)
   const [sessionCleared, setSessionCleared] = useState(false)
@@ -72,8 +52,6 @@ export default function LoginForm() {
   const [android, setAndroid] = useState(false)
   const [showSecurityNotice, setShowSecurityNotice] = useState(false)
   const [showServiceAgreement, setShowServiceAgreement] = useState(false)
-
-  const lookupAbort = useRef<AbortController | null>(null)
 
   useEffect(() => {
     try {
@@ -98,70 +76,14 @@ export default function LoginForm() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(REMEMBER_KEY)
-      if (saved) {
-        if (saved.includes("@")) setEmail(saved)
-        else setPhone(saved)
-      }
+      if (saved) setPhone(saved)
       const params = new URLSearchParams(window.location.search)
-      const emailParam = params.get("email")?.trim()
-      if (emailParam) setEmail(emailParam)
-      if (params.get("verify_later") === "1") {
-        setSuccess("Account created. Sign in with your email and password. You can verify your email anytime from Settings.")
-      }
+      const phoneParam = params.get("phone")?.trim()
+      if (phoneParam) setPhone(phoneParam)
     } catch {
       /* ignore */
     }
   }, [])
-
-  useEffect(() => {
-    if (!codeSentAt) return
-    const tick = () => {
-      const left = Math.max(0, CODE_RESEND_SECONDS - Math.floor((Date.now() - codeSentAt) / 1000))
-      setResendSecondsLeft(left)
-    }
-    tick()
-    const id = window.setInterval(tick, 500)
-    return () => window.clearInterval(id)
-  }, [codeSentAt])
-
-  useEffect(() => {
-    if (signInChannel !== "email") {
-      setAccountHint("unknown")
-      return
-    }
-    const trimmed = email.trim().toLowerCase()
-    if (!isValidRegisterEmail(trimmed)) {
-      setAccountHint("unknown")
-      return
-    }
-
-    lookupAbort.current?.abort()
-    const controller = new AbortController()
-    lookupAbort.current = controller
-    const timer = window.setTimeout(async () => {
-      setAccountHintLoading(true)
-      try {
-        const res = await fetch("/api/auth/lookup-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: trimmed }),
-          signal: controller.signal,
-        })
-        const json = (await res.json().catch(() => ({}))) as { exists?: boolean }
-        if (controller.signal.aborted) return
-        setAccountHint(json.exists ? "existing" : "new")
-      } catch {
-        if (!controller.signal.aborted) setAccountHint("unknown")
-      } finally {
-        if (!controller.signal.aborted) setAccountHintLoading(false)
-      }
-    }, 450)
-
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [email, signInChannel])
 
   const goGuestDashboard = useCallback(() => {
     try {
@@ -173,65 +95,9 @@ export default function LoginForm() {
     router.refresh()
   }, [router, reenterGuestMode])
 
-  async function resolveEmailForPhone(rawPhone: string): Promise<string | null> {
-    const trimmed = rawPhone.trim()
-    if (!trimmed) return null
-    const resolveRes = await fetch("/api/auth/resolve-identifier", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier: trimmed }),
-    })
-    const resolveData = (await resolveRes.json().catch(() => ({}))) as { email?: string }
-    if (!resolveRes.ok || !resolveData.email) return null
-    return resolveData.email
-  }
-
-  async function handleLoginCodeRequest(emailForAuth: string) {
-    const res = await fetch("/api/auth/request-magic-link", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: emailForAuth.trim() }),
-    })
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string }
-    if (!res.ok) {
-      setError(json.error ?? "Could not send sign-in code.")
-      return
-    }
-    setLoginCodeEmail(emailForAuth.trim())
-    setLoginCodeSent(true)
-    setLoginCode("")
-    setCodeSentAt(Date.now())
-    setSuccess(null)
-    setError(null)
-  }
-
-  async function handleLoginCodeVerify(emailForAuth: string, code: string) {
-    const res = await fetch("/api/auth/verify-magic-link", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email: emailForAuth.trim(), code: code.trim() }),
-    })
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
-    if (!res.ok || !json.ok) {
-      setError(json.error ?? "Invalid or expired code.")
-      return
-    }
-    try {
-      const rememberValue = signInChannel === "email" ? email.trim() : phone.trim()
-      if (rememberMe && rememberValue) localStorage.setItem(REMEMBER_KEY, rememberValue)
-      else localStorage.removeItem(REMEMBER_KEY)
-    } catch {
-      /* ignore */
-    }
-    markFreshLoginLanding()
-    window.location.assign(postLoginPath)
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setSuccess(null)
     if (isDevLocalOnly()) {
       goGuestDashboard()
       return
@@ -245,96 +111,60 @@ export default function LoginForm() {
       setError(configIssue)
       return
     }
+
+    const phoneRaw = phone.trim()
+    if (!phoneRaw) {
+      setError("Enter your mobile number.")
+      return
+    }
+    if (!isValidRegisterPhone(phoneRaw) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(phoneRaw)) {
+      setError("Enter a valid mobile number (at least 9 digits).")
+      return
+    }
+    if (!password) {
+      setError("Enter your password.")
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      if (signInChannel === "email") {
-        const emailForAuth = email.trim().toLowerCase()
-        if (!isValidRegisterEmail(emailForAuth)) {
-          setError("Enter your email address.")
-          return
-        }
+      const loginRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: phoneRaw, password }),
+      })
+      const loginJson = (await loginRes.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+      }
 
-        if (emailMethod === "code") {
-          if (loginCodeSent) {
-            if (!/^\d{6}$/.test(loginCode)) {
-              setError("Enter the 6-digit code from your email.")
-              return
-            }
-            await handleLoginCodeVerify(loginCodeEmail || emailForAuth, loginCode)
-          } else {
-            await handleLoginCodeRequest(emailForAuth)
-          }
-          return
+      if (!loginRes.ok) {
+        const msg = loginJson.error ?? `Sign-in failed (${loginRes.status})`
+        if (msg.toLowerCase().includes("invalid login credentials")) {
+          setError("Wrong phone or password. Check caps lock or tap Forgot password.")
+        } else if (msg.toLowerCase().includes("no account")) {
+          setError("No account has this phone linked. Open a new Nexus account or sign in with your email.")
+        } else {
+          setError(msg)
         }
-
-        const loginRes = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ email: emailForAuth, password }),
-        })
-        const loginJson = (await loginRes.json().catch(() => ({}))) as {
-          ok?: boolean
-          error?: string
-          emailVerificationPending?: boolean
-        }
-
-        if (!loginRes.ok) {
-          const msg = loginJson.error ?? `Sign-in failed (${loginRes.status})`
-          if (msg.toLowerCase().includes("invalid login credentials")) {
-            setError("Wrong email or password. Check caps lock or tap Forgot password.")
-          } else {
-            setError(msg)
-          }
-          return
-        }
-
-        if (!loginJson.ok) {
-          setError("No session returned. Check your email or confirm your account.")
-          return
-        }
-
-        try {
-          if (rememberMe) localStorage.setItem(REMEMBER_KEY, emailForAuth)
-          else localStorage.removeItem(REMEMBER_KEY)
-        } catch {
-          /* ignore */
-        }
-
-        if (loginJson.emailVerificationPending) {
-          try {
-            setPendingEmailVerification({ email: emailForAuth })
-          } catch {
-            /* ignore */
-          }
-        }
-
-        markFreshLoginLanding()
-        window.location.assign(postLoginPath)
         return
       }
 
-      const rawPhone = phone.trim()
-      if (!rawPhone) {
-        setError("Enter the mobile number linked to your account.")
+      if (!loginJson.ok) {
+        setError("No session returned. Try again or contact support.")
         return
       }
 
-      const emailForAuth = await resolveEmailForPhone(rawPhone)
-      if (!emailForAuth) {
-        setError("No account has this phone linked. Sign in with email or open a new Nexus account.")
-        return
+      try {
+        if (rememberMe) localStorage.setItem(REMEMBER_KEY, phoneRaw)
+        else localStorage.removeItem(REMEMBER_KEY)
+      } catch {
+        /* ignore */
       }
 
-      if (loginCodeSent) {
-        if (!/^\d{6}$/.test(loginCode)) {
-          setError("Enter the 6-digit verification code.")
-          return
-        }
-        await handleLoginCodeVerify(loginCodeEmail || emailForAuth, loginCode)
-      } else {
-        await handleLoginCodeRequest(emailForAuth)
-      }
+      markFreshLoginLanding()
+      window.location.assign(postLoginPath)
     } catch (err) {
       if (
         isGuestLoginEnabled() &&
@@ -345,9 +175,7 @@ export default function LoginForm() {
         return
       }
       if (err instanceof TypeError && String(err.message).toLowerCase().includes("fetch")) {
-        setError(
-          "Cannot reach the server. Confirm your connection and try again.",
-        )
+        setError("Cannot reach the server. Confirm your connection and try again.")
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong")
       }
@@ -355,39 +183,6 @@ export default function LoginForm() {
       setIsSubmitting(false)
     }
   }
-
-  function resetCodeState() {
-    setLoginCodeSent(false)
-    setLoginCode("")
-    setCodeSentAt(null)
-    setResendSecondsLeft(0)
-    setSuccess(null)
-    setError(null)
-  }
-
-  function switchChannel(channel: SignInChannel) {
-    setSignInChannel(channel)
-    resetCodeState()
-    setError(null)
-    setSuccess(null)
-  }
-
-  const showCodeEntry = loginCodeSent
-  const codeTargetEmail = loginCodeEmail || email.trim().toLowerCase()
-  const canResendCode = resendSecondsLeft <= 0
-
-  const submitLabel = (() => {
-    if (isSubmitting) {
-      if (showCodeEntry) return "Signing in…"
-      if (signInChannel === "email" && emailMethod === "code") return "Sending code…"
-      if (signInChannel === "phone") return "Sending code…"
-      return t.login.signingIn
-    }
-    if (showCodeEntry) return "Sign in"
-    if (signInChannel === "email" && emailMethod === "code") return "Continue securely"
-    if (signInChannel === "phone") return "Continue securely"
-    return "Sign in"
-  })()
 
   const loginFooter = (
     <div className="mt-6 space-y-2">
@@ -397,7 +192,7 @@ export default function LoginForm() {
         onToggle={() => setShowSecurityNotice((v) => !v)}
         panelId="login-security-reminder"
       >
-        <p>Use only your own verified email and avoid shared or public devices.</p>
+        <p>Use your own verified phone number and avoid shared or public devices.</p>
         <p className="mt-1.5">Never share your password or 6-digit Nexus Security PIN with anyone.</p>
         <p className="mt-1.5">
           Confirm you are on <span className="font-medium text-foreground">www.nexuspro.it.com</span> before signing
@@ -446,236 +241,58 @@ export default function LoginForm() {
           </p>
         ) : null}
 
-        <AuthTabSwitcher
-          className="mb-6"
-          tabs={[
-            { id: "email" as const, label: "Email" },
-            { id: "phone" as const, label: "Phone" },
-          ]}
-          active={signInChannel}
-          onChange={switchChannel}
-          disabled={isSubmitting}
-        />
-
         <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
-          {signInChannel === "email" ? (
-            <>
-              <div className="space-y-2.5">
-                <Label htmlFor="login-email" className="text-sm font-medium">
-                  Email address
-                </Label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  autoComplete="username"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value)
-                    resetCodeState()
-                  }}
-                  placeholder="you@example.com"
-                  required
-                  disabled={isSubmitting || showCodeEntry}
-                  className={inputClass}
-                  aria-invalid={!!error}
-                />
-                {accountHintLoading ? (
-                  <p className="text-xs text-muted-foreground">Checking account…</p>
-                ) : accountHint === "existing" ? (
-                  <p className="text-xs text-emerald-400/90">Welcome back — sign in or use a secure code.</p>
-                ) : accountHint === "new" ? (
-                  <p className="text-xs text-muted-foreground">
-                    New here?{" "}
-                    <Link
-                      href={`/auth/register?email=${encodeURIComponent(email.trim())}`}
-                      className="font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      Open your Nexus account
-                    </Link>
-                  </p>
-                ) : null}
-              </div>
+          <div className="space-y-2.5">
+            <Label htmlFor="login-phone" className="text-sm font-medium">
+              Mobile number
+            </Label>
+            <Input
+              id="login-phone"
+              type="tel"
+              autoComplete="username tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+256 7XX XXX XXX"
+              required
+              disabled={isSubmitting}
+              className={inputClass}
+              aria-invalid={!!error}
+            />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Registered with email? Enter your email address here — then add your phone in Settings for faster sign-in
+              next time.
+            </p>
+          </div>
 
-              {!showCodeEntry ? (
-                <AuthTabSwitcher
-                  size="compact"
-                  tabs={[
-                    { id: "password" as const, label: "Password" },
-                    { id: "code" as const, label: "Email code" },
-                  ]}
-                  active={emailMethod}
-                  onChange={(method) => {
-                    setEmailMethod(method)
-                    resetCodeState()
-                  }}
-                  disabled={isSubmitting}
-                />
-              ) : null}
+          <PasswordField
+            id="login-password"
+            label="Password"
+            autoComplete="current-password"
+            value={password}
+            onChange={setPassword}
+            required
+            disabled={isSubmitting}
+            inputClassName={inputClass}
+            aria-invalid={!!error}
+          />
 
-              {emailMethod === "password" && !showCodeEntry ? (
-                <>
-                  <PasswordField
-                    id="login-password"
-                    label="Account password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={setPassword}
-                    required
-                    disabled={isSubmitting}
-                    inputClassName={inputClass}
-                    aria-invalid={!!error}
-                  />
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-xs text-muted-foreground">
-                      <Checkbox
-                        checked={rememberMe}
-                        onCheckedChange={(v) => setRememberMe(v === true)}
-                        disabled={isSubmitting}
-                      />
-                      {t.login.rememberMe}
-                    </label>
-                    <Link
-                      href="/auth/recovery"
-                      className="inline-flex min-h-[44px] items-center text-xs font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      {t.login.forgotPassword}
-                    </Link>
-                  </div>
-                </>
-              ) : null}
-
-              {emailMethod === "code" && showCodeEntry ? (
-                <div className="space-y-4">
-                  <VerificationCodeSentPanel
-                    email={codeTargetEmail}
-                    secondsLeft={resendSecondsLeft}
-                    canResend={canResendCode}
-                  />
-                  <VerificationDeliveryHint codeSentAt={codeSentAt} />
-                  <div className="space-y-2">
-                    <Label htmlFor="login-code" className="text-sm font-medium">
-                      Verification code
-                    </Label>
-                    <Input
-                      id="login-code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      value={loginCode}
-                      onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="000000"
-                      required
-                      disabled={isSubmitting}
-                      className={`${inputClass} text-center text-2xl font-semibold tracking-[0.35em]`}
-                      aria-invalid={!!error}
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        className="min-h-[44px] text-xs text-primary underline-offset-4 hover:underline"
-                        disabled={isSubmitting}
-                        onClick={resetCodeState}
-                      >
-                        Use a different email
-                      </button>
-                      <button
-                        type="button"
-                        className="min-h-[44px] text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
-                        disabled={isSubmitting || !canResendCode}
-                        onClick={() => void handleLoginCodeRequest(codeTargetEmail)}
-                      >
-                        {canResendCode ? "Resend code" : `Resend in ${resendSecondsLeft}s`}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : emailMethod === "code" && !showCodeEntry ? (
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  We will email a 6-digit sign-in code to your inbox. No password required.
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <div className="space-y-2.5">
-                <Label htmlFor="login-phone" className="text-sm font-medium">
-                  Mobile number
-                </Label>
-                <Input
-                  id="login-phone"
-                  type="tel"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(e.target.value)
-                    resetCodeState()
-                  }}
-                  placeholder="+256 7XX XXX XXX"
-                  required
-                  disabled={isSubmitting || showCodeEntry}
-                  className={inputClass}
-                  aria-invalid={!!error}
-                />
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Use a number already linked to your Nexus account. A verification code is sent to your registered
-                  email.
-                </p>
-              </div>
-
-              {showCodeEntry ? (
-                <div className="space-y-4">
-                  <VerificationCodeSentPanel
-                    email={codeTargetEmail}
-                    secondsLeft={resendSecondsLeft}
-                    canResend={canResendCode}
-                  />
-                  <VerificationDeliveryHint codeSentAt={codeSentAt} />
-                  <div className="space-y-2">
-                    <Label htmlFor="login-phone-code" className="text-sm font-medium">
-                      Verification code
-                    </Label>
-                    <Input
-                      id="login-phone-code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      value={loginCode}
-                      onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="000000"
-                      required
-                      disabled={isSubmitting}
-                      className={`${inputClass} text-center text-2xl font-semibold tracking-[0.35em]`}
-                      aria-invalid={!!error}
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        className="min-h-[44px] text-xs text-primary underline-offset-4 hover:underline"
-                        disabled={isSubmitting}
-                        onClick={resetCodeState}
-                      >
-                        Use a different phone
-                      </button>
-                      <button
-                        type="button"
-                        className="min-h-[44px] text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
-                        disabled={isSubmitting || !canResendCode}
-                        onClick={() => void handleLoginCodeRequest(codeTargetEmail)}
-                      >
-                        {canResendCode ? "Resend code" : `Resend in ${resendSecondsLeft}s`}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-xs text-muted-foreground">
+              <Checkbox
+                checked={rememberMe}
+                onCheckedChange={(v) => setRememberMe(v === true)}
+                disabled={isSubmitting}
+              />
+              {t.login.rememberMe}
+            </label>
+            <Link
+              href="/auth/recovery"
+              className="inline-flex min-h-[44px] items-center text-xs font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t.login.forgotPassword}
+            </Link>
+          </div>
 
           {sessionCleared ? (
             <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2.5 text-xs text-sky-100" role="status">
@@ -684,17 +301,12 @@ export default function LoginForm() {
           ) : null}
           {sessionRequired ? (
             <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100" role="status">
-              Signed out on this device. Use your email and password.
+              Signed out on this device. Sign in with your phone and password.
             </p>
           ) : null}
           {resetSuccess ? (
             <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-xs text-emerald-300" role="status">
               Password updated. Sign in with your new password.
-            </p>
-          ) : null}
-          {success ? (
-            <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-xs text-emerald-300" role="status">
-              {success}
             </p>
           ) : null}
           {error ? (
@@ -703,19 +315,15 @@ export default function LoginForm() {
             </p>
           ) : null}
 
-          {!showCodeEntry && (signInChannel === "email" && emailMethod === "code" || signInChannel === "phone") ? (
-            <VerificationDeliveryHint />
-          ) : null}
-
           <div className="sticky bottom-0 -mx-5 border-t border-white/[0.06] bg-[rgba(20,28,52,0.92)] px-5 py-4 backdrop-blur-md sm:-mx-7 sm:px-7">
             <Button type="submit" className="min-h-12 w-full text-base font-semibold" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden />
-                  {submitLabel}
+                  {t.login.signingIn}
                 </>
               ) : (
-                submitLabel
+                "Sign in"
               )}
             </Button>
           </div>

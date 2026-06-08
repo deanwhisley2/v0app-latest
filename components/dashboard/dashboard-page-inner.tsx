@@ -100,6 +100,7 @@ import {
 } from "@/lib/mobile/chrome-android-safe-mode"
 import { HistoryCenterScreen } from "@/components/dashboard/history-center-screen"
 import { EmailVerificationReminderBanner } from "@/components/dashboard/email-verification-reminder-banner"
+import { LegacyEmailLoginTransitionBanner } from "@/components/dashboard/legacy-email-login-transition-banner"
 import { OptionalSecurityReminderBanner } from "@/components/dashboard/optional-security-reminder-banner"
 import { SecuritySetupGateDialog } from "@/components/dashboard/security-setup-gate-dialog"
 import { fetchSecurityProfileForAction } from "@/lib/nexus-security-profile-client"
@@ -4760,6 +4761,13 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
 
       {!isGuestSession && (
         <div className="mx-auto max-w-[1600px] space-y-2 px-4 pb-1">
+          <LegacyEmailLoginTransitionBanner
+            onOpenSettings={() => {
+              setChatHubFocus(null)
+              setSupportThreadFocusId(null)
+              router.push("/settings/deposit-withdraw")
+            }}
+          />
           <EmailVerificationReminderBanner />
           <OptionalSecurityReminderBanner
             onOpenSettings={() => {
