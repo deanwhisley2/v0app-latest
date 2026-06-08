@@ -427,6 +427,70 @@ export async function getTradeSessionAdminStats(admin: SupabaseClient) {
   }
 }
 
+const OPEN_BOT_STATUSES = ["booked", "ready", "pending", "running", "active"] as const
+
+/** Admin housekeeping — remove ended/draft sessions with no open participants. */
+export async function clearOldTradeSessions(
+  admin: SupabaseClient,
+  opts?: { olderThanDays?: number },
+): Promise<{ deleted: number; skipped: number; deletedCodes: string[] }> {
+  const olderThanDays = Math.max(0, Math.min(365, Number(opts?.olderThanDays ?? 0) || 0))
+  const cutoff =
+    olderThanDays > 0
+      ? new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString()
+      : null
+
+  let q = admin
+    .from("trade_sessions")
+    .select("id,code,status,end_at,created_at")
+    .in("status", ["expired", "draft"])
+    .order("created_at", { ascending: true })
+    .limit(200)
+
+  if (cutoff) {
+    q = q.lt("end_at", cutoff)
+  }
+
+  const { data: candidates, error } = await q
+  if (error) throw new Error(error.message)
+
+  const rows = candidates ?? []
+  if (rows.length === 0) {
+    return { deleted: 0, skipped: 0, deletedCodes: [] }
+  }
+
+  const ids = rows.map((r) => String(r.id))
+  const { data: openRows, error: openErr } = await admin
+    .from("nexus_bot_sessions")
+    .select("trade_session_id")
+    .in("trade_session_id", ids)
+    .in("status", [...OPEN_BOT_STATUSES])
+  if (openErr) throw new Error(openErr.message)
+
+  const blocked = new Set((openRows ?? []).map((r) => String(r.trade_session_id)))
+
+  let deleted = 0
+  let skipped = 0
+  const deletedCodes: string[] = []
+
+  for (const row of rows) {
+    const id = String(row.id)
+    if (blocked.has(id)) {
+      skipped += 1
+      continue
+    }
+    const { error: delErr } = await admin.from("trade_sessions").delete().eq("id", id)
+    if (delErr) {
+      skipped += 1
+      continue
+    }
+    deleted += 1
+    deletedCodes.push(String(row.code))
+  }
+
+  return { deleted, skipped, deletedCodes }
+}
+
 export function humanizeTradeSessionError(code: string): string {
   switch (code) {
     case "CODE_NOT_GENERATED":

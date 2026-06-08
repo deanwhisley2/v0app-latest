@@ -382,6 +382,42 @@ export function AdminNexusBotPanel() {
     return { dayIndex, dayRates, slotPct }
   })()
 
+  const clearOldSessions = async () => {
+    const endedCount = sessions.filter((s) => s.status === "expired" || s.status === "draft").length
+    if (endedCount === 0) {
+      setMsg("No ended or draft sessions to clear.")
+      return
+    }
+    const ok = window.confirm(
+      `Remove up to ${endedCount} ended/draft session record(s) from history?\n\n` +
+        "Active sessions are never deleted. Records with open participants are skipped. This cannot be undone.",
+    )
+    if (!ok) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const h = await tokenHeaders()
+      const res = await fetch("/api/admin/trade-sessions", {
+        method: "POST",
+        headers: h,
+        body: JSON.stringify({ action: "clear_old" }),
+      })
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        deleted?: number
+        skipped?: number
+      }
+      if (!res.ok) throw new Error(j.error ?? "Clear failed")
+      setMsg(j.message ?? `Removed ${j.deleted ?? 0} session record(s).`)
+      await loadSessions()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Clear failed")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const terminateSession = async (session: TradeSessionRow) => {
     const activeCount = session.participants?.active ?? 0
     const ok = window.confirm(
@@ -857,7 +893,7 @@ export function AdminNexusBotPanel() {
           <Card className="space-y-3 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-semibold">Session history</h3>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {(["all", "active", "expired"] as const).map((f) => (
                   <button
                     key={f}
@@ -870,8 +906,21 @@ export function AdminNexusBotPanel() {
                     {f}
                   </button>
                 ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-[32px] touch-manipulation text-xs"
+                  disabled={busy || sessions.every((s) => s.status === "active")}
+                  onClick={() => void clearOldSessions()}
+                >
+                  Clear old records
+                </Button>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Removes ended and draft sessions only. Active trades and sessions with open participants are kept.
+            </p>
             <div className="max-h-[400px] space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-border/40 bg-muted/10 p-2 pr-1">
               {sessions.length === 0 ? (
                 <p className="px-1 text-sm text-muted-foreground">No sessions yet.</p>

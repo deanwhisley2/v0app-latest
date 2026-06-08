@@ -9,6 +9,7 @@ import {
   getTradeSessionByCode,
   humanizeTradeSessionError,
   previewRegisteredTradeSessionYield,
+  clearOldTradeSessions,
   registerTradeSession,
 } from "@/lib/server/trade-sessions"
 import {
@@ -112,7 +113,8 @@ export async function POST(request: Request) {
     await requireLiquidityAdminLevel5(actor)
 
     const body = (await request.json().catch(() => ({}))) as {
-      action?: "generate" | "register" | "terminate"
+      action?: "generate" | "register" | "terminate" | "clear_old"
+      olderThanDays?: number
       count?: number
       code?: string
       sessionName?: string
@@ -126,6 +128,23 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
+
+    if (body.action === "clear_old") {
+      const out = await clearOldTradeSessions(admin, {
+        olderThanDays: Number(body.olderThanDays ?? 0) || 0,
+      })
+      return NextResponse.json({
+        ok: true,
+        cleared: true,
+        message:
+          out.deleted > 0
+            ? `Removed ${out.deleted} ended session record(s)${out.skipped > 0 ? ` · ${out.skipped} skipped (active participants or protected)` : ""}.`
+            : out.skipped > 0
+              ? "No sessions removed — remaining ended records still have active participants."
+              : "No ended or draft sessions to remove.",
+        ...out,
+      })
+    }
 
     if (body.action === "terminate") {
       const tradeSessionId = String(body.tradeSessionId ?? "").trim()
