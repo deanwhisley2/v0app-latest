@@ -43,11 +43,14 @@ const QUICK_TRADING_GUIDE_STEPS = [
   'Once activated, take a screenshot and click "Share Screenshot to Group" to celebrate with the community!',
 ] as const
 
+type StakeTier = number | "max" | "custom"
+
 type PersistedTradeFlow = {
   code: string
   verificationId: string
   verifiedAt: string
-  stakeTier: number | "max"
+  stakeTier: StakeTier
+  customStakeUsd?: string
 }
 
 function readPersistedTradeFlow(): PersistedTradeFlow | null {
@@ -240,7 +243,8 @@ export function NexusBotWorkspace({
   const [verifySteps, setVerifySteps] = useState<string[]>([])
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [activateError, setActivateError] = useState<string | null>(null)
-  const [stakeTier, setStakeTier] = useState<number | "max">(50)
+  const [stakeTier, setStakeTier] = useState<StakeTier>("max")
+  const [customStakeUsd, setCustomStakeUsd] = useState("")
   const [activateConfirm, setActivateConfirm] = useState(false)
   const [autoPlan, setAutoPlan] = useState<string>("auto_24h")
   const [autoStake, setAutoStake] = useState("50")
@@ -259,8 +263,12 @@ export function NexusBotWorkspace({
 
   const signalCommitUsd = useMemo(() => {
     if (stakeTier === "max") return availableUsd
+    if (stakeTier === "custom") {
+      const n = Number(customStakeUsd)
+      return Number.isFinite(n) && n > 0 ? n : 0
+    }
     return stakeTier
-  }, [stakeTier, availableUsd])
+  }, [stakeTier, customStakeUsd, availableUsd])
 
   const activateReady = Boolean(verifiedSession) && signalCommitUsd > 0 && !busy
   const canActivate = activateReady && activateConfirm
@@ -276,9 +284,10 @@ export function NexusBotWorkspace({
         verificationId,
         verifiedAt: patch.verifiedAt ?? current?.verifiedAt ?? verifiedSession?.verifiedAt ?? new Date().toISOString(),
         stakeTier: patch.stakeTier ?? stakeTier,
+        customStakeUsd: patch.customStakeUsd ?? (stakeTier === "custom" ? customStakeUsd : undefined),
       })
     },
-    [codeInput, stakeTier, verifiedSession],
+    [codeInput, customStakeUsd, stakeTier, verifiedSession],
   )
 
   const resetFlow = useCallback(() => {
@@ -288,6 +297,8 @@ export function NexusBotWorkspace({
     setVerifyError(null)
     setActivateError(null)
     setActivateConfirm(false)
+    setStakeTier("max")
+    setCustomStakeUsd("")
     writePersistedTradeFlow(null)
   }, [])
 
@@ -351,6 +362,7 @@ export function NexusBotWorkspace({
         verifiedAt: persisted.verifiedAt,
       })
       setStakeTier(persisted.stakeTier)
+      setCustomStakeUsd(persisted.customStakeUsd ?? "")
       setVerifySteps([...VERIFY_STEPS_USER])
       setFlowStep(4)
     }
@@ -517,7 +529,8 @@ export function NexusBotWorkspace({
         body: JSON.stringify({
           code: codeInput,
           verificationId: verifiedSession.verificationId,
-          stakeTierUsd: stakeTier,
+          stakeTierUsd:
+            stakeTier === "max" ? "max" : stakeTier === "custom" ? Number(customStakeUsd) : stakeTier,
           confirm: activateConfirm,
         }),
       })
@@ -760,6 +773,45 @@ export function NexusBotWorkspace({
                       >
                         Max
                       </button>
+                    </div>
+                    <div
+                      className={cn(
+                        "flex flex-col gap-1.5 rounded-lg border p-3 sm:flex-row sm:items-center",
+                        stakeTier === "custom"
+                          ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
+                          : "border-border/60 bg-muted/10",
+                      )}
+                    >
+                      <label htmlFor="nexus-bot-custom-stake" className="text-xs font-semibold text-foreground">
+                        Custom Amount
+                      </label>
+                      <div className="relative flex-1">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-sm text-muted-foreground">
+                          $
+                        </span>
+                        <Input
+                          id="nexus-bot-custom-stake"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Enter amount"
+                          value={customStakeUsd}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[^\d.]/g, "")
+                            setCustomStakeUsd(v)
+                            setStakeTier("custom")
+                            setFlowStep(4)
+                            persistTradeFlow({ stakeTier: "custom", customStakeUsd: v })
+                          }}
+                          onFocus={() => {
+                            if (stakeTier !== "custom") {
+                              setStakeTier("custom")
+                              setFlowStep(4)
+                              persistTradeFlow({ stakeTier: "custom" })
+                            }
+                          }}
+                          className="min-h-[44px] pl-7 font-mono touch-manipulation"
+                        />
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Allocation preview:{" "}

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { createAdminClient } from "@/lib/supabaseAdmin"
-import { NEXUS_SIGNAL_STAKE_TIERS_USD } from "@/lib/nexus-bot/plans"
 import { userSessionPresentation } from "@/lib/nexus-bot/user-session-messaging"
 import {
   activateTradeSessionBot,
@@ -42,10 +41,10 @@ export async function POST(request: Request) {
       stakeUsd = available
     } else {
       const tier = Number(body.stakeTierUsd)
-      if (!NEXUS_SIGNAL_STAKE_TIERS_USD.includes(tier as (typeof NEXUS_SIGNAL_STAKE_TIERS_USD)[number])) {
-        return NextResponse.json({ error: "Invalid capital tier." }, { status: 400 })
+      if (!Number.isFinite(tier) || tier <= 0) {
+        return NextResponse.json({ error: "Enter a valid capital amount." }, { status: 400 })
       }
-      stakeUsd = tier
+      stakeUsd = Math.round(tier * 100) / 100
     }
     if (!(stakeUsd > 0) || stakeUsd > available) {
       return NextResponse.json({ error: "Insufficient Nexus Main balance." }, { status: 400 })
