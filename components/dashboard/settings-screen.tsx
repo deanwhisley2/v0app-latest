@@ -236,8 +236,9 @@ export function SettingsScreen({
 
   const renderBackButton = () => (
     <button
+      type="button"
       onClick={navigateBack}
-      className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+      className="mb-4 flex min-h-[44px] touch-manipulation items-center gap-2 px-1 py-2 text-sm text-muted-foreground hover:text-foreground"
     >
       <ChevronLeft className="h-4 w-4" />
       {t("settings.back")}
@@ -322,7 +323,7 @@ export function SettingsScreen({
             <button
               type="button"
               onClick={() => void Promise.resolve(onLogout())}
-              className="nexus-touch-press flex w-full items-center justify-between gap-3 bg-gradient-to-r from-destructive/12 via-destructive/8 to-transparent px-4 py-4 text-left transition-colors hover:from-destructive/18 active:scale-[0.99] touch-manipulation"
+              className="nexus-touch-press flex min-h-[44px] w-full touch-manipulation items-center justify-between gap-3 bg-gradient-to-r from-destructive/12 via-destructive/8 to-transparent px-4 py-4 text-left transition-colors hover:from-destructive/18 active:scale-[0.99]"
             >
               <span className="flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/15 ring-1 ring-destructive/25">

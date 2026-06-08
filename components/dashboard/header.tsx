@@ -198,10 +198,11 @@ export function Header({
                         {/* Profile Header */}
                         <div className="relative border-b border-border bg-muted/40 p-4">
                           <button
+                            type="button"
                             onClick={closeProfileMenu}
-                            className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-background/50 text-muted-foreground hover:bg-background hover:text-foreground"
+                            className="absolute right-2 top-2 flex min-h-[44px] min-w-[44px] touch-manipulation items-center justify-center rounded-full bg-background/50 text-muted-foreground hover:bg-background hover:text-foreground"
                           >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-4 w-4" />
                           </button>
                           <div className="flex items-center gap-3">
                             <div className="relative">
@@ -283,9 +284,10 @@ export function Header({
 
                         {/* Footer Actions */}
                         <div className="border-t border-border p-2 space-y-1">
-                          <button 
+                          <button
+                            type="button"
                             onClick={() => { onTabChange("settings"); setShowProfileMenu(false); setProfileView("main") }}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                            className="flex min-h-[44px] w-full touch-manipulation items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
                           >
                             <Settings className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-medium">Settings</span>
@@ -302,7 +304,7 @@ export function Header({
                                 }
                               })()
                             }}
-                            className="nexus-touch-press group flex w-full items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-gradient-to-r from-destructive/15 via-destructive/10 to-transparent px-3 py-3 text-left text-destructive shadow-sm transition-all hover:border-destructive/40 hover:from-destructive/20 active:scale-[0.99] touch-manipulation"
+                            className="nexus-touch-press group flex min-h-[44px] w-full touch-manipulation items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-gradient-to-r from-destructive/15 via-destructive/10 to-transparent px-3 py-3 text-left text-destructive shadow-sm transition-all hover:border-destructive/40 hover:from-destructive/20 active:scale-[0.99]"
                           >
                             <span className="flex items-center gap-3">
                               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/15 ring-1 ring-destructive/20 transition-colors group-hover:bg-destructive/20">

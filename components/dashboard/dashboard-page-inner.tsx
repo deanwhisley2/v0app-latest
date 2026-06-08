@@ -2274,14 +2274,66 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     }
   }, [])
 
+  const resetFundModalCaches = useCallback(
+    (target: "add" | "withdraw" | null) => {
+      setFundAmount("")
+      setWithdrawSecurityPin("")
+      setFundModalError(null)
+      if (target !== "withdraw") {
+        setWithdrawPayoutProfile(null)
+        setSelectedWithdrawPayoutId(null)
+        setWithdrawalEligibility(null)
+      }
+      setGatewayStep(1)
+      setPaymentVerificationStatus("idle")
+      setLocalMmWizardStep(1)
+      setLocalMmRetailersSearched(false)
+      setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
+      setQualifiedRetailers([])
+      setOfficialCorridorFallback(null)
+      setSelectedOfficialRouteId("")
+      setSelectedRetailerId("")
+      setFundTxReference("")
+      setFundNote("")
+      setFundMobileNetwork("")
+      setFundPayerSource("manual")
+      setCryptoFundingMeta(null)
+      setFundPaymentProofDataUrl(null)
+      setFundPaymentProofPreview(null)
+      setPendingDepositAmountLabel(null)
+      setUgMoMoNetwork("MTN")
+    },
+    [addFundsCorridorCountry],
+  )
+
+  const closeFundModal = useCallback(() => {
+    resetFundModalCaches(null)
+    setShowFundModal(null)
+    setFundModalError(null)
+    if (typeof window !== "undefined" && uiHistoryReadyRef.current) {
+      const state = window.history.state as { nexusDashboardUi?: boolean; modal?: "add" | "withdraw" | null } | null
+      if (state?.nexusDashboardUi) {
+        window.history.replaceState({ ...state, modal: null }, "")
+      }
+    }
+  }, [resetFundModalCaches])
+
   useEffect(() => {
     if (!fundPageOnly) return
+    resetFundModalCaches(fundPageOnly)
     setShowFundModal(fundPageOnly)
-    setFundAmount("")
-    setGatewayStep(1)
-    setPaymentVerificationStatus("idle")
-    setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
-  }, [fundPageOnly, addFundsCorridorCountry])
+  }, [fundPageOnly, addFundsCorridorCountry, resetFundModalCaches])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || fundPageOnly) return
+    const state = window.history.state as { nexusDashboardUi?: boolean; modal?: "add" | "withdraw" | null } | null
+    if (state?.modal) {
+      window.history.replaceState({ ...state, modal: null }, "")
+    }
+    setShowFundModal(null)
+    resetFundModalCaches(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear stale history modal once on dashboard mount
+  }, [])
 
   useEffect(() => {
     if (fundPageOnly !== "add") return
@@ -2442,12 +2494,16 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const tryOpenFundModal = useCallback(
     async (mode: "add" | "withdraw") => {
       if (isGuestSession) return
-      setFundModalError(null)
+      resetFundModalCaches(mode)
+      if (mode === "add") {
+        setShowFundModal("add")
+      }
       const {
         data: { session },
       } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) {
+        if (mode === "add") setShowFundModal(null)
         showToast(t("withdrawal.error.sessionExpired"), "error")
         return
       }
@@ -2463,9 +2519,11 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         }
         setWithdrawPayoutProfile(readiness.profile)
         setSelectedWithdrawPayoutId(defaultWithdrawPayoutOptionId(readiness.profile))
+        setShowFundModal("withdraw")
       } else {
         const { profile, error } = await fetchSecurityProfileForAction(token)
         if (!profile || profile.needsFundingSetup || profile.needsSecurityPin) {
+          setShowFundModal(null)
           const msg =
             error ??
             profile?.fundingReminder ??
@@ -2478,34 +2536,11 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
           return
         }
         addFundProfile = profile
-        setWithdrawPayoutProfile(null)
-        setSelectedWithdrawPayoutId(null)
         setFundPayerProfile(profile)
-      }
-      setShowFundModal(mode)
-      setFundAmount("")
-      setWithdrawSecurityPin("")
-      setFundModalError(null)
-      if (mode === "add") {
-        setL1FundSource(fundSourceFromGatewayMethod("mobile_money", addFundsCorridorCountry || "UG"))
-        setQualifiedRetailers([])
-        setSelectedRetailerId("")
-        setFundTxReference("")
-        setFundNote("")
-        setFundMobileNetwork("")
-        setFundPayerSource("manual")
-        setCryptoFundingMeta(null)
-        setFundPaymentProofDataUrl(null)
-        setFundPaymentProofPreview(null)
-        if (addFundProfile) {
-          applyRegisteredFundPayer(addFundProfile, null)
-        } else {
-          setFundPayerName("")
-          setFundPayerPhone("")
-        }
+        applyRegisteredFundPayer(profile, null)
       }
     },
-    [isGuestSession, showToast, t, applyRegisteredFundPayer, addFundsCorridorCountry],
+    [isGuestSession, resetFundModalCaches, showToast, t, applyRegisteredFundPayer],
   )
 
   const withdrawSubmitBlockedReason = useMemo(() => {
@@ -3427,11 +3462,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                       router.push("/dashboard")
                       return
                     }
-                    setShowFundModal(null)
-                    setFundModalError(null)
+                    closeFundModal()
                   }}
                   aria-label={t("funding.button.close")}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#0d1117]/90 text-zinc-300 hover:bg-white/10 max-sm:h-11 max-sm:w-11"
+                  className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 touch-manipulation items-center justify-center rounded-full border border-white/10 bg-[#0d1117]/90 text-zinc-300 hover:bg-white/10"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -3447,12 +3481,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               </h2>
               <button
                 type="button"
-                onClick={() => {
-                  setShowFundModal(null)
-                  setFundModalError(null)
-                }}
+                onClick={closeFundModal}
                 aria-label={t("funding.button.close")}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 max-sm:h-11 max-sm:w-11 max-sm:bg-muted/90"
+                className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 touch-manipulation items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 max-sm:bg-muted/90"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -3468,7 +3499,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-36 px-3 pb-4 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(13rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3">
+            <div
+              key={showFundModal}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-36 px-3 pb-4 [-webkit-overflow-scrolling:touch] max-sm:pb-[calc(13rem+env(safe-area-inset-bottom,0px))] sm:scroll-pb-8 sm:px-0 sm:pb-3"
+            >
             {showFundModal === "withdraw" && customerRetailFunding ? (
               <NexusPaymentGatewayCard
                 mode="withdraw"
@@ -3840,7 +3874,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                       <button
                         type="button"
                         onClick={() => handleBackLocalMmWizard()}
-                        className="rounded-md border border-border bg-background px-3 py-1.5 text-[11px] font-semibold hover:bg-muted"
+                        className="min-h-[44px] touch-manipulation rounded-md border border-border bg-background px-3 py-2 text-[11px] font-semibold hover:bg-muted"
                       >
                         {t("funding.local.step2Back")}
                       </button>
@@ -4893,7 +4927,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             </p>
             <button
               type="button"
-              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="mt-4 flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
               onClick={() => {
                 setWithdrawPendingAckOpen(false)
                 setWithdrawPendingAckAmount(null)
@@ -4927,7 +4961,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             </p>
             <button
               type="button"
-              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="mt-4 flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-500"
               onClick={() => {
                 setDepositPendingAckOpen(false)
                 setDepositPendingAckAmount(null)

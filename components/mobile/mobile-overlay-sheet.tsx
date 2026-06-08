@@ -70,7 +70,7 @@ export function MobileOverlaySheet({
             <button
               type="button"
               onClick={onClose}
-              className="nexus-touch-press rounded-md p-1.5 text-muted-foreground touch-manipulation"
+              className="nexus-touch-press flex min-h-[44px] min-w-[44px] touch-manipulation items-center justify-center rounded-md p-2 text-muted-foreground"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
