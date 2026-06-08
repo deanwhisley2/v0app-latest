@@ -245,6 +245,7 @@ export function NexusBotWorkspace({
   const [activateError, setActivateError] = useState<string | null>(null)
   const [stakeTier, setStakeTier] = useState<StakeTier>("max")
   const [customStakeUsd, setCustomStakeUsd] = useState("")
+  const [securityPin, setSecurityPin] = useState("")
   const [activateConfirm, setActivateConfirm] = useState(false)
   const [autoPlan, setAutoPlan] = useState<string>("auto_24h")
   const [autoStake, setAutoStake] = useState("50")
@@ -297,6 +298,7 @@ export function NexusBotWorkspace({
     setVerifyError(null)
     setActivateError(null)
     setActivateConfirm(false)
+    setSecurityPin("")
     setStakeTier("max")
     setCustomStakeUsd("")
     writePersistedTradeFlow(null)
@@ -692,7 +694,7 @@ export function NexusBotWorkspace({
                     resetFlow()
                     setFlowStep(1)
                   }}
-                  placeholder="NXP-7A82-X91K"
+                  placeholder="Signal Code (paste code here...)"
                   className="min-h-[48px] font-mono uppercase"
                 />
               </div>
@@ -793,7 +795,7 @@ export function NexusBotWorkspace({
                           id="nexus-bot-custom-stake"
                           type="text"
                           inputMode="decimal"
-                          placeholder="Enter amount"
+                          placeholder="Amount (type custom amount...)"
                           value={customStakeUsd}
                           onChange={(e) => {
                             const v = e.target.value.replace(/[^\d.]/g, "")
@@ -830,6 +832,17 @@ export function NexusBotWorkspace({
                     <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                       Step 4 · Activate Nexus Bot
                     </p>
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={securityPin}
+                      onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="Security PIN (write or insert pin here...)"
+                      className="min-h-[48px] font-mono tracking-[0.2em] touch-manipulation"
+                      autoComplete="off"
+                      aria-label="Security PIN"
+                    />
                     <button
                       type="button"
                       aria-pressed={activateConfirm}
