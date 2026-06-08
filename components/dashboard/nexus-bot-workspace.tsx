@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Bot, CheckCircle2, Lock, MessageCircle, Sparkles, Zap } from "lucide-react"
+import { BookOpen, Bot, CheckCircle2, Lock, MessageCircle, Sparkles, Zap } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
@@ -9,8 +9,15 @@ import { dispatchCustomerLedgerBump } from "@/lib/client/customer-ledger-sync"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { NexusBotSessionPanel } from "@/components/dashboard/nexus-bot-session-panel"
 import { TradeSessionProfitCelebration } from "@/components/dashboard/trade-session-profit-celebration"
 import { NEXUS_AUTO_TRADE_PLANS, NEXUS_SIGNAL_STAKE_TIERS_USD } from "@/lib/nexus-bot/plans"
@@ -24,7 +31,17 @@ import { cn } from "@/lib/utils"
 
 const LEGACY_RELEASE_KEY = "nexus_bot_legacy_released_v1"
 const SIGNAL_GROUP_HREF = "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf"
+const WHATSAPP_SIGNAL_CHANNEL_HREF = "https://whatsapp.com/channel/0029VbCX8n61SWt0e9a0L80p"
+const WHATSAPP_SCREENSHOT_GROUP_HREF = "https://chat.whatsapp.com/GtBKzg2XxJ7IKfLGesAzzb"
 const TRADE_FLOW_PERSIST_KEY = "nexus_bot_trade_flow_v1"
+
+const QUICK_TRADING_GUIDE_STEPS = [
+  "Go to our WhatsApp Channel and click the latest shared signal link.",
+  "The link will bring you here and automatically fill in your trade code.",
+  "Scroll down to this Nexus Bot workspace.",
+  "Check your code in Step 1, click Verify in Step 2, set your capital amount, and click Activate Bot!",
+  'Once activated, take a screenshot and click "Share Screenshot to Group" to celebrate with the community!',
+] as const
 
 type PersistedTradeFlow = {
   code: string
@@ -54,6 +71,90 @@ function writePersistedTradeFlow(flow: PersistedTradeFlow | null) {
   } catch {
     /* ignore */
   }
+}
+
+function QuickTradingGuideModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Quick Trading Guide</DialogTitle>
+        </DialogHeader>
+        <ol className="space-y-3 text-sm leading-relaxed">
+          {QUICK_TRADING_GUIDE_STEPS.map((step, index) => (
+            <li key={step} className="flex gap-3 text-muted-foreground">
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
+                aria-hidden
+              >
+                {index + 1}
+              </span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+        <DialogFooter className="gap-2 sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-[44px] touch-manipulation"
+            onClick={() => onOpenChange(false)}
+          >
+            Close
+          </Button>
+          <Button
+            type="button"
+            className="min-h-[44px] touch-manipulation"
+            onClick={() => onOpenChange(false)}
+          >
+            Got it
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function CommunityHubSection({ onOpenGuide }: { onOpenGuide: () => void }) {
+  return (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="ghost"
+        className="min-h-[40px] w-full touch-manipulation gap-2 text-sm text-muted-foreground hover:text-foreground"
+        onClick={onOpenGuide}
+      >
+        <BookOpen className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+        Quick Trading Guide
+      </Button>
+      <CommunityActionButtons />
+    </div>
+  )
+}
+
+function CommunityActionButtons() {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <Button variant="outline" className="min-h-[48px] touch-manipulation gap-1.5 px-2 text-xs sm:text-sm" asChild>
+        <a href={WHATSAPP_SIGNAL_CHANNEL_HREF} target="_blank" rel="noopener noreferrer">
+          <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="text-center leading-tight">Join WhatsApp Channel</span>
+        </a>
+      </Button>
+      <Button variant="outline" className="min-h-[48px] touch-manipulation gap-1.5 px-2 text-xs sm:text-sm" asChild>
+        <a href={WHATSAPP_SCREENSHOT_GROUP_HREF} target="_blank" rel="noopener noreferrer">
+          <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="text-center leading-tight">Share Screenshot to Group</span>
+        </a>
+      </Button>
+    </div>
+  )
 }
 
 function SignalGroupLink({ className }: { className?: string }) {
@@ -142,6 +243,7 @@ export function NexusBotWorkspace({
   const [autoStake, setAutoStake] = useState("50")
   const [autoConfirm, setAutoConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   const waHref = useMemo(
     () =>
@@ -605,6 +707,9 @@ export function NexusBotWorkspace({
                   </ul>
                 ) : null}
               </div>
+
+              <CommunityHubSection onOpenGuide={() => setGuideOpen(true)} />
+              <QuickTradingGuideModal open={guideOpen} onOpenChange={setGuideOpen} />
 
               {verifiedSession && flowStep >= 3 ? (
                 <>
