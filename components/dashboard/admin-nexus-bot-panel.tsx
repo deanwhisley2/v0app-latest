@@ -872,9 +872,9 @@ export function AdminNexusBotPanel() {
                 ))}
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="max-h-[400px] space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-border/40 bg-muted/10 p-2 pr-1">
               {sessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No sessions yet.</p>
+                <p className="px-1 text-sm text-muted-foreground">No sessions yet.</p>
               ) : (
                 sessions.map((s) => (
                   <div key={s.id} className="rounded-lg border border-border/60 p-3 text-sm">
@@ -939,31 +939,33 @@ export function AdminNexusBotPanel() {
               <p className="mb-3 text-xs text-muted-foreground">
                 Admin-only view — not shown to customers or retailer desks.
               </p>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[360px] text-sm">
-                  <thead>
-                    <tr className="border-b border-border/60 text-left text-xs uppercase text-muted-foreground">
-                      <th className="pb-2 pr-3">Rank</th>
-                      <th className="pb-2 pr-3">Member</th>
-                      <th className="pb-2 pr-3">User ID</th>
-                      <th className="pb-2 pr-3">Points</th>
-                      <th className="pb-2 pr-3">Sessions</th>
-                      <th className="pb-2">Streak</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weeklyBoard.map((row) => (
-                      <tr key={row.rank} className="border-b border-border/30 last:border-0">
-                        <td className="py-2 pr-3 font-mono">#{row.rank}</td>
-                        <td className="py-2 pr-3">{row.username}</td>
-                        <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{row.userId.slice(0, 8)}…</td>
-                        <td className="py-2 pr-3 font-mono font-semibold">{row.points}</td>
-                        <td className="py-2 pr-3 font-mono">{row.completedSessions}</td>
-                        <td className="py-2 font-mono">{row.streak}d</td>
+              <div className="max-h-[400px] overflow-y-auto overscroll-contain rounded-lg border border-border/40 bg-muted/10">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[360px] text-sm">
+                    <thead className="sticky top-0 z-10 bg-card">
+                      <tr className="border-b border-border/60 text-left text-xs uppercase text-muted-foreground">
+                        <th className="pb-2 pr-3 pt-2">Rank</th>
+                        <th className="pb-2 pr-3 pt-2">Member</th>
+                        <th className="pb-2 pr-3 pt-2">User ID</th>
+                        <th className="pb-2 pr-3 pt-2">Points</th>
+                        <th className="pb-2 pr-3 pt-2">Sessions</th>
+                        <th className="pb-2 pt-2">Streak</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {weeklyBoard.map((row) => (
+                        <tr key={row.rank} className="border-b border-border/30 last:border-0">
+                          <td className="py-2 pr-3 font-mono">#{row.rank}</td>
+                          <td className="py-2 pr-3">{row.username}</td>
+                          <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{row.userId.slice(0, 8)}…</td>
+                          <td className="py-2 pr-3 font-mono font-semibold">{row.points}</td>
+                          <td className="py-2 pr-3 font-mono">{row.completedSessions}</td>
+                          <td className="py-2 font-mono">{row.streak}d</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </Card>
           ) : null}
