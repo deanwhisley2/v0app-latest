@@ -1186,6 +1186,10 @@ export function AdminOperationalAssets({
   const executeWithdrawalAction = useCallback(
     async (decision: "approve" | "reject" | "hold") => {
       if (!reviewRow) return
+      if (decision === "reject" && !resolutionDraft.trim()) {
+        window.alert("Enter a rejection reason in the decision note field.")
+        return
+      }
       const h = await authHeaders()
       if (!h) return
       setActionBusy(decision)

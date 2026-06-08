@@ -4,6 +4,7 @@ import {
   buildFundingHeldCustomerCopy,
   buildFundingRejectedCustomerCopy,
   buildFundingSubmittedCustomerCopy,
+  buildWithdrawalRejectedCustomerCopy,
   isInternalNotificationCopy,
 } from "@/lib/notifications/customer-notification-language"
 import { formatMoneyAmount } from "@/lib/currency-display"
@@ -133,10 +134,14 @@ export function mapCustomerNotification(params: {
       }
     }
     if (t.includes("rejected") || t.includes("declined") || /declined|failed|rejected/i.test(combined)) {
-      return {
-        title: "Withdrawal declined",
-        body: "Your withdrawal could not be completed. Review your payout details in Settings or contact support.",
-      }
+      const note =
+        typeof meta?.resolution_note === "string"
+          ? meta.resolution_note
+          : typeof meta?.note === "string"
+            ? meta.note
+            : null
+      const copy = buildWithdrawalRejectedCustomerCopy(note)
+      return { title: clean(copy.title), body: clean(copy.body) }
     }
     return {
       title: "Withdrawal received",

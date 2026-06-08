@@ -125,6 +125,32 @@ export function buildFundingApprovedCustomerCopy(
   }
 }
 
+export function buildWithdrawalRejectedCustomerCopy(
+  note?: string | null,
+  t?: NotifyCopyFn,
+): { title: string; body: string } {
+  const tr =
+    t ??
+    ((key: string) =>
+      ({
+        "notifications.withdrawal.declinedTitle": "Withdrawal declined",
+        "notifications.withdrawal.declinedBody": "Your withdrawal was declined. {{note}}",
+        "notifications.withdrawal.declinedBodyGeneric": "Your withdrawal request was declined.",
+      })[key] ?? key)
+
+  const cleanNote = note?.trim()
+  if (cleanNote && !INTERNAL_PHRASE.test(cleanNote) && cleanNote.length <= 500) {
+    return {
+      title: tr("notifications.withdrawal.declinedTitle"),
+      body: tr("notifications.withdrawal.declinedBody").replace("{{note}}", cleanNote),
+    }
+  }
+  return {
+    title: tr("notifications.withdrawal.declinedTitle"),
+    body: tr("notifications.withdrawal.declinedBodyGeneric"),
+  }
+}
+
 export function buildFundingRejectedCustomerCopy(
   note?: string | null,
   t?: NotifyCopyFn,

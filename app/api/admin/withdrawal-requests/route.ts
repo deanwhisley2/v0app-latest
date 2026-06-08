@@ -5,6 +5,7 @@ import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { requireLiquidityAdminLevel5 } from "@/lib/server/security-authz"
 import { creditMasterLiquidityFromApprovedWithdrawal } from "@/lib/server/admin-retail-pool"
 import { notifyUserFundingDecision } from "@/lib/server/approval-inbox-notify"
+import { notifyCustomerWithdrawalDeclined } from "@/lib/server/l5-withdrawal-notify"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   assertWithdrawalSettlementConserved,
@@ -86,6 +87,9 @@ export async function PATCH(request: Request) {
     if (!requestId) return NextResponse.json({ error: "requestId required" }, { status: 400 })
     if (body.decision !== "approve" && body.decision !== "reject" && body.decision !== "hold") {
       return NextResponse.json({ error: "decision must be approve, reject, or hold" }, { status: 400 })
+    }
+    if (body.decision === "reject" && !resolutionNote) {
+      return NextResponse.json({ error: "Rejection requires a decision note" }, { status: 400 })
     }
 
     const admin = createAdminClient()
@@ -234,10 +238,11 @@ export async function PATCH(request: Request) {
         },
       })
 
-      await notifyUserFundingDecision(admin, {
+      await notifyCustomerWithdrawalDeclined(admin, {
         userId,
-        headline: resolutionNote ? `Withdrawal not completed. ${resolutionNote.slice(0, 90)}` : "Withdrawal not completed.",
-        relatedId: requestId,
+        requestId,
+        resolutionNote,
+        amountUsd: grossAmount,
       })
 
       return NextResponse.json({
