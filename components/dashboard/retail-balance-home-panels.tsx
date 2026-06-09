@@ -30,6 +30,9 @@ export type WithdrawalEligibilityHint = {
   maxUsd: number
   cooldownActive: boolean
   msRemaining: number
+  uiHint?: string
+  engagementBlocked?: boolean
+  engagementMessage?: string | null
 }
 
 type RetailBalanceHomePanelsProps = {
@@ -245,7 +248,18 @@ export function RetailBalanceHomePanels({
 
       {withdrawalEligibility ? (
         <div className={cn(panelClass, "px-4 py-3.5 text-sm leading-relaxed text-muted-foreground")}>
-          <p className="font-medium text-foreground">{t("withdrawal.modal.ruleOnce")}</p>
+          {withdrawalEligibility.uiHint ? (
+            <p className="text-[13px] text-foreground/90">{withdrawalEligibility.uiHint}</p>
+          ) : null}
+          {withdrawalEligibility.engagementBlocked ? (
+            <p className="mt-2 text-[13px] font-medium text-amber-700 dark:text-amber-300">
+              {withdrawalEligibility.engagementMessage ??
+                "Withdrawal requires 5 days of full dual-session trade participation."}
+            </p>
+          ) : null}
+          <p className={cn("font-medium text-foreground", withdrawalEligibility.uiHint ? "mt-2" : undefined)}>
+            {t("withdrawal.modal.ruleOnce")}
+          </p>
           <ul className="mt-2 space-y-1.5 text-[13px]">
             <li>{t("withdrawal.modal.minLine").replace("{{min}}", formatUserMoney(withdrawalEligibility.minUsd))}</li>
             <li>{t("withdrawal.modal.maxLine").replace("{{max}}", formatUserMoney(withdrawalEligibility.maxUsd))}</li>

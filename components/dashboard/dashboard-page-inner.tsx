@@ -550,6 +550,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     msRemaining: number
     nextEligibleAt: string | null
     totalBalanceUsd: number
+    eligibilityPath?: "active_trader" | "idle_account"
+    engagementBlocked?: boolean
+    engagementMessage?: string | null
+    uiHint?: string
+    reserveDisplayLabel?: string
+    activeTradeStakeUsd?: number
   } | null>(null)
   const [fundTxReference, setFundTxReference] = useState("")
   const [fundTxRefError, setFundTxRefError] = useState<string | null>(null)
@@ -2441,6 +2447,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         msRemaining?: number
         nextEligibleAt?: string | null
         totalBalanceUsd?: number
+        eligibilityPath?: "active_trader" | "idle_account"
+        engagementBlocked?: boolean
+        engagementMessage?: string | null
+        uiHint?: string
+        reserveDisplayLabel?: string
+        activeTradeStakeUsd?: number
       }
       setWithdrawalEligibility({
         minUsd: Number(j.minUsd ?? 0),
@@ -2449,6 +2461,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         msRemaining: Number(j.msRemaining ?? 0),
         nextEligibleAt: j.nextEligibleAt ?? null,
         totalBalanceUsd: Number(j.totalBalanceUsd ?? 0),
+        eligibilityPath: j.eligibilityPath,
+        engagementBlocked: Boolean(j.engagementBlocked),
+        engagementMessage: j.engagementMessage ?? null,
+        uiHint: typeof j.uiHint === "string" ? j.uiHint : undefined,
+        reserveDisplayLabel: j.reserveDisplayLabel,
+        activeTradeStakeUsd: Number(j.activeTradeStakeUsd ?? 0),
       })
     } catch {
       setWithdrawalEligibility(null)
@@ -2556,6 +2574,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     }
     if (withdrawSecurityPin.length !== 6) {
       return "Enter your 6-digit Security PIN to confirm this withdrawal."
+    }
+    if (withdrawalEligibility?.engagementBlocked) {
+      return (
+        withdrawalEligibility.engagementMessage ??
+        "Withdrawal requires 5 days of full dual-session trade participation."
+      )
     }
     if (withdrawalEligibility?.cooldownActive) {
       return t("withdrawal.error.cooldownActive").replace(
@@ -2845,6 +2869,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         if (showFundModal === "withdraw") {
           if (!(amount > 0)) throw new Error(t("withdrawal.error.enterAmount"))
           if (withdrawalEligibility) {
+            if (withdrawalEligibility.engagementBlocked) {
+              throw new Error(
+                withdrawalEligibility.engagementMessage ??
+                  "Withdrawal requires 5 days of full dual-session trade participation.",
+              )
+            }
             if (withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd) {
               throw new Error(t("withdrawal.error.nothingWithdrawable"))
             }
@@ -3512,7 +3542,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 fundAmountLocale={smartAmountLocale}
                 fundAmountCurrency={currency}
                 isProcessing={isFundProcessing}
-                amountHint={`${t("withdrawal.availableLabel")} ${showBalance ? formatUserMoney(mainBalance) : "••••"}`}
+                amountHint={
+                  withdrawalEligibility?.uiHint ??
+                  `${t("withdrawal.availableLabel")} ${showBalance ? formatUserMoney(mainBalance) : "••••"}`
+                }
                 t={t}
               >
                 {withdrawPayoutOptionsList.length ? (
@@ -3547,7 +3580,16 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 </div>
                 {withdrawalEligibility ? (
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-snug text-zinc-400">
-                    <p>
+                    {withdrawalEligibility.uiHint ? (
+                      <p className="text-zinc-300">{withdrawalEligibility.uiHint}</p>
+                    ) : null}
+                    {withdrawalEligibility.engagementBlocked ? (
+                      <p className="mt-1 font-medium text-amber-300">
+                        {withdrawalEligibility.engagementMessage ??
+                          "Withdrawal requires 5 days of full dual-session trade participation."}
+                      </p>
+                    ) : null}
+                    <p className={withdrawalEligibility.uiHint ? "mt-2" : undefined}>
                       {t("withdrawal.modal.ruleOnce")}
                       {withdrawalEligibility.cooldownActive
                         ? ` ${t("withdrawal.modal.waitHours").replace(

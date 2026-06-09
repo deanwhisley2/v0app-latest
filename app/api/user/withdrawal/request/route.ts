@@ -10,11 +10,8 @@ import { appendUserAccountNotification } from "@/lib/server/user-account-notific
 import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-import {
-  WITHDRAWAL_COOLDOWN_MS,
-  mainMinimumRetainUsd,
-  withdrawalCooldownError,
-} from "@/lib/server/withdrawal-policy"
+import { WITHDRAWAL_COOLDOWN_MS, withdrawalCooldownError } from "@/lib/server/withdrawal-policy"
+import { resolveWithdrawalEconomy } from "@/lib/server/withdrawal-eligibility-engine"
 import {
   assertWithdrawalSettlementConserved,
   computeWithdrawalProcessingSettlement,
@@ -109,8 +106,18 @@ export async function POST(request: Request) {
     const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
     const available = liquid.availableUsd
     const totalBalance = liquid.totalLiquidUsd
-    const mainRetainUsd = mainMinimumRetainUsd(profileRow)
-    const withdrawableMainUsd = round2(Math.max(0, available - mainRetainUsd))
+    const economy = await resolveWithdrawalEconomy(admin, user.id, profileRow, available)
+
+    if (economy.engagementBlocked) {
+      return NextResponse.json(
+        {
+          error: economy.engagementMessage ?? "Withdrawal is not available yet.",
+        },
+        { status: 403 },
+      )
+    }
+
+    const withdrawableMainUsd = economy.withdrawableMainUsd
     const maxAllowed = withdrawableMainUsd
 
     const { data: row, error: selErr } = await admin
@@ -143,6 +150,15 @@ export async function POST(request: Request) {
     }
 
     const nextAvailable = round2(available - grossAmount)
+    if (economy.path === "idle_account" && economy.retainUsd > 0 && nextAvailable + 1e-6 < economy.retainUsd) {
+      const reserveFmt = await formatCustomerMoneyForUser(admin, user.id, economy.retainUsd)
+      return NextResponse.json(
+        {
+          error: `Withdrawal would leave your account below the required security reserve (${reserveFmt}).`,
+        },
+        { status: 400 },
+      )
+    }
     const nextPending = round2(pendingWas + grossAmount)
 
     const { error: upErr } = await admin

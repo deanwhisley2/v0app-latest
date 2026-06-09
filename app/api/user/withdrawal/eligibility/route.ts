@@ -8,8 +8,8 @@ import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import {
   WITHDRAWAL_COOLDOWN_MS,
   effectiveStartupCapitalLockUsd,
-  mainMinimumRetainUsd,
 } from "@/lib/server/withdrawal-policy"
+import { resolveWithdrawalEconomy } from "@/lib/server/withdrawal-eligibility-engine"
 
 export async function GET(request: Request) {
   try {
@@ -28,10 +28,9 @@ export async function GET(request: Request) {
     const available = liquid.availableUsd
     const total = liquid.totalLiquidUsd
     const minUsd = roundUsd2(minWithdrawUsdFloor())
-    const retainUsd = mainMinimumRetainUsd(profileRow)
     const startupLockedUsd = effectiveStartupCapitalLockUsd(profileRow)
-    const withdrawableMainUsd = roundUsd2(Math.max(0, available - retainUsd))
-    const maxUsd = withdrawableMainUsd
+    const economy = await resolveWithdrawalEconomy(admin, user.id, profileRow, available)
+    const maxUsd = economy.withdrawableMainUsd
 
     const since = new Date(Date.now() - WITHDRAWAL_COOLDOWN_MS).toISOString()
     const { data: recent, error: wErr } = await admin
@@ -59,7 +58,15 @@ export async function GET(request: Request) {
       containerLiquidUsd: liquid.containerLiquidUsd,
       activeTradeProfitUsd: roundUsd2(liquid.fixedUnreleasedUsd + liquid.copyAccrualUsd),
       startupCapitalLockedUsd: startupLockedUsd,
-      mainMinimumRetainUsd: retainUsd,
+      mainMinimumRetainUsd: economy.retainUsd,
+      eligibilityPath: economy.path,
+      activeTradeStakeUsd: economy.activeTradeStakeUsd,
+      engagementBlocked: economy.engagementBlocked,
+      engagementMessage: economy.engagementMessage,
+      uiHint: economy.uiHint,
+      reserveDisplayLabel: economy.reserveDisplayLabel,
+      registrationAgeDays: economy.registrationAgeDays,
+      dualSessionDaysCompleted: economy.dualSessionDaysCompleted,
       cooldownActive,
       nextEligibleAt,
       msRemaining,
