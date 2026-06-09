@@ -104,9 +104,18 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
-    const available = liquid.availableUsd
     const totalBalance = liquid.totalLiquidUsd
-    const economy = await resolveWithdrawalEconomy(admin, user.id, profileRow, available)
+
+    const { data: row, error: selErr } = await admin
+      .from("user_balances")
+      .select("available_balance, withdrawal_pending_balance")
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    if (selErr) throw new Error(selErr.message)
+
+    const mainBalanceUsd = round2(Number(row?.available_balance ?? 0))
+    const economy = await resolveWithdrawalEconomy(admin, user.id, profileRow, mainBalanceUsd)
 
     if (economy.engagementBlocked) {
       return NextResponse.json(
@@ -119,14 +128,6 @@ export async function POST(request: Request) {
 
     const withdrawableMainUsd = economy.withdrawableMainUsd
     const maxAllowed = withdrawableMainUsd
-
-    const { data: row, error: selErr } = await admin
-      .from("user_balances")
-      .select("available_balance, withdrawal_pending_balance")
-      .eq("user_id", user.id)
-      .maybeSingle()
-
-    if (selErr) throw new Error(selErr.message)
 
     const pendingWas = round2(Number((row as Record<string, unknown>)?.withdrawal_pending_balance ?? 0))
 
@@ -142,14 +143,14 @@ export async function POST(request: Request) {
       )
     }
 
-    if (grossAmount > withdrawableMainUsd + 1e-6 || grossAmount > available + 1e-6) {
+    if (grossAmount > withdrawableMainUsd + 1e-6 || grossAmount > mainBalanceUsd + 1e-6) {
       return NextResponse.json(
         { error: "Insufficient Nexus Main balance for this withdrawal." },
         { status: 400 }
       )
     }
 
-    const nextAvailable = round2(available - grossAmount)
+    const nextAvailable = round2(mainBalanceUsd - grossAmount)
     if (economy.path === "idle_account" && economy.retainUsd > 0 && nextAvailable + 1e-6 < economy.retainUsd) {
       const reserveFmt = await formatCustomerMoneyForUser(admin, user.id, economy.retainUsd)
       return NextResponse.json(

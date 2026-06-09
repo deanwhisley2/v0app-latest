@@ -25,11 +25,19 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     const liquid = await computeAccountLiquidWithdrawBaseUsd(admin, user.id)
-    const available = liquid.availableUsd
     const total = liquid.totalLiquidUsd
     const minUsd = roundUsd2(minWithdrawUsdFloor())
     const startupLockedUsd = effectiveStartupCapitalLockUsd(profileRow)
-    const economy = await resolveWithdrawalEconomy(admin, user.id, profileRow, available)
+
+    const { data: mainRow, error: mainErr } = await admin
+      .from("user_balances")
+      .select("available_balance")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (mainErr) throw new Error(mainErr.message)
+    const mainBalanceUsd = roundUsd2(Number(mainRow?.available_balance ?? 0))
+
+    const economy = await resolveWithdrawalEconomy(admin, user.id, profileRow, mainBalanceUsd)
     const maxUsd = economy.withdrawableMainUsd
 
     const since = new Date(Date.now() - WITHDRAWAL_COOLDOWN_MS).toISOString()
@@ -53,14 +61,17 @@ export async function GET(request: Request) {
     return NextResponse.json({
       minUsd,
       maxUsd,
-      availableUsd: available,
+      availableUsd: mainBalanceUsd,
+      mainBalanceUsd,
       totalBalanceUsd: total,
       containerLiquidUsd: liquid.containerLiquidUsd,
       activeTradeProfitUsd: roundUsd2(liquid.fixedUnreleasedUsd + liquid.copyAccrualUsd),
       startupCapitalLockedUsd: startupLockedUsd,
       mainMinimumRetainUsd: economy.retainUsd,
       eligibilityPath: economy.path,
+      hasAlternativeCushion: economy.hasAlternativeCushion,
       activeTradeStakeUsd: economy.activeTradeStakeUsd,
+      pocketBalanceUsd: economy.pocketBalanceUsd,
       engagementBlocked: economy.engagementBlocked,
       engagementMessage: economy.engagementMessage,
       uiHint: economy.uiHint,

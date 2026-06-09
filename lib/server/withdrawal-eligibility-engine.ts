@@ -4,13 +4,16 @@ import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import type { ProfileWithdrawEconomyRow } from "@/lib/server/withdrawal-policy"
 
-/** Active/booked trade stake must exceed this (USD) to unlock zero-reserve withdrawals. */
-export const ACTIVE_TRADE_COLLATERAL_THRESHOLD_USD = 10
+/** Global alternative-cushion threshold (active trade stake OR Pocket balance). */
+export const GLOBAL_CUSHION_THRESHOLD_USD = 10
 
-/** Idle-account minimum retain after withdrawal (USD equivalent for non-UG corridors). */
-export const IDLE_SECURITY_RESERVE_USD = 5
+/** @deprecated Use GLOBAL_CUSHION_THRESHOLD_USD */
+export const ACTIVE_TRADE_COLLATERAL_THRESHOLD_USD = GLOBAL_CUSHION_THRESHOLD_USD
 
-/** Idle-account minimum retain for Uganda corridor (UGX, converted to USD for ledger math). */
+/** Account-lifeline minimum retain in Nexus Main after withdrawal (non-UG corridors). */
+export const IDLE_SECURITY_RESERVE_USD = 10
+
+/** Account-lifeline minimum retain for Uganda corridor (UGX, converted to USD for ledger math). */
 export const IDLE_SECURITY_RESERVE_UGX = 20_000
 
 export const WITHDRAWAL_ENGAGEMENT_REQUIRED_DAYS = 5
@@ -18,12 +21,16 @@ export const WITHDRAWAL_ENGAGEMENT_REQUIRED_DAYS = 5
 export const WITHDRAWAL_DUAL_SESSION_BLOCK_MESSAGE =
   "Withdrawal requires 5 days of full dual-session trade participation."
 
+/** Path A: cushion elsewhere — drain Nexus Main to 0. Path B: account lifeline reserve in Main only. */
 export type WithdrawalEligibilityPath = "active_trader" | "idle_account"
 
 export type ResolvedWithdrawalEconomy = {
   path: WithdrawalEligibilityPath
+  hasAlternativeCushion: boolean
   activeTradeStakeUsd: number
+  pocketBalanceUsd: number
   retainUsd: number
+  /** Max gross withdrawal from raw Nexus Main (`available_balance`). */
   withdrawableMainUsd: number
   engagementBlocked: boolean
   engagementMessage: string | null
@@ -45,6 +52,16 @@ function embedTradeSession(
   return Array.isArray(raw) ? raw[0] ?? null : raw
 }
 
+export function hasGlobalAlternativeCushion(params: {
+  activeTradeStakeUsd: number
+  pocketBalanceUsd: number
+}): boolean {
+  return (
+    params.activeTradeStakeUsd >= GLOBAL_CUSHION_THRESHOLD_USD ||
+    params.pocketBalanceUsd >= GLOBAL_CUSHION_THRESHOLD_USD
+  )
+}
+
 export function idleSecurityReserveUsd(fundingCountryCode: string | null | undefined): number {
   const cc = String(fundingCountryCode ?? "")
     .trim()
@@ -59,7 +76,7 @@ export function idleSecurityReserveDisplayLabel(fundingCountryCode: string | nul
   const cc = String(fundingCountryCode ?? "")
     .trim()
     .toUpperCase()
-  return cc === "UG" ? "UGX 20,000" : "$5"
+  return cc === "UG" ? "UGX 20,000" : "$10"
 }
 
 export async function computeOpenTradeSessionStakeUsd(
@@ -75,6 +92,16 @@ export async function computeOpenTradeSessionStakeUsd(
   if (error) throw new Error(error.message)
   const total = (data ?? []).reduce((sum, row) => sum + Number(row.stake_usd ?? 0), 0)
   return roundUsd2(total)
+}
+
+export async function readPocketBalanceUsd(admin: SupabaseClient, userId: string): Promise<number> {
+  const { data, error } = await admin
+    .from("user_balances")
+    .select("container_withdrawable_earnings")
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return roundUsd2(Number(data?.container_withdrawable_earnings ?? 0))
 }
 
 export async function assessDualSessionEngagement(
@@ -159,35 +186,64 @@ export async function assessDualSessionEngagement(
 export function buildWithdrawalUiHint(params: {
   path: WithdrawalEligibilityPath
   reserveDisplayLabel: string
+  activeTradeStakeUsd?: number
+  pocketBalanceUsd?: number
 }): string {
   if (params.path === "active_trader") {
-    return "Available for withdrawal: Full balance (Active trade protection active)."
+    const parts: string[] = []
+    if ((params.activeTradeStakeUsd ?? 0) >= GLOBAL_CUSHION_THRESHOLD_USD) {
+      parts.push("active trade")
+    }
+    if ((params.pocketBalanceUsd ?? 0) >= GLOBAL_CUSHION_THRESHOLD_USD) {
+      parts.push("Pocket earnings")
+    }
+    const cushion =
+      parts.length > 0 ? parts.join(" and ") : "alternative security cushion"
+    return `Available for withdrawal: Full Nexus Main balance (${cushion} hold your security cushion).`
   }
-  return `Available for withdrawal: Balance minus ${params.reserveDisplayLabel} security reserve (Requires 5-day active trade history).`
+  return `Available for withdrawal: Nexus Main minus ${params.reserveDisplayLabel} lifeline reserve (requires 5-day dual-session trade history).`
 }
 
+/**
+ * Resolve withdrawal limits from raw Nexus Main only; scans active trade + Pocket for global cushion.
+ * @param mainBalanceUsd Raw `user_balances.available_balance` (not net of startup lock).
+ */
 export async function resolveWithdrawalEconomy(
   admin: SupabaseClient,
   userId: string,
   profileRow: ProfileWithdrawEconomyRow | null | undefined,
-  availableUsd: number,
+  mainBalanceUsd: number,
   now = new Date(),
 ): Promise<ResolvedWithdrawalEconomy> {
-  const activeTradeStakeUsd = await computeOpenTradeSessionStakeUsd(admin, userId)
+  const [activeTradeStakeUsd, pocketBalanceUsd] = await Promise.all([
+    computeOpenTradeSessionStakeUsd(admin, userId),
+    readPocketBalanceUsd(admin, userId),
+  ])
   const reserveDisplayLabel = idleSecurityReserveDisplayLabel(profileRow?.funding_country_code)
+  const hasAlternativeCushion = hasGlobalAlternativeCushion({
+    activeTradeStakeUsd,
+    pocketBalanceUsd,
+  })
 
-  if (activeTradeStakeUsd > ACTIVE_TRADE_COLLATERAL_THRESHOLD_USD) {
+  if (hasAlternativeCushion) {
     return {
       path: "active_trader",
+      hasAlternativeCushion: true,
       activeTradeStakeUsd,
+      pocketBalanceUsd,
       retainUsd: 0,
-      withdrawableMainUsd: roundUsd2(Math.max(0, availableUsd)),
+      withdrawableMainUsd: roundUsd2(Math.max(0, mainBalanceUsd)),
       engagementBlocked: false,
       engagementMessage: null,
       registrationAgeDays: 0,
       dualSessionDaysCompleted: 0,
       reserveDisplayLabel,
-      uiHint: buildWithdrawalUiHint({ path: "active_trader", reserveDisplayLabel }),
+      uiHint: buildWithdrawalUiHint({
+        path: "active_trader",
+        reserveDisplayLabel,
+        activeTradeStakeUsd,
+        pocketBalanceUsd,
+      }),
     }
   }
 
@@ -197,7 +253,9 @@ export async function resolveWithdrawalEconomy(
   if (!engagement.ok) {
     return {
       path: "idle_account",
+      hasAlternativeCushion: false,
       activeTradeStakeUsd,
+      pocketBalanceUsd,
       retainUsd,
       withdrawableMainUsd: 0,
       engagementBlocked: true,
@@ -211,9 +269,11 @@ export async function resolveWithdrawalEconomy(
 
   return {
     path: "idle_account",
+    hasAlternativeCushion: false,
     activeTradeStakeUsd,
+    pocketBalanceUsd,
     retainUsd,
-    withdrawableMainUsd: roundUsd2(Math.max(0, availableUsd - retainUsd)),
+    withdrawableMainUsd: roundUsd2(Math.max(0, mainBalanceUsd - retainUsd)),
     engagementBlocked: false,
     engagementMessage: null,
     registrationAgeDays: engagement.registrationAgeDays,
