@@ -556,6 +556,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     uiHint?: string
     reserveDisplayLabel?: string
     activeTradeStakeUsd?: number
+    sessionCooldownActive?: boolean
+    rejectionCooldownActive?: boolean
+    rejectionCooldownMsRemaining?: number
   } | null>(null)
   const [fundTxReference, setFundTxReference] = useState("")
   const [fundTxRefError, setFundTxRefError] = useState<string | null>(null)
@@ -2453,6 +2456,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         uiHint?: string
         reserveDisplayLabel?: string
         activeTradeStakeUsd?: number
+        sessionCooldownActive?: boolean
+        rejectionCooldownActive?: boolean
+        rejectionCooldownMsRemaining?: number
       }
       setWithdrawalEligibility({
         minUsd: Number(j.minUsd ?? 0),
@@ -2467,6 +2473,9 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         uiHint: typeof j.uiHint === "string" ? j.uiHint : undefined,
         reserveDisplayLabel: j.reserveDisplayLabel,
         activeTradeStakeUsd: Number(j.activeTradeStakeUsd ?? 0),
+        sessionCooldownActive: Boolean(j.sessionCooldownActive),
+        rejectionCooldownActive: Boolean(j.rejectionCooldownActive),
+        rejectionCooldownMsRemaining: Number(j.rejectionCooldownMsRemaining ?? 0),
       })
     } catch {
       setWithdrawalEligibility(null)
@@ -2581,7 +2590,14 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
         "Withdrawal requires 5 days of full dual-session trade participation."
       )
     }
-    if (withdrawalEligibility?.cooldownActive) {
+    if (withdrawalEligibility?.rejectionCooldownActive) {
+      const h = Math.floor((withdrawalEligibility.rejectionCooldownMsRemaining ?? 0) / 3_600_000)
+      const m = Math.floor(((withdrawalEligibility.rejectionCooldownMsRemaining ?? 0) % 3_600_000) / 60_000)
+      const s = Math.floor(((withdrawalEligibility.rejectionCooldownMsRemaining ?? 0) % 60_000) / 1000)
+      const clock = [h, m, s].map((n) => String(n).padStart(2, "0")).join(":")
+      return t("withdrawal.error.rejectionCooldownActive").replace("{{clock}}", clock)
+    }
+    if (withdrawalEligibility?.sessionCooldownActive ?? withdrawalEligibility?.cooldownActive) {
       return t("withdrawal.error.cooldownActive").replace(
         "{{hours}}",
         String(Math.max(1, Math.ceil(withdrawalEligibility.msRemaining / 3_600_000))),
@@ -2878,7 +2894,15 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             if (withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd) {
               throw new Error(t("withdrawal.error.nothingWithdrawable"))
             }
-            if (withdrawalEligibility.cooldownActive) {
+            if (withdrawalEligibility.rejectionCooldownActive) {
+              const ms = withdrawalEligibility.rejectionCooldownMsRemaining ?? 0
+              const h = Math.floor(ms / 3_600_000)
+              const m = Math.floor((ms % 3_600_000) / 60_000)
+              const s = Math.floor((ms % 60_000) / 1000)
+              const clock = [h, m, s].map((n) => String(n).padStart(2, "0")).join(":")
+              throw new Error(t("withdrawal.error.rejectionCooldownActive").replace("{{clock}}", clock))
+            }
+            if (withdrawalEligibility.sessionCooldownActive ?? withdrawalEligibility.cooldownActive) {
               throw new Error(
                 t("withdrawal.error.cooldownActive").replace(
                   "{{hours}}",
@@ -3546,6 +3570,11 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   withdrawalEligibility?.uiHint ??
                   `${t("withdrawal.availableLabel")} ${showBalance ? formatUserMoney(mainBalance) : "••••"}`
                 }
+                withdrawalRejectionCooldownActive={Boolean(withdrawalEligibility?.rejectionCooldownActive)}
+                withdrawalRejectionCooldownMsRemaining={
+                  withdrawalEligibility?.rejectionCooldownMsRemaining ?? 0
+                }
+                onWithdrawalRejectionCooldownExpired={() => void loadWithdrawalEligibility()}
                 t={t}
               >
                 {withdrawPayoutOptionsList.length ? (
@@ -4678,7 +4707,8 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   (showFundModal === "withdraw" &&
                     (Boolean(withdrawSubmitBlockedReason) ||
                       (withdrawalEligibility != null &&
-                        (withdrawalEligibility.cooldownActive ||
+                        ((withdrawalEligibility.rejectionCooldownActive ??
+                          withdrawalEligibility.cooldownActive) ||
                           withdrawalEligibility.maxUsd + 1e-6 < withdrawalEligibility.minUsd)))) ||
                   (showFundModal === "withdraw" &&
                     (!fundAmount ||
@@ -4743,6 +4773,14 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                     </svg>
                     {t("funding.cta.processing")}
                   </>
+                ) : showFundModal === "withdraw" && withdrawalEligibility?.rejectionCooldownActive ? (
+                  (() => {
+                    const ms = withdrawalEligibility.rejectionCooldownMsRemaining ?? 0
+                    const h = Math.floor(ms / 3_600_000)
+                    const m = Math.floor((ms % 3_600_000) / 60_000)
+                    const s = Math.floor((ms % 60_000) / 1000)
+                    return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":")
+                  })()
                 ) : showFundModal === "withdraw" ? (
                   fundAmount.trim()
                     ? t("withdrawal.cta.withdrawWithAmount").replace(

@@ -10,8 +10,13 @@ import { appendUserAccountNotification } from "@/lib/server/user-account-notific
 import { formatCustomerMoneyForUser } from "@/lib/server/customer-money-copy"
 import { minWithdrawUsdOk, minWithdrawUsdFloor } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
-import { WITHDRAWAL_COOLDOWN_MS, withdrawalCooldownError } from "@/lib/server/withdrawal-policy"
-import { resolveWithdrawalEconomy } from "@/lib/server/withdrawal-eligibility-engine"
+import { withdrawalCooldownError } from "@/lib/server/withdrawal-policy"
+import {
+  assessWithdrawalSessionCooldown,
+  readWithdrawalRejectionCooldown,
+  resolveWithdrawalEconomy,
+} from "@/lib/server/withdrawal-eligibility-engine"
+import { formatRejectionCooldownClock } from "@/lib/server/withdrawal-rejection-cooldown"
 import {
   assertWithdrawalSettlementConserved,
   computeWithdrawalProcessingSettlement,
@@ -75,25 +80,27 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
-    const since = new Date(Date.now() - WITHDRAWAL_COOLDOWN_MS).toISOString()
-    const { data: recentW, error: wqErr } = await admin
-      .from("withdrawal_requests")
-      .select("id,created_at")
-      .eq("user_id", user.id)
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (wqErr) throw new Error(wqErr.message)
-    if (recentW?.created_at) {
-      const last = new Date(recentW.created_at as string).getTime()
-      const next = new Date(last + WITHDRAWAL_COOLDOWN_MS).toISOString()
+    const rejectionCooldown = await readWithdrawalRejectionCooldown(admin, user.id)
+    if (rejectionCooldown.cooldownActive && rejectionCooldown.cooldownUntil) {
+      const clock = formatRejectionCooldownClock(rejectionCooldown.msRemaining)
       return NextResponse.json(
         {
-          error: withdrawalCooldownError(next),
-          nextEligibleAt: next,
+          error: `Payout functionality temporarily on hold due to consecutive rejections. You can request another withdrawal in: ${clock}.`,
+          nextEligibleAt: rejectionCooldown.cooldownUntil,
+          rejectionCooldownActive: true,
         },
-        { status: 429 }
+        { status: 429 },
+      )
+    }
+
+    const sessionCooldown = await assessWithdrawalSessionCooldown(admin, user.id)
+    if (sessionCooldown.cooldownActive && sessionCooldown.nextEligibleAt) {
+      return NextResponse.json(
+        {
+          error: withdrawalCooldownError(sessionCooldown.nextEligibleAt),
+          nextEligibleAt: sessionCooldown.nextEligibleAt,
+        },
+        { status: 429 },
       )
     }
 

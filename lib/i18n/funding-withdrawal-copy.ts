@@ -185,6 +185,11 @@ export const fundingWithdrawalEn: Record<string, string> = {
   "withdrawal.error.aboveWithdrawableMax":
     "Amount exceeds withdrawable Nexus Main balance ({{max}}). {{locked}} is locked in open container trades.",
   "withdrawal.error.cooldownActive": "One withdrawal per 12 hours. Try again in about {{hours}} hour(s).",
+  "withdrawal.error.rejectionCooldownActive":
+    "Payout functionality temporarily on hold due to consecutive rejections. You can request another withdrawal in: {{clock}}.",
+  "withdrawal.rejectionCooldown.title": "⚠️ Payout temporarily on hold",
+  "withdrawal.rejectionCooldown.body":
+    "Payout functionality temporarily on hold due to consecutive rejections. You can request another withdrawal in: {{clock}}.",
   "withdrawal.error.nothingWithdrawable":
     "Withdrawable balance is below the minimum right now. Only free Nexus Main can be withdrawn; open trades stay locked until they settle.",
   "withdrawal.error.retailerPendingBlocksWithdraw":

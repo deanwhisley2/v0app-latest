@@ -70,10 +70,50 @@ type Props = {
   paymentStatusMessage?: string
   /** Nexus login email — shown in MTN MoMo reason / reference step. */
   userEmail?: string
+  /** 5h automated hold after 2 consecutive admin rejections. */
+  withdrawalRejectionCooldownActive?: boolean
+  withdrawalRejectionCooldownMsRemaining?: number
+  onWithdrawalRejectionCooldownExpired?: () => void
 }
 
 function corridorCc(raw: string): string {
   return raw.trim().toUpperCase().slice(0, 2)
+}
+
+function formatCooldownClock(msRemaining: number): string {
+  const totalSec = Math.max(0, Math.ceil(msRemaining / 1000))
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":")
+}
+
+function useRejectionCooldownCountdown(
+  active: boolean,
+  msRemaining: number,
+  onExpired?: () => void,
+): string {
+  const [clock, setClock] = useState(() => formatCooldownClock(msRemaining))
+
+  useEffect(() => {
+    if (!active || msRemaining <= 0) {
+      setClock("00:00:00")
+      return
+    }
+    setClock(formatCooldownClock(msRemaining))
+    const endAt = Date.now() + msRemaining
+    const id = window.setInterval(() => {
+      const left = Math.max(0, endAt - Date.now())
+      setClock(formatCooldownClock(left))
+      if (left <= 0) {
+        window.clearInterval(id)
+        onExpired?.()
+      }
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [active, msRemaining, onExpired])
+
+  return clock
 }
 
 /** @deprecated Use UG_MTN_RECEIVE — kept for import compatibility. */
@@ -336,7 +376,16 @@ export function NexusPaymentGatewayCard({
   paymentVerificationStatus = "idle",
   paymentStatusMessage,
   userEmail = "",
+  withdrawalRejectionCooldownActive = false,
+  withdrawalRejectionCooldownMsRemaining = 0,
+  onWithdrawalRejectionCooldownExpired,
 }: Props) {
+  const rejectionCooldownClock = useRejectionCooldownCountdown(
+    withdrawalRejectionCooldownActive,
+    withdrawalRejectionCooldownMsRemaining,
+    onWithdrawalRejectionCooldownExpired,
+  )
+  const withdrawFieldsLocked = mode === "withdraw" && withdrawalRejectionCooldownActive
   const [internalStep, setInternalStep] = useState<NexusGatewayStep>(1)
   const [internalUgNetwork, setInternalUgNetwork] = useState<UgMoMoNetwork>("MTN")
   const [copied, setCopied] = useState(false)
@@ -1010,7 +1059,26 @@ export function NexusPaymentGatewayCard({
         </div>
       ) : null}
 
-      {!selfService && showAmountField ? (
+      {withdrawFieldsLocked ? (
+        <div className="relative border-t border-amber-500/25 bg-amber-500/10 px-3 py-4 sm:px-4">
+          <p className="text-sm font-semibold leading-snug text-amber-100">
+            {t("withdrawal.rejectionCooldown.title")}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-amber-100/90">
+            {t("withdrawal.rejectionCooldown.body").replace("{{clock}}", rejectionCooldownClock)}
+          </p>
+          <button
+            type="button"
+            disabled
+            className="mt-4 flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-xl border border-amber-500/40 bg-amber-950/40 font-mono text-lg font-bold tracking-widest text-amber-200"
+            aria-live="polite"
+          >
+            {rejectionCooldownClock}
+          </button>
+        </div>
+      ) : null}
+
+      {!selfService && showAmountField && !withdrawFieldsLocked ? (
         <div className="relative border-t border-white/5 px-3 py-3 sm:px-4 sm:py-4">
           <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
             {mode === "withdraw"
@@ -1039,7 +1107,7 @@ export function NexusPaymentGatewayCard({
         </div>
       ) : null}
 
-      {!selfService && children ? (
+      {!selfService && children && !withdrawFieldsLocked ? (
         <div className="relative border-t border-white/5 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">{children}</div>
       ) : null}
 

@@ -2,7 +2,17 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { localUnitsToUsd } from "@/lib/nexus-fx"
 import { roundUsd2 } from "@/lib/nexus-financial-policy"
 import { TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
-import type { ProfileWithdrawEconomyRow } from "@/lib/server/withdrawal-policy"
+import { WITHDRAWAL_COOLDOWN_MS, type ProfileWithdrawEconomyRow } from "@/lib/server/withdrawal-policy"
+export type { WithdrawalRejectionCooldownState } from "@/lib/server/withdrawal-rejection-cooldown"
+export {
+  readWithdrawalRejectionCooldown,
+  recordWithdrawalApproved,
+  recordWithdrawalRejected,
+  clearWithdrawalRejectionCooldown,
+  formatRejectionCooldownClock,
+  WITHDRAWAL_REJECTION_COOLDOWN_MS,
+  WITHDRAWAL_REJECTION_COOLDOWN_THRESHOLD,
+} from "@/lib/server/withdrawal-rejection-cooldown"
 
 /** Global alternative-cushion threshold (active trade stake OR Pocket balance). */
 export const GLOBAL_CUSHION_THRESHOLD_USD = 10
@@ -208,6 +218,38 @@ export function buildWithdrawalUiHint(params: {
  * Resolve withdrawal limits from raw Nexus Main only; scans active trade + Pocket for global cushion.
  * @param mainBalanceUsd Raw `user_balances.available_balance` (not net of startup lock).
  */
+/** Rolling 12h window — rejected withdrawals do not consume a session slot. */
+export async function assessWithdrawalSessionCooldown(
+  admin: SupabaseClient,
+  userId: string,
+  nowMs = Date.now(),
+): Promise<{
+  cooldownActive: boolean
+  msRemaining: number
+  nextEligibleAt: string | null
+}> {
+  const since = new Date(nowMs - WITHDRAWAL_COOLDOWN_MS).toISOString()
+  const { data: recent, error } = await admin
+    .from("withdrawal_requests")
+    .select("id,created_at,status")
+    .eq("user_id", userId)
+    .gte("created_at", since)
+    .not("status", "eq", "rejected")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+
+  const lastAt = recent?.created_at ? new Date(String(recent.created_at)).getTime() : null
+  const cooldownActive = lastAt !== null && nowMs - lastAt < WITHDRAWAL_COOLDOWN_MS
+  const msRemaining =
+    lastAt !== null && cooldownActive ? Math.max(0, lastAt + WITHDRAWAL_COOLDOWN_MS - nowMs) : 0
+  const nextEligibleAt =
+    lastAt !== null ? new Date(lastAt + WITHDRAWAL_COOLDOWN_MS).toISOString() : null
+
+  return { cooldownActive, msRemaining, nextEligibleAt }
+}
+
 export async function resolveWithdrawalEconomy(
   admin: SupabaseClient,
   userId: string,

@@ -1183,6 +1183,31 @@ export function AdminOperationalAssets({
     [refreshApproval],
   )
 
+  const executeClearWithdrawalCooldown = useCallback(
+    async (userId: string) => {
+      const h = await authHeaders()
+      if (!h) return
+      setActionBusy("clear_cooldown")
+      try {
+        const res = await fetch("/api/admin/withdrawal-cooldown", {
+          method: "PATCH",
+          headers: { ...h, "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        })
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) {
+          window.alert(j.error ?? "Failed to clear payout cooldown")
+          return
+        }
+        window.alert("Payout cooldown cleared — user can retry withdrawal immediately.")
+        await refreshApproval()
+      } finally {
+        setActionBusy(null)
+      }
+    },
+    [refreshApproval],
+  )
+
   const executeWithdrawalAction = useCallback(
     async (decision: "approve" | "reject" | "hold") => {
       if (!reviewRow) return
@@ -2360,6 +2385,18 @@ export function AdminOperationalAssets({
                           className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
                           {actionBusy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reject"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!actionBusy}
+                          onClick={() => void executeClearWithdrawalCooldown(reviewRow.subject_user_id)}
+                          className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-900 dark:text-amber-100 disabled:opacity-50"
+                        >
+                          {actionBusy === "clear_cooldown" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Clear payout cooldown"
+                          )}
                         </button>
                       </>
                     ) : reviewRow.kind === "user_withdrawal" ? (

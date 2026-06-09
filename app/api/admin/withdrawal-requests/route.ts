@@ -11,6 +11,10 @@ import {
   assertWithdrawalSettlementConserved,
   resolveWithdrawalSettlementFromRow,
 } from "@/lib/server/withdrawal-processing-fee"
+import {
+  recordWithdrawalApproved,
+  recordWithdrawalRejected,
+} from "@/lib/server/withdrawal-rejection-cooldown"
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -245,10 +249,13 @@ export async function PATCH(request: Request) {
         amountUsd: grossAmount,
       })
 
+      const rejectionCooldown = await recordWithdrawalRejected(admin, userId)
+
       return NextResponse.json({
         ok: true,
         decision: "reject",
         balances: { available_balance: nextAvailable, withdrawal_pending_balance: nextPending },
+        rejectionCooldown,
       })
     }
 
@@ -323,6 +330,8 @@ export async function PATCH(request: Request) {
         : "Withdrawal completed. Processing fee applied.",
       relatedId: requestId,
     })
+
+    await recordWithdrawalApproved(admin, userId)
 
     return NextResponse.json({
       ok: true,
