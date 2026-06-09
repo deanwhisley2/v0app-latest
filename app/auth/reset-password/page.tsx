@@ -151,6 +151,7 @@ function ResetPasswordContent() {
             required
             disabled={loading}
             inputClassName={inputClass}
+            captureHardened
           />
           <PasswordField
             id="confirm-password"
@@ -161,6 +162,7 @@ function ResetPasswordContent() {
             required
             disabled={loading}
             inputClassName={inputClass}
+            captureHardened
           />
           <Button type="submit" className="min-h-12 w-full text-base font-semibold" disabled={loading}>
             {loading ? "Updating…" : "Update password"}

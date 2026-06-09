@@ -21,6 +21,8 @@ import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter"
 import { PasswordField } from "@/components/auth/password-field"
+import { NexusSecureShield } from "@/components/security/nexus-secure-shield"
+import { SECURE_PIN_INPUT_PROPS } from "@/lib/security/secure-input"
 import { RegisterStepIndicator } from "@/components/auth/register-step-indicator"
 import { DashboardTestimonialStrip } from "@/components/dashboard/dashboard-testimonial-strip"
 import { useAuthTestimonialNotifs } from "@/hooks/use-auth-testimonial-notifs"
@@ -323,6 +325,7 @@ export default function RegisterForm() {
                 minLength={6}
                 disabled={isSubmitting}
                 inputClassName={inputClass}
+                captureHardened
                 hint={
                   <>
                     <PasswordStrengthMeter password={password} language={language} />
@@ -340,14 +343,14 @@ export default function RegisterForm() {
                 minLength={6}
                 disabled={isSubmitting}
                 inputClassName={inputClass}
+                captureHardened
               />
+              <NexusSecureShield className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="register-security-pin">6-digit Security PIN</Label>
                 <Input
                   id="register-security-pin"
-                  type="password"
                   inputMode="numeric"
-                  autoComplete="off"
                   maxLength={6}
                   pattern="\d{6}"
                   value={securityPin}
@@ -356,6 +359,7 @@ export default function RegisterForm() {
                   disabled={isSubmitting}
                   placeholder="••••••"
                   className={inputClass}
+                  {...SECURE_PIN_INPUT_PROPS}
                 />
                 <p className="text-xs text-muted-foreground">
                   Required for withdrawals. Choose something you will remember.
@@ -365,9 +369,7 @@ export default function RegisterForm() {
                 <Label htmlFor="register-confirm-security-pin">Confirm Security PIN</Label>
                 <Input
                   id="register-confirm-security-pin"
-                  type="password"
                   inputMode="numeric"
-                  autoComplete="off"
                   maxLength={6}
                   pattern="\d{6}"
                   value={confirmSecurityPin}
@@ -376,8 +378,10 @@ export default function RegisterForm() {
                   disabled={isSubmitting}
                   placeholder="••••••"
                   className={inputClass}
+                  {...SECURE_PIN_INPUT_PROPS}
                 />
               </div>
+              </NexusSecureShield>
             </div>
           ) : null}
 

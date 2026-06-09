@@ -128,6 +128,8 @@ import { formatAmountInputLive } from "@/lib/customer-amount-input-format"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { Input } from "@/components/ui/input"
 import { FundingPaymentPanel, type L1FundSource } from "@/components/dashboard/funding-payment-panel"
+import { NexusSecureShield } from "@/components/security/nexus-secure-shield"
+import { SECURE_PIN_INPUT_PROPS } from "@/lib/security/secure-input"
 import {
   NexusPaymentGatewayCard,
   fundSourceFromGatewayMethod,
@@ -3588,25 +3590,24 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                     <p className="text-[10px] text-zinc-500">{t("withdrawal.payoutLockedHint")}</p>
                   </div>
                 ) : null}
-                <div className="space-y-1.5">
+                <NexusSecureShield className="space-y-1.5">
                   <label htmlFor="withdraw-security-pin-main" className="text-xs font-medium text-zinc-400">
                     Security PIN
                   </label>
                   <Input
                     id="withdraw-security-pin-main"
-                    type="password"
                     inputMode="numeric"
                     maxLength={6}
-                    autoComplete="off"
                     placeholder="Security PIN (write or insert pin here...)"
                     value={withdrawSecurityPin}
                     onChange={(e) => setWithdrawSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     className="min-h-[44px] border-white/10 bg-white/[0.04] font-mono tracking-[0.2em] text-zinc-100 touch-manipulation"
+                    {...SECURE_PIN_INPUT_PROPS}
                   />
                   <p className="text-[10px] text-zinc-500">
                     Required for every withdrawal. Bot trading does not ask for your PIN.
                   </p>
-                </div>
+                </NexusSecureShield>
                 {withdrawalEligibility ? (
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-snug text-zinc-400">
                     {withdrawalEligibility.uiHint ? (
@@ -4586,25 +4587,24 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   </div>
                 ) : null}
                 {showFundModal === "withdraw" ? (
-                  <div className="mt-3">
+                  <NexusSecureShield className="mt-3">
                     <label htmlFor="withdraw-security-pin" className="text-xs font-medium text-muted-foreground">
                       Security PIN
                     </label>
                     <Input
                       id="withdraw-security-pin"
-                      type="password"
                       inputMode="numeric"
                       maxLength={6}
-                      autoComplete="off"
                       placeholder="Security PIN (write or insert pin here...)"
                       value={withdrawSecurityPin}
                       onChange={(e) => setWithdrawSecurityPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                       className="mt-1 min-h-[44px] font-mono tracking-[0.2em] touch-manipulation"
+                      {...SECURE_PIN_INPUT_PROPS}
                     />
                     <p className="mt-1 text-[10px] text-muted-foreground">
                       Required for every withdrawal. Bot trading does not ask for your PIN.
                     </p>
-                  </div>
+                  </NexusSecureShield>
                 ) : null}
                 {showFundModal === "withdraw" && withdrawalEligibility ? (
                   <div className="mt-2 rounded-lg border border-border/80 bg-muted/30 p-2 text-[11px] leading-snug text-muted-foreground">

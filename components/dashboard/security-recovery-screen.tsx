@@ -280,18 +280,24 @@ export function SecurityRecoveryScreen() {
         <p className="mb-3 text-xs text-muted-foreground">
           Enter your current password first. If unknown, use account recovery with your Nexus Security Code.
         </p>
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="nexus-secure-shield grid gap-2 md:grid-cols-2">
           <Input
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             placeholder="Current password"
+            autoComplete="new-password"
+            data-private="true"
+            spellCheck={false}
           />
           <Input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="New password (min 8 chars)"
+            autoComplete="new-password"
+            data-private="true"
+            spellCheck={false}
           />
         </div>
         <Button className="mt-3" size="sm" onClick={() => void changePassword()}>

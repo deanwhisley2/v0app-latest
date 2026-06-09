@@ -12,7 +12,9 @@ import {
 } from "@/components/dashboard/mobile-money-payment-instructions"
 import { KenyaMpesaTillCard } from "@/components/dashboard/kenya-mpesa-till-card"
 import { SavedPayerDisplay } from "@/components/dashboard/saved-payer-display"
+import { NexusSecureShield } from "@/components/security/nexus-secure-shield"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
+import { SECURE_TX_REF_INPUT_PROPS } from "@/lib/security/secure-input"
 
 const FALLBACK_TRC20_ADDRESS = "TYqESCZz8xcN5TZTdEDtRsbjNmhPWrVTNe"
 
@@ -409,27 +411,26 @@ export function FundingPaymentPanel({
         </div>
       ) : null}
 
-      <div className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
+      <NexusSecureShield className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
         <label className="block text-[10px] font-medium text-foreground" htmlFor="fund-crypto-txhash">
           {t("funding.txRefLabel")}
         </label>
         <input
           id="fund-crypto-txhash"
-          type="text"
           value={fundTxReference}
           onChange={(e) => onTxReferenceChange(e.target.value)}
           onBlur={() => onTxReferenceBlur?.()}
           placeholder={t("funding.payment.txRefPlaceholderCrypto")}
-          autoComplete="off"
           aria-invalid={txReferenceError ? true : undefined}
           className="w-full min-h-[44px] rounded-md border-2 border-primary/40 bg-background px-3 py-2 font-mono text-sm"
+          {...SECURE_TX_REF_INPUT_PROPS}
         />
         {txReferenceError ? (
           <p className="text-[10px] font-medium text-destructive" role="alert">
             {txReferenceError}
           </p>
         ) : null}
-      </div>
+      </NexusSecureShield>
 
       <details className="mt-2 rounded-lg border border-border bg-muted/50">
         <summary className="cursor-pointer select-none px-2 py-1.5 text-[10px] font-medium text-muted-foreground">

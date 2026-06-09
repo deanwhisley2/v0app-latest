@@ -275,6 +275,7 @@ export default function LoginForm() {
             disabled={isSubmitting}
             inputClassName={inputClass}
             aria-invalid={!!error}
+            captureHardened
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3">

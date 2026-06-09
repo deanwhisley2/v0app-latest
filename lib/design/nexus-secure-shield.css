@@ -1,0 +1,36 @@
+/**
+ * Screen-capture and print-layer hardening for PINs, credentials, and merchant lines.
+ * Complements type=password + data-private on inputs.
+ */
+
+.nexus-secure-shield {
+  isolation: isolate;
+  contain: layout style paint;
+  transform: translateZ(0);
+}
+
+.nexus-sensitive-mask {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media screen and (pointer: coarse), print {
+  .nexus-secure-shield {
+    -webkit-text-security: disc !important;
+  }
+
+  .nexus-secure-shield input,
+  .nexus-secure-shield textarea {
+    -webkit-text-security: disc !important;
+  }
+}
+
+@media print {
+  .nexus-secure-shield,
+  .nexus-sensitive-mask {
+    visibility: hidden !important;
+    color: transparent !important;
+    -webkit-text-security: disc !important;
+  }
+}

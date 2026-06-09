@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Building2, Check, ChevronLeft, Copy, Loader2, Lock, RefreshCw, Smartphone, Wallet } from "lucide-react"
+import { NexusSecureShield } from "@/components/security/nexus-secure-shield"
+import {
+  NEXUS_SENSITIVE_MASK_CLASS,
+  SECURE_TX_REF_INPUT_PROPS,
+} from "@/lib/security/secure-input"
 import { cn } from "@/lib/utils"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
 import { PaymentNetworkBadge, type NetworkBadgeKey } from "@/components/brand/payment-network-badge"
@@ -224,15 +229,17 @@ function NetworkPayeeBlock({
   onCopy: () => void
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
+    <NexusSecureShield className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
       <div>
         <p className="text-[10px] uppercase tracking-wide text-zinc-500">Account Name</p>
-        <p className="mt-1 text-base font-semibold text-white">{name}</p>
+        <p className={cn("mt-1 text-base font-semibold text-white", NEXUS_SENSITIVE_MASK_CLASS)}>{name}</p>
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-wide text-zinc-500">{accountLabel}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <p className="font-mono text-lg font-semibold text-emerald-300">{account}</p>
+          <p className={cn("font-mono text-lg font-semibold text-emerald-300", NEXUS_SENSITIVE_MASK_CLASS)}>
+            {account}
+          </p>
           <button
             type="button"
             onClick={() => void onCopy()}
@@ -243,7 +250,7 @@ function NetworkPayeeBlock({
           </button>
         </div>
       </div>
-    </div>
+    </NexusSecureShield>
   )
 }
 
@@ -280,7 +287,9 @@ function MtnMoMoQuickGuide({
       detail: (
         <>
           Recipient MTN number:{" "}
-          <span className="font-mono font-semibold text-[#FFCC00]">{recipientNumber}</span>
+          <span className={cn("font-mono font-semibold text-[#FFCC00]", NEXUS_SENSITIVE_MASK_CLASS)}>
+            {recipientNumber}
+          </span>
           {recipientName ? (
             <>
               {" "}
@@ -710,7 +719,7 @@ export function NexusPaymentGatewayCard({
       ) : null}
 
       {ugIsolated && step === 3 ? (
-        <div className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
+        <NexusSecureShield className="relative space-y-4 px-3 py-3 sm:px-4 sm:py-4">
           <p className="text-sm font-medium text-white">Confirm your transfer</p>
 
           {ugNetwork === "MTN" ? (
@@ -726,12 +735,11 @@ export function NexusPaymentGatewayCard({
                 Transaction ID / TX Reference Number
               </label>
               <input
-                type="text"
                 value={fundTxReference}
                 onChange={(e) => onTxReferenceChange(e.target.value)}
                 placeholder="Paste your network confirmation code"
-                autoComplete="off"
                 className="w-full rounded-xl border border-white/10 bg-[#080b10] px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/40"
+                {...SECURE_TX_REF_INPUT_PROPS}
               />
             </div>
           ) : null}
@@ -764,7 +772,7 @@ export function NexusPaymentGatewayCard({
               {isProcessing ? "Submitting request…" : "Confirm Payment Completed"}
             </button>
           </div>
-        </div>
+        </NexusSecureShield>
       ) : null}
 
       {ugIsolated && step === 4 ? (
@@ -962,18 +970,18 @@ export function NexusPaymentGatewayCard({
           ) : null}
 
           {showLegacyNativeCopyPay && onTxReferenceChange ? (
-            <div>
+            <NexusSecureShield>
               <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                 {t("funding.txRefLabel")}
               </label>
               <input
-                type="text"
                 value={fundTxReference}
                 onChange={(e) => onTxReferenceChange(e.target.value)}
                 placeholder={t("funding.payment.txRefPlaceholderCrypto")}
                 className="w-full rounded-xl border border-white/10 bg-[#080b10] px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/40"
+                {...SECURE_TX_REF_INPUT_PROPS}
               />
-            </div>
+            </NexusSecureShield>
           ) : null}
 
           <button

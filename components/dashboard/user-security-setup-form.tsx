@@ -19,6 +19,7 @@ import {
   SECURITY_SETUP_FIELD_GROUP_CLASS,
   SECURITY_SETUP_INPUT_CLASS,
 } from "@/lib/nexus-security-setup-field-styles"
+import { SECURE_PIN_INPUT_PROPS } from "@/lib/security/secure-input"
 
 type Props = {
   variant?: "settings"
@@ -304,15 +305,14 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
                 {hasExistingPin ? "Confirm 6-digit PIN" : "6-digit Nexus Security PIN"}
               </Label>
               <Input
-                type="password"
                 inputMode="numeric"
                 maxLength={6}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className={cn(SECURITY_SETUP_INPUT_CLASS, "font-mono tracking-[0.35em] text-center")}
                 placeholder="000000"
-                autoComplete="off"
                 aria-label={hasExistingPin ? "Confirm 6-digit security PIN" : "6-digit Nexus Security PIN"}
+                {...SECURE_PIN_INPUT_PROPS}
               />
             </div>
             <div>
@@ -320,15 +320,14 @@ export function UserSecuritySetupForm({ variant = "settings", onComplete }: Prop
                 {hasExistingPin ? "Re-enter PIN" : "Confirm PIN"}
               </Label>
               <Input
-                type="password"
                 inputMode="numeric"
                 maxLength={6}
                 value={codeConfirm}
                 onChange={(e) => setCodeConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className={cn(SECURITY_SETUP_INPUT_CLASS, "font-mono tracking-[0.35em] text-center")}
                 placeholder="000000"
-                autoComplete="off"
                 aria-label={hasExistingPin ? "Re-enter security PIN" : "Confirm security PIN"}
+                {...SECURE_PIN_INPUT_PROPS}
               />
             </div>
           </div>

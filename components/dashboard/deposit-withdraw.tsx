@@ -391,7 +391,7 @@ export function DepositWithdraw({
         </div>
 
         {/* Withdrawal PIN */}
-        <div>
+        <div className="nexus-secure-shield">
           <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
             <Key className="h-3 w-3" />
             Withdrawal PIN
@@ -403,6 +403,10 @@ export function DepositWithdraw({
             onChange={(e) => setWithdrawPin(e.target.value.replace(/\D/g, ""))}
             placeholder="Enter 6-digit PIN"
             className="mt-1 text-center text-lg tracking-widest"
+            autoComplete="new-password"
+            data-private="true"
+            inputMode="numeric"
+            spellCheck={false}
           />
         </div>
 

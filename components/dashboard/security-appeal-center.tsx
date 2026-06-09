@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { MessageCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { NexusSecureShield } from "@/components/security/nexus-secure-shield"
 import { Input } from "@/components/ui/input"
+import { SECURE_PIN_INPUT_PROPS } from "@/lib/security/secure-input"
 import { supabase } from "@/lib/supabaseClient"
 import type { PublicSecurityProfile, SecurityAppealRow } from "@/lib/nexus-security-profile-types"
 import {
@@ -160,20 +162,23 @@ export function SecurityAppealCenter({ onOpenSupportThread }: Props) {
                   Change Security PIN
                 </option>
               </select>
-              <Input
-                placeholder={appealType === "security_code" ? "New 6-digit PIN" : "New withdrawal mobile number"}
-                value={appealValue}
-                onChange={(e) =>
-                  setAppealValue(
-                    appealType === "security_code"
-                      ? e.target.value.replace(/\D/g, "").slice(0, 6)
-                      : e.target.value,
-                  )
-                }
-                disabled={!profile?.canChangeSensitive}
-                inputMode={appealType === "security_code" ? "numeric" : "tel"}
-                maxLength={appealType === "security_code" ? 6 : undefined}
-              />
+              <NexusSecureShield>
+                <Input
+                  placeholder={appealType === "security_code" ? "New 6-digit PIN" : "New withdrawal mobile number"}
+                  value={appealValue}
+                  onChange={(e) =>
+                    setAppealValue(
+                      appealType === "security_code"
+                        ? e.target.value.replace(/\D/g, "").slice(0, 6)
+                        : e.target.value,
+                    )
+                  }
+                  disabled={!profile?.canChangeSensitive}
+                  inputMode={appealType === "security_code" ? "numeric" : "tel"}
+                  maxLength={appealType === "security_code" ? 6 : undefined}
+                  {...(appealType === "security_code" ? SECURE_PIN_INPUT_PROPS : { "data-private": "true" as const, type: "password" as const, autoComplete: "new-password" as const })}
+                />
+              </NexusSecureShield>
               <textarea
                 rows={4}
                 placeholder="Explain why this change is needed…"

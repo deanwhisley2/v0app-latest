@@ -50,6 +50,8 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   themeColor: SITE_BRAND.themeColor,
   interactiveWidget: 'resizes-content',
+  /** Isolated compositor layer hints for mobile WebView capture hardening. */
+  colorScheme: 'dark light',
 }
 
 export const metadata: Metadata = {

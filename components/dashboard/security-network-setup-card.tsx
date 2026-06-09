@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { SECURITY_SETUP_INPUT_CLASS } from "@/lib/nexus-security-setup-field-styles"
+import { NEXUS_SECURE_SHIELD_CLASS, SECURE_PIN_INPUT_PROPS } from "@/lib/security/secure-input"
 
 type Props = {
   network: "MTN" | "Airtel"
@@ -39,7 +40,7 @@ export function SecurityNetworkSetupCard({
   const accentBg = isMtn ? "bg-[#FFCC00]/6" : "bg-[#ED1C24]/5"
 
   return (
-    <div className={cn("rounded-xl border p-3.5 sm:p-4", accentBorder, accentBg)}>
+    <div className={cn(NEXUS_SECURE_SHIELD_CLASS, "rounded-xl border p-3.5 sm:p-4", accentBorder, accentBg)}>
       <div className="mb-3 flex items-center gap-3">
         <MobileMoneyNetworkLogo network={network} size="md" />
         <div className="min-w-0 flex-1">
@@ -59,7 +60,7 @@ export function SecurityNetworkSetupCard({
             className={SECURITY_SETUP_INPUT_CLASS}
             placeholder="+256…"
             inputMode="tel"
-            autoComplete="tel"
+            {...SECURE_PIN_INPUT_PROPS}
           />
         </div>
         <div>
@@ -89,7 +90,7 @@ export function SecurityNetworkSetupCard({
               className={SECURITY_SETUP_INPUT_CLASS}
               placeholder="+256… withdrawal"
               inputMode="tel"
-              autoComplete="tel"
+              {...SECURE_PIN_INPUT_PROPS}
             />
             <Input
               value={withdrawalNames}
