@@ -7,7 +7,7 @@
  * When false: `public/sw.js` registers as push-only (no fetch interception).
  * Capacitor/APK wrappers may register the same SW path for native WebView push.
  */
-export const NEXUS_BROWSER_ONLY_LOCK = true
+export const NEXUS_BROWSER_ONLY_LOCK = false
 
 export function isPwaSafeMode(): boolean {
   return NEXUS_BROWSER_ONLY_LOCK

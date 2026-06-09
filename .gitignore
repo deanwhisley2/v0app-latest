@@ -30,3 +30,12 @@ supabase/.temp/
 
 # `npx skills add` cache; project skills live in .cursor/skills/
 .agents/
+
+# Capacitor / Android local build artifacts
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
