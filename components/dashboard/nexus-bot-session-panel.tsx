@@ -9,6 +9,7 @@ import {
   sessionProgressPct,
   visibleSessionActivities,
 } from "@/lib/nexus-bot/session-earnings-ux"
+import { TRADE_SESSION_CANCELLABLE_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import { cn } from "@/lib/utils"
 
 export type NexusBotSessionPanelSession = {
@@ -27,13 +28,15 @@ export type NexusBotSessionPanelSession = {
 type Props = {
   session: NexusBotSessionPanelSession
   formatMoney: (usd: number) => string
+  onCancel?: () => void
+  cancelBusy?: boolean
 }
 
-export function NexusBotSessionPanel({ session, formatMoney }: Props) {
+export function NexusBotSessionPanel({ session, formatMoney, onCancel, cancelBusy }: Props) {
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    const id = window.setInterval(() => setTick((n) => n + 1), 4000)
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000)
     return () => window.clearInterval(id)
   }, [])
 
@@ -52,9 +55,19 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
   const meter = useMemo(() => sessionProgressMeterBlocks(progressPct), [progressPct])
   const statusLabel = useMemo(() => sessionActiveStatusLabel(progressPct), [progressPct])
 
-  const isPreStart = session.status === "booked" || session.status === "ready"
+  const isPreStart = (TRADE_SESSION_CANCELLABLE_STATUSES as readonly string[]).includes(
+    session.status ?? "",
+  )
   const isLive =
     !isPreStart && !["booked", "ready", "pending"].includes(session.status ?? "")
+
+  const canCancel = useMemo(() => {
+    void tick
+    if (!onCancel || !isPreStart) return false
+    const startAt = session.session_start_at
+    if (!startAt) return true
+    return Date.now() < new Date(startAt).getTime()
+  }, [isPreStart, onCancel, session.session_start_at, tick])
   const showReleased =
     session.earnings_withdrawable && Number(session.profit_released_usd ?? 0) > 0
 
@@ -103,10 +116,25 @@ export function NexusBotSessionPanel({ session, formatMoney }: Props) {
       ) : null}
 
       {isPreStart ? (
-        <p className="mt-2 flex items-center gap-2 text-sm text-warning">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Trade booked successfully · Waiting for session start
-        </p>
+        <div className="mt-2 space-y-2">
+          <p className="flex items-center gap-2 text-sm text-warning">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Trade booked successfully · Waiting for session start
+          </p>
+          {canCancel ? (
+            <button
+              type="button"
+              onClick={() => onCancel?.()}
+              disabled={cancelBusy}
+              className={cn(
+                "border border-red-500/30 text-red-400 hover:bg-red-500/10 transition rounded-xl px-3 py-1.5 text-sm",
+                "touch-manipulation disabled:cursor-not-allowed disabled:opacity-50",
+              )}
+            >
+              {cancelBusy ? "Cancelling…" : "Cancel Trade"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {isLive ? (

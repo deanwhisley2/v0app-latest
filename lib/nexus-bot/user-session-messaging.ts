@@ -20,6 +20,9 @@ export const TRADE_SESSION_OPEN_STATUSES = [
   "active",
 ] as const
 
+/** Pre-start statuses eligible for user-initiated cancellation (before session.start_at). */
+export const TRADE_SESSION_CANCELLABLE_STATUSES = ["booked", "ready", "pending"] as const
+
 export const VERIFY_STEPS_USER = [
   "Verifying trade code",
   "Session located",

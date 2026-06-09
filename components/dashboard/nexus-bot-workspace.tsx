@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useNexusNotifications } from "@/contexts/NexusNotificationsContext"
 import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { dispatchCustomerLedgerBump } from "@/lib/client/customer-ledger-sync"
+import { fetchLiveBalanceSnapshot } from "@/lib/client/refresh-live-balance"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -250,6 +251,8 @@ export function NexusBotWorkspace({
   const [autoStake, setAutoStake] = useState("50")
   const [autoConfirm, setAutoConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [sessionCardExiting, setSessionCardExiting] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
 
   const waHref = useMemo(
@@ -547,6 +550,44 @@ export function NexusBotWorkspace({
     }
   }
 
+  const cancelBookedTrade = useCallback(async () => {
+    if (!activeSession?.id || cancelBusy) return
+    setCancelBusy(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const res = await fetch("/api/user/trade-sessions/cancel", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId: activeSession.id }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(out.error ?? "Cancellation failed")
+
+      const balance = await fetchLiveBalanceSnapshot(token)
+      if (balance) setAvailableUsd(balance.available_balance)
+      else if (typeof out.availableUsd === "number") setAvailableUsd(out.availableUsd)
+
+      dispatchCustomerLedgerBump("nexus_trade_session_cancel")
+      setSessionCardExiting(true)
+      window.setTimeout(() => {
+        setActiveSession(null)
+        setSessionCardExiting(false)
+        hadActiveSessionRef.current = false
+        resetFlow()
+        onActiveSessionCountsChange?.({ copy: 0, fix: 0 })
+        void load()
+      }, 320)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Cancellation failed")
+    } finally {
+      setCancelBusy(false)
+    }
+  }, [activeSession?.id, cancelBusy, load, onActiveSessionCountsChange, resetFlow])
+
   const activateAuto = async () => {
     setBusy(true)
     try {
@@ -618,7 +659,13 @@ export function NexusBotWorkspace({
       </Card>
 
       {activeSession ? (
-        <Card className="overflow-hidden border-success/30 p-4">
+        <Card
+          className={cn(
+            "overflow-hidden border-success/30 p-4 transition-all duration-300 ease-out",
+            sessionCardExiting &&
+              "pointer-events-none -translate-x-6 opacity-0 scale-[0.98]",
+          )}
+        >
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-success">
@@ -629,7 +676,12 @@ export function NexusBotWorkspace({
               </p>
             </div>
           </div>
-          <NexusBotSessionPanel session={activeSession} formatMoney={formatUserMoney} />
+          <NexusBotSessionPanel
+            session={activeSession}
+            formatMoney={formatUserMoney}
+            onCancel={() => void cancelBookedTrade()}
+            cancelBusy={cancelBusy}
+          />
           <div className="mt-3 border-t border-border/40 pt-3">
             <ShareScreenshotGroupButton />
           </div>

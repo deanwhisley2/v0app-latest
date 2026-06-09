@@ -4,6 +4,7 @@ import { computeParticipationWeight } from "@/lib/nexus-bot/participation-weight
 import {
   closedTradeHistorySummary,
   resolveTradeSessionPhaseKey,
+  TRADE_SESSION_CANCELLABLE_STATUSES,
   TRADE_SESSION_OPEN_STATUSES,
   type TradeSessionPhaseKey,
 } from "@/lib/nexus-bot/user-session-messaging"
@@ -12,7 +13,11 @@ import {
   normalizeSignalCode,
   type NexusSignalSlot,
 } from "@/lib/nexus-bot/plans"
-import { casCreditNexusMainOnly, casReserveCopyTradeStake } from "@/lib/server/nexus-main-enforcement"
+import {
+  casCreditNexusMainOnly,
+  casReserveCopyTradeStake,
+  readNexusMainAvailableUsd,
+} from "@/lib/server/nexus-main-enforcement"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 import { appendUserAccountNotification } from "@/lib/server/user-account-notifications"
 import {
@@ -28,6 +33,7 @@ import {
 import { settleTradeSessionParticipation } from "@/lib/server/trade-session-settlement"
 import {
   ensureTradeSessionSettlementCredits,
+  hasTradeSessionCancelEvent,
   hasTradeSessionFinancialResolution,
   hasTradeSessionSettlementEvent,
   repairUnsettledTradeSessionParticipants,
@@ -697,6 +703,98 @@ export async function activateTradeSessionBot(
     participationWeight,
     available_balance: reserved.available_balance,
   }
+}
+
+export async function cancelBookedTradeSessionBot(
+  admin: SupabaseClient,
+  params: { userId: string; participantId: string },
+): Promise<{ stakeReturnedUsd: number; available_balance: number }> {
+  const now = new Date()
+
+  const { data: row, error } = await admin
+    .from("nexus_bot_sessions")
+    .select(
+      "id,user_id,status,stake_usd,trade_session_id,trade_sessions(start_at,end_at,session_slot)",
+    )
+    .eq("id", params.participantId)
+    .eq("user_id", params.userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!row) throw new Error("SESSION_NOT_FOUND")
+  if (!row.trade_session_id) throw new Error("SESSION_NOT_CANCELLABLE")
+
+  const status = String(row.status)
+  if ((TRADE_SESSION_CANCELLABLE_STATUSES as readonly string[]).includes(status) === false) {
+    if (status === "running" || status === "active") throw new Error("SESSION_ALREADY_STARTED")
+    throw new Error("SESSION_NOT_CANCELLABLE")
+  }
+
+  const ts = await resolveTradeSessionTiming(
+    admin,
+    String(row.trade_session_id),
+    row.trade_sessions as { start_at?: string; end_at?: string; session_slot?: string } | null,
+  )
+  if (!ts?.start_at) throw new Error("SESSION_TIMING_UNAVAILABLE")
+  if (now.getTime() >= new Date(ts.start_at).getTime()) throw new Error("SESSION_ALREADY_STARTED")
+
+  const botSessionId = String(row.id)
+  const stake = roundUsd2(Number(row.stake_usd ?? 0))
+
+  if (await hasTradeSessionCancelEvent(admin, params.userId, botSessionId)) {
+    return {
+      stakeReturnedUsd: stake,
+      available_balance: await readNexusMainAvailableUsd(admin, params.userId),
+    }
+  }
+
+  if (await hasTradeSessionFinancialResolution(admin, params.userId, botSessionId)) {
+    throw new Error("SESSION_ALREADY_RESOLVED")
+  }
+
+  const nowIso = now.toISOString()
+  const { data: updated, error: uErr } = await admin
+    .from("nexus_bot_sessions")
+    .update({
+      status: "cancelled",
+      display_phase: "completed",
+      settled_at: nowIso,
+      profit_released_usd: 0,
+    })
+    .eq("id", botSessionId)
+    .eq("user_id", params.userId)
+    .in("status", [...TRADE_SESSION_CANCELLABLE_STATUSES])
+    .select("id")
+    .maybeSingle()
+  if (uErr) throw new Error(uErr.message)
+  if (!updated) throw new Error("SESSION_CANCEL_CONFLICT")
+
+  let available_balance = await readNexusMainAvailableUsd(admin, params.userId)
+  if (stake > 0) {
+    const credit = await casCreditNexusMainOnly(admin, params.userId, stake)
+    available_balance = credit.available_balance
+    await recordFinancialEvent({
+      userId: params.userId,
+      eventType: "nexus_trade_session_cancel",
+      category: "container",
+      amount: stake,
+      balanceSource: "nexus_bot_session",
+      balanceDestination: "available_balance",
+      status: "completed",
+      actorType: "user",
+      actorId: params.userId,
+      relatedSessionId: botSessionId,
+      summary: "Trade booking cancelled — reserved capital returned to Nexus Main.",
+      metadata: {
+        session_id: botSessionId,
+        trade_session_id: row.trade_session_id,
+        stake_returned_usd: stake,
+        cancelled_before_start: true,
+        scheduled_start_at: ts.start_at,
+      },
+    })
+  }
+
+  return { stakeReturnedUsd: stake, available_balance }
 }
 
 export async function findPendingProfitCelebration(
