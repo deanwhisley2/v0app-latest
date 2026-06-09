@@ -350,6 +350,12 @@ function mapInternalOpsNotification(
   if (/withdraw/i.test(combined) && /approved/i.test(combined)) {
     return { title: "Withdrawal approved", body: "Your withdrawal request has been approved." }
   }
+  if (/withdraw/i.test(combined) && /reject|declin|failed|refund/i.test(combined)) {
+    return {
+      title: "Withdrawal Declined",
+      body: "Your withdrawal was declined and funds were returned to your balance.",
+    }
+  }
   if (/withdraw/i.test(combined)) {
     return { title: "Withdrawal received", body: "We received your withdrawal request." }
   }

@@ -56,11 +56,26 @@ export function presentFinancialEventForCustomer(
 ): PresentedFinancialEvent {
   const fallback = "Account activity recorded."
   const rawSummary = (row.summary ?? "").trim()
+  const eventType = String(row.event_type ?? "").toLowerCase()
   const syntheticType = `${row.category}_${row.event_type}`.toLowerCase()
   const fixedTitle = fixedTradeActivityTitle(row.event_type)
   const cat = CATEGORY_LABEL[row.category] ?? "Activity"
-  const status = STATUS_LABEL[row.status] ?? row.status.replace(/_/g, " ")
   const amt = formatActivityAmount(row.gross_amount, viewer)
+
+  if (eventType === "withdrawal_rejected_refund") {
+    return {
+      title: "Withdrawal Declined",
+      detailLine: [cat, "Failed & Refunded", amt].filter(Boolean).join(" · "),
+    }
+  }
+  if (eventType === "withdrawal_pending") {
+    return {
+      title: "Withdrawal Pending",
+      detailLine: [cat, "Pending", amt].filter(Boolean).join(" · "),
+    }
+  }
+
+  const status = STATUS_LABEL[row.status] ?? row.status.replace(/_/g, " ")
   const detailParts = [cat, status, amt].filter(Boolean)
 
   if (fixedTitle) {

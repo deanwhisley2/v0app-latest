@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const id = searchParams.get("id")?.trim()
 
     const selectCols =
-      "id,amount,processing_fee_amount,payout_amount,processing_fee_rate,currency_context,amount_input_local,input_currency,status,payout_status,transaction_ref,created_at,reviewed_at,metadata"
+      "id,amount,processing_fee_amount,payout_amount,processing_fee_rate,currency_context,amount_input_local,input_currency,status,payout_status,transaction_ref,created_at,reviewed_at,resolution_note,metadata"
 
     if (id) {
       const { data: one, error: oneErr } = await admin

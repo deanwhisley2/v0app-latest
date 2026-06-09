@@ -14,11 +14,16 @@ import { TransactionReceiptSheet } from "@/components/dashboard/transaction-rece
 import { useTransactionReceiptOpener } from "@/hooks/use-transaction-receipt"
 import {
   depositTimelineLabelKey,
-  withdrawalTimelineLabelKey,
   type CryptoDepositReceiptRow,
   type FinancialEventReceiptRow,
   type WithdrawalReceiptRow,
 } from "@/lib/transactions/transaction-receipt-model"
+import {
+  buildWithdrawalHistoryIndex,
+  presentWithdrawalHistoryRow,
+  shouldSuppressWithdrawalLedgerEvent,
+  shouldSuppressWithdrawalNotification,
+} from "@/lib/transactions/withdrawal-history-presenter"
 import { NEXUS_CUSTOMER_LEDGER_BUMP } from "@/lib/client/customer-ledger-sync"
 
 type FinancialEvent = FinancialEventReceiptRow
@@ -89,18 +94,24 @@ export function HistoryCenterScreen() {
     sortMs: number
     title: string
     subtitle: string
+    declined?: boolean
+    declineReason?: string | null
     onOpen: () => void
   }
 
   const unifiedHistory = useMemo(() => {
+    const withdrawalIndex = buildWithdrawalHistoryIndex(withdrawals)
     const rows: UnifiedHistoryItem[] = []
     for (const w of withdrawals) {
+      const presented = presentWithdrawalHistoryRow(w, formatUserMoney, t)
       rows.push({
         id: `w-${w.id}`,
-        timestamp: w.created_at,
-        sortMs: new Date(w.created_at).getTime(),
-        title: t(withdrawalTimelineLabelKey(w)),
-        subtitle: `${formatUserMoney(Number(w.amount))} · ${w.transaction_ref.slice(0, 8)}…`,
+        timestamp: w.reviewed_at ?? w.created_at,
+        sortMs: new Date(w.reviewed_at ?? w.created_at).getTime(),
+        title: t(presented.titleKey),
+        subtitle: presented.subtitle,
+        declined: presented.declined,
+        declineReason: presented.declineReason,
         onOpen: () => openWithdrawal(w),
       })
     }
@@ -129,6 +140,7 @@ export function HistoryCenterScreen() {
       })
     }
     for (const e of events) {
+      if (shouldSuppressWithdrawalLedgerEvent(e, withdrawalIndex)) continue
       const presented = presentFinancialEventForCustomer(e, viewer)
       rows.push({
         id: `e-${e.id}`,
@@ -140,6 +152,7 @@ export function HistoryCenterScreen() {
       })
     }
     for (const n of historyNotifs) {
+      if (shouldSuppressWithdrawalNotification(n, withdrawalIndex)) continue
       const p = presentNotification(n, t, viewer)
       rows.push({
         id: `n-${n.id}`,
@@ -314,6 +327,8 @@ export function HistoryCenterScreen() {
                     subtitle={row.subtitle}
                     timestamp={row.timestamp}
                     t={t}
+                    declined={row.declined}
+                    declineReason={row.declineReason}
                     onOpen={row.onOpen}
                   />
                 ))}

@@ -10,10 +10,23 @@ type TransactionHistoryRowProps = {
   timestamp: string
   onOpen: () => void
   t: (key: string) => string
+  /** Declined/rejected withdrawal — crimson title tint. */
+  declined?: boolean
+  /** Admin resolution note shown under subtitle when present. */
+  declineReason?: string | null
 }
 
 /** Compact, tappable history timeline row (GPU-safe — no hover transitions on low-end). */
-export function TransactionHistoryRow({ title, subtitle, timestamp, onOpen, t }: TransactionHistoryRowProps) {
+export function TransactionHistoryRow({
+  title,
+  subtitle,
+  timestamp,
+  onOpen,
+  t,
+  declined = false,
+  declineReason,
+}: TransactionHistoryRowProps) {
+  const reason = declineReason?.trim()
   return (
     <li>
       <button
@@ -25,8 +38,20 @@ export function TransactionHistoryRow({ title, subtitle, timestamp, onOpen, t }:
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-snug text-foreground">{title}</p>
+          <p
+            className={cn(
+              "text-sm font-semibold leading-snug",
+              declined ? "text-rose-900/90 dark:text-rose-300/95" : "text-foreground",
+            )}
+          >
+            {title}
+          </p>
           <p className="mt-0.5 font-mono text-xs text-muted-foreground">{subtitle}</p>
+          {reason ? (
+            <p className="mt-1 text-xs italic text-slate-400">
+              {t("history.withdrawal.declineReasonPrefix")} {reason}
+            </p>
+          ) : null}
           <p className="mt-1 text-[10px] text-muted-foreground">
             {formatNotificationTimeAgo(timestamp, t)}
           </p>

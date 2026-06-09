@@ -61,6 +61,7 @@ export type WithdrawalReceiptRow = {
   transaction_ref: string
   created_at: string
   reviewed_at?: string | null
+  resolution_note?: string | null
   metadata?: unknown
 }
 
@@ -84,6 +85,8 @@ export type FinancialEventReceiptRow = {
   gross_amount: number | null
   status: string
   summary: string | null
+  transaction_ref?: string | null
+  metadata?: unknown
   created_at: string
 }
 
@@ -163,10 +166,10 @@ export function resolveWithdrawalStatusKeys(row: WithdrawalReceiptRow): {
   const status = String(row.status ?? "").toLowerCase()
   const payoutStatus = String(row.payout_status ?? "none").toLowerCase()
 
-  if (status === "rejected") {
+  if (status === "rejected" || status === "declined") {
     return {
       tone: "danger",
-      statusLabelKey: "receipt.status.rejected",
+      statusLabelKey: "receipt.status.failedRefunded",
       headerTitleKey: "receipt.header.withdrawalRejected",
       timelineLabelKey: "receipt.timeline.withdrawalRejected",
     }
@@ -217,6 +220,7 @@ export function buildWithdrawalReceipt(
 ): TransactionReceipt {
   const brand = inferWithdrawalBrand(row.metadata)
   const kind = inferWithdrawalKind(brand)
+  const status = String(row.status ?? "").toLowerCase()
   const statusKeys = resolveWithdrawalStatusKeys(row)
   const settlement = resolveSettlement(row)
   const m = metaObj(row.metadata)
@@ -305,6 +309,16 @@ export function buildWithdrawalReceipt(
     value: row.transaction_ref,
     mono: true,
   })
+
+  const resolutionNote =
+    typeof row.resolution_note === "string" ? row.resolution_note.trim() : ""
+  if (resolutionNote && (status === "rejected" || status === "declined")) {
+    fields.push({
+      labelKey: "receipt.field.declineReason",
+      value: resolutionNote,
+      multiline: true,
+    })
+  }
 
   const shareLines = [
     statusKeys.headerTitleKey,
