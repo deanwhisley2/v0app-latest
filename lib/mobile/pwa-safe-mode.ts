@@ -3,6 +3,9 @@
  *
  * Keeps the app in normal browser mode: no service worker takeover, no install/APK layer.
  * Set NEXUS_BROWSER_ONLY_LOCK = false only after PWA is revalidated end-to-end.
+ *
+ * When false: `public/sw.js` registers as push-only (no fetch interception).
+ * Capacitor/APK wrappers may register the same SW path for native WebView push.
  */
 export const NEXUS_BROWSER_ONLY_LOCK = true
 

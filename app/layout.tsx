@@ -13,6 +13,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeScript } from '@/components/theme-script'
 import { MobileConnectivityProvider } from '@/contexts/MobileConnectivityContext'
 import { PwaSafeModeBootstrap } from '@/components/mobile/pwa-safe-mode-bootstrap'
+import { HardwareSafeguardBootstrap } from '@/components/mobile/hardware-safeguard-bootstrap'
 import { MobileLowGpuBootstrap } from '@/components/mobile/mobile-low-gpu-bootstrap'
 import { NativeScrollBootstrap } from '@/components/mobile/native-scroll-bootstrap'
 import { ProductionErrorReporter } from '@/components/mobile/production-error-reporter'
@@ -39,6 +40,7 @@ import {
   CHROME_ANDROID_SAFE_BOOT_SCRIPT,
 } from '@/lib/mobile/chrome-android-safe-mode'
 import { ChromeAndroidSafeBootstrap } from '@/components/mobile/chrome-android-safe-bootstrap'
+import { HARDWARE_SAFEGUARD_BOOT_SCRIPT } from '@/lib/security/hardware-safeguard'
 import { NEXUS_THEME_STORAGE_KEY } from '@/lib/nexus-theme-storage'
 import './globals.css'
 
@@ -134,6 +136,7 @@ export default function RootLayout({
         {isPwaSafeMode() ? (
           <script dangerouslySetInnerHTML={{ __html: PWA_SAFE_MODE_TEARDOWN_SCRIPT }} />
         ) : null}
+        <script dangerouslySetInnerHTML={{ __html: HARDWARE_SAFEGUARD_BOOT_SCRIPT }} />
         {LOW_GPU_ANDROID_MODE ? (
           <script dangerouslySetInnerHTML={{ __html: MOBILE_LOW_GPU_BOOT_SCRIPT }} />
         ) : null}
@@ -193,6 +196,7 @@ export default function RootLayout({
           <MobileNavigationDiagnostics />
         </Suspense>
         <ScrollLockSafety />
+        <HardwareSafeguardBootstrap />
         <MobileLowGpuBootstrap />
         <ChromeAndroidSafeBootstrap />
         <NativeScrollBootstrap />

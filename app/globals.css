@@ -2,6 +2,7 @@
 @import 'tw-animate-css';
 @import '../lib/design/nexus-glass.css';
 @import '../lib/design/nexus-secure-shield.css';
+@import '../lib/design/nexus-low-ram-mode.css';
 
 @custom-variant dark (&:is(.dark *));
 

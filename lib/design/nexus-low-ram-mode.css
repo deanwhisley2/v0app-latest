@@ -1,0 +1,57 @@
+/**
+ * Global UI degradation when html.nexus-low-ram-mode is set (≤2GB RAM or ≤4 cores).
+ * Strips heavy GPU compositing to reduce flicker and thermal load on budget phones.
+ */
+
+html.nexus-low-ram-mode {
+  text-rendering: speed;
+}
+
+html.nexus-low-ram-mode,
+html.nexus-low-ram-mode body,
+html.nexus-low-ram-mode #nexus-app-root {
+  background-color: #0d1117 !important;
+  background-image: none !important;
+}
+
+html.nexus-low-ram-mode [class*="animate-"],
+html.nexus-low-ram-mode [class*="animate-in"],
+html.nexus-low-ram-mode [class*="slide-in-from"],
+html.nexus-low-ram-mode [class*="fade-in"],
+html.nexus-low-ram-mode [class*="zoom-in"] {
+  animation: none !important;
+  transform: none !important;
+  will-change: auto !important;
+  opacity: 1 !important;
+}
+
+html.nexus-low-ram-mode [class*="backdrop-blur"],
+html.nexus-low-ram-mode [class*="backdrop-filter"],
+html.nexus-low-ram-mode [class*="blur-"],
+html.nexus-low-ram-mode [style*="backdrop-filter"] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+}
+
+html.nexus-low-ram-mode [class*="bg-gradient"],
+html.nexus-low-ram-mode [class*="from-"],
+html.nexus-low-ram-mode [class*="via-"],
+html.nexus-low-ram-mode [class*="to-"] {
+  background-image: none !important;
+  background-color: #0d1117 !important;
+}
+
+html.nexus-low-ram-mode .nexus-glass-panel,
+html.nexus-low-ram-mode [class*="shadow-["],
+html.nexus-low-ram-mode .shadow-2xl,
+html.nexus-low-ram-mode .shadow-xl,
+html.nexus-low-ram-mode .shadow-lg {
+  box-shadow: none !important;
+  transform: none !important;
+  will-change: auto !important;
+}
+
+html.nexus-low-ram-mode * {
+  will-change: auto !important;
+}
