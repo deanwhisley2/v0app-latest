@@ -11,6 +11,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext"
 import { isGuestLoginEnabled } from "@/lib/free-entry"
 import { AuthAssistantPanel } from "@/components/auth/auth-assistant-panel"
 import { AuthCollapsibleSection } from "@/components/auth/auth-collapsible-section"
+import { NexusApkDownloadCard } from "@/components/auth/nexus-apk-download-card"
 import { AuthLayoutShell } from "@/components/auth/auth-layout-shell"
 import { markFreshLoginLanding } from "@/lib/dashboard-navigation-policy"
 import { sanitizeInternalRedirect } from "@/lib/nexus-bot/trade-signal-share"
@@ -23,7 +24,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { getAuthMessages } from "@/lib/i18n/auth-messages"
 
 const REMEMBER_KEY = "nexus_auth_remember_id"
-const APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL || "/app-debug.apk"
 
 const LOGIN_JOELIN_CHIPS = [
   { label: "First steps after login", prompt: "What should I do first after I sign in to the dashboard?" },
@@ -344,23 +344,7 @@ export default function LoginForm() {
           </div>
         ) : null}
 
-        {APK_URL ? (
-          <div className="mt-6">
-            <a
-              href={APK_URL}
-              download="Nexus_Pro.apk"
-              className="flex items-center justify-center gap-2.5 rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/10 to-emerald-500/5 px-5 py-3.5 text-sm font-semibold text-emerald-400 shadow-sm transition-all hover:from-emerald-500/15 hover:to-emerald-500/10 hover:text-emerald-300 active:scale-[0.98]"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Download Android App (APK)
-            </a>
-            <p className="mt-2 text-center text-[10px] text-muted-foreground/60">
-              Sideload on any Android device — no Play Store required
-            </p>
-          </div>
-        ) : null}
+        <NexusApkDownloadCard />
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           {t.login.noAccount}{" "}
