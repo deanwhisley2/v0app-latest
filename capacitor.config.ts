@@ -1,15 +1,11 @@
 import type { CapacitorConfig } from "@capacitor/cli"
 
-/**
- * Thin WebView shell — loads live dashboard inside BridgeActivity (no external browser).
- * `webDir` is a minimal offline fallback; `server.url` is the authoritative boot target.
- */
 const config: CapacitorConfig = {
   appId: "com.nexuspro.it.app",
   appName: "Nexus Pro",
   webDir: "out",
   server: {
-    url: "https://www.nexuspro.it.com/dashboard?source=capacitor_apk",
+    url: "https://nexuspro.it.com",
     androidScheme: "https",
     cleartext: true,
     allowNavigation: [
