@@ -59,11 +59,23 @@ export class TelegramNotifier {
   }
 
   /**
-   * Send a plain text message to Telegram
+   * Send a plain text message to Telegram (to configured chatId).
    */
   async sendMessage(text: string): Promise<boolean> {
-    if (!this.enabled || !this.config) {
-      console.log("[TelegramNotifier] Skipping message (not configured):")
+    return this.sendToChat(text, this.config?.chatId ?? "")
+  }
+
+  /**
+   * Send a plain text message to a specific chat ID (for webhook replies).
+   */
+  async sendToChat(text: string, chatId: number | string): Promise<boolean> {
+    if (!this.config?.botToken) {
+      console.log("[TelegramNotifier] Skipping message (bot token not configured):")
+      console.log(text)
+      return false
+    }
+    if (!chatId) {
+      console.log("[TelegramNotifier] Skipping message (no chatId):")
       console.log(text)
       return false
     }
@@ -74,7 +86,7 @@ export class TelegramNotifier {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: this.config.chatId,
+          chat_id: String(chatId),
           text,
           parse_mode: "Markdown",
           disable_web_page_preview: true,
