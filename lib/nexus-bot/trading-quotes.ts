@@ -16,7 +16,7 @@ export type QuoteCategory =
 
 export type QuoteEntry = {
   text: string
-  author?: string
+  author?: string | null
   category: QuoteCategory
 }
 
