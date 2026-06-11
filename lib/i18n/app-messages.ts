@@ -72,6 +72,7 @@ const en: Record<string, string> = {
   "receipt.header.depositUnderReview": "Deposit under review",
   "receipt.header.depositProcessing": "Deposit processing",
   "receipt.header.tradeSettled": "Trade profit settled",
+  "receipt.header.earningsCredited": "Earnings Credited",
   "receipt.header.tradeActivity": "Trading activity",
   "receipt.header.transferCompleted": "Transfer completed",
   "receipt.header.activityRecorded": "Activity recorded",

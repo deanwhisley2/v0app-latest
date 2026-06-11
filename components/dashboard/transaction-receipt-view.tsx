@@ -59,12 +59,15 @@ export function TransactionReceiptView({
               </dt>
               <dd
                 className={cn(
-                  "text-end text-sm font-semibold text-foreground",
+                  "text-end",
+                  field.profitGreen
+                    ? "text-[17px] font-bold text-[#22C55E]"
+                    : "text-sm font-semibold text-foreground",
                   field.mono && "font-mono text-[12px] leading-relaxed break-all",
                   field.multiline && "text-start",
                 )}
               >
-                {field.value}
+                {field.profitGreen ? `+${field.value}` : field.value}
               </dd>
             </div>
           ))}

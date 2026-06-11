@@ -29,6 +29,7 @@ export type ReceiptField = {
   value: string
   mono?: boolean
   multiline?: boolean
+  profitGreen?: boolean
 }
 
 export type TransactionReceipt = {
@@ -611,13 +612,20 @@ export function buildNotificationFallbackReceipt(
     categoryLabelKey = "receipt.category.funding"
     tone = /reject|fail/i.test(`${n.title} ${n.message}`) ? "danger" : /approv|credit|complet/i.test(`${n.title} ${n.message}`) ? "success" : "pending"
     headerTitleKey = tone === "success" ? "receipt.header.fundingReceived" : "receipt.header.fundingPending"
+  } else if (/session closed|earnings credited/i.test(title)) {
+    kind = "trade"
+    categoryLabelKey = "receipt.category.trading"
+    tone = "success"
+    headerTitleKey = /session closed/i.test(title) ? "receipt.header.tradeSettled" : "receipt.header.earningsCredited"
   }
 
+  const isEarnings = /earnings credited|earnings/i.test(title) && !/principal|return|capital/i.test(title)
   const fields: ReceiptField[] = [{ labelKey: "receipt.field.summary", value: summary }]
   if (n.customerAmountUsd != null && n.customerAmountUsd > 0) {
     fields.unshift({
       labelKey: "receipt.field.amount",
       value: fmtLedgerUsd(n.customerAmountUsd, display),
+      profitGreen: isEarnings,
     })
   }
 
@@ -626,9 +634,11 @@ export function buildNotificationFallbackReceipt(
       ? "receipt.status.rejected"
       : tone === "pending"
         ? "receipt.status.pending"
-        : tone === "success"
-          ? "receipt.status.approved"
-          : "receipt.status.processing"
+        : kind === "trade"
+          ? "receipt.status.completed"
+          : tone === "success"
+            ? "receipt.status.approved"
+            : "receipt.status.processing"
 
   return {
     id: n.id,

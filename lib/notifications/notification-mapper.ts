@@ -67,12 +67,35 @@ export function mapCustomerNotification(params: {
       ? (params.metadata as Record<string, unknown>)
       : null
 
+  const eventType = typeof meta?.event_type === "string" ? meta.event_type : ""
   const amountUsd = Number(meta?.amount_usd ?? meta?.settled_amount_usd ?? NaN)
   const amountInputLocal = Number(meta?.amount_input_local ?? NaN)
   const inputCurrency = typeof meta?.input_currency === "string" ? meta.input_currency : null
   const viewer = params.viewer
   const amountFmt =
     Number.isFinite(amountUsd) && amountUsd > 0 ? formatCustomerAmountUsd(amountUsd, viewer) : ""
+
+  // --- Trading: metadata-driven event_type detection (runs before internal-copy check) ---
+  if (eventType) {
+    // Notification 1: Capital Return — principal returned to Main
+    if (/principal_to_main|principal.*return/i.test(eventType)) {
+      return {
+        title: "Session Closed",
+        body: amountFmt
+          ? `Your allocated capital ${amountFmt} has been returned to your Main Account.`
+          : "Your allocated capital has been returned to your Main Account following the successful completion of the trading session.",
+      }
+    }
+    // Notification 2: Earnings Credit — earnings credited
+    if (/earnings_to_liquid|earnings_liquid|terminal_earnings/i.test(eventType)) {
+      return {
+        title: "Earnings Credited",
+        body: amountFmt
+          ? `Your trading earnings of ${amountFmt} have been credited to your Main Account.`
+          : "Your earnings from the completed trading session have been credited to your earnings account.",
+      }
+    }
+  }
 
   if (isInternalNotificationCopy(rawTitle) || isInternalNotificationCopy(rawBody)) {
     const mapped = mapInternalOpsNotification(combined, {
@@ -208,7 +231,7 @@ export function mapCustomerNotification(params: {
     }
   }
 
-  // --- Trading: copy trade, fixed trade, earnings release ---
+  // --- Trading: copy trade, fixed trade, earnings release (text-based fallback) ---
   if (
     t.includes("copy") ||
     t.includes("fixed") ||
@@ -262,48 +285,12 @@ export function mapCustomerNotification(params: {
           : "Your copy trade session has started.",
       }
     }
-
-    // --- Detect session completed (new + old format) ---
-    // New format: "🚀 Session Completed" / "✅ Session Completed" — body already has short summary
-    // Old format: "Trade session complete" / "Session complete" — needs mapping
-    const isNewFormat = /[✅🚀]\s*Session\s+Completed/i.test(rawTitle)
-    const isOldFormat = (/trade\s+session\s+complete|session\s+complete/i.test(rawTitle) &&
-      /release|credit|returned|capital/i.test(rawBody))
-
-    if (isNewFormat) {
-      // New format — body already has short summary, title is already formatted
-      // The friendly_detail metadata has the full detail view
-      return null // Return null to use stored values as-is
-    }
-
-    if (isOldFormat) {
-      // Old format — generate new format from available data
-      const hasEarnings = Number(meta?.amount_usd ?? 0) > 0
-      const signPrefix = hasEarnings ? "🚀" : "✅"
-      const amountLocal = amountFmt || ""
-      const amountLine = hasEarnings && amountLocal
-        ? `Capital returned: ${amountLocal}`
-        : "Capital returned: —"
-      const bodyLines = [
-        `${signPrefix} Session Completed`,
-        ``,
-        amountLine,
-        ``,
-        "Status: Closed",
-      ].filter(Boolean).join("\n")
-
-      return {
-        title: `${signPrefix} Session Completed`,
-        body: bodyLines,
-      }
-    }
-
     if (/container liquid|transferred into|earnings transferred|release|added to your balance|fixed[- ]?trade earnings/i.test(combined)) {
       return {
-        title: "Trade session earnings credited",
+        title: "Trade session closed",
         body: amountFmt
-          ? `Trade session earnings of ${amountFmt} have been credited to your balance.`
-          : "Trade session earnings have been credited to your balance.",
+          ? `Your trade session has closed. ${amountFmt} has been returned to your balance.`
+          : "Your trade session has closed. Funds have been returned to your balance.",
       }
     }
     if (amountFmt) {
@@ -395,6 +382,15 @@ function mapInternalOpsNotification(
   if (/withdraw/i.test(combined)) {
     return { title: "Withdrawal received", body: "We received your withdrawal request." }
   }
+  // Principal return (from internal-copy path) — clear, no "earnings" language
+  if (/principal.*(?:main|nexus main|return)/i.test(combined)) {
+    return {
+      title: "Session Closed",
+      body: amountFmt
+        ? `Your allocated capital ${amountFmt} has been returned to your Main Account.`
+        : "Your allocated capital has been returned to your Main Account.",
+    }
+  }
   if (/copy[- ]?trade|settlement|stake reserved/i.test(combined)) {
     return {
       title: /started|reserved|stake/i.test(combined) ? "Copy trade started" : "Copy trade completed",
@@ -412,12 +408,13 @@ function mapInternalOpsNotification(
       body: "Your trade session was updated. See the trading workspace for details.",
     }
   }
-  if (/container liquid|earnings transferred|internal_transfer|withdrawable_to_main/i.test(combined)) {
+  // Earnings credit (from internal-copy path) — only actual earnings, never principal
+  if (/container liquid|earnings transferred|earnings.*liquid|terminal_earnings|earnings.*pocket|internal_transfer|withdrawable_to_main/i.test(combined)) {
     return {
-      title: "Trade session earnings credited",
+      title: "Earnings Credited",
       body: amountFmt
-        ? `Trade session earnings of ${amountFmt} have been credited to your balance.`
-        : "Trade session earnings have been credited to your balance.",
+        ? `Your trading earnings of ${amountFmt} have been credited to your Main Account.`
+        : "Your earnings from the completed trading session have been credited to your earnings account.",
     }
   }
   if (/login|sign[- ]?in/i.test(combined)) {

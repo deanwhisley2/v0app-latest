@@ -58,11 +58,15 @@ const CATEGORY_LABEL: Record<NotificationInboxCategory, string> = {
 }
 
 /**
- * Detect if a title or subtitle indicates this was an earnings/credit event.
+ * Detect if this row represents an actual completed trade session earnings event.
+ * Only match unambiguous session-completion titles — NOT broader "credited" or
+ * "release" keywords that also match user-initiated transfers (withdrawable_to_main).
  */
-function isEarningsEvent(title: string, subtitle?: string): boolean {
-  if (/earnings?\s+credit|credit(?:ed)?.*earnings?|released?\s+earnings?|earnings?\s+release/i.test(title)) return true
-  if (/trading\s+update/i.test(title) && subtitle && /earnings?|credit|profit/i.test(subtitle)) return true
+function isEarningsEvent(title: string): boolean {
+  // New format: "🚀 Session Completed" / "✅ Session Completed"
+  if (/^[✅🚀]\s*Session\s+Completed/i.test(title)) return true
+  // Old exact format from direct session settlement
+  if (/^Trade session completed$/i.test(title)) return true
   return false
 }
 
@@ -79,7 +83,7 @@ export function TransactionHistoryRow({
   declineReason,
 }: TransactionHistoryRowProps) {
   const reason = declineReason?.trim()
-  const isEarnings = !declined && isEarningsEvent(title, subtitle)
+  const isEarnings = !declined && isEarningsEvent(title)
   const category = inferCategory(title, subtitle)
   const Icon = categoryIcon(category)
 

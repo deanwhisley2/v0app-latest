@@ -67,8 +67,8 @@ export function buildFundsCreditedCustomerCopy(
     t ??
     ((key: string) => {
       const en: Record<string, string> = {
-        "notifications.customer.fundsCreditedTitle": "Earnings credited",
-        "notifications.customer.fundsCreditedBody": "Trading earnings of {{amount}} have been added to your balance.",
+        "notifications.customer.fundsCreditedTitle": "Earnings Credited",
+        "notifications.customer.fundsCreditedBody": "Your trading earnings of {{amount}} have been credited to your Main Account.",
       }
       return en[key] ?? key
     })
