@@ -262,6 +262,42 @@ export function mapCustomerNotification(params: {
           : "Your copy trade session has started.",
       }
     }
+
+    // --- Detect session completed (new + old format) ---
+    // New format: "🚀 Session Completed" / "✅ Session Completed" — body already has short summary
+    // Old format: "Trade session complete" / "Session complete" — needs mapping
+    const isNewFormat = /[✅🚀]\s*Session\s+Completed/i.test(rawTitle)
+    const isOldFormat = (/trade\s+session\s+complete|session\s+complete/i.test(rawTitle) &&
+      /release|credit|returned|capital/i.test(rawBody))
+
+    if (isNewFormat) {
+      // New format — body already has short summary, title is already formatted
+      // The friendly_detail metadata has the full detail view
+      return null // Return null to use stored values as-is
+    }
+
+    if (isOldFormat) {
+      // Old format — generate new format from available data
+      const hasEarnings = Number(meta?.amount_usd ?? 0) > 0
+      const signPrefix = hasEarnings ? "🚀" : "✅"
+      const amountLocal = amountFmt || ""
+      const amountLine = hasEarnings && amountLocal
+        ? `Capital returned: ${amountLocal}`
+        : "Capital returned: —"
+      const bodyLines = [
+        `${signPrefix} Session Completed`,
+        ``,
+        amountLine,
+        ``,
+        "Status: Closed",
+      ].filter(Boolean).join("\n")
+
+      return {
+        title: `${signPrefix} Session Completed`,
+        body: bodyLines,
+      }
+    }
+
     if (/container liquid|transferred into|earnings transferred|release|added to your balance|fixed[- ]?trade earnings/i.test(combined)) {
       return {
         title: "Trade session earnings credited",

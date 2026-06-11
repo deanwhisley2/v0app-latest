@@ -489,25 +489,55 @@ export async function settleTradeSessionBotParticipant(
   if (uErr) return null
 
   if (!repairFromTerminal) {
+    // Fetch the trade session code for the notification
+    let sessionCode = ""
+    try {
+      const { data: ts } = await admin
+        .from("trade_sessions")
+        .select("code")
+        .eq("id", row.tradeSessionId)
+        .maybeSingle()
+      if (ts?.code) sessionCode = String(ts.code)
+    } catch { /* silent — code is cosmetic */ }
+
+    const signPrefix = earningsUsd > 0 ? "🚀" : "✅"
+    const amountFmtLocal = earningsUsd > 0
+      ? `${earningsUsd.toFixed(2)} USD`
+      : ""
+
+    // Short subtitle shown in history row
+    const shortSummary = earningsUsd > 0
+      ? `Completed · ${amountFmtLocal}`
+      : "Completed · Capital returned"
+
+    // Full detail shown when notification is opened (compact format)
+    const codeLine = sessionCode ? `>${sessionCode}` : ""
+    const amountLine = earningsUsd > 0
+      ? `Capital returned: ${amountFmtLocal}`
+      : "Capital returned: —"
+    const detailLines = [
+      `${signPrefix} Session Completed`,
+      ``,
+      codeLine,
+      amountLine,
+      ``,
+      "Status: Closed",
+    ].filter(Boolean).join("\n")
+
     await appendUserAccountNotification(admin, {
     userId: row.userId,
     sourceKind: "trade_session_complete",
     sourceId: row.id,
     notificationType: "trade",
-    title: earningsUsd > 0 ? "Trade session complete" : "Session complete",
-    body:
-      earningsUsd > 0
-        ? `Released earnings credited to your Pocket balance.`
-        : "Your trade session has completed. Capital returned to Nexus Main.",
+    title: `${signPrefix} Session Completed`,
+    body: shortSummary,
     nav: { kind: "trade" },
     metadata: {
       amount_usd: earningsUsd,
       session_id: row.id,
       trade_session_id: row.tradeSessionId,
-      friendly_detail:
-        earningsUsd > 0
-          ? `Session complete — released earnings are in Pocket. Transfer to Nexus Main when ready.`
-          : "Session complete — your reserved capital is back on Nexus Main.",
+      ...(sessionCode ? { session_code: sessionCode } : {}),
+      friendly_detail: detailLines,
     },
   })
   }
