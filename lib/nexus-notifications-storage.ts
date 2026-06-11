@@ -1,6 +1,6 @@
 import type { NexusNotificationItem } from "@/lib/nexus-notification-models"
 
-const STORAGE_PREFIX = "nexus_notifications_v4"
+const STORAGE_PREFIX = "nexus_notifications_v5"
 const LEGACY_GLOBAL_KEY = "nexus_notifications_v3"
 
 export function notificationsStorageKey(userId: string | null, isGuest: boolean): string {
