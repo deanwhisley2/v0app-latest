@@ -8,7 +8,7 @@ export const COMMUNITY_LINKS = {
   whatsappGroup: "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf",
   whatsappChannel: "https://whatsapp.com/channel/0029VbCX8n61SWt0e9a0L80p",
   screenshotGroup: "https://chat.whatsapp.com/GtBKzg2XxJ7IKfLGesAzzb",
-} as const
+} as const;
 
 export function buildCommunityBlock(): string {
   return [
@@ -17,5 +17,5 @@ export function buildCommunityBlock(): string {
     `📢 Telegram Channel: ${COMMUNITY_LINKS.telegramChannel}`,
     `💬 WhatsApp Group: ${COMMUNITY_LINKS.whatsappGroup}`,
     `📣 WhatsApp Channel: ${COMMUNITY_LINKS.whatsappChannel}`,
-  ].join("\n")
+  ].join("\n");
 }

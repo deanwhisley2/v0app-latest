@@ -1,168 +1,192 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useState } from "react"
-import { Trophy } from "lucide-react"
-import { supabase } from "@/lib/supabaseClient"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { NEXUS_AUTO_TRADE_PLAN_KEYS } from "@/lib/nexus-bot/plans"
+import { useCallback, useEffect, useState } from "react";
+import { Trophy } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NEXUS_AUTO_TRADE_PLAN_KEYS } from "@/lib/nexus-bot/plans";
 import {
   defaultTradeSessionWindow,
   formatSessionClock,
   parseDatetimeLocalInput,
   toDatetimeLocalInputValue,
-} from "@/lib/nexus-bot/trade-code"
+} from "@/lib/nexus-bot/trade-code";
 import {
   getYieldMatrixDayRates,
   resolveMatrixYieldPercent,
   sumYieldMatrixTotalPercent,
   yieldMatrixDayIndex,
-} from "@/lib/nexus-bot/trade-session-yield-matrix"
-import { TradeSignalShareActions } from "@/components/dashboard/trade-signal-share-actions"
+} from "@/lib/nexus-bot/trade-session-yield-matrix";
+import { TradeSignalShareActions } from "@/components/dashboard/trade-signal-share-actions";
 
 type TradeSessionRow = {
-  id: string
-  code: string
-  session_name: string
-  session_slot: string
-  start_at: string
-  end_at: string
-  status: string
-  display_label: string | null
-  created_at: string
-  admin_terminated_at?: string | null
-  adminTerminated?: boolean
-  participants?: { active: number; completed: number }
-  max_yield_percent?: number | string | null
-  yield_distribution_mode?: string | null
-  profit_percentage_locked_at?: string | null
-}
+  id: string;
+  code: string;
+  session_name: string;
+  session_slot: string;
+  start_at: string;
+  end_at: string;
+  status: string;
+  display_label: string | null;
+  created_at: string;
+  admin_terminated_at?: string | null;
+  adminTerminated?: boolean;
+  participants?: { active: number; completed: number };
+  max_yield_percent?: number | string | null;
+  yield_distribution_mode?: string | null;
+  profit_percentage_locked_at?: string | null;
+};
 
 type Stats = {
-  generatedCodes: number
-  registeredSessions: number
-  activeSessions: number
-  expiredSessions: number
-  participants: number
-  totalCapitalAllocatedUsd: number
-  totalReleasedProfitUsd: number
+  generatedCodes: number;
+  registeredSessions: number;
+  activeSessions: number;
+  expiredSessions: number;
+  participants: number;
+  totalCapitalAllocatedUsd: number;
+  totalReleasedProfitUsd: number;
   settlementMonitoring?: {
-    activeBotParticipants: number
-    settledBotParticipants: number
-    expiredBotParticipants: number
-    pendingCelebrations: number
-    failedSettlementsStuckOpen: number
-    reconciliationTopUpEvents: number
-    pastDueOpenParticipantCount?: number
-    pastDueOpenStakeUsd?: number
-    expiredUnsettledParticipantCount?: number
-    expiredUnsettledStakeUsd?: number
-    cancelledUnsettledParticipantCount?: number
-    cancelledUnsettledStakeUsd?: number
-    completedWithoutLedgerCount?: number
-    completedWithoutLedgerStakeUsd?: number
-    totalStrandedStakeUsd?: number
-    hasStrandedCapital?: boolean
-    settledWithoutProfitPercentageCount?: number
-    checkedAt?: string
-  }
-}
+    activeBotParticipants: number;
+    settledBotParticipants: number;
+    expiredBotParticipants: number;
+    pendingCelebrations: number;
+    failedSettlementsStuckOpen: number;
+    reconciliationTopUpEvents: number;
+    pastDueOpenParticipantCount?: number;
+    pastDueOpenStakeUsd?: number;
+    expiredUnsettledParticipantCount?: number;
+    expiredUnsettledStakeUsd?: number;
+    cancelledUnsettledParticipantCount?: number;
+    cancelledUnsettledStakeUsd?: number;
+    completedWithoutLedgerCount?: number;
+    completedWithoutLedgerStakeUsd?: number;
+    totalStrandedStakeUsd?: number;
+    hasStrandedCapital?: boolean;
+    settledWithoutProfitPercentageCount?: number;
+    checkedAt?: string;
+  };
+};
 
 type LeaderboardRow = {
-  rank: number
-  userId: string
-  username: string
-  points: number
-  completedSessions: number
-  streak: number
-}
+  rank: number;
+  userId: string;
+  username: string;
+  points: number;
+  completedSessions: number;
+  streak: number;
+};
 
 export function AdminNexusBotPanel() {
-  const [view, setView] = useState<"sessions" | "grants" | "legacy">("sessions")
-  const [sessions, setSessions] = useState<TradeSessionRow[]>([])
-  const [unregisteredCodes, setUnregisteredCodes] = useState<Array<{ code: string; created_at: string }>>([])
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [sessionFilter, setSessionFilter] = useState<"all" | "active" | "expired">("all")
+  const [view, setView] = useState<"sessions" | "grants" | "legacy">(
+    "sessions",
+  );
+  const [sessions, setSessions] = useState<TradeSessionRow[]>([]);
+  const [unregisteredCodes, setUnregisteredCodes] = useState<
+    Array<{ code: string; created_at: string }>
+  >([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [sessionFilter, setSessionFilter] = useState<
+    "all" | "active" | "expired"
+  >("all");
 
-  const [registerCode, setRegisterCode] = useState("")
-  const [sessionName, setSessionName] = useState("")
-  const [sessionSlot, setSessionSlot] = useState<"morning" | "evening">("morning")
-  const [startAt, setStartAt] = useState("")
-  const [endAt, setEndAt] = useState("")
-  const [registerStatus, setRegisterStatus] = useState<"draft" | "active">("active")
+  const [registerCode, setRegisterCode] = useState("");
+  const [sessionName, setSessionName] = useState("");
+  const [sessionSlot, setSessionSlot] = useState<"morning" | "evening">(
+    "morning",
+  );
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [registerStatus, setRegisterStatus] = useState<"draft" | "active">(
+    "active",
+  );
   const [yieldPreview, setYieldPreview] = useState<{
-    durationHours: number
-    maxYieldPercent?: number
-    matrixDayIndex?: number
-    examples: Array<{ label: string; earnedPercent: number }>
-  } | null>(null)
+    durationHours: number;
+    maxYieldPercent?: number;
+    matrixDayIndex?: number;
+    examples: Array<{ label: string; earnedPercent: number }>;
+  } | null>(null);
 
-  const [auditUserId, setAuditUserId] = useState("")
-  const [auditRows, setAuditRows] = useState<Array<Record<string, unknown>>>([])
-  const [slot, setSlot] = useState<"morning" | "evening">("morning")
-  const [code, setCode] = useState("")
-  const [strategyTitle, setStrategyTitle] = useState("")
-  const [confidence, setConfidence] = useState("High")
-  const [durationHours, setDurationHours] = useState("12")
-  const [grantUserId, setGrantUserId] = useState("")
-  const [grants, setGrants] = useState<Record<string, boolean>>({})
-  const [msg, setMsg] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [sessionsLoading, setSessionsLoading] = useState(false)
-  const [registerError, setRegisterError] = useState<string | null>(null)
-  const [lastRegistered, setLastRegistered] = useState<TradeSessionRow | null>(null)
-  const [registeredOk, setRegisteredOk] = useState(false)
-  const [reviewUserId, setReviewUserId] = useState("")
+  const [auditUserId, setAuditUserId] = useState("");
+  const [auditRows, setAuditRows] = useState<Array<Record<string, unknown>>>(
+    [],
+  );
+  const [slot, setSlot] = useState<"morning" | "evening">("morning");
+  const [code, setCode] = useState("");
+  const [strategyTitle, setStrategyTitle] = useState("");
+  const [confidence, setConfidence] = useState("High");
+  const [durationHours, setDurationHours] = useState("12");
+  const [grantUserId, setGrantUserId] = useState("");
+  const [grants, setGrants] = useState<Record<string, boolean>>({});
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [lastRegistered, setLastRegistered] = useState<TradeSessionRow | null>(
+    null,
+  );
+  const [registeredOk, setRegisteredOk] = useState(false);
+  const [reviewUserId, setReviewUserId] = useState("");
   const [memberPoints, setMemberPoints] = useState<{
-    points: number
-    completedSessions: number
-    events: Array<{ delta: number; reason: string; source: string; created_at: string }>
-  } | null>(null)
-  const [weeklyBoard, setWeeklyBoard] = useState<LeaderboardRow[]>([])
+    points: number;
+    completedSessions: number;
+    events: Array<{
+      delta: number;
+      reason: string;
+      source: string;
+      created_at: string;
+    }>;
+  } | null>(null);
+  const [weeklyBoard, setWeeklyBoard] = useState<LeaderboardRow[]>([]);
 
   const tokenHeaders = async () => {
     const {
       data: { session },
-    } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) throw new Error("Not signed in")
-    return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
-  }
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error("Not signed in");
+    return {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+  };
 
   const loadEarningsAudit = async () => {
-    if (!auditUserId.trim()) return
-    setBusy(true)
-    setMsg(null)
+    if (!auditUserId.trim()) return;
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch(
         `/api/admin/trade-sessions/earnings-audit?userId=${encodeURIComponent(auditUserId.trim())}`,
         { headers: h },
-      )
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Audit load failed")
-      setAuditRows((j.rows as Array<Record<string, unknown>>) ?? [])
-      setMsg(`Loaded ${((j.rows as unknown[]) ?? []).length} earnings audit row(s)`)
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Audit load failed");
+      setAuditRows((j.rows as Array<Record<string, unknown>>) ?? []);
+      setMsg(
+        `Loaded ${((j.rows as unknown[]) ?? []).length} earnings audit row(s)`,
+      );
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Audit load failed")
+      setMsg(e instanceof Error ? e.message : "Audit load failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const runYieldSimulation = async () => {
-    const start = parseDatetimeLocalInput(startAt)
-    const end = parseDatetimeLocalInput(endAt)
+    const start = parseDatetimeLocalInput(startAt);
+    const end = parseDatetimeLocalInput(endAt);
     if (!start || !end) {
-      setRegisterError("Set valid times before simulating.")
-      return
+      setRegisterError("Set valid times before simulating.");
+      return;
     }
-    const pct = resolveMatrixYieldPercent(start, sessionSlot)
-    setBusy(true)
-    setRegisterError(null)
+    const pct = resolveMatrixYieldPercent(start, sessionSlot);
+    setBusy(true);
+    setRegisterError(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/trade-sessions/simulate", {
         method: "POST",
         headers: h,
@@ -171,9 +195,9 @@ export function AdminNexusBotPanel() {
           endAt: end.toISOString(),
           maxYieldPercent: pct,
         }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Simulation failed")
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Simulation failed");
       setYieldPreview({
         durationHours: Number(j.session_duration_hours ?? 0),
         maxYieldPercent: pct,
@@ -184,130 +208,137 @@ export function AdminNexusBotPanel() {
             : `Join +${Number(r.join_offset_hours ?? 0).toFixed(1)}h`,
           earnedPercent: Number(r.earned_percent ?? 0),
         })),
-      })
+      });
     } catch (e) {
-      setRegisterError(e instanceof Error ? e.message : "Simulation failed")
+      setRegisterError(e instanceof Error ? e.message : "Simulation failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const loadMemberPoints = async () => {
-    if (!reviewUserId.trim()) return
-    setBusy(true)
-    setMsg(null)
+    if (!reviewUserId.trim()) return;
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch(
         `/api/admin/trade-sessions?userId=${encodeURIComponent(reviewUserId.trim())}`,
         { headers: h },
-      )
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Load failed")
-      setMemberPoints(j.memberPoints ?? null)
-      setMsg("Member performance loaded")
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Load failed");
+      setMemberPoints(j.memberPoints ?? null);
+      setMsg("Member performance loaded");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Load failed")
+      setMsg(e instanceof Error ? e.message : "Load failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const applyDefaultTimes = useCallback((slot: "morning" | "evening") => {
-    const { start, end } = defaultTradeSessionWindow(slot)
-    setStartAt(toDatetimeLocalInputValue(start))
-    setEndAt(toDatetimeLocalInputValue(end))
-  }, [])
+    const { start, end } = defaultTradeSessionWindow(slot);
+    setStartAt(toDatetimeLocalInputValue(start));
+    setEndAt(toDatetimeLocalInputValue(end));
+  }, []);
 
   const pickGeneratedCode = (codeValue: string) => {
-    setRegisterCode(codeValue)
-    setRegisterError(null)
-    setRegisteredOk(false)
+    setRegisterCode(codeValue);
+    setRegisterError(null);
+    setRegisteredOk(false);
     if (!sessionName.trim()) {
-      setSessionName(sessionSlot === "morning" ? "Session 1 Morning" : "Session 2 Evening")
+      setSessionName(
+        sessionSlot === "morning" ? "Session 1 Morning" : "Session 2 Evening",
+      );
     }
     if (!startAt || !endAt) {
-      applyDefaultTimes(sessionSlot)
+      applyDefaultTimes(sessionSlot);
     }
-  }
+  };
 
   const loadSessions = useCallback(async () => {
-    setSessionsLoading(true)
+    setSessionsLoading(true);
     try {
-      const h = await tokenHeaders()
-      const res = await fetch(`/api/admin/trade-sessions?view=${sessionFilter}`, { headers: h })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Load failed")
-      setSessions(j.sessions ?? [])
-      setUnregisteredCodes(j.unregisteredCodes ?? [])
-      setStats(j.stats ?? null)
-      setWeeklyBoard(j.weeklyBoard ?? [])
+      const h = await tokenHeaders();
+      const res = await fetch(
+        `/api/admin/trade-sessions?view=${sessionFilter}`,
+        { headers: h },
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Load failed");
+      setSessions(j.sessions ?? []);
+      setUnregisteredCodes(j.unregisteredCodes ?? []);
+      setStats(j.stats ?? null);
+      setWeeklyBoard(j.weeklyBoard ?? []);
     } finally {
-      setSessionsLoading(false)
+      setSessionsLoading(false);
     }
-  }, [sessionFilter])
+  }, [sessionFilter]);
 
   useEffect(() => {
-    if (view !== "sessions") return
+    if (view !== "sessions") return;
     if (!startAt && !endAt) {
-      applyDefaultTimes(sessionSlot)
+      applyDefaultTimes(sessionSlot);
     }
-  }, [view, sessionSlot, startAt, endAt, applyDefaultTimes])
+  }, [view, sessionSlot, startAt, endAt, applyDefaultTimes]);
 
   useEffect(() => {
-    if (view !== "sessions") return
-    void loadSessions().catch((e) => setMsg(e instanceof Error ? e.message : "Load failed"))
-  }, [view, loadSessions])
+    if (view !== "sessions") return;
+    void loadSessions().catch((e) =>
+      setMsg(e instanceof Error ? e.message : "Load failed"),
+    );
+  }, [view, loadSessions]);
 
   const generateCodes = async () => {
-    setBusy(true)
-    setMsg(null)
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/trade-sessions", {
         method: "POST",
         headers: h,
         body: JSON.stringify({ action: "generate", count: 1 }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Generate failed")
-      setMsg(`Generated: ${(j.codes as string[]).join(", ")}`)
-      await loadSessions()
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Generate failed");
+      setMsg(`Generated: ${(j.codes as string[]).join(", ")}`);
+      await loadSessions();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Generate failed")
+      setMsg(e instanceof Error ? e.message : "Generate failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const registerSession = async () => {
-    setRegisterError(null)
-    setRegisteredOk(false)
-    setLastRegistered(null)
+    setRegisterError(null);
+    setRegisteredOk(false);
+    setLastRegistered(null);
 
-    const start = parseDatetimeLocalInput(startAt)
-    const end = parseDatetimeLocalInput(endAt)
+    const start = parseDatetimeLocalInput(startAt);
+    const end = parseDatetimeLocalInput(endAt);
     if (!registerCode.trim()) {
-      setRegisterError("Paste or select a generated code.")
-      return
+      setRegisterError("Paste or select a generated code.");
+      return;
     }
     if (!sessionName.trim()) {
-      setRegisterError("Enter a session name.")
-      return
+      setRegisterError("Enter a session name.");
+      return;
     }
     if (!start || !end) {
-      setRegisterError("Set valid start and end times.")
-      return
+      setRegisterError("Set valid start and end times.");
+      return;
     }
     if (end.getTime() <= start.getTime()) {
-      setRegisterError("End time must be after start time.")
-      return
+      setRegisterError("End time must be after start time.");
+      return;
     }
 
-    setBusy(true)
-    setMsg(null)
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/trade-sessions", {
         method: "POST",
         headers: h,
@@ -320,28 +351,32 @@ export function AdminNexusBotPanel() {
           endAt: end.toISOString(),
           status: registerStatus,
         }),
-      })
+      });
       const j = (await res.json().catch(() => ({}))) as {
-        error?: string
-        preview?: { durationHours: number; examples: Array<{ label: string; earnedPercent: number }> }
+        error?: string;
+        preview?: {
+          durationHours: number;
+          examples: Array<{ label: string; earnedPercent: number }>;
+        };
         session?: {
-          sessionId: string
-          code: string
-          sessionName: string
-          sessionSlot: string
-          startAt: string
-          endAt: string
-          status: string
-          displayLabel: string
-        }
-      }
-      if (!res.ok) throw new Error(j.error ?? "Register failed")
+          sessionId: string;
+          code: string;
+          sessionName: string;
+          sessionSlot: string;
+          startAt: string;
+          endAt: string;
+          status: string;
+          displayLabel: string;
+        };
+      };
+      if (!res.ok) throw new Error(j.error ?? "Register failed");
 
-      const saved = j.session
-      if (!saved?.sessionId) throw new Error("Registration did not persist — retry.")
+      const saved = j.session;
+      if (!saved?.sessionId)
+        throw new Error("Registration did not persist — retry.");
 
-      if (j.preview) setYieldPreview(j.preview)
-      setRegisteredOk(true)
+      if (j.preview) setYieldPreview(j.preview);
+      setRegisteredOk(true);
       setLastRegistered({
         id: saved.sessionId,
         code: saved.code,
@@ -352,116 +387,121 @@ export function AdminNexusBotPanel() {
         status: saved.status,
         display_label: saved.displayLabel,
         created_at: new Date().toISOString(),
-      })
-      setMsg(`Registered ${saved.code} · ${saved.status} · saved to database`)
-      setRegisterCode("")
-      setRegisterError(null)
-      await loadSessions()
+      });
+      setMsg(`Registered ${saved.code} · ${saved.status} · saved to database`);
+      setRegisterCode("");
+      setRegisterError(null);
+      await loadSessions();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Register failed"
-      setRegisterError(message)
-      setMsg(message)
+      const message = e instanceof Error ? e.message : "Register failed";
+      setRegisterError(message);
+      setMsg(message);
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const canRegister =
     Boolean(registerCode.trim()) &&
     Boolean(sessionName.trim()) &&
     Boolean(startAt) &&
     Boolean(endAt) &&
-    !busy
+    !busy;
 
   const matrixSlotPreview = (() => {
-    const start = parseDatetimeLocalInput(startAt)
-    if (!start) return null
-    const dayIndex = yieldMatrixDayIndex(start)
-    const dayRates = getYieldMatrixDayRates(dayIndex)
-    const slotPct = resolveMatrixYieldPercent(start, sessionSlot)
-    return { dayIndex, dayRates, slotPct }
-  })()
+    const start = parseDatetimeLocalInput(startAt);
+    if (!start) return null;
+    const dayIndex = yieldMatrixDayIndex(start);
+    const dayRates = getYieldMatrixDayRates(dayIndex);
+    const slotPct = resolveMatrixYieldPercent(start, sessionSlot);
+    return { dayIndex, dayRates, slotPct };
+  })();
 
   const clearOldSessions = async () => {
-    const endedCount = sessions.filter((s) => s.status === "expired" || s.status === "draft").length
+    const endedCount = sessions.filter(
+      (s) => s.status === "expired" || s.status === "draft",
+    ).length;
     if (endedCount === 0) {
-      setMsg("No ended or draft sessions to clear.")
-      return
+      setMsg("No ended or draft sessions to clear.");
+      return;
     }
     const ok = window.confirm(
       `Remove up to ${endedCount} ended/draft session record(s) from history?\n\n` +
         "Active sessions are never deleted. Records with open participants are skipped. This cannot be undone.",
-    )
-    if (!ok) return
-    setBusy(true)
-    setMsg(null)
+    );
+    if (!ok) return;
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/trade-sessions", {
         method: "POST",
         headers: h,
         body: JSON.stringify({ action: "clear_old" }),
-      })
+      });
       const j = (await res.json().catch(() => ({}))) as {
-        error?: string
-        message?: string
-        deleted?: number
-        skipped?: number
-      }
-      if (!res.ok) throw new Error(j.error ?? "Clear failed")
-      setMsg(j.message ?? `Removed ${j.deleted ?? 0} session record(s).`)
-      await loadSessions()
+        error?: string;
+        message?: string;
+        deleted?: number;
+        skipped?: number;
+      };
+      if (!res.ok) throw new Error(j.error ?? "Clear failed");
+      setMsg(j.message ?? `Removed ${j.deleted ?? 0} session record(s).`);
+      await loadSessions();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Clear failed")
+      setMsg(e instanceof Error ? e.message : "Clear failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const terminateSession = async (session: TradeSessionRow) => {
-    const activeCount = session.participants?.active ?? 0
+    const activeCount = session.participants?.active ?? 0;
     const ok = window.confirm(
       `End session ${session.code} now?\n\n` +
         `${activeCount} active participant(s) will be settled at full session target. ` +
         `Users will see a normal completed trade — no early exit.`,
-    )
-    if (!ok) return
-    setBusy(true)
-    setMsg(null)
+    );
+    if (!ok) return;
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/trade-sessions", {
         method: "POST",
         headers: h,
-        body: JSON.stringify({ action: "terminate", tradeSessionId: session.id }),
-      })
+        body: JSON.stringify({
+          action: "terminate",
+          tradeSessionId: session.id,
+        }),
+      });
       const j = (await res.json().catch(() => ({}))) as {
-        error?: string
-        message?: string
-        participantsSettled?: number
-        totalProfitUsd?: number
-      }
-      if (!res.ok) throw new Error(j.error ?? "Terminate failed")
+        error?: string;
+        message?: string;
+        participantsSettled?: number;
+        totalProfitUsd?: number;
+      };
+      if (!res.ok) throw new Error(j.error ?? "Terminate failed");
       setMsg(
         j.message ??
           `Session ended — ${j.participantsSettled ?? 0} settled, $${Number(j.totalProfitUsd ?? 0).toFixed(2)} profit released.`,
-      )
-      await loadSessions()
+      );
+      await loadSessions();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Terminate failed")
+      setMsg(e instanceof Error ? e.message : "Terminate failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const publishSignal = async () => {
-    setBusy(true)
-    setMsg(null)
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
-      const opens = new Date()
-      const hours = Math.max(1, Number(durationHours) || 12)
-      const closes = new Date(opens.getTime() + hours * 3_600_000)
+      const h = await tokenHeaders();
+      const opens = new Date();
+      const hours = Math.max(1, Number(durationHours) || 12);
+      const closes = new Date(opens.getTime() + hours * 3_600_000);
       const res = await fetch("/api/admin/nexus-signal-codes", {
         method: "POST",
         headers: h,
@@ -474,77 +514,78 @@ export function AdminNexusBotPanel() {
           windowOpensAt: opens.toISOString(),
           windowClosesAt: closes.toISOString(),
         }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Publish failed")
-      setMsg(`Published legacy ${slot} code ${j.code?.code ?? code}`)
-      setCode("")
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Publish failed");
+      setMsg(`Published legacy ${slot} code ${j.code?.code ?? code}`);
+      setCode("");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Publish failed")
+      setMsg(e instanceof Error ? e.message : "Publish failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const loadGrants = async () => {
-    setBusy(true)
-    setMsg(null)
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch(
         `/api/admin/nexus-bot/auto-trade-grants?userId=${encodeURIComponent(grantUserId.trim())}`,
         { headers: h },
-      )
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Load failed")
-      setGrants(j.grants ?? {})
-      setMsg("Grants loaded")
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Load failed");
+      setGrants(j.grants ?? {});
+      setMsg("Grants loaded");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Load failed")
+      setMsg(e instanceof Error ? e.message : "Load failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const saveGrants = async () => {
-    setBusy(true)
-    setMsg(null)
+    setBusy(true);
+    setMsg(null);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/nexus-bot/auto-trade-grants", {
         method: "PATCH",
         headers: h,
         body: JSON.stringify({ userId: grantUserId.trim(), grants }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Save failed")
-      setMsg("Auto Trade grants saved")
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Save failed");
+      setMsg("Auto Trade grants saved");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Save failed")
+      setMsg(e instanceof Error ? e.message : "Save failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const releaseAllLegacy = async () => {
-    if (!confirm("Release ALL active copy/fixed sessions for all users?")) return
-    setBusy(true)
+    if (!confirm("Release ALL active copy/fixed sessions for all users?"))
+      return;
+    setBusy(true);
     try {
-      const h = await tokenHeaders()
+      const h = await tokenHeaders();
       const res = await fetch("/api/admin/container-legacy/release", {
         method: "POST",
         headers: h,
         body: JSON.stringify({ allUsers: true }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j.error ?? "Release failed")
-      setMsg(`Legacy release: ${j.usersProcessed ?? 0} users processed`)
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Release failed");
+      setMsg(`Legacy release: ${j.usersProcessed ?? 0} users processed`);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Release failed")
+      setMsg(e instanceof Error ? e.message : "Release failed");
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-4">
@@ -561,7 +602,9 @@ export function AdminNexusBotPanel() {
             type="button"
             onClick={() => setView(t.id)}
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              view === t.id ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+              view === t.id
+                ? "bg-primary/15 text-primary"
+                : "bg-muted text-muted-foreground"
             }`}
           >
             {t.label}
@@ -578,19 +621,27 @@ export function AdminNexusBotPanel() {
               <Card className="grid gap-2 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <p className="text-muted-foreground">Generated codes</p>
-                  <p className="font-mono font-semibold">{stats.generatedCodes}</p>
+                  <p className="font-mono font-semibold">
+                    {stats.generatedCodes}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Active sessions</p>
-                  <p className="font-mono font-semibold">{stats.activeSessions}</p>
+                  <p className="font-mono font-semibold">
+                    {stats.activeSessions}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Participants</p>
-                  <p className="font-mono font-semibold">{stats.participants}</p>
+                  <p className="font-mono font-semibold">
+                    {stats.participants}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Released profit (USD)</p>
-                  <p className="font-mono font-semibold">{stats.totalReleasedProfitUsd.toFixed(2)}</p>
+                  <p className="font-mono font-semibold">
+                    {stats.totalReleasedProfitUsd.toFixed(2)}
+                  </p>
                 </div>
               </Card>
               {stats.settlementMonitoring ? (
@@ -599,34 +650,45 @@ export function AdminNexusBotPanel() {
                     Settlement monitoring
                   </p>
                   <div>
-                    <p className="text-muted-foreground">Active bot participants</p>
+                    <p className="text-muted-foreground">
+                      Active bot participants
+                    </p>
                     <p className="font-mono font-semibold">
                       {stats.settlementMonitoring.activeBotParticipants}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Settled participants</p>
+                    <p className="text-muted-foreground">
+                      Settled participants
+                    </p>
                     <p className="font-mono font-semibold">
                       {stats.settlementMonitoring.settledBotParticipants}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Expired participants</p>
+                    <p className="text-muted-foreground">
+                      Expired participants
+                    </p>
                     <p className="font-mono font-semibold">
                       {stats.settlementMonitoring.expiredBotParticipants}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Pending celebrations</p>
+                    <p className="text-muted-foreground">
+                      Pending celebrations
+                    </p>
                     <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">
                       {stats.settlementMonitoring.pendingCelebrations}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Stuck after session end</p>
+                    <p className="text-muted-foreground">
+                      Stuck after session end
+                    </p>
                     <p
                       className={`font-mono font-semibold ${
-                        stats.settlementMonitoring.failedSettlementsStuckOpen > 0
+                        stats.settlementMonitoring.failedSettlementsStuckOpen >
+                        0
                           ? "text-destructive"
                           : ""
                       }`}
@@ -635,45 +697,56 @@ export function AdminNexusBotPanel() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Reconciliation top-ups</p>
+                    <p className="text-muted-foreground">
+                      Reconciliation top-ups
+                    </p>
                     <p className="font-mono font-semibold">
                       {stats.settlementMonitoring.reconciliationTopUpEvents}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Stranded capital (USD)</p>
+                    <p className="text-muted-foreground">
+                      Stranded capital (USD)
+                    </p>
                     <p
                       className={`font-mono font-semibold ${
-                        (stats.settlementMonitoring.totalStrandedStakeUsd ?? 0) > 0
+                        (stats.settlementMonitoring.totalStrandedStakeUsd ??
+                          0) > 0
                           ? "text-destructive"
                           : ""
                       }`}
                     >
-                      {(stats.settlementMonitoring.totalStrandedStakeUsd ?? 0).toFixed(2)}
+                      {(
+                        stats.settlementMonitoring.totalStrandedStakeUsd ?? 0
+                      ).toFixed(2)}
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Expired unsettled</p>
                     <p
                       className={`font-mono font-semibold ${
-                        (stats.settlementMonitoring.expiredUnsettledParticipantCount ?? 0) > 0
+                        (stats.settlementMonitoring
+                          .expiredUnsettledParticipantCount ?? 0) > 0
                           ? "text-destructive"
                           : ""
                       }`}
                     >
-                      {stats.settlementMonitoring.expiredUnsettledParticipantCount ?? 0}
+                      {stats.settlementMonitoring
+                        .expiredUnsettledParticipantCount ?? 0}
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Past-due open</p>
                     <p
                       className={`font-mono font-semibold ${
-                        (stats.settlementMonitoring.pastDueOpenParticipantCount ?? 0) > 0
+                        (stats.settlementMonitoring
+                          .pastDueOpenParticipantCount ?? 0) > 0
                           ? "text-destructive"
                           : ""
                       }`}
                     >
-                      {stats.settlementMonitoring.pastDueOpenParticipantCount ?? 0}
+                      {stats.settlementMonitoring.pastDueOpenParticipantCount ??
+                        0}
                     </p>
                   </div>
                 </Card>
@@ -684,7 +757,8 @@ export function AdminNexusBotPanel() {
           <Card className="space-y-3 p-4">
             <h3 className="font-semibold">Generate trade code</h3>
             <p className="text-xs text-muted-foreground">
-              Creates unique codes stored in history. Only a manually registered code becomes active.
+              Creates unique codes stored in history. Only a manually registered
+              code becomes active.
             </p>
             <Button
               type="button"
@@ -696,7 +770,9 @@ export function AdminNexusBotPanel() {
             </Button>
             {unregisteredCodes.length > 0 ? (
               <div className="rounded-lg bg-muted/40 p-3 text-xs">
-                <p className="mb-2 font-medium">Unregistered suggestions — tap to fill register form</p>
+                <p className="mb-2 font-medium">
+                  Unregistered suggestions — tap to fill register form
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {unregisteredCodes.map((c) => (
                     <button
@@ -723,15 +799,15 @@ export function AdminNexusBotPanel() {
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
-              Registration is saved on the server immediately. Users can verify only <strong>active</strong>{" "}
-              sessions before end time.
+              Registration is saved on the server immediately. Users can verify
+              only <strong>active</strong> sessions before end time.
             </p>
             <Input
               value={registerCode}
               onChange={(e) => {
-                setRegisterCode(e.target.value.toUpperCase())
-                setRegisterError(null)
-                setRegisteredOk(false)
+                setRegisterCode(e.target.value.toUpperCase());
+                setRegisterError(null);
+                setRegisteredOk(false);
               }}
               placeholder="NXP-7A82-X91K"
               className="min-h-[48px] font-mono uppercase"
@@ -747,12 +823,14 @@ export function AdminNexusBotPanel() {
                   key={s}
                   type="button"
                   onClick={() => {
-                    setSessionSlot(s)
-                    applyDefaultTimes(s)
-                    setRegisterError(null)
+                    setSessionSlot(s);
+                    applyDefaultTimes(s);
+                    setRegisterError(null);
                   }}
                   className={`min-h-[44px] flex-1 rounded-lg py-2 text-sm capitalize touch-manipulation ${
-                    sessionSlot === s ? "bg-primary/15 text-primary" : "bg-muted"
+                    sessionSlot === s
+                      ? "bg-primary/15 text-primary"
+                      : "bg-muted"
                   }`}
                 >
                   {s}
@@ -784,15 +862,21 @@ export function AdminNexusBotPanel() {
                 Static 30-day yield matrix
               </p>
               <p className="text-xs text-muted-foreground">
-                Monthly cap: {sumYieldMatrixTotalPercent().toFixed(3)}% total across 60 slots (21–28%
-                treasury shield). Session max yield is assigned automatically from the matrix.
+                Monthly cap: {sumYieldMatrixTotalPercent().toFixed(3)}% total
+                across 60 slots (21–28% treasury shield). Session max yield is
+                assigned automatically from the matrix.
               </p>
               {matrixSlotPreview ? (
                 <div className="rounded-lg bg-muted/50 p-2 text-xs space-y-1">
                   <p>
-                    Day index <span className="font-mono">{matrixSlotPreview.dayIndex + 1}</span> ·{" "}
-                    {sessionSlot} slot:{" "}
-                    <span className="font-mono">{matrixSlotPreview.slotPct.toFixed(5)}%</span>
+                    Day index{" "}
+                    <span className="font-mono">
+                      {matrixSlotPreview.dayIndex + 1}
+                    </span>{" "}
+                    · {sessionSlot} slot:{" "}
+                    <span className="font-mono">
+                      {matrixSlotPreview.slotPct.toFixed(5)}%
+                    </span>
                   </p>
                   <p className="text-muted-foreground">
                     Day pair — morning{" "}
@@ -810,7 +894,9 @@ export function AdminNexusBotPanel() {
                   </p>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">Set start time to preview matrix slot.</p>
+                <p className="text-xs text-muted-foreground">
+                  Set start time to preview matrix slot.
+                </p>
               )}
               <Button
                 type="button"
@@ -824,14 +910,18 @@ export function AdminNexusBotPanel() {
               {yieldPreview ? (
                 <div className="rounded-lg bg-muted/50 p-2 text-xs">
                   <p className="font-medium">
-                    Matrix day {((yieldPreview.matrixDayIndex ?? 0) + 1).toString()} · max yield{" "}
-                    {yieldPreview.maxYieldPercent?.toFixed(5)}% · duration{" "}
+                    Matrix day{" "}
+                    {((yieldPreview.matrixDayIndex ?? 0) + 1).toString()} · max
+                    yield {yieldPreview.maxYieldPercent?.toFixed(5)}% · duration{" "}
                     {yieldPreview.durationHours.toFixed(2)}h
                   </p>
                   <ul className="mt-1 space-y-1">
                     {yieldPreview.examples.map((ex, i) => (
                       <li key={i}>
-                        {ex.label}: <span className="font-mono">{ex.earnedPercent.toFixed(4)}%</span>
+                        {ex.label}:{" "}
+                        <span className="font-mono">
+                          {ex.earnedPercent.toFixed(4)}%
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -845,7 +935,9 @@ export function AdminNexusBotPanel() {
                   type="button"
                   onClick={() => setRegisterStatus(s)}
                   className={`flex-1 rounded-lg py-2 text-sm capitalize ${
-                    registerStatus === s ? "bg-primary/15 text-primary" : "bg-muted"
+                    registerStatus === s
+                      ? "bg-primary/15 text-primary"
+                      : "bg-muted"
                   }`}
                 >
                   {s}
@@ -860,18 +952,23 @@ export function AdminNexusBotPanel() {
             {lastRegistered ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
-                  <p className="font-semibold text-success">Saved to database</p>
+                  <p className="font-semibold text-success">
+                    Saved to database
+                  </p>
                   <p className="font-mono">{lastRegistered.code}</p>
                   <p>
                     {lastRegistered.session_name} · {lastRegistered.status} ·{" "}
-                    {formatSessionClock(lastRegistered.start_at)} – {formatSessionClock(lastRegistered.end_at)}
+                    {formatSessionClock(lastRegistered.start_at)} –{" "}
+                    {formatSessionClock(lastRegistered.end_at)}
                   </p>
                 </div>
                 {lastRegistered.status === "active" ? (
                   <TradeSignalShareActions
                     code={lastRegistered.code}
                     sessionSlot={
-                      lastRegistered.session_slot === "evening" ? "evening" : "morning"
+                      lastRegistered.session_slot === "evening"
+                        ? "evening"
+                        : "morning"
                     }
                   />
                 ) : null}
@@ -886,7 +983,9 @@ export function AdminNexusBotPanel() {
               {busy ? "Registering on server…" : "Register trade code"}
             </Button>
             {sessionsLoading ? (
-              <p className="text-xs text-muted-foreground">Refreshing session list…</p>
+              <p className="text-xs text-muted-foreground">
+                Refreshing session list…
+              </p>
             ) : null}
           </Card>
 
@@ -900,7 +999,9 @@ export function AdminNexusBotPanel() {
                     type="button"
                     onClick={() => setSessionFilter(f)}
                     className={`rounded-lg px-3 py-1 text-xs capitalize ${
-                      sessionFilter === f ? "bg-primary/15 text-primary" : "bg-muted"
+                      sessionFilter === f
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted"
                     }`}
                   >
                     {f}
@@ -911,7 +1012,9 @@ export function AdminNexusBotPanel() {
                   variant="outline"
                   size="sm"
                   className="min-h-[32px] touch-manipulation text-xs"
-                  disabled={busy || sessions.every((s) => s.status === "active")}
+                  disabled={
+                    busy || sessions.every((s) => s.status === "active")
+                  }
                   onClick={() => void clearOldSessions()}
                 >
                   Clear old records
@@ -919,14 +1022,20 @@ export function AdminNexusBotPanel() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Removes ended and draft sessions only. Active trades and sessions with open participants are kept.
+              Removes ended and draft sessions only. Active trades and sessions
+              with open participants are kept.
             </p>
             <div className="max-h-[400px] space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-border/40 bg-muted/10 p-2 pr-1">
               {sessions.length === 0 ? (
-                <p className="px-1 text-sm text-muted-foreground">No sessions yet.</p>
+                <p className="px-1 text-sm text-muted-foreground">
+                  No sessions yet.
+                </p>
               ) : (
                 sessions.map((s) => (
-                  <div key={s.id} className="rounded-lg border border-border/60 p-3 text-sm">
+                  <div
+                    key={s.id}
+                    className="rounded-lg border border-border/60 p-3 text-sm"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-mono font-semibold">{s.code}</span>
                       <span
@@ -943,7 +1052,8 @@ export function AdminNexusBotPanel() {
                     </div>
                     <p className="mt-1">{s.session_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatSessionClock(s.start_at)} – {formatSessionClock(s.end_at)} · {s.session_slot}
+                      {formatSessionClock(s.start_at)} –{" "}
+                      {formatSessionClock(s.end_at)} · {s.session_slot}
                       {s.max_yield_percent != null
                         ? ` · max yield ${s.max_yield_percent}% (time-weighted)`
                         : ""}
@@ -959,7 +1069,9 @@ export function AdminNexusBotPanel() {
                       <>
                         <TradeSignalShareActions
                           code={s.code}
-                          sessionSlot={s.session_slot === "evening" ? "evening" : "morning"}
+                          sessionSlot={
+                            s.session_slot === "evening" ? "evening" : "morning"
+                          }
                         />
                         <Button
                           type="button"
@@ -1003,12 +1115,21 @@ export function AdminNexusBotPanel() {
                     </thead>
                     <tbody>
                       {weeklyBoard.map((row) => (
-                        <tr key={row.rank} className="border-b border-border/30 last:border-0">
+                        <tr
+                          key={row.rank}
+                          className="border-b border-border/30 last:border-0"
+                        >
                           <td className="py-2 pr-3 font-mono">#{row.rank}</td>
                           <td className="py-2 pr-3">{row.username}</td>
-                          <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{row.userId.slice(0, 8)}…</td>
-                          <td className="py-2 pr-3 font-mono font-semibold">{row.points}</td>
-                          <td className="py-2 pr-3 font-mono">{row.completedSessions}</td>
+                          <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
+                            {row.userId.slice(0, 8)}…
+                          </td>
+                          <td className="py-2 pr-3 font-mono font-semibold">
+                            {row.points}
+                          </td>
+                          <td className="py-2 pr-3 font-mono">
+                            {row.completedSessions}
+                          </td>
                           <td className="py-2 font-mono">{row.streak}d</td>
                         </tr>
                       ))}
@@ -1022,7 +1143,8 @@ export function AdminNexusBotPanel() {
           <Card className="space-y-3 p-4">
             <h3 className="font-semibold">Earnings audit</h3>
             <p className="text-xs text-muted-foreground">
-              Explain why a user earned a specific trade-session amount (profit %, capital, settlement).
+              Explain why a user earned a specific trade-session amount (profit
+              %, capital, settlement).
             </p>
             <Input
               value={auditUserId}
@@ -1030,21 +1152,37 @@ export function AdminNexusBotPanel() {
               placeholder="User UUID"
               className="font-mono text-xs"
             />
-            <Button variant="outline" disabled={busy || !auditUserId.trim()} onClick={() => void loadEarningsAudit()}>
+            <Button
+              variant="outline"
+              disabled={busy || !auditUserId.trim()}
+              onClick={() => void loadEarningsAudit()}
+            >
               Load earnings audit
             </Button>
             {auditRows.length > 0 ? (
               <div className="max-h-64 space-y-2 overflow-y-auto text-xs">
                 {auditRows.map((row, i) => (
-                  <div key={i} className="rounded-lg border border-border/60 p-2">
-                    <p className="font-mono font-semibold">{String(row.trade_session_code ?? "")}</p>
-                    <p>
-                      {String(row.earned_percent ?? row.participant_profit_percentage_used ?? "?")}% on $
-                      {Number(row.capital_at_join_usd ?? 0).toFixed(2)} → expected $
-                      {Number(row.expected_profit_usd ?? 0).toFixed(2)} · settled $
-                      {Number(row.settled_profit_usd ?? 0).toFixed(2)}
+                  <div
+                    key={i}
+                    className="rounded-lg border border-border/60 p-2"
+                  >
+                    <p className="font-mono font-semibold">
+                      {String(row.trade_session_code ?? "")}
                     </p>
-                    <p className="text-muted-foreground">{String(row.earnings_explanation ?? "")}</p>
+                    <p>
+                      {String(
+                        row.earned_percent ??
+                          row.participant_profit_percentage_used ??
+                          "?",
+                      )}
+                      % on ${Number(row.capital_at_join_usd ?? 0).toFixed(2)} →
+                      expected $
+                      {Number(row.expected_profit_usd ?? 0).toFixed(2)} ·
+                      settled ${Number(row.settled_profit_usd ?? 0).toFixed(2)}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {String(row.earnings_explanation ?? "")}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1054,7 +1192,8 @@ export function AdminNexusBotPanel() {
           <Card className="space-y-3 p-4">
             <h3 className="font-semibold">Member performance review</h3>
             <p className="text-xs text-muted-foreground">
-              Audit how a member earned participation points (separate from wallet balances).
+              Audit how a member earned participation points (separate from
+              wallet balances).
             </p>
             <Input
               value={reviewUserId}
@@ -1062,19 +1201,30 @@ export function AdminNexusBotPanel() {
               placeholder="User UUID"
               className="font-mono text-xs"
             />
-            <Button variant="outline" disabled={busy || !reviewUserId.trim()} onClick={() => void loadMemberPoints()}>
+            <Button
+              variant="outline"
+              disabled={busy || !reviewUserId.trim()}
+              onClick={() => void loadMemberPoints()}
+            >
               Load point history
             </Button>
             {memberPoints ? (
               <div className="rounded-lg border border-border/60 p-3 text-sm">
                 <p>
-                  Total points: <span className="font-mono font-semibold">{memberPoints.points}</span> · Completed
-                  sessions: {memberPoints.completedSessions}
+                  Total points:{" "}
+                  <span className="font-mono font-semibold">
+                    {memberPoints.points}
+                  </span>{" "}
+                  · Completed sessions: {memberPoints.completedSessions}
                 </p>
                 <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs">
                   {memberPoints.events.map((ev, i) => (
-                    <li key={`${ev.created_at}-${i}`} className="text-muted-foreground">
-                      +{ev.delta} · {ev.reason} · {ev.source} · {new Date(ev.created_at).toLocaleString()}
+                    <li
+                      key={`${ev.created_at}-${i}`}
+                      className="text-muted-foreground"
+                    >
+                      +{ev.delta} · {ev.reason} · {ev.source} ·{" "}
+                      {new Date(ev.created_at).toLocaleString()}
                     </li>
                   ))}
                 </ul>
@@ -1095,7 +1245,11 @@ export function AdminNexusBotPanel() {
               className="font-mono text-xs"
             />
             <div className="flex gap-2">
-              <Button variant="outline" disabled={busy} onClick={() => void loadGrants()}>
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => void loadGrants()}
+              >
                 Load
               </Button>
               <Button disabled={busy} onClick={() => void saveGrants()}>
@@ -1108,7 +1262,9 @@ export function AdminNexusBotPanel() {
                   <input
                     type="checkbox"
                     checked={Boolean(grants[key])}
-                    onChange={(e) => setGrants((g) => ({ ...g, [key]: e.target.checked }))}
+                    onChange={(e) =>
+                      setGrants((g) => ({ ...g, [key]: e.target.checked }))
+                    }
                   />
                   {key}
                 </label>
@@ -1129,8 +1285,17 @@ export function AdminNexusBotPanel() {
                 </button>
               ))}
             </div>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="NXP-4728" className="font-mono uppercase" />
-            <Input value={strategyTitle} onChange={(e) => setStrategyTitle(e.target.value)} placeholder="Strategy title" />
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="NXP-4728"
+              className="font-mono uppercase"
+            />
+            <Input
+              value={strategyTitle}
+              onChange={(e) => setStrategyTitle(e.target.value)}
+              placeholder="Strategy title"
+            />
             <Button disabled={busy} onClick={() => void publishSignal()}>
               Publish legacy code
             </Button>
@@ -1142,13 +1307,18 @@ export function AdminNexusBotPanel() {
         <Card className="p-4">
           <h3 className="mb-2 font-semibold">Legacy container migration</h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            Closes all active copy/fixed sessions and moves container liquid to Nexus Main (per user).
+            Closes all active copy/fixed sessions and moves container liquid to
+            Nexus Main (per user).
           </p>
-          <Button variant="destructive" disabled={busy} onClick={() => void releaseAllLegacy()}>
+          <Button
+            variant="destructive"
+            disabled={busy}
+            onClick={() => void releaseAllLegacy()}
+          >
             Release all legacy sessions
           </Button>
         </Card>
       ) : null}
     </div>
-  )
+  );
 }

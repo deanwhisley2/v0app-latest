@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabaseAdmin"
-import { generateTradeCodes, registerTradeSession } from "@/lib/server/trade-sessions"
-import { TelegramNotifier } from "@/lib/telegram-notifier"
-import { buildCommunityBlock } from "@/lib/nexus-bot/community-links"
-import { buildMarketInsight, buildSessionResultQuote } from "@/lib/nexus-bot/trading-quotes"
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+  generateTradeCodes,
+  registerTradeSession,
+} from "@/lib/server/trade-sessions";
+import { TelegramNotifier } from "@/lib/telegram-notifier";
+import { buildCommunityBlock } from "@/lib/nexus-bot/community-links";
+import {
+  buildMarketInsight,
+  buildSessionResultQuote,
+} from "@/lib/nexus-bot/trading-quotes";
 import {
   buildSessionWindow,
   detectSlot,
@@ -11,7 +17,7 @@ import {
   formatEAT,
   formatISODate,
   toEAT,
-} from "@/lib/nexus-bot/signal-schedule"
+} from "@/lib/nexus-bot/signal-schedule";
 
 /**
  * CRON: Publish one trade signal to Telegram channel.
@@ -26,32 +32,37 @@ import {
 export async function POST(request: Request) {
   try {
     // ── Auth ──────────────────────────────────────────────
-    const configured = process.env.CRON_SECRET?.trim()
+    const configured = process.env.CRON_SECRET?.trim();
     const headerSecret =
       request.headers.get("x-cron-secret")?.trim() ||
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim()
+      request.headers
+        .get("authorization")
+        ?.replace(/^Bearer\s+/i, "")
+        .trim();
     if (!configured || headerSecret !== configured) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const slot = detectSlot()
-    const admin = createAdminClient()
-    const actorId = process.env.NEXUS_EXPERT_FALLBACK_USER_ID?.trim()
+    const slot = detectSlot();
+    const admin = createAdminClient();
+    const actorId = process.env.NEXUS_EXPERT_FALLBACK_USER_ID?.trim();
 
     if (!actorId) {
       return NextResponse.json(
         { error: "NEXUS_EXPERT_FALLBACK_USER_ID not configured" },
         { status: 500 },
-      )
+      );
     }
 
-    const notifier = new TelegramNotifier()
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://nexuspro.it.com").replace(/\/+$/, "")
-    const now = new Date()
-    let sessionClosedMessage: string | null = null
+    const notifier = new TelegramNotifier();
+    const siteUrl = (
+      process.env.NEXT_PUBLIC_SITE_URL ?? "https://nexuspro.it.com"
+    ).replace(/\/+$/, "");
+    const now = new Date();
+    let sessionClosedMessage: string | null = null;
 
     // ── Check for recently expired sessions → send close notification ──
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
     const { data: expiredSessions } = await admin
       .from("trade_sessions")
       .select("id,code,session_name,session_slot,status,expired_at,end_at")
@@ -59,13 +70,17 @@ export async function POST(request: Request) {
       .gte("expired_at", oneHourAgo)
       .lt("expired_at", now.toISOString())
       .order("expired_at", { ascending: false })
-      .limit(2)
+      .limit(2);
 
     if (expiredSessions && expiredSessions.length > 0) {
       for (const expired of expiredSessions) {
-        const expiredSlot = expired.session_slot === "evening" ? "evening" : "morning"
-        const slotLabel = expiredSlot === "morning" ? "Morning Session" : "Night Session"
-        const resultQuote = buildSessionResultQuote(new Date(expired.expired_at ?? now))
+        const expiredSlot =
+          expired.session_slot === "evening" ? "evening" : "morning";
+        const slotLabel =
+          expiredSlot === "morning" ? "Morning Session" : "Night Session";
+        const resultQuote = buildSessionResultQuote(
+          new Date(expired.expired_at ?? now),
+        );
 
         const closeMsg = [
           `🏁 *NEXUS PRO — SESSION CLOSED*`,
@@ -99,30 +114,34 @@ export async function POST(request: Request) {
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
           ``,
           `Nexus Pro — Crypto Intelligence`,
-        ].join("\n")
+        ].join("\n");
 
-        await notifier.sendMessage(closeMsg)
-        sessionClosedMessage = closeMsg
+        await notifier.sendMessage(closeMsg);
+        sessionClosedMessage = closeMsg;
       }
     }
 
     // ── Generate 1 trade code ─────────────────────────────
-    const codes = await generateTradeCodes(admin, actorId, 1)
+    const codes = await generateTradeCodes(admin, actorId, 1);
     if (!codes || codes.length === 0) {
-      return NextResponse.json({ error: "Failed to generate trade code" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Failed to generate trade code" },
+        { status: 500 },
+      );
     }
-    const code = codes[0]
+    const code = codes[0];
 
     // ── Build session window (EAT) ────────────────────────
-    const window = buildSessionWindow(slot)
+    const window = buildSessionWindow(slot);
     // Convert back to UTC for DB storage
-    const startUtc = fromEAT(window.sessionStart)
-    const endUtc = fromEAT(window.sessionEnd)
+    const startUtc = fromEAT(window.sessionStart);
+    const endUtc = fromEAT(window.sessionEnd);
 
     // ── Register as active session ────────────────────────
-    const sessionName = slot === "morning"
-      ? `Morning Signal · ${formatISODate(window.sessionStart.toISOString())}`
-      : `Evening Signal · ${formatISODate(window.sessionStart.toISOString())}`
+    const sessionName =
+      slot === "morning"
+        ? `Morning Signal · ${formatISODate(window.sessionStart.toISOString())}`
+        : `Evening Signal · ${formatISODate(window.sessionStart.toISOString())}`;
     const registered = await registerTradeSession(admin, {
       actorId,
       code,
@@ -131,28 +150,32 @@ export async function POST(request: Request) {
       startAt: startUtc.toISOString(),
       endAt: endUtc.toISOString(),
       status: "active",
-    })
+    });
 
     // ── Build premium Telegram message ────────────────────
-    const signalUrl = `${siteUrl}/signal/${code}`
+    const signalUrl = `${siteUrl}/signal/${code}`;
 
-    const isMorning = slot === "morning"
-    const emojiHeader = isMorning ? "🌅" : "🌙"
-    const headerLabel = isMorning ? "PREMIUM TRADE SIGNAL" : "NIGHT SESSION SIGNAL"
-    const sessionLabel = isMorning ? "MORNING SIGNAL SESSION" : "EVENING SIGNAL SESSION"
-    const startTimeEAT = formatEAT(window.sessionStart)
-    const endTimeEAT = formatEAT(window.sessionEnd)
+    const isMorning = slot === "morning";
+    const emojiHeader = isMorning ? "🌅" : "🌙";
+    const headerLabel = isMorning
+      ? "PREMIUM TRADE SIGNAL"
+      : "NIGHT SESSION SIGNAL";
+    const sessionLabel = isMorning
+      ? "MORNING SIGNAL SESSION"
+      : "EVENING SIGNAL SESSION";
+    const startTimeEAT = formatEAT(window.sessionStart);
+    const endTimeEAT = formatEAT(window.sessionEnd);
 
     // Motivational quote (unique per slot)
-    const quote = buildMarketInsight(now, slot)
+    const quote = buildMarketInsight(now, slot);
 
     // Build the session time string (handle overnight)
-    const dateStr = formatISODate(window.sessionStart.toISOString())
-    let timeWindowStr: string
+    const dateStr = formatISODate(window.sessionStart.toISOString());
+    let timeWindowStr: string;
     if (window.crossesMidnight) {
-      timeWindowStr = `${startTimeEAT} → ${endTimeEAT} (next day)`
+      timeWindowStr = `${startTimeEAT} → ${endTimeEAT} (next day)`;
     } else {
-      timeWindowStr = `${startTimeEAT} → ${endTimeEAT}`
+      timeWindowStr = `${startTimeEAT} → ${endTimeEAT}`;
     }
 
     const message = [
@@ -184,9 +207,7 @@ export async function POST(request: Request) {
       ``,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       ``,
-      isMorning
-        ? `🔥 *TODAY'S MARKET INSIGHT*`
-        : `🚀 *TONIGHT'S OPPORTUNITY*`,
+      isMorning ? `🔥 *TODAY'S MARKET INSIGHT*` : `🚀 *TONIGHT'S OPPORTUNITY*`,
       ``,
       quote,
       ``,
@@ -206,10 +227,10 @@ export async function POST(request: Request) {
       ``,
       `🚀 *Nexus Pro Intelligence Engine*`,
       `Powering Smarter Crypto Decisions`,
-    ].join("\n")
+    ].join("\n");
 
     // ── Send to Telegram ──────────────────────────────────
-    const sent = await notifier.sendMessage(message)
+    const sent = await notifier.sendMessage(message);
 
     // ── Response ──────────────────────────────────────────
     return NextResponse.json({
@@ -227,12 +248,12 @@ export async function POST(request: Request) {
       telegramDelivered: sent,
       quoteUsed: quote,
       previousSessionClosed: sessionClosedMessage !== null,
-    })
+    });
   } catch (e) {
-    console.error("[publish-daily-signal] Error:", e)
+    console.error("[publish-daily-signal] Error:", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Internal error" },
       { status: 500 },
-    )
+    );
   }
 }
