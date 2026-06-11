@@ -232,12 +232,12 @@ function NetworkPayeeBlock({
     <NexusSecureShield className="space-y-3 rounded-xl border border-white/10 bg-[#080b10] p-4">
       <div>
         <p className="text-[10px] uppercase tracking-wide text-zinc-500">Account Name</p>
-        <p className={cn("mt-1 text-base font-semibold text-white", NEXUS_SENSITIVE_MASK_CLASS)}>{name}</p>
+        <p className="mt-1 text-base font-semibold text-white">{name}</p>
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-wide text-zinc-500">{accountLabel}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <p className={cn("font-mono text-lg font-semibold text-emerald-300", NEXUS_SENSITIVE_MASK_CLASS)}>
+          <p className="font-mono text-lg font-semibold text-emerald-300">
             {account}
           </p>
           <button

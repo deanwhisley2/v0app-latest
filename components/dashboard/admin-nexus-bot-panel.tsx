@@ -267,7 +267,7 @@ export function AdminNexusBotPanel() {
       const res = await fetch("/api/admin/trade-sessions", {
         method: "POST",
         headers: h,
-        body: JSON.stringify({ action: "generate", count: 3 }),
+        body: JSON.stringify({ action: "generate", count: 1 }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(j.error ?? "Generate failed")
