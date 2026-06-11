@@ -2,11 +2,11 @@
 -- Uses metadata->>'event_type' to distinguish principal return from earnings credit.
 -- Idempotent — safe to re-run.
 
--- 1) Principal return → "Session Closed"
+-- 1) Principal return → "Session Closed" — never call this earnings/profit
 UPDATE public.user_account_notifications
 SET
   title = 'Session Closed',
-  body = 'Your allocated capital has been returned to your Main Account following the successful completion of the trading session.'
+  body = 'Your allocated trading capital has been returned to your Main Account.'
 WHERE source_kind = 'container_balance_event'
   AND metadata->>'event_type' IN (
     'copy_trade_settlement_principal_to_main',
@@ -15,11 +15,11 @@ WHERE source_kind = 'container_balance_event'
   )
   AND title IS DISTINCT FROM 'Session Closed';
 
--- 2) Earnings credit → "Earnings Credited"
+-- 2) Earnings credit → "Earnings Credited" — only actual profit
 UPDATE public.user_account_notifications
 SET
   title = 'Earnings Credited',
-  body = 'Your earnings from the completed trading session have been credited to your earnings account.'
+  body = 'Your trading earnings have been transferred to your Earnings Account.'
 WHERE source_kind = 'container_balance_event'
   AND metadata->>'event_type' IN (
     'copy_trade_settlement_earnings_to_liquid',
@@ -29,14 +29,14 @@ WHERE source_kind = 'container_balance_event'
   )
   AND title IS DISTINCT FROM 'Earnings Credited';
 
--- 3) Nexus bot session complete (no principal/earnings split) → "Trade session completed"
+-- 3) Nexus bot session complete → fallback to principal return
 UPDATE public.user_account_notifications
 SET
-  title = 'Trade session completed',
-  body = 'Your trade session has completed. Funds are available per your program terms.'
+  title = 'Session Closed',
+  body = 'Your allocated trading capital has been returned to your Main Account.'
 WHERE source_kind = 'container_balance_event'
   AND metadata->>'event_type' IN (
     'nexus_trade_session_complete',
     'nexus_trade_session_reconcile_topup'
   )
-  AND title IS DISTINCT FROM 'Trade session completed';
+  AND title IS DISTINCT FROM 'Session Closed';

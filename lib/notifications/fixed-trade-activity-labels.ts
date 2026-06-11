@@ -12,12 +12,12 @@ export function fixedTradeActivityTitle(eventType: string): string | null {
     case "fixed_trade_earnings_release":
     case "container_to_withdrawable":
     case "withdrawable_to_main":
-      return "💰 Earnings Transferred";
+      return "Earnings Credited";
     case "nexus_bot_session_complete":
     case "fixed_trade_maturity_principal_to_main":
     case "fixed_trade_early_exit_settlement":
     case "fixed_trade_maturity_earnings_release":
-      return "Trade session completed";
+      return "Session Closed";
   }
   return null;
 }

@@ -1,8 +1,8 @@
 /** Canonical notification copy — short, professional, business-like (English base). */
 export const customerNotificationMessageEn: Record<string, string> = {
-  "notifications.customer.fundingApprovedTitle": "Deposit credited",
-  "notifications.customer.fundingApprovedBody": "Your deposit has been successfully credited.",
-  "notifications.customer.fundingApprovedBodyLocal": "Your deposit of {{amount}} has been successfully credited.",
+  "notifications.customer.fundingApprovedTitle": "Deposit Confirmed",
+  "notifications.customer.fundingApprovedBody": "Your deposit has been credited to your Main Account.",
+  "notifications.customer.fundingApprovedBodyLocal": "Your deposit of {{amount}} has been credited to your Main Account.",
   "notifications.customer.fundingApprovedHint": "Credited to your balance.",
   "notifications.customer.fundingDeclinedTitle": "Deposit declined",
   "notifications.customer.fundingDeclinedBody": "Your deposit could not be completed. {{note}}",
@@ -17,7 +17,7 @@ export const customerNotificationMessageEn: Record<string, string> = {
   "notifications.customer.fundingSubmittedBody": "We received your deposit request and will notify you when it is confirmed.",
   "notifications.customer.fundingUpdateTitle": "Account update",
   "notifications.customer.fundsCreditedTitle": "Earnings Credited",
-  "notifications.customer.fundsCreditedBody": "Your trading earnings of {{amount}} have been credited to your Main Account.",
+  "notifications.customer.fundsCreditedBody": "Your trading earnings of {{amount}} have been transferred to your Earnings Account.",
   "notifications.time.now": "Now",
   "notifications.launch.refereeBonusTitle": "First Deposit Bonus Applied",
   "notifications.launch.refereeBonusBody": "First Deposit Bonus Applied ({{amount}}).",

@@ -60,8 +60,11 @@ export function inferNotificationCategory(n: NexusNotificationItem): Notificatio
   const blob = `${n.title} ${n.message} ${n.detailText ?? ""}`.toLowerCase()
   if (n.type === "security" || isRawSecurityLoginCopy(n.title, n.message)) return "security"
   if (/support|thread|desk|escalat|assistant/.test(blob)) return "support"
+  // Trading events: earnings, capital returns, trade sessions
+  if (/earnings credited|session closed|trade|trading|capital return/i.test(blob)) return "trading"
   if (n.type === "financial") {
     if (/withdraw|payout|sent to|debit/.test(blob)) return "withdrawals"
+    if (/deposit confirm|funding|deposit/i.test(blob)) return "funding"
     return "funding"
   }
   if (n.type === "trade" || n.type === "price" || n.type === "analysis") return "trading"

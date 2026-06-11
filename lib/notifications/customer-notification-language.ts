@@ -68,7 +68,7 @@ export function buildFundsCreditedCustomerCopy(
     ((key: string) => {
       const en: Record<string, string> = {
         "notifications.customer.fundsCreditedTitle": "Earnings Credited",
-        "notifications.customer.fundsCreditedBody": "Your trading earnings of {{amount}} have been credited to your Main Account.",
+        "notifications.customer.fundsCreditedBody": "Your trading earnings of {{amount}} have been transferred to your Earnings Account.",
       }
       return en[key] ?? key
     })
@@ -94,9 +94,9 @@ export function buildFundingApprovedCustomerCopy(
     t ??
     ((key: string) => {
       const en: Record<string, string> = {
-        "notifications.customer.fundingApprovedTitle": "Deposit credited",
-        "notifications.customer.fundingApprovedBody": "Your deposit has been successfully credited.",
-        "notifications.customer.fundingApprovedBodyLocal": "Your deposit of {{amount}} has been successfully credited.",
+        "notifications.customer.fundingApprovedTitle": "Deposit Confirmed",
+        "notifications.customer.fundingApprovedBody": "Your deposit has been credited to your Main Account.",
+        "notifications.customer.fundingApprovedBodyLocal": "Your deposit of {{amount}} has been credited to your Main Account.",
         "notifications.customer.fundingApprovedHint": "Credited to your balance.",
       }
       return en[key] ?? key

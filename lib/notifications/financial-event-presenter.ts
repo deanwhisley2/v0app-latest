@@ -7,6 +7,7 @@ import type { NotificationViewerCorridor } from "@/lib/customer-corridor-money"
 export type PresentedFinancialEvent = {
   title: string
   detailLine: string
+  profitGreen?: { displayAmount: string }
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -100,14 +101,13 @@ export function presentFinancialEventForCustomer(
       : undefined,
   })
 
-  const title = sanitizeCustomerNotificationText(mapped?.title ?? rawSummary, fallback)
-  const body = sanitizeCustomerNotificationText(mapped?.body ?? "", "")
-
-  const safeTitle = sanitizeCustomerNotificationText(title, fallback)
-  const safeBody = body && !isInternalNotificationCopy(body) ? body : ""
+  const safeTitle = sanitizeCustomerNotificationText(mapped?.title ?? rawSummary, fallback)
+  const isEarnings = /earnings credited/i.test(safeTitle)
+  const displayAmt = isEarnings && amt ? `+${amt}` : amt
 
   return {
-    title: safeBody.length > 12 ? safeBody : safeTitle,
-    detailLine: detailParts.join(" · "),
+    title: safeTitle,
+    detailLine: [cat, status, displayAmt].filter(Boolean).join(" · "),
+    profitGreen: isEarnings ? { displayAmount: amt } : undefined,
   }
 }
