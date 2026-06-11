@@ -12,7 +12,6 @@ import { sessionProgressPct } from "@/lib/nexus-bot/session-earnings-ux"
 import { userSessionPresentation, TRADE_SESSION_OPEN_STATUSES } from "@/lib/nexus-bot/user-session-messaging"
 import { readNexusMainAvailableUsd } from "@/lib/server/nexus-main-enforcement"
 import { releaseLegacyContainerSessionsForUser } from "@/lib/server/release-legacy-container-sessions"
-import { advanceTradeSessionLifecycle } from "@/lib/server/trade-sessions"
 import { NEXUS_AUTO_TRADE_PLANS } from "@/lib/nexus-bot/plans"
 
 function mapTradeSessionForUser(row: Record<string, unknown>) {
@@ -62,46 +61,52 @@ export async function GET(request: Request) {
     const { user } = auth
     const admin = createAdminClient()
 
-    await advanceTradeSessionLifecycle(admin, { userId: user.id })
-
+    // Record attendance visit first (creates the streak row we query below)
     const streak = await recordAttendanceVisit(admin, user.id)
-    const grants = await getAutoTradeGrantsMap(admin, user.id)
-    const availableUsd = await readNexusMainAvailableUsd(admin, user.id)
-    const pendingProfitCelebration = await findPendingProfitCelebration(admin, user.id)
 
-    const now = new Date().toISOString()
-    const { data: signals } = await admin
-      .from("nexus_signal_codes")
-      .select("id,slot,code,strategy_title,confidence,duration_hours,window_opens_at,window_closes_at")
-      .lte("window_opens_at", now)
-      .gte("window_closes_at", now)
-      .order("window_opens_at", { ascending: false })
-      .limit(4)
+    // Run all independent queries in parallel
+    const [grants, availableUsd, pendingProfitCelebration, signalsResult, activeSessionsResult, streakRowResult] =
+      await Promise.all([
+        getAutoTradeGrantsMap(admin, user.id),
+        readNexusMainAvailableUsd(admin, user.id),
+        findPendingProfitCelebration(admin, user.id),
 
-    const { data: activeSessions } = await admin
-      .from("nexus_bot_sessions")
-      .select(
-        "id,session_kind,stake_usd,ends_at,created_at,status,display_phase,participation_weight,profit_released_usd,trade_session_id,user_id,trade_sessions(start_at,end_at,session_slot)",
-      )
-      .eq("user_id", user.id)
-      .in("status", [...TRADE_SESSION_OPEN_STATUSES])
-      .order("created_at", { ascending: false })
-      .limit(3)
+        admin
+          .from("nexus_signal_codes")
+          .select("id,slot,code,strategy_title,confidence,duration_hours,window_opens_at,window_closes_at")
+          .lte("window_opens_at", new Date().toISOString())
+          .gte("window_closes_at", new Date().toISOString())
+          .order("window_opens_at", { ascending: false })
+          .limit(4)
+          .then((r) => r.data ?? []),
 
-    const { data: streakRow } = await admin
-      .from("user_attendance_streaks")
-      .select("current_streak,longest_streak,total_visits,last_visit_date")
-      .eq("user_id", user.id)
-      .maybeSingle()
+        admin
+          .from("nexus_bot_sessions")
+          .select(
+            "id,session_kind,stake_usd,ends_at,created_at,status,display_phase,participation_weight,profit_released_usd,trade_session_id,user_id,trade_sessions(start_at,end_at,session_slot)",
+          )
+          .eq("user_id", user.id)
+          .in("status", [...TRADE_SESSION_OPEN_STATUSES])
+          .order("created_at", { ascending: false })
+          .limit(3)
+          .then((r) => r.data ?? []),
+
+        admin
+          .from("user_attendance_streaks")
+          .select("current_streak,longest_streak,total_visits,last_visit_date")
+          .eq("user_id", user.id)
+          .maybeSingle()
+          .then((r) => r.data),
+      ])
 
     return NextResponse.json({
       availableUsd,
-      attendance: streakRow ?? streak,
+      attendance: streakRowResult ?? streak,
       autoTradePlans: NEXUS_AUTO_TRADE_PLANS.map((p) => ({
         ...p,
         granted: Boolean(grants[p.key]),
       })),
-      openSignals: (signals ?? []).map((s) => ({
+      openSignals: signalsResult.map((s) => ({
         id: s.id,
         slot: s.slot,
         code: s.code,
@@ -111,7 +116,7 @@ export async function GET(request: Request) {
         windowOpensAt: s.window_opens_at,
         windowClosesAt: s.window_closes_at,
       })),
-      activeSessions: (activeSessions ?? []).map((r) =>
+      activeSessions: activeSessionsResult.map((r) =>
         mapTradeSessionForUser(r as Record<string, unknown>),
       ),
       pendingProfitCelebration,

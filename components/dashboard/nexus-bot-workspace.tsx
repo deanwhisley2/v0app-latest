@@ -30,7 +30,6 @@ import {
 import { VERIFY_STEPS_USER } from "@/lib/nexus-bot/user-session-messaging"
 import { cn } from "@/lib/utils"
 
-const LEGACY_RELEASE_KEY = "nexus_bot_legacy_released_v1"
 const SIGNAL_GROUP_HREF = "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf"
 const WHATSAPP_SIGNAL_CHANNEL_HREF = "https://whatsapp.com/channel/0029VbCX8n61SWt0e9a0L80p"
 const WHATSAPP_SCREENSHOT_GROUP_HREF = "https://chat.whatsapp.com/GtBKzg2XxJ7IKfLGesAzzb"
@@ -375,33 +374,6 @@ export function NexusBotWorkspace({
     void (async () => {
       setLoading(true)
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (token) {
-          let released = false
-          try {
-            released = sessionStorage.getItem(LEGACY_RELEASE_KEY) === "1"
-          } catch {
-            /* ignore */
-          }
-          if (!released) {
-            await fetch("/api/user/nexus-bot", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ action: "release_legacy_container" }),
-            })
-            try {
-              sessionStorage.setItem(LEGACY_RELEASE_KEY, "1")
-            } catch {
-              /* ignore */
-            }
-          }
-        }
         await load()
       } finally {
         setLoading(false)
