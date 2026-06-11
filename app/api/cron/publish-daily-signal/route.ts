@@ -21,11 +21,11 @@ import {
 
 /**
  * CRON: Publish one trade signal to Telegram channel.
- * Called by VPS crontab at ~9:00 AM EAT (morning) and ~5:00 PM EAT (evening).
+ * Called by VPS crontab at ~5:00 AM EAT (morning) and ~6:00 PM EAT (evening).
  *
  * Schedule (Africa / EAT = UTC+3):
- *   ☀️ Morning:   Signal 09:00  → Trade 11:00–16:00 (same day)
- *   🌙 Evening:   Signal 17:00  → Trade 20:00–07:00 (next day)
+ *   ☀️ Morning:   Signal 05:00  → Trade 07:00–11:00 (same day)
+ *   🌙 Evening:   Signal 18:00  → Trade 21:00–07:00 (next day)
  *
  * Guard: `CRON_SECRET` in header `x-cron-secret` or `Authorization: Bearer`.
  */
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
           ``,
           `The Nexus Pro Intelligence Engine is currently analyzing live market conditions and generating the next opportunity.`,
           ``,
-          `⏳ Next Signal Release: ${slot === "morning" ? "Today at 5:00 PM EAT" : "Tomorrow at 9:00 AM EAT"}`,
+          `⏳ Next Signal Release: ${slot === "morning" ? "Today at 6:00 PM EAT" : "Tomorrow at 5:00 AM EAT"}`,
           ``,
           `Stay connected:`,
           ``,

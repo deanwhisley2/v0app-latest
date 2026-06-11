@@ -1,17 +1,21 @@
 /**
  * SIGNAL SCHEDULE — Africa Time (EAT / UTC+3)
  *
- * Morning Cycle:
- *   Signal Generated: 09:00 EAT
- *   Trading Opens:    11:00 EAT
- *   Trading Closes:   16:00 EAT
+ * Fixed daily schedule:
  *
- * Evening Cycle:
- *   Signal Generated: 17:00 EAT
- *   Trading Opens:    20:00 EAT
- *   Trading Closes:   07:00 EAT (next day)
+ * Morning Session:
+ *   Signal visible:  5:00 AM EAT (users can see/join)
+ *   Trading opens:   7:00 AM EAT
+ *   Trading closes: 11:00 AM EAT (settlement runs)
+ *   Duration: 4 hours
  *
- * The system dynamically detects the current slot based on server time.
+ * Evening Session:
+ *   Signal visible:  6:00 PM EAT (users can see/join)
+ *   Trading opens:   9:00 PM EAT
+ *   Trading closes:  7:00 AM EAT next day (settlement runs)
+ *   Duration: 10 hours
+ *
+ * No overlap — morning fully settled before evening signal appears.
  */
 
 export type SignalSlot = "morning" | "evening";
@@ -29,19 +33,17 @@ export type SessionWindow = {
 };
 
 /**
- * Build today's session window for the given slot based on Africa/EAT timezone.
+ * Build the session window for the given slot.
+ * All times EAT (UTC+3).
  *
- * Times in EAT (UTC+3):
- *   Morning: signal 09:00, trade 11:00–16:00
- *   Evening: signal 17:00, trade 20:00–07:00+1
+ * Morning: signal 5AM, trade 7AM→11AM (same day)
+ * Evening: signal 6PM, trade 9PM→7AM+1 (next day)
  */
 export function buildSessionWindow(
   slot: SignalSlot,
   referenceDate?: Date,
 ): SessionWindow {
   const now = referenceDate ?? new Date();
-
-  // Convert to EAT (UTC+3) for all calculations
   const eatNow = toEAT(now);
 
   const signalRelease = new Date(eatNow);
@@ -49,28 +51,28 @@ export function buildSessionWindow(
   const sessionEnd = new Date(eatNow);
 
   if (slot === "morning") {
-    // Signal: 09:00 EAT
-    signalRelease.setHours(9, 0, 0, 0);
-    // Trade: 11:00 EAT → 16:00 EAT
-    sessionStart.setHours(11, 0, 0, 0);
-    sessionEnd.setHours(16, 0, 0, 0);
+    // Signal: 5:00 AM EAT
+    signalRelease.setHours(5, 0, 0, 0);
+    // Trade: 7:00 AM → 11:00 AM
+    sessionStart.setHours(7, 0, 0, 0);
+    sessionEnd.setHours(11, 0, 0, 0);
 
-    // If we're past signal release time, move to tomorrow
-    if (eatNow.getTime() >= signalRelease.getTime() + 2 * 60 * 60 * 1000) {
+    // If we're past session end (11AM), move to tomorrow
+    if (eatNow.getTime() >= sessionEnd.getTime()) {
       signalRelease.setDate(signalRelease.getDate() + 1);
       sessionStart.setDate(sessionStart.getDate() + 1);
       sessionEnd.setDate(sessionEnd.getDate() + 1);
     }
   } else {
-    // Evening: Signal 17:00 EAT
-    signalRelease.setHours(17, 0, 0, 0);
-    // Trade: 20:00 EAT → 07:00 EAT next day
-    sessionStart.setHours(20, 0, 0, 0);
+    // Signal: 6:00 PM EAT
+    signalRelease.setHours(18, 0, 0, 0);
+    // Trade: 9:00 PM → 7:00 AM next day
+    sessionStart.setHours(21, 0, 0, 0);
     sessionEnd.setHours(7, 0, 0, 0);
-    sessionEnd.setDate(sessionEnd.getDate() + 1); // crosses midnight
+    sessionEnd.setDate(sessionEnd.getDate() + 1);
 
-    // If we're past signal release time, move to tomorrow
-    if (eatNow.getTime() >= signalRelease.getTime() + 2 * 60 * 60 * 1000) {
+    // If we're past session end (7AM next day), move to tomorrow
+    if (eatNow.getTime() >= sessionEnd.getTime()) {
       signalRelease.setDate(signalRelease.getDate() + 1);
       sessionStart.setDate(sessionStart.getDate() + 1);
       sessionEnd.setDate(sessionEnd.getDate() + 1);
@@ -93,9 +95,7 @@ export function buildSessionWindow(
  * Returns a new Date object adjusted to EAT.
  */
 export function toEAT(date: Date): Date {
-  // Get current UTC time
   const utcMs = date.getTime() + date.getTimezoneOffset() * 60_000;
-  // EAT = UTC+3
   return new Date(utcMs + 3 * 60 * 60 * 1000);
 }
 
@@ -104,22 +104,24 @@ export function toEAT(date: Date): Date {
  */
 export function fromEAT(eatDate: Date): Date {
   const eatMs = eatDate.getTime();
-  // Subtract 3 hours to get back to UTC
   return new Date(eatMs - 3 * 60 * 60 * 1000);
 }
 
 /**
  * Detect which slot we're in based on current EAT time.
+ *
+ * Slot windows (determined by signal visibility periods):
+ *   Morning signal: 5:00 AM – 11:00 AM (signal appears 5AM, session 7AM–11AM)
+ *   Evening signal: 6:00 PM – 7:00 AM next day (signal appears 6PM, session 9PM–7AM)
  */
 export function detectSlot(referenceDate?: Date): SignalSlot {
   const now = referenceDate ?? new Date();
   const eat = toEAT(now);
   const hour = eat.getHours();
 
-  // Morning: signal released 9:00 AM, session runs 11:00-16:00
-  // Evening: signal released 17:00 (5PM), session runs 20:00-07:00+1
-  // Use signal release time to determine slot
-  if (hour >= 5 && hour < 13) return "morning";
+  // Morning slot: if current hour is between 5AM and 11AM (inclusive of signal window)
+  if (hour >= 5 && hour < 11) return "morning";
+  // Evening slot: everything else (covers 11AM–5AM next day, including overnight)
   return "evening";
 }
 
@@ -127,13 +129,12 @@ export function detectSlot(referenceDate?: Date): SignalSlot {
  * Format EAT time for display in messages.
  */
 export function formatEAT(date: Date, showDate = false): string {
-  // Convert to EAT for display
   const eat = toEAT(date);
   const timeStr = eat.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: "UTC", // We've already adjusted to EAT, so use UTC to avoid double adjustment
+    timeZone: "UTC",
   });
   if (!showDate) return timeStr;
 
