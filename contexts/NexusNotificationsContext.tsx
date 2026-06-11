@@ -121,11 +121,13 @@ function mapServerAccountRow(r: {
     body: r.body,
     metadata: r.metadata,
   })
+  const mappedProfitGreen = mapped?.profitGreen
   return {
     id: r.id,
     type,
     title: sanitizeCustomerNotificationText(mapped?.title ?? r.title, fallbackMsg),
     message: sanitizeCustomerNotificationText(mapped?.body ?? r.body, fallbackMsg),
+    profitGreen: mappedProfitGreen,
     timestamp: r.created_at,
     read: !!r.read_at,
     archived: !!r.user_archived_at,

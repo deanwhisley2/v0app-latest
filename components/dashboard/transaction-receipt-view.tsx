@@ -48,6 +48,9 @@ export function TransactionReceiptView({
         </div>
         <h2 className="mt-3 text-lg font-semibold tracking-tight text-foreground">{headerTitle}</h2>
         <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{category}</p>
+        {receipt.profitGreen ? (
+          <p className="mt-3 text-xl font-bold text-[#22C55E]">+{receipt.profitGreen.displayAmount}</p>
+        ) : null}
       </div>
 
       <div className="mx-4 rounded-2xl border border-border/70 bg-muted/10">

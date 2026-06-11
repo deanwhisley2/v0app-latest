@@ -24,6 +24,7 @@ export type PresentedNotification = {
   metaLine?: string
   category: NotificationInboxCategory
   categoryLabel: string
+  profitGreen?: { displayAmount: string }
 }
 
 const LOGIN_RAW =
@@ -149,5 +150,6 @@ export function presentNotification(
     summary,
     detail,
     metaLine,
+    profitGreen: (n as { profitGreen?: { displayAmount: string } }).profitGreen,
   }
 }

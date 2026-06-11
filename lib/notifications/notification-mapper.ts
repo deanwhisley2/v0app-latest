@@ -14,6 +14,8 @@ import type { AppLanguage } from "@/lib/user-preferences"
 export type MappedCustomerNotification = {
   title: string
   body: string
+  /** If set, render amount as +{displayAmount} in green (#22C55E) */
+  profitGreen?: { displayAmount: string }
 }
 
 function clean(s: string): string {
@@ -90,9 +92,8 @@ export function mapCustomerNotification(params: {
     if (/earnings_to_liquid|earnings_liquid|terminal_earnings/i.test(eventType)) {
       return {
         title: "Earnings Credited",
-        body: amountFmt
-          ? `Your trading earnings of ${amountFmt} have been credited to your Main Account.`
-          : "Your earnings from the completed trading session have been credited to your earnings account.",
+        body: "Your trading earnings have been successfully credited.",
+        ...(amountFmt ? { profitGreen: { displayAmount: amountFmt } } : {}),
       }
     }
   }
@@ -246,7 +247,7 @@ export function mapCustomerNotification(params: {
         return {
           title: "Copy trade completed",
           body: amountFmt
-            ? `Your copy trade session has been settled successfully. ${amountFmt} was added to your balance.`
+            ? `Your copy trade session has been settled successfully. +${amountFmt} was added to your balance.`
             : "Your copy trade session has been settled successfully.",
         }
       }
@@ -295,8 +296,9 @@ export function mapCustomerNotification(params: {
     }
     if (amountFmt) {
       return {
-        title: "Trading update",
-        body: `Trading earnings of ${amountFmt} have been added to your balance.`,
+        title: "Earnings Credited",
+        body: "Your trading earnings have been successfully credited.",
+        profitGreen: { displayAmount: amountFmt },
       }
     }
     return {

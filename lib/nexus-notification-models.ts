@@ -22,6 +22,8 @@ export type NexusNotificationItem = {
   type: NexusNotificationType
   title: string
   message: string
+  /** If set, render amount as +{displayAmount} in green */
+  profitGreen?: { displayAmount: string }
   /** Optional friendlier explanation for the detail screen (falls back to `message`). */
   detailText?: string
   timestamp: string

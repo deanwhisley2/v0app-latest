@@ -46,6 +46,8 @@ export type TransactionReceipt = {
   payoutRail?: string | null
   /** Plain-text payload for future share/download. */
   shareText: string
+  /** If set, render amount as +{displayAmount} in green (#22C55E) */
+  profitGreen?: { displayAmount: string }
 }
 
 export type WithdrawalReceiptRow = {
@@ -651,6 +653,7 @@ export function buildNotificationFallbackReceipt(
     fields,
     timestamp: n.timestamp,
     shareText: [title, summary, n.timestamp].join("\n"),
+    profitGreen: (n as { profitGreen?: { displayAmount: string } }).profitGreen,
   }
 }
 
