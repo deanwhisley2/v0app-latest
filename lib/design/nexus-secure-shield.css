@@ -16,10 +16,6 @@
 }
 
 @media screen and (pointer: coarse), print {
-  .nexus-secure-shield {
-    -webkit-text-security: disc !important;
-  }
-
   .nexus-secure-shield input,
   .nexus-secure-shield textarea {
     -webkit-text-security: disc !important;
