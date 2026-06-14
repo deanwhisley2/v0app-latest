@@ -19,6 +19,11 @@ import { Loader2 } from "lucide-react"
 import type { SettingsView } from "@/components/dashboard/settings-screen"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
 
+const AirtimeCard = dynamic(
+  () => import("@/components/dashboard/airtime-card").then((m) => m.AirtimeCard),
+  { ssr: false, loading: () => <PanelLoader label="Loading airtime…" /> },
+)
+
 const NexusBotWorkspace = dynamic(
   () => import("@/components/dashboard/nexus-bot-workspace").then((m) => m.NexusBotWorkspace),
   {
@@ -524,6 +529,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const [selectedWithdrawPayoutId, setSelectedWithdrawPayoutId] = useState<string | null>(null)
   const [selectedCoinSymbol, setSelectedCoinSymbol] = useState("BTC")
   const [showBalance, setShowBalance] = useState(true)
+  const [showAirtimeDialog, setShowAirtimeDialog] = useState(false)
   const [mainBalance, setMainBalance] = useState(0)
   const [containerLockedUsd, setContainerLockedUsd] = useState(0)
   const [retailBalance, setRetailBalance] = useState(0)
@@ -4840,10 +4846,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 }}
                 onWithdraw={() => router.push("/recharge?mode=withdraw")}
                 onWithdrawEarnings={() => router.push("/recharge?mode=withdraw&source=earnings")}
-                onAirtime={() => {
-                  const el = document.getElementById("airtime-dialog-trigger")
-                  if (el) { el.click() } else { router.push("/recharge?mode=airtime") }
-                }}
+                onAirtime={() => setShowAirtimeDialog(true)}
                 depositUnderReviewLabel={depositUnderReviewBannerLabel}
               />
             ) : null}
@@ -5058,6 +5061,29 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
       ) : null}
 
       {!isGuestSession ? <TradeCelebrationBootstrap /> : null}
+
+      {/* ── Airtime Purchase Dialog ── */}
+      {showAirtimeDialog ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setShowAirtimeDialog(false)}
+        >
+          <div
+            className="w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-700/50 bg-[#0d1117] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Buy Airtime"
+          >
+            <AirtimeCard
+              earningsBalance={containerWithdrawableEarnings}
+              onClose={() => setShowAirtimeDialog(false)}
+              onSuccess={() => setShowAirtimeDialog(false)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       </>
       ) : null}
 
