@@ -9,7 +9,7 @@ export const SITE_BRAND = {
   assetVersion: "20260609",
   themeColor: "#00b87c",
   backgroundColor: "#0d1117",
-  siteUrl: "https://www.nexuspro.it.com",
+  siteUrl: "https://nexuspro-it-com.com",
 } as const
 
 export function brandAsset(path: string): string {

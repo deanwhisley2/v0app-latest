@@ -8,7 +8,7 @@ export const COMPANY_CONTACT = {
   whatsappDisplay: "+1 970 868 1977",
   whatsappHref: "https://wa.me/19708681977",
   email: "esknexuspro@gmail.com",
-  website: "https://nexuspro.it.com",
+  website: "https://nexuspro-it-com.com",
   twitter: "https://x.com/nexuspro",
   linkedIn: "https://www.linkedin.com/company/nexus-pro",
 } as const

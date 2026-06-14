@@ -5,13 +5,12 @@ const config: CapacitorConfig = {
   appName: "Nexus Pro",
   webDir: "out",
   server: {
-    url: "https://nexuspro.it.com",
+    url: "https://nexuspro-it-com.com",
     androidScheme: "https",
     cleartext: true,
     allowNavigation: [
-      "nexuspro.it.com",
-      "www.nexuspro.it.com",
-      "*.nexuspro.it.com",
+      "nexuspro-it-com.com",
+      "*.nexuspro-it-com.com",
       "*.supabase.co",
       "*.supabase.in",
     ],

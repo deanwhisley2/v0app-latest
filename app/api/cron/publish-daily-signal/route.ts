@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
     const notifier = new TelegramNotifier();
     const siteUrl = (
-      process.env.NEXT_PUBLIC_SITE_URL ?? "https://nexuspro.it.com"
+      process.env.NEXT_PUBLIC_SITE_URL ?? "https://nexuspro-it-com.com"
     ).replace(/\/+$/, "");
     const now = new Date();
     let sessionClosedMessage: string | null = null;

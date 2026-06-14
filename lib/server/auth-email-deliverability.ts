@@ -111,7 +111,7 @@ export async function getAuthEmailDeliverabilityDashboard(
   for (const p of recentProfiles ?? []) {
     const { data: auth } = await admin.auth.admin.getUserById(p.id)
     const email = auth.user?.email ?? ""
-    if (!email.includes("@") || email.includes("@accounts.nexuspro.it.com")) continue
+    if (!email.includes("@") || email.includes("@accounts.nexuspro-it-com.com")) continue
 
     const { data: codeRow } = await admin
       .from("email_verifications")

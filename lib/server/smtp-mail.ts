@@ -85,7 +85,7 @@ export async function sendSmtpMail(params: {
   if (!cfg) throw new Error("Brevo SMTP is not configured")
 
   const transport = getTransport()
-  const domain = cfg.fromEmail.split("@")[1] ?? "nexuspro.it.com"
+  const domain = cfg.fromEmail.split("@")[1] ?? "nexuspro-it-com.com"
   const messageId = `<${createHash("sha256").update(randomBytes(16)).digest("hex").slice(0, 24)}@${domain}>`
   const sentAt = new Date()
 

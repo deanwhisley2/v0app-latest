@@ -49,7 +49,7 @@ export function GoogleAnalyticsScripts() {
           gtag('config', '${measurementId}', {
             send_page_view: true,
             page_location: window.location.href,
-            cookie_domain: 'nexuspro.it.com',
+            cookie_domain: 'nexuspro-it-com.com',
             cookie_flags: 'SameSite=None;Secure'
           });
         `}
