@@ -66,25 +66,27 @@ CREATE POLICY airtime_requests_user_insert ON public.airtime_requests
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
--- Admins (level 5) can see all
+-- Admins (level 5) can see all — using profiles.trading_user_level instead of user_roles (which doesn't exist)
+DROP POLICY IF EXISTS airtime_requests_admin_select ON public.airtime_requests;
 CREATE POLICY airtime_requests_admin_select ON public.airtime_requests
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.user_roles
-      WHERE user_id = auth.uid()
-      AND role = 'admin'
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+      AND trading_user_level = 5
     )
   );
 
 -- Admins can update (approve/decline)
+DROP POLICY IF EXISTS airtime_requests_admin_update ON public.airtime_requests;
 CREATE POLICY airtime_requests_admin_update ON public.airtime_requests
   FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM public.user_roles
-      WHERE user_id = auth.uid()
-      AND role = 'admin'
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+      AND trading_user_level = 5
     )
   );
 
@@ -106,7 +108,7 @@ END $$;
 --    We keep the column name but add a view for the new naming
 
 -- Helper function: round USD to 2 decimals
-CREATE OR REPLACE FUNCTION public.internal_round_usd2(val numeric)
+CREATE OR REPLACE FUNCTION public.internal_round_usd2(n numeric)
 RETURNS numeric
 LANGUAGE sql
 IMMUTABLE
