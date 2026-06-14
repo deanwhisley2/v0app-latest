@@ -1,7 +1,7 @@
 /** Canonical transactional sender identity for auth / security email. */
 
-export const NEXUS_SUPPORT_EMAIL = "support@nexuspro.it.com"
-export const NEXUS_SECURITY_EMAIL = "security@nexuspro.it.com"
+export const NEXUS_SUPPORT_EMAIL = "support@nexuspro-it-com.com"
+export const NEXUS_SECURITY_EMAIL = "security@nexuspro-it-com.com"
 
 export type TransactionalSenderIdentity = {
   fromEmail: string

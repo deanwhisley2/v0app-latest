@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const SPAM_GUIDANCE =
-  "Gmail may place security messages in Promotions or Spam. Outlook may use Junk. Add security@nexuspro.it.com to contacts if needed."
+  "Gmail may place security messages in Promotions or Spam. Outlook may use Junk. Add security@nexuspro-it-com.com to contacts if needed."
 
 type Props = {
   className?: string
