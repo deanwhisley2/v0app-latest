@@ -6,7 +6,7 @@ import { getOrCreateSecurityProfile, verifyUserSecurityCode } from "@/lib/server
 import { isSupportedFiat } from "@/lib/currency-display"
 
 const SUPPORTED_AIRTIME_CURRENCIES = ["KES", "UGX"] as const
-const MIN_AIRTIME_USD = 0.5 // ~2000 KES worth
+const MIN_AIRTIME_USD = 0.53 // minimum airtime purchase
 
 type AirtimeBody = {
   amountLocal: number
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     // Check minimum
     if (amountUsd < MIN_AIRTIME_USD) {
       return NextResponse.json({
-        error: `Minimum airtime amount is ${MIN_AIRTIME_USD} USD worth (approx ${localCurrency === "KES" ? "2,000 KES" : "74,000 UGX"})`
+        error: `Minimum airtime amount is $${MIN_AIRTIME_USD} USD worth (approx ${localCurrency === "KES" ? "70 KES" : "2,000 UGX"})`
       }, { status: 400 })
     }
 

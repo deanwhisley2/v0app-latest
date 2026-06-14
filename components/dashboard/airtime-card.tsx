@@ -46,8 +46,8 @@ const CURRENCIES = [
 ]
 
 const MIN_AIRTIME_LOCAL: Record<string, number> = {
-  KES: 2000,
-  UGX: 74000,
+  KES: 70,
+  UGX: 2000,
 }
 
 function formatUsd(amount: number): string {
