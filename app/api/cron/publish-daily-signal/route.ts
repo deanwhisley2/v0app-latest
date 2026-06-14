@@ -137,7 +137,7 @@ export async function POST(request: Request) {
           ``,
           `The Nexus Pro Intelligence Engine is currently analyzing live market conditions and generating the next opportunity.`,
           ``,
-          `⏳ Next Signal Release: ${slot === "morning" ? "Today at 6:20 PM EAT (Night Session)" : "Tomorrow at 10:00 AM EAT (Morning Session)"}`,
+          `⏳ Next Signal Release: ${slot === "morning" ? "Today at 6:00 PM EAT (Night Session)" : "Tomorrow at 10:00 AM EAT (Morning Session)"}`,
           ``,
           `Stay connected:`,
           ``,

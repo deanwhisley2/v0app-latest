@@ -101,6 +101,21 @@ export async function registerTradeSession(
         resolveMatrixYieldPercent(start, sessionSlot),
       )
 
+  // Overlap guard: reject if there's already an active session for this slot
+  // whose time window overlaps with the new one.
+  const { data: overlapping, error: overlapErr } = await admin
+    .from("trade_sessions")
+    .select("id,code,start_at,end_at")
+    .eq("session_slot", sessionSlot)
+    .eq("status", "active")
+    .lt("start_at", end.toISOString())
+    .gt("end_at", start.toISOString())
+    .limit(1)
+  if (overlapErr) throw new Error(overlapErr.message)
+  if (overlapping && overlapping.length > 0) {
+    throw new Error(`SESSION_OVERLAP: slot "${sessionSlot}" already has active session ${overlapping[0].code}`);
+  }
+
   const { data: session, error: sErr } = await admin
     .from("trade_sessions")
     .insert({
