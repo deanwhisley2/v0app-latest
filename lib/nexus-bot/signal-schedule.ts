@@ -152,27 +152,27 @@ export function detectSlot(referenceDate?: Date): SignalSlot {
 /**
  * Check whether a given slot's trading window is currently active.
  * Used to prevent overlapping signals.
+ * Trade is active from sessionStart up until sessionEnd.
  */
 export function isSlotActive(slot: SignalSlot, referenceDate?: Date): boolean {
   const now = referenceDate ?? new Date();
   const window = buildSessionWindow(slot, now);
-  const eatNowMs = nowEATMs();
-  const startMs = window.sessionStart.getTime() + 3 * 3600_000;
-  const endMs = window.sessionEnd.getTime() + 3 * 3600_000;
-  return eatNowMs >= startMs && eatNowMs < endMs;
+  return now.getTime() >= window.sessionStart.getTime() && now.getTime() < window.sessionEnd.getTime();
 }
 
 /**
  * Check if a new signal can be generated for the given slot.
- * Returns false if the slot's trading window is already active or has passed.
+ * Returns true if current time is between signal release and trade session start.
+ * The publishing window is WIDE open from release time up until the exact moment
+ * trading starts — even if the release minute has passed, as long as the trade
+ * hasn't begun, the signal can still be published.
  */
 export function canPublishSignal(slot: SignalSlot, referenceDate?: Date): boolean {
   const now = referenceDate ?? new Date();
   const window = buildSessionWindow(slot, now);
-  const eatNowMs = nowEATMs();
-  const releaseMs = window.signalRelease.getTime() + 3 * 3600_000;
-  const endMs = window.sessionEnd.getTime() + 3 * 3600_000;
-  return eatNowMs >= releaseMs && eatNowMs < endMs;
+
+  // CORE RULE: Allow publishing from release time up until trading opens!
+  return now.getTime() >= window.signalRelease.getTime() && now.getTime() < window.sessionStart.getTime();
 }
 
 /**
