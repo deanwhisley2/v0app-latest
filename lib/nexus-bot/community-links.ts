@@ -6,7 +6,7 @@
 export const COMMUNITY_LINKS = {
   telegramChannel: "https://t.me/nexuspro2",
   telegramInvite: "https://t.me/+MlD_BiLkpephMjZk",
-  whatsappGroup: "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf",
+  whatsappGroup: "https://chat.whatsapp.com/CkezPKQ9ZtzJygH8VTo6Tj",
   whatsappChannel: "https://whatsapp.com/channel/0029VbCX8n61SWt0e9a0L80p",
   screenshotGroup: "https://chat.whatsapp.com/GtBKzg2XxJ7IKfLGesAzzb",
 } as const;

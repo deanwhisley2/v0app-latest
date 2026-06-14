@@ -30,7 +30,7 @@ import {
 import { VERIFY_STEPS_USER } from "@/lib/nexus-bot/user-session-messaging"
 import { cn } from "@/lib/utils"
 
-const SIGNAL_GROUP_HREF = "https://chat.whatsapp.com/GH3tSCYOQf8C4UldGDBLBf"
+const SIGNAL_GROUP_HREF = "https://chat.whatsapp.com/CkezPKQ9ZtzJygH8VTo6Tj"
 const WHATSAPP_SIGNAL_CHANNEL_HREF = "https://whatsapp.com/channel/0029VbCX8n61SWt0e9a0L80p"
 const WHATSAPP_SCREENSHOT_GROUP_HREF = "https://chat.whatsapp.com/GtBKzg2XxJ7IKfLGesAzzb"
 const TRADE_FLOW_PERSIST_KEY = "nexus_bot_trade_flow_v1"
