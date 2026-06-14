@@ -51,7 +51,7 @@ export function EmailVerificationSettingsCard({ variant = "security" }: Props) {
     const j = (await res.json().catch(() => ({}))) as EmailStatus & { error?: string }
     if (res.ok) {
       setStatus(j)
-      const auth = j.authEmail?.includes("@") && !j.authEmail.includes("@accounts.nexuspro-it-com.com")
+      const auth = j.authEmail?.includes("@") && !j.authEmail.includes("@accounts.nexuspro.it.com")
         ? j.authEmail
         : null
       const next = j.pendingEmail ?? j.profileEmail ?? auth ?? ""

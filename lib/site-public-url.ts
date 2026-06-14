@@ -3,7 +3,7 @@
  * Never use localhost in production-facing URLs.
  */
 
-const CANONICAL_PRODUCTION_ORIGIN = "https://nexuspro-it-com.com"
+const CANONICAL_PRODUCTION_ORIGIN = "https://www.nexuspro.it.com"
 
 function stripTrailingSlash(s: string): string {
   return s.replace(/\/+$/, "")

@@ -48,9 +48,9 @@ function buildCookieRecoveryResponse(request: NextRequest) {
 /** GA4 stream and canonical public site use www — redirect apex host (never leak :3000). */
 function wwwCanonicalRedirect(request: NextRequest): NextResponse | null {
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? ""
-  if (host !== "nexuspro-it-com.com") return null
+  if (host !== "nexuspro.it.com") return null
   const path = `${request.nextUrl.pathname}${request.nextUrl.search}`
-  return NextResponse.redirect(new URL(path, "https://nexuspro-it-com.com"), 308)
+  return NextResponse.redirect(new URL(path, "https://www.nexuspro.it.com"), 308)
 }
 
 export async function middleware(request: NextRequest) {

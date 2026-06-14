@@ -1,4 +1,4 @@
-const PHONE_AUTH_EMAIL_DOMAIN = "accounts.nexuspro-it-com.com"
+const PHONE_AUTH_EMAIL_DOMAIN = "accounts.nexuspro.it.com"
 
 export function normalizeRegisterPhone(raw: string): string {
   return raw.trim().replace(/\s+/g, "")

@@ -30,7 +30,7 @@ async function main() {
   for (const p of gaps ?? []) {
     const { data: auth } = await admin.auth.admin.getUserById(p.id)
     const email = auth.user?.email ?? ""
-    if (!email.includes("@") || email.includes("@accounts.nexuspro-it-com.com")) continue
+    if (!email.includes("@") || email.includes("@accounts.nexuspro.it.com")) continue
     const { data: v } = await admin
       .from("email_verifications")
       .select("created_at")
