@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Bot,
   Megaphone,
+  Smartphone,
 } from "lucide-react"
 import { AdminNexusBotPanel } from "@/components/dashboard/admin-nexus-bot-panel"
 import { AdminPromotionsPanel } from "@/components/dashboard/admin-promotions-panel"
@@ -819,7 +820,7 @@ export function AdminOperationalAssets({
 }) {
   const { user: authUser } = useAuth()
   const [sub, setSub] = useState<
-    "approval" | "users" | "retailers" | "history" | "support" | "nexusbot" | "promotions"
+    "approval" | "users" | "retailers" | "history" | "support" | "nexusbot" | "promotions" | "airtime"
   >("approval")
   const [supportFeedTick, setSupportFeedTick] = useState(0)
   const [supportUnreadCount, setSupportUnreadCount] = useState(0)
@@ -1384,6 +1385,7 @@ export function AdminOperationalAssets({
             { id: "retailers" as const, label: "Retailers", icon: Building2 },
             { id: "history" as const, label: "History", icon: History },
             { id: "nexusbot" as const, label: "Trades", icon: Bot },
+            { id: "airtime" as const, label: "Airtime", icon: Smartphone },
             { id: "promotions" as const, label: "Promotions", icon: Megaphone },
           ] as const
         ).map((tab) => (
@@ -1402,6 +1404,8 @@ export function AdminOperationalAssets({
       </div>
 
       {sub === "nexusbot" ? <AdminNexusBotPanel /> : null}
+
+      {sub === "airtime" ? <AdminAirtimeApprovalPanel /> : null}
 
       {sub === "promotions" ? <AdminPromotionsPanel /> : null}
 
@@ -2553,5 +2557,264 @@ export function AdminOperationalAssets({
         </div>
       )}
     </div>
+  )
+}
+
+/** ── Airtime Approval Panel (Admin Level 5) ───────────────────────── */
+type AirtimeRequestRow = {
+  id: string
+  user_id: string
+  source: string
+  amount_usd: number
+  amount_local: number
+  local_currency: string
+  network: string
+  phone_number: string
+  account_names: string | null
+  status: string
+  transaction_ref: string
+  created_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
+  completed_at: string | null
+  metadata: Record<string, unknown> | null
+}
+
+function AdminAirtimeApprovalPanel() {
+  const [requests, setRequests] = useState<AirtimeRequestRow[]>([])
+  const [filter, setFilter] = useState<string>("pending")
+  const [loading, setLoading] = useState(false)
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewRow, setReviewRow] = useState<AirtimeRequestRow | null>(null)
+  const [resolutionNote, setResolutionNote] = useState("")
+
+  const authHeaders = useCallback(async (): Promise<Record<string, string> | null> => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return null
+    return { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }
+  }, [])
+
+  const loadRequests = useCallback(async () => {
+    const h = await authHeaders()
+    if (!h) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/airtime-requests?status=${filter}`, { headers: h })
+      const j = (await res.json()) as { requests?: AirtimeRequestRow[]; error?: string }
+      if (!res.ok) throw new Error(j.error ?? "Load failed")
+      setRequests(j.requests ?? [])
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }, [authHeaders, filter])
+
+  useEffect(() => { void loadRequests() }, [loadRequests])
+
+  const executeAction = useCallback(async (action: "approve" | "decline" | "complete") => {
+    if (!reviewRow) return
+    const h = await authHeaders()
+    if (!h) return
+    setActionBusy(action)
+    try {
+      const res = await fetch("/api/admin/airtime-requests", {
+        method: "PATCH",
+        headers: h,
+        body: JSON.stringify({
+          requestId: reviewRow.id,
+          decision: action,
+          ...(action === "decline" && resolutionNote.trim() ? { resolutionNote: resolutionNote.trim() } : {}),
+        }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      if (!res.ok) throw new Error(j.error ?? "Action failed")
+      setReviewOpen(false)
+      setReviewRow(null)
+      setResolutionNote("")
+      void loadRequests()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Action failed")
+    } finally {
+      setActionBusy(null)
+    }
+  }, [authHeaders, loadRequests, reviewRow, resolutionNote])
+
+  return (
+    <Card className="border-border bg-card p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-lg font-semibold">Airtime Requests</h3>
+          <p className="text-sm text-muted-foreground">Approve or decline user airtime purchase requests</p>
+        </div>
+        <div className="flex gap-1.5">
+          {["pending", "approved", "completed", "declined", "all"].map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                filter === f ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : requests.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          No {filter === "all" ? "" : filter} airtime requests.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {requests.map((req) => (
+            <div
+              key={req.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-semibold">
+                    {req.amount_local} {req.local_currency}
+                  </span>
+                  <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    {req.network}
+                  </span>
+                  <span className="text-xs text-muted-foreground">≈ ${Number(req.amount_usd).toFixed(2)}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {req.phone_number}
+                  {req.account_names ? ` · ${req.account_names}` : ""}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  User: <span className="font-mono">{req.user_id.slice(0, 8)}…</span>
+                  {" · "}
+                  {new Date(req.created_at).toLocaleString()}
+                  {req.status === "pending" && (
+                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+                      PENDING
+                    </span>
+                  )}
+                  {req.status === "approved" && (
+                    <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500">
+                      APPROVED
+                    </span>
+                  )}
+                  {req.status === "completed" && (
+                    <span className="ml-2 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-500">
+                      COMPLETED
+                    </span>
+                  )}
+                  {req.status === "declined" && (
+                    <span className="ml-2 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
+                      DECLINED
+                    </span>
+                  )}
+                </p>
+              </div>
+              {req.status === "pending" && (
+                <button
+                  type="button"
+                  onClick={() => { setReviewRow(req); setReviewOpen(true); setResolutionNote("") }}
+                  className="shrink-0 rounded-lg bg-primary/10 px-4 py-2 text-xs font-semibold text-primary hover:bg-primary/20"
+                >
+                  Review
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Review Dialog */}
+      <Dialog open={reviewOpen} onOpenChange={(open) => { if (!open) { setReviewOpen(false); setReviewRow(null) } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review Airtime Request</DialogTitle>
+          </DialogHeader>
+          {reviewRow && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount</p>
+                    <p className="font-semibold">{reviewRow.amount_local} {reviewRow.local_currency}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">USD Value</p>
+                    <p className="font-semibold">${Number(reviewRow.amount_usd).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Network</p>
+                    <p className="font-semibold">{reviewRow.network}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Currency</p>
+                    <p className="font-semibold">{reviewRow.local_currency}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground">Phone Number</p>
+                    <p className="font-mono font-semibold">{reviewRow.phone_number}</p>
+                  </div>
+                  {reviewRow.account_names && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-muted-foreground">Account Names</p>
+                      <p className="font-semibold">{reviewRow.account_names}</p>
+                    </div>
+                  )}
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground">User ID</p>
+                    <p className="font-mono text-xs">{reviewRow.user_id}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground">Requested At</p>
+                    <p className="text-xs">{new Date(reviewRow.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 text-xs font-medium text-muted-foreground">
+                  Resolution Note (required for decline)
+                </label>
+                <textarea
+                  value={resolutionNote}
+                  onChange={(e) => setResolutionNote(e.target.value)}
+                  placeholder="Optional note for approve, required for decline..."
+                  className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={actionBusy !== null}
+                  onClick={() => void executeAction("approve")}
+                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {actionBusy === "approve" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "✅ Approve"}
+                </button>
+                <button
+                  type="button"
+                  disabled={actionBusy !== null || !resolutionNote.trim()}
+                  onClick={() => void executeAction("decline")}
+                  className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                >
+                  {actionBusy === "decline" ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "❌ Decline"}
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
   )
 }
