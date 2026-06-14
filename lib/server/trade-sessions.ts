@@ -71,6 +71,7 @@ export async function registerTradeSession(
     endAt: string
     status: "draft" | "active"
     displayLabel?: string
+    maxYieldPercent?: number
   },
 ): Promise<RegisteredTradeSession> {
   const code = normalizeTradeCode(params.code)
@@ -94,9 +95,11 @@ export async function registerTradeSession(
   if (gen.trade_session_id) throw new Error("CODE_ALREADY_REGISTERED")
 
   const displayLabel = params.displayLabel?.trim() || sessionName
-  const maxYieldPercent = validateMaxYieldPercent(
-    resolveMatrixYieldPercent(start, sessionSlot),
-  )
+  const maxYieldPercent = params.maxYieldPercent != null
+    ? validateMaxYieldPercent(params.maxYieldPercent)
+    : validateMaxYieldPercent(
+        resolveMatrixYieldPercent(start, sessionSlot),
+      )
 
   const { data: session, error: sErr } = await admin
     .from("trade_sessions")

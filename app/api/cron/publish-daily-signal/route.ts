@@ -21,11 +21,11 @@ import {
 
 /**
  * CRON: Publish one trade signal to Telegram channel.
- * Called by VPS crontab at ~5:00 AM EAT (morning) and ~6:00 PM EAT (evening).
+ * Called by VPS crontab at ~10:00 AM EAT (morning) and ~6:20 PM EAT (evening).
  *
  * Schedule (Africa / EAT = UTC+3):
- *   ☀️ Morning:   Signal 05:00  → Trade 07:00–11:00 (same day)
- *   🌙 Evening:   Signal 18:00  → Trade 21:00–07:00 (next day)
+ *   ☀️ Morning:   Signal 10:00  → Trade 13:00–17:30 (same day, 3hr early booking)
+ *   🌙 Evening:   Signal 18:20  → Trade 00:10–08:40 (next day overnight)
  *
  * Guard: `CRON_SECRET` in header `x-cron-secret` or `Authorization: Bearer`.
  */
@@ -52,6 +52,38 @@ export async function POST(request: Request) {
         { error: "NEXUS_EXPERT_FALLBACK_USER_ID not configured" },
         { status: 500 },
       );
+    }
+
+    // ── Check for admin manual override ──────────────────
+    // If admin 5 has already created a signal for this slot today, skip auto-generation
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: existingSessions } = await admin
+      .from("trade_sessions")
+      .select("id,code,session_name,status,created_at,registered_by,max_yield_percent")
+      .eq("session_slot", slot)
+      .gte("created_at", todayStart.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const activeOverride = (existingSessions ?? []).find(
+      (s) => s.status === "active" && s.registered_by && s.registered_by !== actorId
+    );
+
+    if (activeOverride) {
+      console.log(`[publish-daily-signal] Admin override detected for ${slot} slot. Skipping auto-generation.`);
+      return NextResponse.json({
+        ok: true,
+        slot,
+        skipped: true,
+        reason: "admin_override",
+        existingSession: {
+          id: activeOverride.id,
+          code: activeOverride.code,
+          sessionName: activeOverride.session_name,
+          status: activeOverride.status,
+        },
+      });
     }
 
     const notifier = new TelegramNotifier();
@@ -105,7 +137,7 @@ export async function POST(request: Request) {
           ``,
           `The Nexus Pro Intelligence Engine is currently analyzing live market conditions and generating the next opportunity.`,
           ``,
-          `⏳ Next Signal Release: ${slot === "morning" ? "Today at 6:00 PM EAT" : "Tomorrow at 5:00 AM EAT"}`,
+          `⏳ Next Signal Release: ${slot === "morning" ? "Today at 6:20 PM EAT (Night Session)" : "Tomorrow at 10:00 AM EAT (Morning Session)"}`,
           ``,
           `Stay connected:`,
           ``,
@@ -166,8 +198,13 @@ export async function POST(request: Request) {
     const startTimeEAT = formatEAT(window.sessionStart);
     const endTimeEAT = formatEAT(window.sessionEnd);
 
-    // Motivational quote (unique per slot)
+    // Motivational quotes — deterministic per slot + random extra
     const quote = buildMarketInsight(now, slot);
+    // Add a second random trading quote for variety
+    const { pickQuote } = await import("@/lib/nexus-bot/trading-quotes");
+    const secondQuote = pickQuote(now, slot === "morning" ? "evening" : "morning");
+    const author = secondQuote.author ? ` — ${secondQuote.author}` : "";
+    const extraQuote = `"${secondQuote.text}"${author}`;
 
     // Build the session time string (handle overnight)
     const dateStr = formatISODate(window.sessionStart.toISOString());
@@ -177,6 +214,11 @@ export async function POST(request: Request) {
     } else {
       timeWindowStr = `${startTimeEAT} → ${endTimeEAT}`;
     }
+
+    // Early booking info
+    const earlyBookingStr = isMorning
+      ? `⏰ *Early Booking*: Signal released 3 hours before trade starts at ${startTimeEAT}. Book your slot early!`
+      : `⏰ *Early Booking*: Signal released at ${formatEAT(window.signalRelease)} today. Trade opens at ${startTimeEAT} midnight. Book before midnight!`;
 
     const message = [
       `🚀 *NEXUS PRO — ${headerLabel}*`,
@@ -205,15 +247,15 @@ export async function POST(request: Request) {
       `✅ Allocate Capital`,
       `✅ Activate Trade`,
       ``,
+      earlyBookingStr,
+      ``,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       ``,
-      isMorning ? `🔥 *TODAY'S MARKET INSIGHT*` : `🚀 *TONIGHT'S OPPORTUNITY*`,
+      `🔥 *TRADING MOTIVATION*`,
       ``,
       quote,
       ``,
-      isMorning
-        ? `"The market rewards discipline, not emotion. Every signal is an opportunity, but consistency creates wealth."`
-        : `"Markets never sleep. While others are watching, intelligent traders are positioning themselves for tomorrow."`,
+      extraQuote,
       ``,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       ``,

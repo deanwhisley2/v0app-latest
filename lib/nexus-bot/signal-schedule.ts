@@ -3,17 +3,15 @@
  *
  * Fixed daily schedule:
  *
- * Morning Session:
- *   Signal visible:  5:00 AM EAT (users can see/join)
- *   Trading opens:   7:00 AM EAT
- *   Trading closes: 11:00 AM EAT (settlement runs)
- *   Duration: 4 hours
+ * ☀️ Morning Session:
+ *   Signal sent:    10:00 AM EAT  (published to Telegram channel)
+ *   Trading opens:   1:00 PM EAT  (3 hours for early booking)
+ *   Trading closes:  5:30 PM EAT  (4.5 hours session)
  *
- * Evening Session:
- *   Signal visible:  6:00 PM EAT (users can see/join)
- *   Trading opens:   9:00 PM EAT
- *   Trading closes:  7:00 AM EAT next day (settlement runs)
- *   Duration: 10 hours
+ * 🌙 Evening / Night Session:
+ *   Signal sent:     6:20 PM EAT  (published same day, 50 min after morning closes)
+ *   Trading opens:  12:10 AM EAT  (next day midnight)
+ *   Trading closes:  8:40 AM EAT  (next day morning)
  *
  * No overlap — morning fully settled before evening signal appears.
  */
@@ -36,8 +34,8 @@ export type SessionWindow = {
  * Build the session window for the given slot.
  * All times EAT (UTC+3).
  *
- * Morning: signal 5AM, trade 7AM→11AM (same day)
- * Evening: signal 6PM, trade 9PM→7AM+1 (next day)
+ * ☀️ Morning: signal 10AM, trade 1PM→5:30PM (same day)
+ * 🌙 Evening: signal 6:20PM, trade 12:10AM→8:40AM (next day)
  */
 export function buildSessionWindow(
   slot: SignalSlot,
@@ -51,27 +49,28 @@ export function buildSessionWindow(
   const sessionEnd = new Date(eatNow);
 
   if (slot === "morning") {
-    // Signal: 5:00 AM EAT
-    signalRelease.setHours(5, 0, 0, 0);
-    // Trade: 7:00 AM → 11:00 AM
-    sessionStart.setHours(7, 0, 0, 0);
-    sessionEnd.setHours(11, 0, 0, 0);
+    // Signal: 10:00 AM EAT
+    signalRelease.setHours(10, 0, 0, 0);
+    // Trade: 1:00 PM → 5:30 PM (3hr early booking + 4.5hr trading)
+    sessionStart.setHours(13, 0, 0, 0);
+    sessionEnd.setHours(17, 30, 0, 0);
 
-    // If we're past session end (11AM), move to tomorrow
+    // If we're past session end (5:30PM), move to tomorrow
     if (eatNow.getTime() >= sessionEnd.getTime()) {
       signalRelease.setDate(signalRelease.getDate() + 1);
       sessionStart.setDate(sessionStart.getDate() + 1);
       sessionEnd.setDate(sessionEnd.getDate() + 1);
     }
   } else {
-    // Signal: 6:00 PM EAT
-    signalRelease.setHours(18, 0, 0, 0);
-    // Trade: 9:00 PM → 7:00 AM next day
-    sessionStart.setHours(21, 0, 0, 0);
-    sessionEnd.setHours(7, 0, 0, 0);
+    // Signal: 6:20 PM EAT (same day as morning)
+    signalRelease.setHours(18, 20, 0, 0);
+    // Trade: 12:10 AM → 8:40 AM next day
+    sessionStart.setHours(0, 10, 0, 0);
+    sessionStart.setDate(sessionStart.getDate() + 1);
+    sessionEnd.setHours(8, 40, 0, 0);
     sessionEnd.setDate(sessionEnd.getDate() + 1);
 
-    // If we're past session end (7AM next day), move to tomorrow
+    // If we're past session end (8:40AM next day), move to tomorrow
     if (eatNow.getTime() >= sessionEnd.getTime()) {
       signalRelease.setDate(signalRelease.getDate() + 1);
       sessionStart.setDate(sessionStart.getDate() + 1);
@@ -111,17 +110,19 @@ export function fromEAT(eatDate: Date): Date {
  * Detect which slot we're in based on current EAT time.
  *
  * Slot windows (determined by signal visibility periods):
- *   Morning signal: 5:00 AM – 11:00 AM (signal appears 5AM, session 7AM–11AM)
- *   Evening signal: 6:00 PM – 7:00 AM next day (signal appears 6PM, session 9PM–7AM)
+ *   ☀️ Morning signal: 10:00 AM – 5:30 PM (signal 10AM, trade 1PM–5:30PM)
+ *   🌙 Evening signal: 6:20 PM – 8:40 AM next day (signal 6:20PM, trade 12:10AM–8:40AM)
  */
 export function detectSlot(referenceDate?: Date): SignalSlot {
   const now = referenceDate ?? new Date();
   const eat = toEAT(now);
   const hour = eat.getHours();
+  const minute = eat.getMinutes();
 
-  // Morning slot: if current hour is between 5AM and 11AM (inclusive of signal window)
-  if (hour >= 5 && hour < 11) return "morning";
-  // Evening slot: everything else (covers 11AM–5AM next day, including overnight)
+  // Morning slot: 10:00 AM to 5:29 PM
+  if (hour >= 10 && hour < 17) return "morning";
+  if (hour === 17 && minute < 30) return "morning";
+  // Evening slot: everything else (5:30PM–9:59AM next day)
   return "evening";
 }
 

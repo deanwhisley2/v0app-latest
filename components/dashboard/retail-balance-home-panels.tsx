@@ -3,12 +3,12 @@
 import type { ComponentType, ReactNode } from "react"
 import {
   ArrowDownLeft,
-  ArrowRightLeft,
   Clock,
   Eye,
   EyeOff,
   Lock,
   Plus,
+  Smartphone,
   TrendingUp,
   Wallet,
 } from "lucide-react"
@@ -52,7 +52,8 @@ type RetailBalanceHomePanelsProps = {
   withdrawalEligibility: WithdrawalEligibilityHint | null
   onAddFunds: () => void
   onWithdraw: () => void
-  onTransferToMain: () => void
+  onWithdrawEarnings: () => void
+  onAirtime: () => void
   depositUnderReviewLabel?: string | null
 }
 
@@ -115,7 +116,8 @@ export function RetailBalanceHomePanels({
   withdrawalEligibility,
   onAddFunds,
   onWithdraw,
-  onTransferToMain,
+  onWithdrawEarnings,
+  onAirtime,
   depositUnderReviewLabel = null,
 }: RetailBalanceHomePanelsProps) {
   const masked = "••••••••"
@@ -213,9 +215,9 @@ export function RetailBalanceHomePanels({
         </div>
       ) : null}
 
-      {/* Pocket balance */}
+      {/* Earnings Account (was Pocket balance) */}
       <section className={cn(panelClass, "nexus-transfer-panel p-5 sm:p-6")} aria-label={t("funding.balance.liquidTitle")}>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div className="grid grid-cols-1 gap-4">
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">
               {t("funding.balance.liquidTitle")}
@@ -223,18 +225,33 @@ export function RetailBalanceHomePanels({
             <p className="mt-2 min-h-[2rem] font-mono text-[1.75rem] font-semibold tabular-nums leading-none tracking-tight text-foreground sm:min-h-[2.25rem] sm:text-[2rem]">
               {pocketDisplay}
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t("funding.balance.pocketHint")}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              Keep your earnings here and cash out via Withdraw or Airtime. No transfers to Nexus Main.
+            </p>
           </div>
-          <Button
-            type="button"
-            size="lg"
-            className={cn("w-full shrink-0 sm:min-w-[12rem]", NX_BTN_PRIMARY)}
-            onClick={onTransferToMain}
-            disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
-          >
-            <ArrowRightLeft className="h-4 w-4 shrink-0" aria-hidden />
-            {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.transferCta")}
-          </Button>
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              type="button"
+              size="lg"
+              className={cn("w-full text-base", NX_BTN_PRIMARY)}
+              onClick={onWithdrawEarnings}
+              disabled={isContainerFlowBusy || containerWithdrawableEarnings <= 0}
+            >
+              <ArrowDownLeft className="h-5 w-5 shrink-0" aria-hidden />
+              {isContainerFlowBusy ? t("funding.balance.processing") : t("funding.balance.withdrawEarnings") || "Withdraw"}
+            </Button>
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              className="w-full text-base"
+              onClick={onAirtime}
+              disabled={containerWithdrawableEarnings <= 0}
+            >
+              <Smartphone className="h-5 w-5 shrink-0" aria-hidden />
+              Airtime
+            </Button>
+          </div>
         </div>
       </section>
 

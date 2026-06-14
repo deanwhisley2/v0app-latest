@@ -4,7 +4,7 @@ import { bearerUserWithGovernance } from "@/lib/server/account-governance"
 import { recordFinancialEvent } from "@/lib/server/financial-events"
 
 type ActionBody = {
-  action?: "extract" | "transfer_to_main"
+  action?: "extract" | "withdraw"
   grossAmount?: number
 }
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as ActionBody
     const action = body.action
-    if (action !== "extract" && action !== "transfer_to_main") {
+    if (action !== "extract" && action !== "withdraw") {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
 
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         status: "completed",
         actorType: "user",
         actorId: user.id,
-        summary: "Fixed trade earnings credited to container balance.",
+        summary: "Fixed trade earnings credited to earnings balance.",
         metadata: { creditedAmount: credited, feeRate: CONTAINER_FEE_RATE },
       })
 
@@ -108,46 +108,87 @@ export async function POST(request: Request) {
       })
     }
 
-    // transfer_to_main
+    // withdraw — Directly cash out earnings via the withdrawal pipeline
     if (withdrawable <= 0) {
-      return NextResponse.json({ error: "No container liquid earnings to transfer" }, { status: 400 })
+      return NextResponse.json({ error: "No earnings balance to withdraw" }, { status: 400 })
     }
-    const transferAmount = withdrawable
-    const nextAvailable = round2(available + transferAmount)
-    const nextWithdrawable = 0
+    if (withdrawable < 1) {
+      return NextResponse.json({ error: "Minimum earnings withdrawal is $1.00" }, { status: 400 })
+    }
 
-    const { error: updateErr } = await admin
+    // Create a withdrawal request from earnings
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("funding_country_code")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    const grossAmount = withdrawable
+    const txRef = crypto.randomUUID()
+
+    // Record as a withdrawal request from earnings
+    const { error: wrErr } = await admin
+      .from("withdrawal_requests")
+      .insert({
+        user_id: user.id,
+        amount: grossAmount,
+        processing_fee_amount: 0,
+        payout_amount: grossAmount,
+        processing_fee_rate: 0,
+        currency_context: "USD",
+        status: "pending",
+        transaction_ref: txRef,
+        metadata: {
+          source: "earnings_withdrawal",
+          earnings_full_balance: true,
+          settlement: {
+            gross_usd: grossAmount,
+            processing_fee_usd: 0,
+            payout_usd: grossAmount,
+            fee_rate: 0,
+          },
+        },
+      })
+
+    if (wrErr) throw new Error(wrErr.message)
+
+    // Deduct from earnings
+    await admin
       .from("user_balances")
       .update({
-        available_balance: nextAvailable,
-        container_withdrawable_earnings: nextWithdrawable,
+        container_withdrawable_earnings: 0,
+        withdrawal_pending_balance: round2(Number(current.withdrawal_pending_balance ?? 0) + grossAmount),
         last_updated: new Date().toISOString(),
       })
       .eq("user_id", user.id)
-    if (updateErr) throw new Error(updateErr.message)
 
     await recordFinancialEvent({
       userId: user.id,
-      eventType: "withdrawable_to_main",
-      category: "internal_transfer",
-      amount: transferAmount,
+      eventType: "earnings_withdrawal_request",
+      category: "cashout",
+      amount: grossAmount,
       feeAmount: 0,
       balanceSource: "container_withdrawable_earnings",
-      balanceDestination: "available_balance",
-      status: "completed",
+      balanceDestination: "withdrawal_pending_balance",
+      status: "pending",
+      transactionRef: txRef,
       actorType: "user",
       actorId: user.id,
-      summary: "Fixed trade earnings credited to Nexus main balance.",
+      summary: `Earnings withdrawal requested: $${grossAmount}`,
+      metadata: { source: "earnings_direct_withdrawal" },
     })
 
     return NextResponse.json({
       ok: true,
       action,
-      transferAmount,
+      withdrawalAmount: grossAmount,
+      transactionRef: txRef,
+      message: "Earnings withdrawal request submitted for admin review.",
       balances: {
-        available_balance: nextAvailable,
+        available_balance: available,
         active_container_earnings: active,
-        container_withdrawable_earnings: nextWithdrawable,
+        container_withdrawable_earnings: 0,
+        withdrawal_pending_balance: round2(Number(current.withdrawal_pending_balance ?? 0) + grossAmount),
       },
     })
   } catch (e) {
