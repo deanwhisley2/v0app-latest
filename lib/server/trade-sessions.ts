@@ -192,34 +192,45 @@ export async function diagnoseTradeSessionCode(
     return { ok: false, code, reason: "invalid_format" }
   }
 
-  const { data, error } = await admin
-    .from("trade_sessions")
-    .select(
-      "id,code,session_name,display_label,session_slot,start_at,end_at,status,max_yield_percent,admin_terminated_at",
-    )
-    .eq("code", code)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!data) return { ok: false, code, reason: "not_found" }
+  // Retry once — handles read-after-write consistency lag on Supabase replicas.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from("trade_sessions")
+      .select(
+        "id,code,session_name,display_label,session_slot,start_at,end_at,status,max_yield_percent,admin_terminated_at",
+      )
+      .eq("code", code)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
 
-  if (data.admin_terminated_at) return { ok: false, code, reason: "terminated" }
+    if (data) {
+      if (data.admin_terminated_at) return { ok: false, code, reason: "terminated" }
 
-  const status = String(data.status)
-  const endMs = new Date(String(data.end_at)).getTime()
-  if (status === "expired" || endMs <= now.getTime()) {
-    return { ok: false, code, reason: "expired" }
+      const status = String(data.status)
+      const endMs = new Date(String(data.end_at)).getTime()
+      if (status === "expired" || endMs <= now.getTime()) {
+        return { ok: false, code, reason: "expired" }
+      }
+      if (status === "draft") return { ok: false, code, reason: "draft" }
+      if (status !== "active") return { ok: false, code, reason: "not_active" }
+
+      const maxYield = data.max_yield_percent != null ? Number(data.max_yield_percent) : null
+      if (!(maxYield != null && maxYield > 0)) {
+        return { ok: false, code, reason: "no_yield_config" }
+      }
+
+      const session = await findActiveTradeSessionByCode(admin, code, now)
+      if (!session) return { ok: false, code, reason: "not_active" }
+      return { ok: true, session }
+    }
+
+    // First attempt returned null — could be replica lag. Wait briefly and retry.
+    if (attempt === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
   }
-  if (status === "draft") return { ok: false, code, reason: "draft" }
-  if (status !== "active") return { ok: false, code, reason: "not_active" }
 
-  const maxYield = data.max_yield_percent != null ? Number(data.max_yield_percent) : null
-  if (!(maxYield != null && maxYield > 0)) {
-    return { ok: false, code, reason: "no_yield_config" }
-  }
-
-  const session = await findActiveTradeSessionByCode(admin, code, now)
-  if (!session) return { ok: false, code, reason: "not_active" }
-  return { ok: true, session }
+  return { ok: false, code, reason: "not_found" };
 }
 
 export async function findActiveTradeSessionByCode(
