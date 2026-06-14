@@ -1,133 +1,197 @@
 /**
- * SIGNAL SCHEDULE — Africa Time (EAT / UTC+3)
- *
- * Fixed daily schedule:
+ * REVISED SIGNAL SCHEDULE — Nairobi / Africa Time (EAT / UTC+3)
+ * 12-Hour Clock Strict Automation Engine
  *
  * ☀️ Morning Session:
- *   Signal sent:    10:00 AM EAT  (published to Telegram channel)
- *   Trading opens:   1:00 PM EAT  (3 hours for early booking)
- *   Trading closes:  5:30 PM EAT  (4.5 hours session)
+ *   Signal sent:    10:00 AM EAT
+ *   Trading opens:   1:00 PM EAT (3hr early booking)
+ *   Trading closes:  5:30 PM EAT (4.5hr session)
  *
- * 🌙 Evening / Night Session:
- *   Signal sent:     6:20 PM EAT  (published same day, 50 min after morning closes)
- *   Trading opens:  12:10 AM EAT  (next day midnight)
- *   Trading closes:  8:40 AM EAT  (next day morning)
+ * 🌙 Evening Session:
+ *   Signal sent:     6:00 PM EAT
+ *   Trading opens:  10:00 PM EAT (4hr early booking)
+ *   Trading closes: 10:00 AM EAT next day (12hr session, crosses midnight)
  *
- * No overlap — morning fully settled before evening signal appears.
+ * No overlap — sessions strictly sequential.
+ * Admin can ONLY override profitMargin (earnings %).
  */
 
 export type SignalSlot = "morning" | "evening";
 
 export type SessionWindow = {
   slot: SignalSlot;
-  /** When the signal code is published (generated) */
+  /** When the signal code is published (generated) — Telegram trigger time */
   signalRelease: Date;
   /** When trading opens (session start) */
   sessionStart: Date;
-  /** When trading closes (session end) */
+  /** When trading closes (session end / settlement) */
   sessionEnd: Date;
-  /** Whether the session ends on the next day */
+  /** Admin-configurable profit margin (%), system default if unset */
+  profitMargin: number;
+  /** Whether the session ends on the next calendar day */
   crossesMidnight: boolean;
 };
 
 /**
+ * Create a UTC Date from explicit EAT (UTC+3) hour/minute values.
+ * Uses pure math — no mutable .setHours/.setDate chaining.
+ * Works correctly regardless of server timezone.
+ */
+function createEATDate(baseDate: Date, eatHour: number, eatMinute: number, dayOffset = 0): Date {
+  // EAT = UTC+3 → UTC hour = EAT hour - 3
+  const utcDate = new Date(baseDate);
+  utcDate.setUTCDate(utcDate.getUTCDate() + dayOffset);
+  utcDate.setUTCHours(eatHour - 3, eatMinute, 0, 0);
+  return utcDate;
+}
+
+/**
+ * Get current time in EAT (millis since epoch).
+ */
+function nowEATMs(): number {
+  const now = new Date();
+  return now.getTime() + now.getTimezoneOffset() * 60_000 + 3 * 3600_000;
+}
+
+/**
  * Build the session window for the given slot.
- * All times EAT (UTC+3).
+ * All session boundaries are computed as **immutable UTC dates** derived from
+ * explicit EAT hour/minute constants — no chained setHours/setDate mutations.
  *
- * ☀️ Morning: signal 10AM, trade 1PM→5:30PM (same day)
- * 🌙 Evening: signal 6:20PM, trade 12:10AM→8:40AM (next day)
+ * Past-slot detection: if the current EAT time is already past the session end
+ * for today, the entire window shifts forward by 1 day.
  */
 export function buildSessionWindow(
   slot: SignalSlot,
   referenceDate?: Date,
+  adminProfitMargin?: number,
 ): SessionWindow {
-  const now = referenceDate ?? new Date();
-  const eatNow = toEAT(now);
+  const base = referenceDate ?? new Date();
+  const eatNowMs = nowEATMs();
 
-  const signalRelease = new Date(eatNow);
-  const sessionStart = new Date(eatNow);
-  const sessionEnd = new Date(eatNow);
+  const DEFAULT_PROFIT_MARGIN = 10; // 10% default
 
   if (slot === "morning") {
-    // Signal: 10:00 AM EAT
-    signalRelease.setHours(10, 0, 0, 0);
-    // Trade: 1:00 PM → 5:30 PM (3hr early booking + 4.5hr trading)
-    sessionStart.setHours(13, 0, 0, 0);
-    sessionEnd.setHours(17, 30, 0, 0);
+    // ☀️ MORNING: Signal 10AM | Trade 1PM → 5:30PM (same day)
+    let signalRelease = createEATDate(base, 10, 0, 0);
+    let sessionStart = createEATDate(base, 13, 0, 0);
+    let sessionEnd = createEATDate(base, 17, 30, 0);
 
-    // If we're past session end (5:30PM), move to tomorrow
-    if (eatNow.getTime() >= sessionEnd.getTime()) {
-      signalRelease.setDate(signalRelease.getDate() + 1);
-      sessionStart.setDate(sessionStart.getDate() + 1);
-      sessionEnd.setDate(sessionEnd.getDate() + 1);
+    // If past 5:30 PM EAT today → shift to tomorrow
+    if (eatNowMs >= sessionEnd.getTime() + 3 * 3600_000) {
+      signalRelease = createEATDate(base, 10, 0, 1);
+      sessionStart = createEATDate(base, 13, 0, 1);
+      sessionEnd = createEATDate(base, 17, 30, 1);
     }
-  } else {
-    // Signal: 6:20 PM EAT (same day as morning)
-    signalRelease.setHours(18, 20, 0, 0);
-    // Trade: 12:10 AM → 8:40 AM next day
-    sessionStart.setHours(0, 10, 0, 0);
-    sessionStart.setDate(sessionStart.getDate() + 1);
-    sessionEnd.setHours(8, 40, 0, 0);
-    sessionEnd.setDate(sessionEnd.getDate() + 1);
 
-    // If we're past session end (8:40AM next day), move to tomorrow
-    if (eatNow.getTime() >= sessionEnd.getTime()) {
-      signalRelease.setDate(signalRelease.getDate() + 1);
-      sessionStart.setDate(sessionStart.getDate() + 1);
-      sessionEnd.setDate(sessionEnd.getDate() + 1);
-    }
+    return {
+      slot: "morning",
+      signalRelease,
+      sessionStart,
+      sessionEnd,
+      profitMargin: adminProfitMargin ?? DEFAULT_PROFIT_MARGIN,
+      crossesMidnight: false,
+    };
   }
 
-  const crossesMidnight = sessionEnd.getDate() !== sessionStart.getDate();
+  // 🌙 EVENING: Signal 6PM | Trade 10PM → 10AM next day
+  let signalRelease = createEATDate(base, 18, 0, 0);
+  let sessionStart = createEATDate(base, 22, 0, 0);
+  let sessionEnd = createEATDate(base, 10, 0, 1); // Next day 10AM
+
+  // If past 10 AM EAT (session end for tonight's evening) → shift to tomorrow
+  // Also if past 6PM and before 10PM, we're in the waiting window for today's evening
+  // But if past 10AM and before 6PM, evening hasn't released yet — use today's
+  const yesterdaySignal = createEATDate(base, 18, 0, 0);
+  const yesterdayEnd = createEATDate(base, 10, 0, 0); // 10 AM today = yesterday evening's end
+
+  // If we're past today's 10AM (evening session end), but before 6PM (evening signal),
+  // today's evening signal hasn't been released yet — keep current day
+  // If past 6PM AND past 10AM, shift to tomorrow
+  const today6PM = createEATDate(base, 18, 0, 0).getTime() + 3 * 3600_000;
+  const today10AM = createEATDate(base, 10, 0, 0).getTime() + 3 * 3600_000;
+
+  if (eatNowMs >= today10AM && eatNowMs >= today6PM) {
+    // Past both 10AM and 6PM → shift to tomorrow
+    signalRelease = createEATDate(base, 18, 0, 1);
+    sessionStart = createEATDate(base, 22, 0, 1);
+    sessionEnd = createEATDate(base, 10, 0, 2);
+  }
 
   return {
-    slot,
+    slot: "evening",
     signalRelease,
     sessionStart,
     sessionEnd,
-    crossesMidnight,
+    profitMargin: adminProfitMargin ?? DEFAULT_PROFIT_MARGIN,
+    crossesMidnight: true,
   };
 }
 
 /**
- * Convert a Date to EAT (UTC+3) for consistent time calculations.
- * Returns a new Date object adjusted to EAT.
- */
-export function toEAT(date: Date): Date {
-  const utcMs = date.getTime() + date.getTimezoneOffset() * 60_000;
-  return new Date(utcMs + 3 * 60 * 60 * 1000);
-}
-
-/**
- * Convert EAT date back to local Date for ISO serialization.
- */
-export function fromEAT(eatDate: Date): Date {
-  const eatMs = eatDate.getTime();
-  return new Date(eatMs - 3 * 60 * 60 * 1000);
-}
-
-/**
- * Detect which slot we're in based on current EAT time.
+ * Detect which slot the current time falls into.
+ * Returns "morning" during 10AM-5:30PM window.
+ * Returns "evening" during 6PM-10AM next day window.
  *
- * Slot windows (determined by signal visibility periods):
- *   ☀️ Morning signal: 10:00 AM – 5:30 PM (signal 10AM, trade 1PM–5:30PM)
- *   🌙 Evening signal: 6:20 PM – 8:40 AM next day (signal 6:20PM, trade 12:10AM–8:40AM)
+ * This is used by the cron endpoint to determine which slot to publish.
  */
 export function detectSlot(referenceDate?: Date): SignalSlot {
   const now = referenceDate ?? new Date();
-  const eat = toEAT(now);
-  const hour = eat.getHours();
-  const minute = eat.getMinutes();
+  const eatMs = now.getTime() + now.getTimezoneOffset() * 60_000 + 3 * 3600_000;
+  const eatDate = new Date(eatMs);
+  const hour = eatDate.getUTCHours();
+  const minute = eatDate.getUTCMinutes();
 
   // Morning slot: 10:00 AM to 5:29 PM
   if (hour >= 10 && hour < 17) return "morning";
   if (hour === 17 && minute < 30) return "morning";
-  // Evening slot: everything else (5:30PM–9:59AM next day)
+  // Evening slot: 5:30 PM to 9:59 AM next day
   return "evening";
 }
 
 /**
- * Format EAT time for display in messages.
+ * Check whether a given slot's trading window is currently active.
+ * Used to prevent overlapping signals.
+ */
+export function isSlotActive(slot: SignalSlot, referenceDate?: Date): boolean {
+  const now = referenceDate ?? new Date();
+  const window = buildSessionWindow(slot, now);
+  const eatNowMs = nowEATMs();
+  const startMs = window.sessionStart.getTime() + 3 * 3600_000;
+  const endMs = window.sessionEnd.getTime() + 3 * 3600_000;
+  return eatNowMs >= startMs && eatNowMs < endMs;
+}
+
+/**
+ * Check if a new signal can be generated for the given slot.
+ * Returns false if the slot's trading window is already active or has passed.
+ */
+export function canPublishSignal(slot: SignalSlot, referenceDate?: Date): boolean {
+  const now = referenceDate ?? new Date();
+  const window = buildSessionWindow(slot, now);
+  const eatNowMs = nowEATMs();
+  const releaseMs = window.signalRelease.getTime() + 3 * 3600_000;
+  const endMs = window.sessionEnd.getTime() + 3 * 3600_000;
+  return eatNowMs >= releaseMs && eatNowMs < endMs;
+}
+
+/**
+ * Convert a Date to EAT (UTC+3) for consistent time calculations.
+ */
+export function toEAT(date: Date): Date {
+  const utcMs = date.getTime() + date.getTimezoneOffset() * 60_000;
+  return new Date(utcMs + 3 * 3600_000);
+}
+
+/**
+ * Convert EAT-adjusted date back to UTC for DB storage.
+ */
+export function fromEAT(eatDate: Date): Date {
+  return new Date(eatDate.getTime() - 3 * 3600_000);
+}
+
+/**
+ * Format an EAT date for human-readable display (12-hour clock).
  */
 export function formatEAT(date: Date, showDate = false): string {
   const eat = toEAT(date);
@@ -138,7 +202,6 @@ export function formatEAT(date: Date, showDate = false): string {
     timeZone: "UTC",
   });
   if (!showDate) return timeStr;
-
   const dateStr = eat.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -81,6 +81,16 @@ export function PaymentCard({
   // ── Shared fields ──
   const [amount, setAmount] = useState("")
   const [showPreview, setShowPreview] = useState(true)
+  // Per-field visibility: true = visible, false = masked
+  const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({})
+
+  const toggleField = useCallback((key: string) => {
+    setVisibleFields(prev => ({ ...prev, [key]: !prev[key] }))
+  }, [])
+
+  const isFieldVisible = useCallback((key: string): boolean => {
+    return visibleFields[key] !== false
+  }, [visibleFields])
 
   // ── Withdraw fields ──
   const [withdrawMethod, setWithdrawMethod] = useState<"mobile" | "bank" | "crypto">("mobile")
@@ -246,24 +256,36 @@ export function PaymentCard({
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <User className="h-3.5 w-3.5" /> Account Holder Name
+                  <button type="button" onClick={() => toggleField("dname")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("dname") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={depositName} onChange={(e) => setDepositName(e.target.value)}
+                  type={isFieldVisible("dname") ? "text" : "password"}
                   placeholder="e.g. John Doe"
                   className="h-10 rounded-xl border-border bg-background text-sm" />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Phone className="h-3.5 w-3.5" /> Phone / Account Number
+                  <button type="button" onClick={() => toggleField("dphone")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("dphone") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={depositNumber} onChange={(e) => setDepositNumber(e.target.value)}
+                  type={isFieldVisible("dphone") ? "text" : "password"}
                   placeholder="e.g. 0772123456"
                   className="h-10 rounded-xl border-border bg-background text-sm" />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5" /> Amount (USD)
+                  <button type="button" onClick={() => toggleField("damt")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("damt") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={amount} onChange={(e) => setAmount(e.target.value)}
+                  type={isFieldVisible("damt") ? "text" : "password"}
                   placeholder="0.00" inputMode="decimal"
                   className="h-10 rounded-xl border-border bg-background text-sm font-mono" />
                 <div className="mt-1.5 flex gap-1.5">
@@ -292,24 +314,36 @@ export function PaymentCard({
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <User className="h-3.5 w-3.5" /> Account Holder Name
+                  <button type="button" onClick={() => toggleField("wname")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("wname") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={withdrawName} onChange={(e) => setWithdrawName(e.target.value)}
+                  type={isFieldVisible("wname") ? "text" : "password"}
                   placeholder="e.g. John Doe"
                   className="h-10 rounded-xl border-border bg-background text-sm" />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Phone className="h-3.5 w-3.5" /> Phone Number
+                  <button type="button" onClick={() => toggleField("wphone")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("wphone") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={withdrawPhone} onChange={(e) => setWithdrawPhone(e.target.value)}
+                  type={isFieldVisible("wphone") ? "text" : "password"}
                   placeholder="e.g. 0772123456" inputMode="tel"
                   className="h-10 rounded-xl border-border bg-background text-sm" />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5" /> Amount (USD)
+                  <button type="button" onClick={() => toggleField("wamt")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("wamt") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={amount} onChange={(e) => setAmount(e.target.value)}
+                  type={isFieldVisible("wamt") ? "text" : "password"}
                   placeholder="0.00" inputMode="decimal"
                   className="h-10 rounded-xl border-border bg-background text-sm font-mono" />
                 <div className="mt-1.5 flex gap-1.5">
@@ -324,9 +358,12 @@ export function PaymentCard({
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Lock className="h-3.5 w-3.5" /> Security PIN
+                  <button type="button" onClick={() => toggleField("wpin")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("wpin") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={withdrawPin} onChange={(e) => setWithdrawPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="• • • • • •" type="password" inputMode="numeric" maxLength={6}
+                  placeholder="• • • • • •" type={isFieldVisible("wpin") ? "text" : "password"} inputMode="numeric" maxLength={6}
                   className="h-10 rounded-xl border-border bg-background text-center text-lg tracking-[0.3em] text-sm" />
               </div>
               <Button disabled={!withdrawName.trim() || !withdrawPhone.trim() || !Number(amount) || withdrawPin.length !== 6}
@@ -369,22 +406,33 @@ export function PaymentCard({
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <User className="h-3.5 w-3.5" /> Account Name
+                  <button type="button" onClick={() => toggleField("aname")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("aname") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={airName} onChange={(e) => setAirName(e.target.value)}
+                  type={isFieldVisible("aname") ? "text" : "password"}
                   placeholder="e.g. John Doe"
                   className="h-10 rounded-xl border-border bg-background text-sm" />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Phone className="h-3.5 w-3.5" /> Phone Number
+                  <button type="button" onClick={() => toggleField("aphone")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("aphone") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={airPhone} onChange={(e) => setAirPhone(e.target.value)}
+                  type={isFieldVisible("aphone") ? "text" : "password"}
                   placeholder="e.g. 0772123456" inputMode="tel"
                   className="h-10 rounded-xl border-border bg-background text-sm" />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5" /> Amount ({airCurrency})
+                  <button type="button" onClick={() => toggleField("aamt")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("aamt") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={airAmountLocal} onChange={(e) => setAirAmountLocal(e.target.value)}
                   placeholder={`Min ${airMinLocal.toLocaleString()} ${airCurrency}`} inputMode="numeric"
@@ -400,9 +448,12 @@ export function PaymentCard({
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Lock className="h-3.5 w-3.5" /> Security PIN
+                  <button type="button" onClick={() => toggleField("apin")} className="ml-auto text-zinc-500 hover:text-zinc-300">
+                    {isFieldVisible("apin") ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
                 </label>
                 <Input value={airPin} onChange={(e) => setAirPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="• • • • • •" type="password" inputMode="numeric" maxLength={6}
+                  placeholder="• • • • • •" type={isFieldVisible("apin") ? "text" : "password"} inputMode="numeric" maxLength={6}
                   className="h-10 rounded-xl border-border bg-background text-center text-lg tracking-[0.3em] text-sm" />
               </div>
               <Button disabled={!airCanSubmit || isSubmitting}
