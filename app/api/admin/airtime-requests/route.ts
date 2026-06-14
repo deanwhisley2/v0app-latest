@@ -144,7 +144,7 @@ export async function PATCH(request: Request) {
         feeAmount: 0,
         balanceSource: "airtime_withdrawable_earnings",
         balanceDestination: "container_withdrawable_earnings",
-        status: "declined",
+        status: "rejected",
         transactionRef: txRef,
         actorType: "admin",
         actorId: actor.id,
@@ -156,7 +156,7 @@ export async function PATCH(request: Request) {
         ok: true,
         decision: "decline",
         requestId,
-        status: "declined",
+        status: "rejected",
         message: "Airtime request declined. Funds refunded to user's earnings balance.",
       })
     }

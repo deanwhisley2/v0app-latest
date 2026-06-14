@@ -18,12 +18,21 @@ async function readBalanceRow(admin: ReturnType<typeof createAdminClient>, userI
   const { data, error } = await admin
     .from("user_balances")
     .select(
-      "id,user_id,available_balance,active_container_earnings,container_withdrawable_earnings,lifetime_container_withdrawn,lifetime_container_fees"
+      "id,user_id,available_balance,active_container_earnings,container_withdrawable_earnings,withdrawal_pending_balance,lifetime_container_withdrawn,lifetime_container_fees"
     )
     .eq("user_id", userId)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  return data
+  return data as {
+    id: unknown;
+    user_id: unknown;
+    available_balance: unknown;
+    active_container_earnings: unknown;
+    container_withdrawable_earnings: unknown;
+    withdrawal_pending_balance: unknown;
+    lifetime_container_withdrawn: unknown;
+    lifetime_container_fees: unknown;
+  }
 }
 
 export async function POST(request: Request) {

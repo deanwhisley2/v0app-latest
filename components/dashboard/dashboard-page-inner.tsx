@@ -4839,7 +4839,11 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   router.push("/recharge")
                 }}
                 onWithdraw={() => router.push("/recharge?mode=withdraw")}
-                onTransferToMain={() => void runContainerFlowAction("transfer_to_main")}
+                onWithdrawEarnings={() => router.push("/recharge?mode=withdraw&source=earnings")}
+                onAirtime={() => {
+                  const el = document.getElementById("airtime-dialog-trigger")
+                  if (el) { el.click() } else { router.push("/recharge?mode=airtime") }
+                }}
                 depositUnderReviewLabel={depositUnderReviewBannerLabel}
               />
             ) : null}
