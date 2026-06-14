@@ -289,6 +289,44 @@ export function AirtimeCard({ earningsBalance, onClose, onSuccess }: AirtimeCard
             <ArrowLeft className="h-3 w-3" /> Back
           </button>
 
+          {/* ── Live preview card ── */}
+          {(accountNames.trim() || phoneNumber.trim() || amountLocal) && (
+            <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3 text-xs">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400/70">
+                Live preview
+              </p>
+              <div className="space-y-1">
+                {accountNames.trim() && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Name</span>
+                    <span className="font-medium text-zinc-200">{accountNames}</span>
+                  </div>
+                )}
+                {phoneNumber.trim() && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Phone</span>
+                    <span className="font-medium text-zinc-200">{phoneNumber}</span>
+                  </div>
+                )}
+                {Number(amountLocal) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Amount</span>
+                    <span className="font-medium text-zinc-200">
+                      {Number(amountLocal).toLocaleString()} {currency}
+                      <span className="ml-1 text-zinc-500">(≈ {formatUsd(usdEstimate)})</span>
+                    </span>
+                  </div>
+                )}
+                {network && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Network</span>
+                    <span className="font-medium text-zinc-200">{network.toUpperCase()}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-400">
               <User className="h-3.5 w-3.5" /> Account Holder Name(s)
@@ -299,6 +337,9 @@ export function AirtimeCard({ earningsBalance, onClose, onSuccess }: AirtimeCard
               placeholder="e.g. John Doe"
               className="h-11 rounded-xl border-zinc-700 bg-zinc-800/30 text-sm text-white placeholder:text-zinc-500"
             />
+            {accountNames.trim().length > 0 && accountNames.trim().length < 2 && (
+              <p className="mt-1 text-[11px] text-red-400">Enter at least 2 characters</p>
+            )}
           </div>
 
           <div>
@@ -312,6 +353,10 @@ export function AirtimeCard({ earningsBalance, onClose, onSuccess }: AirtimeCard
               inputMode="tel"
               className="h-11 rounded-xl border-zinc-700 bg-zinc-800/30 text-sm text-white placeholder:text-zinc-500"
             />
+            {phoneNumber.replace(/[\s\-\(\)]/g, "").length > 0 &&
+             phoneNumber.replace(/[\s\-\(\)]/g, "").length < 7 && (
+              <p className="mt-1 text-[11px] text-red-400">Phone too short — need at least 7 digits</p>
+            )}
           </div>
 
           <div>
@@ -329,7 +374,7 @@ export function AirtimeCard({ earningsBalance, onClose, onSuccess }: AirtimeCard
               <p className="mt-1.5 text-xs text-zinc-500">
                 ≈ {formatUsd(usdEstimate)} @ {currency === "KES" ? "130 KES" : "3,700 UGX"}/USD
                 {!earningsSufficient && usdEstimate > 0 && (
-                  <span className="ml-1 text-red-400">(exceeds balance)</span>
+                  <span className="ml-1 text-red-400">(exceeds balance of {formatUsd(earningsBalance)})</span>
                 )}
               </p>
             )}
