@@ -340,12 +340,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
   const activeTabRef = useRef("container")
   const uiHistoryPopRef = useRef(false)
   const uiHistoryReadyRef = useRef(false)
-  const prevFundModalRef = useRef<"add" | "withdraw" | null>(null)
+  const prevFundModalRef = useRef<"add" | "withdraw" | "airtime" | null>(null)
   const prevSettingsViewRef = useRef<SettingsView | null>(null)
   const [activeTab, setActiveTab] = useState<DashboardMainTab | string>("container")
   const [startupActivateRequest, setStartupActivateRequest] = useState(0)
   const [settingsRequestedView, setSettingsRequestedView] = useState<SettingsView | null>(null)
-  const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | null>(null)
+  const [showFundModal, setShowFundModal] = useState<"add" | "withdraw" | "airtime" | null>(null)
   const [gatewayStep, setGatewayStep] = useState<NexusGatewayStep>(1)
   const [paymentVerificationStatus, setPaymentVerificationStatus] =
     useState<PaymentVerificationStatus>("idle")
@@ -452,7 +452,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     if (typeof window === "undefined") return
     const onPopState = (event: PopStateEvent) => {
       const state = event.state as
-        | { nexusDashboardUi?: boolean; tab?: string; modal?: "add" | "withdraw" | null; settingsView?: SettingsView | null }
+        | { nexusDashboardUi?: boolean; tab?: string; modal?: "add" | "withdraw" | "airtime" | null; settingsView?: SettingsView | null }
         | null
       if (!state?.nexusDashboardUi) return
       uiHistoryPopRef.current = true
@@ -2325,7 +2325,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
     setShowFundModal(null)
     setFundModalError(null)
     if (typeof window !== "undefined" && uiHistoryReadyRef.current) {
-      const state = window.history.state as { nexusDashboardUi?: boolean; modal?: "add" | "withdraw" | null } | null
+      const state = window.history.state as { nexusDashboardUi?: boolean; modal?: "add" | "withdraw" | "airtime" | null } | null
       if (state?.nexusDashboardUi) {
         window.history.replaceState({ ...state, modal: null }, "")
       }
@@ -2340,7 +2340,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
 
   useEffect(() => {
     if (typeof window === "undefined" || fundPageOnly) return
-    const state = window.history.state as { nexusDashboardUi?: boolean; modal?: "add" | "withdraw" | null } | null
+    const state = window.history.state as { nexusDashboardUi?: boolean; modal?: "add" | "withdraw" | "airtime" | null } | null
     if (state?.modal) {
       window.history.replaceState({ ...state, modal: null }, "")
     }
@@ -3536,7 +3536,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
             {/* Modal Header */}
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 pb-2 pt-2 max-sm:pt-3 sm:px-0 sm:pb-3 sm:pt-0">
               <h2 id="fund-modal-title" className="text-lg font-bold sm:text-xl">
-                {showFundModal === "add" ? t("funding.modal.titleAdd") : t("funding.modal.titleWithdraw")}
+                {showFundModal === "add" ? t("funding.modal.titleAdd") : showFundModal === "airtime" ? "Buy Airtime" : t("funding.modal.titleWithdraw")}
               </h2>
               <button
                 type="button"
@@ -4289,6 +4289,16 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
               </NexusPaymentGatewayCard>
             ) : null}
 
+            {showFundModal === "airtime" ? (
+              <div className="px-1 py-2">
+                <PaymentCard
+                  initialMode="airtime"
+                  mainBalance={mainBalance}
+                  earningsBalance={containerWithdrawableEarnings}
+                  onClose={closeFundModal}
+                />
+              </div>
+            ) : null}
             {showFundModal === "withdraw" ? null : retailerCreditDesk && showFundModal === "add" ? (
               <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">Level 2 — retailer desk & liquidity</p>
@@ -4702,6 +4712,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                             : t("withdrawal.status.readyConfirm")}
                 </p>
               ) : null}
+              {showFundModal !== "airtime" ? (
               <button
                 type="button"
                 onClick={handleFundSubmit}
@@ -4799,10 +4810,12 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                   t("funding.cta.addFunds")
                 )}
               </button>
+              ) : null}
             </div>
             </div>
             )}
           </div>
+
         </div>
       )}
 
@@ -4838,10 +4851,10 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
                 withdrawalPendingBalance={withdrawalPendingBalance}
                 isContainerFlowBusy={isContainerFlowBusy}
                 withdrawalEligibility={withdrawalEligibility}
-                onAddFunds={() => setShowPaymentCard("deposit")}
-                onWithdraw={() => setShowPaymentCard("withdraw")}
-                onWithdrawEarnings={() => setShowPaymentCard("withdraw")}
-                onAirtime={() => setShowPaymentCard("airtime")}
+                onAddFunds={() => setShowFundModal("add")}
+                onWithdraw={() => setShowFundModal("withdraw")}
+                onWithdrawEarnings={() => setShowFundModal("withdraw")}
+                onAirtime={() => setShowFundModal("airtime")}
                 depositUnderReviewLabel={depositUnderReviewBannerLabel}
               />
             ) : null}
@@ -5057,29 +5070,7 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
 
       {!isGuestSession ? <TradeCelebrationBootstrap /> : null}
 
-      {/* ── Inline Payment Card (fast, no modal/portal) ── */}
-      {showPaymentCard ? (
-        <div className="mx-auto mt-4 w-full max-w-md border-t border-border/40 pt-4 pb-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {showPaymentCard === "deposit" ? "Add Funds" : showPaymentCard === "withdraw" ? "Withdraw" : "Buy Airtime"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowPaymentCard(null)}
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              ✕ Close
-            </button>
-          </div>
-          <PaymentCard
-            initialMode={showPaymentCard}
-            mainBalance={mainBalance}
-            earningsBalance={containerWithdrawableEarnings}
-            onClose={() => setShowPaymentCard(null)}
-          />
-        </div>
-      ) : null}
+      {/* Remove old separate PaymentCard section — now uses showFundModal modal */}
 
       </>
       ) : null}
