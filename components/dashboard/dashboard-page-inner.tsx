@@ -19,10 +19,7 @@ import { Loader2 } from "lucide-react"
 import type { SettingsView } from "@/components/dashboard/settings-screen"
 import { RetailBalanceHomePanels } from "@/components/dashboard/retail-balance-home-panels"
 
-const PaymentCard = dynamic(
-  () => import("@/components/dashboard/payment-card").then((m) => m.PaymentCard),
-  { ssr: false, loading: () => <PanelLoader label="Loading payment…" /> },
-)
+import { PaymentCard } from "@/components/dashboard/payment-card"
 
 const NexusBotWorkspace = dynamic(
   () => import("@/components/dashboard/nexus-bot-workspace").then((m) => m.NexusBotWorkspace),
@@ -5062,14 +5059,17 @@ export function DashboardPageInner({ fundPageOnly = null }: { fundPageOnly?: "ad
 
       {/* ── Inline Payment Card (fast, no modal/portal) ── */}
       {showPaymentCard ? (
-        <div className="mx-auto mt-2 w-full max-w-md px-0 pb-4 sm:px-0">
-          <div className="flex items-center justify-between mb-2">
+        <div className="mx-auto mt-4 w-full max-w-md border-t border-border/40 pt-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {showPaymentCard === "deposit" ? "Add Funds" : showPaymentCard === "withdraw" ? "Withdraw" : "Buy Airtime"}
+            </span>
             <button
               type="button"
               onClick={() => setShowPaymentCard(null)}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              &larr; Close
+              ✕ Close
             </button>
           </div>
           <PaymentCard
